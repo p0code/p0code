@@ -1,14 +1,14 @@
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
+import { useRouter } from "@tanstack/react-router";
 import { T, useGT } from "gt-react";
 import { XIcon } from "lucide-react";
-import { useRouter } from "@tanstack/react-router";
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 import { getCommandPaletteOpener } from "../commandPaletteStore";
 import { useNativeTitlebarHeight } from "../lib/windowControlsOverlay";
 import { requestWorkspaceFocus } from "../lib/workspaceFocus";
-import { useCloseAppModal } from "./sidebar/mainAppLocation";
 import { GlobalVoiceInputIndicator } from "./chat/GlobalVoiceInputIndicator";
+import { useCloseAppModal } from "./sidebar/mainAppLocation";
 import { Button } from "./ui/button";
 import { DialogBackdrop } from "./ui/dialog";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
@@ -56,7 +56,7 @@ export function AppRouteModal({ label, children }: { label: string; children: Re
   return (
     <DialogPrimitive.Root
       open={open}
-      // Portaled layers outside this tree (toasts, Clerk, confirm dialogs) are not backdrop presses.
+      // Portaled layers outside this tree (toasts and confirm dialogs) are not backdrop presses.
       disablePointerDismissal
       onOpenChange={(nextOpen, eventDetails) => {
         if (nextOpen) return;
@@ -64,7 +64,7 @@ export function AppRouteModal({ label, children }: { label: string; children: Re
         if (eventDetails.reason === "escape-key" && eventDetails.event.repeat) {
           return eventDetails.cancel();
         }
-        // Esc from a layer outside Base UI (Clerk's modals) is that layer's to handle.
+        // Esc from a layer outside Base UI (nested overlays) is that layer's to handle.
         const target = eventDetails.event.target;
         if (
           eventDetails.reason === "escape-key" &&

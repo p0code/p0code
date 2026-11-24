@@ -35,6 +35,12 @@ import {
   ProviderOptionSelections,
 } from "./model.ts";
 import { ModelSelection } from "./modelSelection.ts";
+import {
+  AccountProfile,
+  AccountProfileId,
+  DEFAULT_ACCOUNT_PROFILES,
+  DEFAULT_ACTIVE_ACCOUNT_PROFILE_ID,
+} from "./accountProfile.ts";
 import { ProjectScript, type ProjectMutation } from "./project.ts";
 import { DEFAULT_RUNTIME_MODE, RuntimeMode } from "./providerPolicy.ts";
 import { BrowserProfile, BrowserProfileId, DEFAULT_BROWSER_PROFILE_ID } from "./browserProfile.ts";
@@ -1152,8 +1158,6 @@ export const ResponseStreamingMode = Schema.Literals(["turn", "paragraph"]);
 export type ResponseStreamingMode = typeof ResponseStreamingMode.Type;
 
 /** `on-request`: agents report only when the user asks. `auto`: they also report on their own. */
-export const AgentFeedbackMode = Schema.Literals(["off", "on-request", "auto"]);
-export type AgentFeedbackMode = typeof AgentFeedbackMode.Type;
 
 const StorageRetentionDays = Schema.NullOr(
   Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 3650 })),
@@ -1384,7 +1388,59 @@ export const CloudSpeechCredentials = Schema.Struct({
   openrouter: CloudSpeechCredential,
 });
 
+export const JudgeMember = Schema.Struct({
+  id: Schema.optionalKey(Schema.String),
+  providerInstanceId: Schema.optionalKey(ProviderInstanceId),
+  driverKind: Schema.optionalKey(ProviderDriverKind),
+  model: TrimmedNonEmptyString,
+  options: Schema.optionalKey(ProviderOptionSelections),
+  enabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+});
+export type JudgeMember = typeof JudgeMember.Type;
+const DEFAULT_JUDGE_INSTRUCTIONS =
+  "Review independently for correctness bugs, security vulnerabilities, missed surfaces, and missing tests that would catch real regressions. Inspect the actual code. Report only actionable findings with severity (P0/P1/P2/P3), concrete file:line locations, impact, and evidence. No style nits. Do not edit files, commit, or run commands that modify the project. If no issues are found, say so explicitly.";
+export const DEFAULT_JUDGES: ReadonlyArray<JudgeMember> = [
+  {
+    id: "judge-default-0",
+    driverKind: ProviderDriverKind.make("pi"),
+    model: "opencode-go/glm-5.3-flash",
+    enabled: true,
+  },
+  {
+    driverKind: ProviderDriverKind.make("pi"),
+    id: "judge-default-1",
+    model: "opencode-go/deepseek-v4.1-flash",
+    enabled: true,
+  },
+  {
+    id: "judge-default-2",
+    driverKind: ProviderDriverKind.make("codex"),
+    model: "gpt-6.1-sol",
+    enabled: true,
+  },
+  {
+    id: "judge-default-3",
+    driverKind: ProviderDriverKind.make("claudeAgent"),
+    model: "claude-opus-5-5",
+    enabled: true,
+  },
+];
+
 export const ServerSettings = Schema.Struct({
+  judges: Schema.Array(JudgeMember).pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_JUDGES)),
+  ),
+  judgeInstructions: Schema.String.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_JUDGE_INSTRUCTIONS)),
+  ),
+  judgeDefaultScope: Schema.String.pipe(
+    Schema.withDecodingDefault(
+      Effect.succeed(
+        "Review the current work and uncommitted changes in this project, including related callers and affected surfaces.",
+      ),
+    ),
+  ),
+
   // Null means unmigrated; empty is authoritative and must not resurrect cleared preferences.
   favorites: Schema.NullOr(ModelFavorites).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
   providerModelPreferences: Schema.NullOr(ProviderModelPreferences).pipe(
@@ -1405,16 +1461,14 @@ export const ServerSettings = Schema.Struct({
   responseStreamingMode: ResponseStreamingMode.pipe(
     Schema.withDecodingDefault(Effect.succeed("paragraph" as const)),
   ),
-  agentFeedback: Schema.Struct({
-    mode: AgentFeedbackMode.pipe(Schema.withDecodingDefaultKey(Effect.succeed("off" as const))),
-  }).pipe(Schema.withDecodingDefault(Effect.succeed({ mode: "off" as const }))),
+
   enableProviderUpdateChecks: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   continueThreadsAfterServerUpdate: Schema.Boolean.pipe(
     Schema.withDecodingDefault(Effect.succeed(true)),
   ),
   /** Holds an OS sleep inhibitor while any run is active; closing a laptop lid still sleeps it. */
   keepAwakeWhileAgentsWork: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
-  /** New T3 Connect device keys wait for approval from someone already trusted here. */
+  /** Retired broker preference retained to decode existing settings files. */
   requireConnectDeviceApproval: Schema.Boolean.pipe(
     Schema.withDecodingDefault(Effect.succeed(false)),
   ),
@@ -1456,6 +1510,13 @@ export const ServerSettings = Schema.Struct({
   ),
   fallbackModelSelection: Schema.NullOr(ModelSelection).pipe(
     Schema.withDecodingDefault(Effect.succeed(null)),
+  ),
+  accountProfiles: Schema.Array(AccountProfile).pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_ACCOUNT_PROFILES)),
+  ),
+  /** A missing or deleted profile id means no profile: instances keep their settings order. */
+  activeAccountProfileId: Schema.NullOr(AccountProfileId).pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_ACTIVE_ACCOUNT_PROFILE_ID)),
   ),
   defaultRuntimeMode: RuntimeMode.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_RUNTIME_MODE)),
@@ -1881,7 +1942,7 @@ export const ServerSettingsPatch = Schema.Struct({
   worktreesDirectory: Schema.optionalKey(TrimmedString),
   fastWorktreeCheckout: Schema.optionalKey(Schema.Boolean),
   responseStreamingMode: Schema.optionalKey(ResponseStreamingMode),
-  agentFeedback: Schema.optionalKey(Schema.Struct({ mode: AgentFeedbackMode })),
+
   enableProviderUpdateChecks: Schema.optionalKey(Schema.Boolean),
   continueThreadsAfterServerUpdate: Schema.optionalKey(Schema.Boolean),
   keepAwakeWhileAgentsWork: Schema.optionalKey(Schema.Boolean),
@@ -1914,6 +1975,8 @@ export const ServerSettingsPatch = Schema.Struct({
   defaultModelSelection: Schema.optionalKey(Schema.NullOr(ModelSelection)),
   defaultRuntimeMode: Schema.optionalKey(RuntimeMode),
   fallbackModelSelection: Schema.optionalKey(Schema.NullOr(ModelSelection)),
+  accountProfiles: Schema.optionalKey(Schema.Array(AccountProfile)),
+  activeAccountProfileId: Schema.optionalKey(Schema.NullOr(AccountProfileId)),
   /** Replaces each project's override set; null removes it. Omitted providerInstances retains its stored value. */
   projectSettingsOverrides: Schema.optionalKey(
     Schema.Record(
@@ -1984,6 +2047,9 @@ export const ServerSettingsPatch = Schema.Struct({
     }),
   ),
   sourceControlWriterModelSelection: Schema.optionalKey(Schema.NullOr(ModelSelection)),
+  judges: Schema.optionalKey(Schema.Array(JudgeMember)),
+  judgeInstructions: Schema.optionalKey(Schema.String),
+  judgeDefaultScope: Schema.optionalKey(Schema.String),
   reviewGuidesEnabled: Schema.optionalKey(Schema.Boolean),
   reviewGuideModelSelection: Schema.optionalKey(Schema.NullOr(ModelSelection)),
   reviewGuideInstructions: Schema.optionalKey(TrimmedString),

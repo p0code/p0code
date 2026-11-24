@@ -150,6 +150,7 @@ export type MarkThreadUnreadInput = ThreadCommandInput;
 
 export interface UpdateThreadMetadataInput extends ThreadCommandInput {
   readonly limitRecovery?: import("@t3tools/contracts").OrchestrationV2LimitRecoveryUpdate | null;
+  readonly autoResumeAtLimitReset?: boolean | null;
   readonly title?: string;
   readonly modelSelection?: ModelSelection;
   readonly branch?: string | null;
@@ -716,6 +717,15 @@ export const markThreadUnread = Effect.fn("EnvironmentCommands.markThreadUnread"
 
 export const updateThreadMetadata = Effect.fn("EnvironmentCommands.updateThreadMetadata")(
   function* (input: UpdateThreadMetadataInput) {
+    if (
+      input.autoResumeAtLimitReset !== undefined &&
+      (yield* getInitialServerConfig()).environment.capabilities.threadLimitRecoveryPreference !==
+        true
+    )
+      return yield* new EnvironmentRpcUnavailableError({
+        environmentId: (yield* EnvironmentSupervisor.EnvironmentSupervisor).target.environmentId,
+        message: "This server does not support per-thread limit recovery preferences.",
+      });
     const commandId = yield* allocateCommandId(input);
     let result = null;
     if (
@@ -724,11 +734,15 @@ export const updateThreadMetadata = Effect.fn("EnvironmentCommands.updateThreadM
       input.worktreePath !== undefined ||
       input.regenerateTitle !== undefined ||
       input.linkedPullRequest !== undefined ||
-      input.limitRecovery !== undefined
+      input.limitRecovery !== undefined ||
+      input.autoResumeAtLimitReset !== undefined
     ) {
       result = yield* dispatch({
         type: "thread.metadata.update",
         ...(input.limitRecovery === undefined ? {} : { limitRecovery: input.limitRecovery }),
+        ...(input.autoResumeAtLimitReset === undefined
+          ? {}
+          : { autoResumeAtLimitReset: input.autoResumeAtLimitReset }),
         commandId,
         threadId: input.threadId,
         ...(input.title === undefined ? {} : { title: input.title }),

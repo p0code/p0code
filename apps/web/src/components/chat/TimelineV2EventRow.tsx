@@ -1,18 +1,18 @@
-import { WorkLogBlock } from "./WorkLog";
-import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { useAtomValue } from "@effect/atom-react";
-import { environmentThreadDetails } from "../../state/threads";
+import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
   subagentGroupSummary,
   summarizeSubagentStatuses,
 } from "@t3tools/client-runtime/state/subagent-display";
 import { useGT, useMessages } from "gt-react";
-import { memo, use, useState } from "react";
 import { ChevronDownIcon } from "lucide-react";
+import { memo, use, useState } from "react";
 import { cn } from "~/lib/utils";
-import { Collapsible, CollapsibleTrigger, CollapsiblePanel } from "../ui/collapsible";
+import { environmentThreadDetails } from "../../state/threads";
+import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "../ui/collapsible";
 import { EnvironmentSubagentAvatar, SubagentElapsed, V2LifecycleRow } from "./V2LifecycleRow";
-import { FeedbackRequestCard } from "./FeedbackRequestCard";
+import { WorkLogBlock } from "./WorkLog";
+
 import { LinkRequestCard } from "./LinkRequestCard";
 import { SecretRequestCard } from "./SecretRequestCard";
 import { TimelineRowCtx, type TimelineRow } from "./timelineRowContext";
@@ -33,15 +33,7 @@ export function V2EventTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
       />
     );
   }
-  if (item.type === "feedback_request") {
-    return (
-      <FeedbackRequestCard
-        environmentId={ctx.activeThreadEnvironmentId}
-        item={item}
-        visibility={visibility}
-      />
-    );
-  }
+  if (item.type === "feedback_request") return null;
   if (item.type === "link_request") {
     return (
       <LinkRequestCard

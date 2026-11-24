@@ -1,3 +1,6 @@
+import * as JudgePanelService from "../../JudgePanelService.ts";
+import * as JudgeSettings from "../../../serverSettings.ts";
+import * as JudgeProviders from "../../../provider/ProviderRegistry.ts";
 import { OrchestratorMcpFailure } from "@t3tools/contracts";
 import { OrchestratorToolkit } from "./tools.ts";
 import * as Effect from "effect/Effect";
@@ -12,12 +15,33 @@ import * as McpToolAccess from "../../McpToolAccess.ts";
 import * as OrchestratorMcpService from "../../OrchestratorMcpService.ts";
 import * as ThreadMetadataMcpService from "../../ThreadMetadataMcpService.ts";
 
-const handlers = {
+export const handlers = {
   orchestrator_capabilities: McpToolAccess.reads((input) =>
     Effect.gen(function* () {
       const scope = yield* McpInvocationContext.McpInvocationContext;
       const service = yield* OrchestratorMcpService.OrchestratorMcpService;
       return yield* service.capabilities(scope, input);
+    }),
+  ),
+  convene_judges: McpToolAccess.actsAsCaller((input) =>
+    Effect.gen(function* () {
+      const scope = yield* McpInvocationContext.McpInvocationContext;
+      const service = yield* OrchestratorMcpService.OrchestratorMcpService;
+      const settings = yield* JudgeSettings.ServerSettingsService;
+      const providers = yield* JudgeProviders.ProviderRegistry;
+      return yield* JudgePanelService.makeJudgePanel({
+        settings: settings.getSettings.pipe(
+          Effect.mapError(
+            () =>
+              new OrchestratorMcpFailure({
+                code: "orchestration_error",
+                message: "Unable to read judge settings.",
+              }),
+          ),
+        ),
+        providers: providers.getProviders,
+        delegate: service.delegateTask,
+      }).convene(scope, input);
     }),
   ),
   delegate_task: McpToolAccess.actsAsCaller((input) =>

@@ -85,9 +85,9 @@ describe("AppRouteModal", () => {
       { router: "/settings/general" },
     );
     const settings = page.getByRole("dialog", { name: "Settings" });
-    // Base UI takes initial focus a frame after opening; let it land before Clerk's modal takes focus.
+    // Base UI takes initial focus a frame after opening; let it land before a nested overlay takes focus.
     await expect.element(settings).toHaveFocus();
-    // Clerk renders its account modal in its own root and dismisses on a document Esc listener.
+    // An overlay renders in its own root and dismisses on a document Esc listener.
     const foreignModal = document.body.appendChild(document.createElement("input"));
     using _foreignModal = { [Symbol.dispose]: () => foreignModal.remove() };
 

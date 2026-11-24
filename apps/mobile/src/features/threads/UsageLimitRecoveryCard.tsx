@@ -1,25 +1,29 @@
-import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { errorDisplayMessage } from "@t3tools/client-runtime/errors";
-import { AsyncResult } from "effect/reactivity";
+import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import { limitRecoveryOwnsSnooze } from "@t3tools/client-runtime/state/thread-execution";
-import type { EnvironmentId } from "@t3tools/contracts";
+import { type EnvironmentId, isOpenEndedSnooze, MessageId } from "@t3tools/contracts";
+import { limitFailoverSelection } from "@t3tools/shared/accountProfiles";
 import {
   CHATGPT_USAGE_LIMIT_CODE,
   CHATGPT_USAGE_URL,
   CHATGPT_WORKSPACE_ADMIN_REQUEST,
   CHATGPT_WORKSPACE_USAGE_LIMIT_CODE,
 } from "@t3tools/shared/usageLimits";
+import { AsyncResult } from "effect/reactivity";
 import * as Clipboard from "expo-clipboard";
 import { T, useGT } from "gt-react-native";
-import { m } from "../../i18n/messages";
 import { useState } from "react";
 import { Pressable, View } from "react-native";
-import { tryOpenExternalUrl } from "../../lib/openExternalUrl";
 import { ProviderIcon } from "../../components/ProviderIcon";
 import { AppText as Text } from "../../components/ui/AppText";
-import { useDeadlinePassed } from "../../lib/clock";
+import { m } from "../../i18n/messages";
+import { useDeadlinePassed, useNowMinuteMs } from "../../lib/clock";
+import { tryOpenExternalUrl } from "../../lib/openExternalUrl";
+import { uuidv4 } from "../../lib/uuid";
+import { environmentPresentations, useEnvironmentPresentation } from "../../state/presentation";
 import { threadEnvironment } from "../../state/threads";
+import { useAtomValue } from "@effect/atom-react";
 import { useAtomCommand } from "../../state/use-atom-command";
 
 export function UsageLimitRecoveryCard({
@@ -31,6 +35,12 @@ export function UsageLimitRecoveryCard({
 }) {
   const gt = useGT();
   const updateMetadata = useAtomCommand(threadEnvironment.updateMetadata);
+  const startTurn = useAtomCommand(threadEnvironment.startTurn, { reportFailure: false });
+  const settings = useEnvironmentPresentation(environmentId).presentation?.serverConfig?.settings;
+  const providers = useAtomValue(environmentPresentations.providersByEnvironmentAtom).get(
+    environmentId,
+  );
+  const nowMs = useNowMinuteMs();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const resetAt = thread.runtime?.usageLimitResetAt ?? null;
@@ -48,6 +58,7 @@ export function UsageLimitRecoveryCard({
     scheduled &&
     resetAt &&
     thread.snoozedUntil &&
+    !isOpenEndedSnooze(thread.snoozedUntil) &&
     Date.parse(thread.snoozedUntil) > Date.parse(resetAt)
       ? thread.snoozedUntil
       : resetAt;
@@ -65,6 +76,40 @@ export function UsageLimitRecoveryCard({
     !runId
   )
     return null;
+  // The next account in the active profile; the server switches on its own when the profile says so.
+  const failover =
+    settings && providers && thread.settledOverride !== "settled"
+      ? limitFailoverSelection({
+          selection: thread.modelSelection,
+          providers,
+          settings,
+          projectId: thread.projectId,
+          now: nowMs,
+        })
+      : null;
+  const failoverProvider = providers?.find((entry) => entry.instanceId === failover?.instanceId);
+  async function switchAccount() {
+    if (!failover || !runId) return;
+    setPending(true);
+    setError(null);
+    const result = await startTurn({
+      environmentId,
+      input: {
+        creationSource: "mobile",
+        threadId: thread.id,
+        manualContinuationOfRunId: runId,
+        modelSelection: failover,
+        message: { messageId: MessageId.make(uuidv4()), role: "user", text: "", attachments: [] },
+        runtimeMode: thread.runtimeMode,
+        interactionMode: thread.interactionMode,
+        dispatchMode: "start",
+      },
+    });
+    setPending(false);
+    if (AsyncResult.isFailure(result)) {
+      setError(errorDisplayMessage(squashAtomCommandFailure(result), m) ?? gt("Try again."));
+    }
+  }
   const resumes = canSchedule && scheduled;
   const resumesUpcoming = resumes && !displayPassed;
   const shownAt = resumesUpcoming ? displayAt : resetAt;
@@ -185,9 +230,18 @@ export function UsageLimitRecoveryCard({
                     "Usage limit reached. The provider did not report a reset time. Retry manually when your limit is available.",
                   )}
         </Text>
-        {chatGptLimit || canSchedule ? (
+        {chatGptLimit || canSchedule || failoverProvider ? (
           // The margins cancel the 44pt touch height so the links sit 8pt under the text.
           <View className="-mb-3 -mt-2 flex-row flex-wrap gap-x-4">
+            {failoverProvider ? (
+              <RecoveryAction
+                label={gt("Continue on {account}", {
+                  account: failoverProvider.displayName ?? failoverProvider.instanceId,
+                })}
+                disabled={pending}
+                onPress={() => void switchAccount()}
+              />
+            ) : null}
             {chatGptLimit ? (
               <RecoveryAction
                 label={action.label}

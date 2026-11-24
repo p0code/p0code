@@ -1,0 +1,44 @@
+{
+  "name": "@t3tools/relay-tunnel",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./codec": {
+      "types": "./src/codec.ts",
+      "import": "./src/codec.ts"
+    },
+    "./mux": {
+      "types": "./src/mux.ts",
+      "import": "./src/mux.ts"
+    },
+    "./sni": {
+      "types": "./src/sni.ts",
+      "import": "./src/sni.ts"
+    },
+    "./auth": {
+      "types": "./src/auth.ts",
+      "import": "./src/auth.ts"
+    },
+    "./client": {
+      "types": "./src/client.ts",
+      "import": "./src/client.ts"
+    },
+    "./certificates": {
+      "types": "./src/certificates.ts",
+      "import": "./src/certificates.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "effect-tsgo tsrs --noEmit",
+    "test": "vp test run --config ../../vite.config.ts --dir ."
+  },
+  "dependencies": {
+    "acme-client": "5.4.0",
+    "ws": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@types/ws": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}

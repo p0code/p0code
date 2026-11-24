@@ -1,87 +1,87 @@
-import { msg, useGT, useMessages } from "gt-react";
-import { errorDisplayMessage, thrownErrorMessage } from "@t3tools/client-runtime/errors";
-import { m } from "~/i18n/messages";
+import { useAtomValue } from "@effect/atom-react";
 import type { EnvironmentServerConfig } from "@t3tools/client-runtime/connection";
+import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { errorDisplayMessage, thrownErrorMessage } from "@t3tools/client-runtime/errors";
+import { sideThreadKindOf, type SideThreadOpenIntent } from "@t3tools/client-runtime/side-thread";
+import {
+  type AtomCommandResult,
+  isAtomCommandInterrupted,
+  squashAtomCommandFailure,
+} from "@t3tools/client-runtime/state/runtime";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
-import type { Dispatch } from "react";
-import type { ComposerThreadTarget } from "../../composerDraftStore";
-import type { ComposerHandleRef } from "../../composerHandleContext";
+import type { RunStopPresentation } from "@t3tools/client-runtime/state/thread-execution";
 import {
-  isThreadWokeUnseen,
-  branchMismatchKey,
-  isBranchMismatchDismissedForSession,
-  shouldShowBranchMismatchBanner,
-  chatActionErrorMessage,
-  makeThreadErrorSetter,
-} from "../ChatView.logic";
-import { useStableCallback } from "../../hooks/useStableCallback";
-import { useDeadlinePassed, useNowAfter } from "../../hooks/useDeadline";
-import type { usePendingThreadRequests } from "./usePendingThreadRequests";
-import {
-  AuthOrchestrationOperateScope,
-  AuthSourceControlWriteScope,
-  type EnvironmentId,
-  type ScopedThreadRef,
-  type ThreadId,
-  ProviderInteractionMode,
-  RuntimeMode,
-} from "@t3tools/contracts";
+  BACKGROUND_WORK_STOP_RETRY_AFTER_MS,
+  type BackgroundWorkStopRequest,
+  isBackgroundWorkStopPending,
+} from "@t3tools/client-runtime/state/thread-execution";
 import {
   effectiveSnoozed,
   snoozeWakeLabel,
   threadWokeAt,
 } from "@t3tools/client-runtime/state/thread-settled";
 import {
-  BACKGROUND_WORK_STOP_RETRY_AFTER_MS,
-  type BackgroundWorkStopRequest,
-  isBackgroundWorkStopPending,
-} from "@t3tools/client-runtime/state/thread-execution";
-import { useAcknowledgeThreadWoke, useThreadActions } from "../../hooks/useThreadActions";
-import { settleAndAdvance } from "../../settleAndAdvance";
-import type { ChatShortcutCommands } from "./useChatShortcuts";
-import { resolveThreadLastVisitedAt } from "../Sidebar.logic";
-import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { type SetStateAction, useRef, useState } from "react";
+  AuthOrchestrationOperateScope,
+  AuthSourceControlWriteScope,
+  type EnvironmentId,
+  isOpenEndedSnooze,
+  ProviderInteractionMode,
+  RuntimeMode,
+  type ScopedThreadRef,
+  type ThreadId,
+} from "@t3tools/contracts";
 import { useNavigate, useRouter } from "@tanstack/react-router";
-import {
-  isAtomCommandInterrupted,
-  squashAtomCommandFailure,
-  type AtomCommandResult,
-} from "@t3tools/client-runtime/state/runtime";
-import { useUiStateStore } from "../../uiStateStore";
-import { type ChatMessage, DEFAULT_INTERACTION_MODE } from "../../types";
-import { AlarmClockIcon, CheckCircle2Icon } from "lucide-react";
-import { stackedThreadToast, toastManager } from "../ui/toast";
-import { titleRegenerationToast } from "../threadTitleRegenerationToast";
+import { Atom } from "effect/reactivity";
+import { msg, useGT, useMessages } from "gt-react";
+import { AlarmClockIcon, CheckCircle2Icon, EyeOffIcon } from "lucide-react";
+import type { Dispatch } from "react";
+import { type SetStateAction, useRef, useState } from "react";
+import { m } from "~/i18n/messages";
 import { newMessageId } from "~/lib/utils";
-import { buildThreadRouteParams } from "../../threadRoutes";
-import { composerDraftHasUserContent, useComposerDraftStore } from "../../composerDraftStore";
 import { useEnvironmentScope } from "~/state/session";
-import { threadEnvironment } from "../../state/threads";
-import { vcsEnvironment } from "../../state/vcs";
-import { useChildThreadInputs, readThreadShell, waitForThreadShell } from "../../state/entities";
-import { serverEnvironment } from "../../state/server";
-import { environmentShell } from "../../state/shell";
-import { ThreadStatusLine } from "./ThreadStatusLine";
-import { formatRelativeTimeLabel } from "../../timestampFormat";
+import type { ComposerThreadTarget } from "../../composerDraftStore";
+import { composerDraftHasUserContent, useComposerDraftStore } from "../../composerDraftStore";
+import type { ComposerHandleRef } from "../../composerHandleContext";
+import { useDeadlinePassed, useNowAfter } from "../../hooks/useDeadline";
+import { useStableCallback } from "../../hooks/useStableCallback";
+import { useAcknowledgeThreadWoke, useThreadActions } from "../../hooks/useThreadActions";
+import { openSideThread, resolveThreadOpenRoute } from "../../lib/sideChatPane";
 import { appAtomRegistry } from "../../rpc/atomRegistry";
+import { settleAndAdvance } from "../../settleAndAdvance";
+import { readThreadShell, useChildThreadInputs, waitForThreadShell } from "../../state/entities";
+import { serverEnvironment } from "../../state/server";
 import { readEnvironmentScope } from "../../state/session";
+import { environmentShell } from "../../state/shell";
+import { environmentThreadDetails, threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { useOrchestrationCommand } from "../../state/use-orchestration-command";
+import { vcsEnvironment } from "../../state/vcs";
+import { buildThreadRouteParams } from "../../threadRoutes";
+import { formatRelativeTimeLabel } from "../../timestampFormat";
+import { type ChatMessage, DEFAULT_INTERACTION_MODE } from "../../types";
+import { useUiStateStore } from "../../uiStateStore";
+import {
+  branchMismatchKey,
+  chatActionErrorMessage,
+  isBranchMismatchDismissedForSession,
+  isThreadWokeUnseen,
+  makeThreadErrorSetter,
+  shouldShowBranchMismatchBanner,
+} from "../ChatView.logic";
+import { resolveThreadLastVisitedAt } from "../Sidebar.logic";
+import { titleRegenerationToast } from "../threadTitleRegenerationToast";
+import { stackedThreadToast, toastManager } from "../ui/toast";
 import {
   backgroundWorkNowItem,
   childInputNowItem,
   goalNowItem,
   runStopNowItem,
 } from "./ThreadActivityBanners";
+import { ThreadStatusLine } from "./ThreadStatusLine";
+import type { ChatShortcutCommands } from "./useChatShortcuts";
 import { useForceStopThread } from "./useForceStopThread";
-import { useAtomValue } from "@effect/atom-react";
-import type { RunStopPresentation } from "@t3tools/client-runtime/state/thread-execution";
-import { Atom } from "effect/reactivity";
-import { environmentThreadDetails } from "../../state/threads";
-import { type SideThreadOpenIntent, sideThreadKindOf } from "@t3tools/client-runtime/side-thread";
-import { openSideThread, resolveThreadOpenRoute } from "../../lib/sideChatPane";
 import type { useLocalDispatchState } from "./useLocalDispatchState";
+import type { usePendingThreadRequests } from "./usePendingThreadRequests";
 const RELATED_THREAD_SHELL_WAIT_MS = 1_000;
 
 function actionErrorMessage(error: unknown): string {
@@ -191,7 +191,7 @@ export function useThreadLifecycle(input: ThreadLifecycleInput) {
   const messages = useMessages();
   const navigate = useNavigate();
   const router = useRouter();
-  const { settleThread, pinThread, confirmAndUnpinThread } = useThreadActions();
+  const { settleThread, pinThread, confirmAndUnpinThread, toggleHideThread } = useThreadActions();
   const canWriteSourceControl = useEnvironmentScope(environmentId, AuthSourceControlWriteScope);
   const switchGitRef = useAtomCommand(vcsEnvironment.switchRef, { reportFailure: false });
   const updateThreadMetadata = useOrchestrationCommand(threadEnvironment.updateMetadata, {
@@ -654,21 +654,24 @@ export function useThreadLifecycle(input: ThreadLifecycleInput) {
   const settledAt = activeThreadShell?.settledAt ?? null;
   // Same rounding as the sidebar's snoozed shelf, so both read the same hour.
   const snoozeNow = `${nowMinute}:00.000Z`;
+  const hidden = isOpenEndedSnooze(snoozedUntil);
   const snoozeWake =
-    snoozedUntil && Date.parse(snoozedUntil) > Date.parse(snoozeNow)
+    !hidden && snoozedUntil && Date.parse(snoozedUntil) > Date.parse(snoozeNow)
       ? snoozeWakeLabel(snoozedUntil, { now: snoozeNow }, messages)
       : null;
   const threadStatusLine = activeThreadSnoozed ? (
     limitRecoveryHoldsSnooze ? null : (
       <ThreadStatusLine
-        icon={<AlarmClockIcon />}
+        icon={hidden ? <EyeOffIcon /> : <AlarmClockIcon />}
         label={
-          snoozeWake
-            ? gt("Snoozed, {remaining} left", { remaining: snoozeWake })
-            : gt("Snoozed", { $context: "thread status" })
+          hidden
+            ? gt("Hidden until you bring it back")
+            : snoozeWake
+              ? gt("Snoozed, {remaining} left", { remaining: snoozeWake })
+              : gt("Snoozed", { $context: "thread status" })
         }
         clockMinute={nowMinute}
-        actionLabel={isUnsnoozing ? gt("Waking...") : gt("Wake now")}
+        actionLabel={isUnsnoozing ? gt("Waking...") : hidden ? gt("Bring back") : gt("Wake now")}
         actionDisabled={!canOperateThread || isUnsnoozing}
         onAction={() => void handleUnsnoozeActiveThreadStable()}
       />
@@ -734,6 +737,16 @@ export function useThreadLifecycle(input: ThreadLifecycleInput) {
       ).then(
         toastThreadActionFailure(
           activeThreadPinned ? m(msg("Failed to unpin thread")) : m(msg("Failed to pin thread")),
+        ),
+      );
+    },
+    "thread.hide": () => {
+      if (!readEnvironmentScope(environmentId, AuthOrchestrationOperateScope)) return false;
+      if (!activeThreadShell || !activeThreadRef || !serverConfigLoaded) return;
+      const hiding = !isOpenEndedSnooze(activeThreadShell.snoozedUntil);
+      void toggleHideThread(activeThreadRef).then(
+        toastThreadActionFailure(
+          hiding ? m(msg("Failed to hide thread")) : m(msg("Failed to bring thread back")),
         ),
       );
     },

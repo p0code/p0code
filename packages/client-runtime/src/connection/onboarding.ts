@@ -22,7 +22,7 @@ import {
 } from "../environment/endpoint.ts";
 import { fetchRemoteEnvironmentDescriptor } from "../environment/descriptor.ts";
 import * as ClientCapabilities from "../platform/capabilities.ts";
-import * as ManagedRelay from "../relay/managedRelay.ts";
+import * as ManagedRelay from "../authorization/dpopSigner.ts";
 import {
   BearerConnectionCredential,
   BearerConnectionProfile,

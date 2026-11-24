@@ -17,6 +17,7 @@ import {
   type OrchestrationV2ThreadHistoryPage,
   type OrchestrationV2ThreadShellSnapshot,
   NodeId,
+  OPEN_ENDED_SNOOZE_UNTIL,
   PlanId,
   ProjectId,
   ProviderDriverKind,
@@ -8984,6 +8985,8 @@ it.layer(layerTest)("ProjectionStoreV2", (it) => {
         if (lastErrorClass === "usage_limit") {
           assert.deepEqual(candidate, {
             id: sqlShell.id,
+            projectId: sqlShell.projectId,
+            modelSelection: sqlShell.modelSelection,
             status: sqlShell.status,
             lastErrorClass: sqlShell.lastErrorClass,
             usageLimitResetAt: sqlShell.usageLimitResetAt,
@@ -8994,6 +8997,7 @@ it.layer(layerTest)("ProjectionStoreV2", (it) => {
             settledOverride: sqlShell.settledOverride,
             pendingRuntimeRequest: null,
             limitRecovery: sqlShell.limitRecovery,
+            autoResumeAtLimitReset: sqlShell.autoResumeAtLimitReset ?? null,
             snoozedUntil: sqlShell.snoozedUntil,
           });
         } else assert.isUndefined(candidate);
@@ -9173,6 +9177,42 @@ it.layer(layerTest)("ProjectionStoreV2", (it) => {
           (row) => row.id === threadId,
         ),
       );
+      // A thread's own choice overrides the environment default in both directions.
+      for (const [own, environmentDefault, found] of [
+        [true, false, true],
+        [false, true, false],
+      ] as const) {
+        yield* sql`UPDATE orchestration_v2_projection_threads
+          SET payload_json = json_set(payload_json, '$.autoResumeAtLimitReset', json(${String(own)}))
+          WHERE thread_id = ${threadId}`;
+        assert.strictEqual(
+          (yield* store.getLimitRecoveryCandidates({
+            ...recoveryOptions,
+            autoResume: environmentDefault,
+          })).some((row) => row.id === threadId),
+          found,
+        );
+      }
+      yield* sql`UPDATE orchestration_v2_projection_threads
+        SET payload_json = ${originalRow!.payload_json} WHERE thread_id = ${threadId}`;
+      // Account failover lists a recent limit that no reset recovery holds, unless the thread opted out.
+      for (const [own, failoverSince, found] of [
+        [null, DateTime.subtract(now, { days: 1 }), true],
+        [null, DateTime.add(now, { minutes: 1 }), false],
+        [false, DateTime.subtract(now, { days: 1 }), false],
+      ] as const) {
+        yield* sql`UPDATE orchestration_v2_projection_threads
+          SET payload_json = json_set(payload_json, '$.autoResumeAtLimitReset', json(${String(own)}))
+          WHERE thread_id = ${threadId}`;
+        assert.strictEqual(
+          (yield* store.getLimitRecoveryCandidates({ ...recoveryOptions, failoverSince })).some(
+            (row) => row.id === threadId,
+          ),
+          found,
+        );
+      }
+      yield* sql`UPDATE orchestration_v2_projection_threads
+        SET payload_json = ${originalRow!.payload_json} WHERE thread_id = ${threadId}`;
       const reset = DateTime.makeUnsafe(limitItem.failure.resetAt);
       const recovery = {
         runId: original.id,
@@ -9216,6 +9256,16 @@ it.layer(layerTest)("ProjectionStoreV2", (it) => {
         yield* store.getLimitRecoveryWakeAt(reset),
         DateTime.toEpochMillis(DateTime.add(reset, { minutes: 1 })),
       );
+      // Hiding requires a per-thread opt-in even when recovery was armed by the environment.
+      yield* sql`UPDATE orchestration_v2_projection_threads
+        SET payload_json = json_set(payload_json, '$.snoozedUntil', ${OPEN_ENDED_SNOOZE_UNTIL}, '$.autoResumeAtLimitReset', json('true'))
+        WHERE thread_id = ${threadId}`;
+      assert.isDefined(
+        (yield* store.getLimitRecoveryCandidates({ ...recoveryOptions, now: reset })).find(
+          (row) => row.id === threadId,
+        ),
+      );
+      assert.isNull(yield* store.getLimitRecoveryWakeAt(reset));
       yield* sql`UPDATE orchestration_v2_projection_threads
         SET payload_json = json_set(payload_json, '$.snoozedUntil', NULL, '$.limitRecovery.autoResume', json('false'))
         WHERE thread_id = ${threadId}`;

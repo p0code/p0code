@@ -77,7 +77,7 @@ export class NoRunningServerError extends Schema.TaggedError<NoRunningServerErro
       ...(this.inLinkedWorktree
         ? ["In a linked worktree, pass --base-dir to pair with a server outside it."]
         : []),
-      `Start one with \`${this.serveCommand}\`, or connect this machine with T3 Connect: \`${this.connectCommand}\`.`,
+      `Start one with \`${this.serveCommand}\`, or install its background service with: \`${this.connectCommand}\`.`,
     ].join("\n");
   }
 }
@@ -327,7 +327,7 @@ const discoverPairTarget = Effect.fn("pair.discoverPairTarget")(function* (
     checkedStatePaths,
     inLinkedWorktree,
     serveCommand: (yield* resolveHostCliCommand("serve", baseDirArgs)).command,
-    connectCommand: (yield* resolveHostCliCommand("connect", baseDirArgs)).command,
+    connectCommand: (yield* resolveHostCliCommand("up", baseDirArgs)).command,
   });
 });
 
@@ -581,14 +581,16 @@ export const pairCommand = Command.make("pair", {
         pairingBaseUrl = resolved.baseUrl;
         notes.push(...resolved.notes);
       } else {
-        pairingBaseUrl = resolveDirectPairingBaseUrl(target.state, yield* HostProcess.Platform);
+        pairingBaseUrl =
+          target.descriptor.publicOrigin ??
+          resolveDirectPairingBaseUrl(target.state, yield* HostProcess.Platform);
         if (isLoopbackHost(new URL(pairingBaseUrl).hostname)) {
           notes.push(
             "This URL is only reachable from this machine. To reach it from your other devices, run `t3 up`, or re-run with --tailscale.",
           );
         } else if (target.state.privateNetworkOnly) {
           notes.push(
-            "This URL works only from this machine's local network. From elsewhere, re-run with --tailscale or use T3 Connect.",
+            "This URL works only from this machine's local network. From elsewhere, re-run with --tailscale or use self-hosted relay.",
           );
         }
         if (target.variant === "dev" && target.state.devUrl === undefined) {

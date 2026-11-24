@@ -1,35 +1,31 @@
-import { CollapsibleUserMessageBody } from "./CollapsibleUserMessageBody";
-import { msg, T, useGT, useLocale, useMessages } from "gt-react-native";
-import { m } from "../../i18n/messages";
-import { errorDisplayMessage } from "@t3tools/client-runtime/errors";
 import { toServerClock } from "@t3tools/client-runtime/clock";
+import { errorDisplayMessage } from "@t3tools/client-runtime/errors";
+import { ASSISTANT_CITATION_MAX_TEXT_LENGTH, type AssistantCitation } from "@t3tools/contracts";
+import { formatProviderSkillDisplayName } from "@t3tools/shared/inlineSkills";
 import { formatDuration } from "@t3tools/shared/orchestrationTimingCopy";
-import { Sheet } from "../../components/ui/Sheet";
-import { ListActionRow } from "../../components/ui/ListActionRow";
-import { ListSection } from "../../components/ui/ListSection";
-import { collectMobileAssistantTextSelectors } from "../../lib/assistantCitationSelection";
+import { msg, T, useGT, useLocale, useMessages } from "gt-react-native";
 import { Button } from "../../components/ui/Button";
 import * as Dialog from "../../components/ui/Dialog";
-import { ASSISTANT_CITATION_MAX_TEXT_LENGTH, type AssistantCitation } from "@t3tools/contracts";
-import { useOpenPullRequest } from "../../native/useOpenPullRequest";
-import { useWorkspaceSettledContentWidth } from "../layout/workspace-content-width";
-import { useVisibleSecondClock } from "./use-visible-second-clock";
+import { ListActionRow } from "../../components/ui/ListActionRow";
+import { ListSection } from "../../components/ui/ListSection";
+import { Sheet } from "../../components/ui/Sheet";
+import { m } from "../../i18n/messages";
+import { collectMobileAssistantTextSelectors } from "../../lib/assistantCitationSelection";
 import {
-  ThreadMarkdownVideo,
-  ThreadMediaRetainContext,
-  ThreadMediaVisibleContext,
-} from "./ThreadMarkdownVideo";
-import { useMarkdownImageSource } from "../../native/useMarkdownImageSource";
+  enrichedSkillInstructionsPath,
+  enrichedSkillReference,
+} from "../../lib/enrichedLinkPresentation";
 import {
   enrichedContextLinkCustomization,
   enrichedThreadLinkCustomization,
   withChipIcon,
 } from "../../native/useEnrichedLinkVariants";
-import {
-  enrichedSkillInstructionsPath,
-  enrichedSkillReference,
-} from "../../lib/enrichedLinkPresentation";
-import { formatProviderSkillDisplayName } from "@t3tools/shared/inlineSkills";
+import { useMarkdownImageSource } from "../../native/useMarkdownImageSource";
+import { useOpenPullRequest } from "../../native/useOpenPullRequest";
+import { useWorkspaceSettledContentWidth } from "../layout/workspace-content-width";
+import { CollapsibleUserMessageBody } from "./CollapsibleUserMessageBody";
+import { GuestBubbleTint, GuestMessageName } from "./guestMessageStyle";
+import { LinkRequestCard } from "./LinkRequestCard";
 import {
   ThreadContextDivider,
   ThreadStatusLine,
@@ -40,67 +36,20 @@ import {
   ThreadHandoffRow,
   ThreadModelSwitchDivider,
 } from "./thread-handoff-row";
-import { GuestBubbleTint, GuestMessageName } from "./guestMessageStyle";
 import { ThreadGuestPendingMessage, useThreadGuestShare } from "./ThreadGuestShareBar";
-import { LinkRequestCard } from "./LinkRequestCard";
-import { FeedbackRequestCard } from "./FeedbackRequestCard";
-import { SecretRequestCard } from "./SecretRequestCard";
-import { AppActivityIndicator } from "../../components/ui/AppActivityIndicator";
 import {
-  WorktreePreparingHeader,
-  WorktreeSetupCard,
-  WorktreeSetupDetails,
-  WorktreeSetupFoldChip,
-  worktreeSetupHandedOff,
-  type WorktreeSetupCardProps,
-} from "./worktree-setup-card";
-import * as Haptics from "expo-haptics";
+  ThreadMarkdownVideo,
+  ThreadMediaRetainContext,
+  ThreadMediaVisibleContext,
+} from "./ThreadMarkdownVideo";
+import { useVisibleSecondClock } from "./use-visible-second-clock";
+
 import { KeyboardAwareLegendList } from "@legendapp/list/keyboard";
 import { useViewabilityAmount, type LegendListRef } from "@legendapp/list/react-native";
+import { useFocusEffect, useIsFocused, useNavigation } from "@react-navigation/native";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { HandoffEndpoints } from "@t3tools/client-runtime/handoff";
-import {
-  IDLE_COMPACTING_LABELS,
-  resolveUserMessageFileCards,
-  resolveUserMessagePresentation,
-} from "@t3tools/client-runtime/user-message";
-import { canForkProjectedAssistantItem } from "@t3tools/client-runtime/state/thread-workflows";
-import type { WorkflowOpening } from "@t3tools/client-runtime/state/subagentRuntime";
-import {
-  AuthFilesystemReadScope,
-  idleCompactionOf,
-  isOrchestrationV2WorkActive,
-  type OrchestrationMessageContext,
-  ThreadId,
-  type ChatAttachment,
-  type ChatFileAttachment,
-  type ChatImageAttachment,
-  type EnvironmentId,
-  type MessageId,
-  type OrchestrationV2ProjectedTurnItem,
-  type RunId,
-  type ScheduledTaskId,
-  type ScopedThreadRef,
-} from "@t3tools/contracts";
-import type { ToolCallVisibility } from "@t3tools/contracts/settings";
-import { encodeComposerContextFragment } from "@t3tools/shared/composerContextClipboard";
-import {
-  hasThreadLinks,
-  hostedThreadLink,
-  parseThreadLinkHref,
-  threadLinkRefs,
-} from "@t3tools/shared/threadLinks";
-import { PROMPT_LINK_MAX_PROMPT_LENGTH } from "@t3tools/shared/promptLinks";
-import {
-  parseComposerContextHref,
-  collectComposerContextReferences,
-  replaceComposerContextReferences,
-  formatComposerContextReference,
-} from "@t3tools/shared/composerContextReferences";
-import { ComposerContextSheet } from "../../components/ComposerContextSheet";
-import { writeComposerContextClipboard } from "../../lib/composerContextClipboard";
-import type { CodexArtifactTemplate } from "@t3tools/shared/codexArtifactTemplates";
-import { codexArtifactTemplatePresentationLabel } from "@t3tools/shared/codexArtifactTemplatesCopy";
+import { classifyMarkdownImageSource } from "@t3tools/client-runtime/markdown-images";
 import { resolveAssetUrl } from "@t3tools/client-runtime/state/assets";
 import { formatAttachmentSize } from "@t3tools/client-runtime/state/attachments";
 import {
@@ -109,35 +58,71 @@ import {
   settlePromise,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
-import { classifyMarkdownImageSource } from "@t3tools/client-runtime/markdown-images";
+import type { WorkflowOpening } from "@t3tools/client-runtime/state/subagentRuntime";
+import { canForkProjectedAssistantItem } from "@t3tools/client-runtime/state/thread-workflows";
+import {
+  IDLE_COMPACTING_LABELS,
+  resolveUserMessageFileCards,
+  resolveUserMessagePresentation,
+} from "@t3tools/client-runtime/user-message";
 import {
   contextCompactionTokenCounts,
   resolveViewedImageAsset,
 } from "@t3tools/client-runtime/work-log/presentation";
 import {
+  AuthFilesystemReadScope,
+  idleCompactionOf,
+  isOrchestrationV2WorkActive,
+  ThreadId,
+  type ChatAttachment,
+  type ChatFileAttachment,
+  type ChatImageAttachment,
+  type EnvironmentId,
+  type MessageId,
+  type OrchestrationMessageContext,
+  type OrchestrationV2ProjectedTurnItem,
+  type RunId,
+  type ScheduledTaskId,
+  type ScopedThreadRef,
+} from "@t3tools/contracts";
+import type { ToolCallVisibility } from "@t3tools/contracts/settings";
+import { CHAT_LIST_ANCHOR_OFFSET, resolveChatListAnchoredEndSpace } from "@t3tools/shared/chatList";
+import type { CodexArtifactTemplate } from "@t3tools/shared/codexArtifactTemplates";
+import { codexArtifactTemplatePresentationLabel } from "@t3tools/shared/codexArtifactTemplatesCopy";
+import {
   renderCodexInlineDirectivesAsMarkdown,
   splitCodexArtifactTemplateMarkdown,
 } from "@t3tools/shared/codexMarkdownDirectives";
-import { CHAT_LIST_ANCHOR_OFFSET, resolveChatListAnchoredEndSpace } from "@t3tools/shared/chatList";
+import { encodeComposerContextFragment } from "@t3tools/shared/composerContextClipboard";
+import {
+  collectComposerContextReferences,
+  formatComposerContextReference,
+  parseComposerContextHref,
+  replaceComposerContextReferences,
+} from "@t3tools/shared/composerContextReferences";
 import { imageMimeType } from "@t3tools/shared/image";
-import { videoMimeType } from "@t3tools/shared/video";
-import { SymbolView, type AppSymbolName } from "../../components/ui/AppSymbol";
+import { PROMPT_LINK_MAX_PROMPT_LENGTH } from "@t3tools/shared/promptLinks";
 import { textDirection } from "@t3tools/shared/textDirection";
-import { useFocusEffect, useIsFocused, useNavigation } from "@react-navigation/native";
-import { useNativeWorkspaceColumnsSupported } from "../../native/NativeWorkspaceColumns";
-import { useDeviceType } from "../../native/native-layout-metrics";
-import { isDuoDevice } from "../../lib/device-type";
+import {
+  hasThreadLinks,
+  hostedThreadLink,
+  parseThreadLinkHref,
+  threadLinkRefs,
+} from "@t3tools/shared/threadLinks";
+import { videoMimeType } from "@t3tools/shared/video";
+import * as Haptics from "expo-haptics";
+import { Image as ExpoImage } from "expo-image";
 import {
   memo,
   useCallback,
   useEffect,
   useEffectEvent,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
   useSyncExternalStore,
-  useId,
   type ComponentPropsWithRef,
   type Dispatch,
   type ReactNode,
@@ -146,54 +131,57 @@ import {
 } from "react";
 import {
   Image,
-  ScrollView,
   Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+  type ColorValue,
   type LayoutChangeEvent,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
-  Pressable,
-  StyleSheet,
-  type ColorValue,
-  useWindowDimensions,
-  View,
 } from "react-native";
-import { Image as ExpoImage } from "expo-image";
+import Animated, { FadeIn, FadeInDown, type SharedValue } from "react-native-reanimated";
 import { useResolveClassNames } from "uniwind";
+import { ComposerContextSheet } from "../../components/ComposerContextSheet";
+import { AppActivityIndicator } from "../../components/ui/AppActivityIndicator";
+import { SymbolView, type AppSymbolName } from "../../components/ui/AppSymbol";
+import { FilePreviewGallery, useFilePreviewGallery } from "../../components/ui/FilePreviewGallery";
+import { FilePreviewModal, type FilePreviewSource } from "../../components/ui/FilePreviewModal";
+import { PresentationSource } from "../../components/ui/NativePresentation";
 import { useReduceMotionEnabled } from "../../lib/appState";
-import { useFilePreviewGallery, FilePreviewGallery } from "../../components/ui/FilePreviewGallery";
 import { assetImageSource } from "../../lib/assetImageSource";
-import {
-  filePreviewSourceIdentifier,
-  remoteAttachmentImageSource,
-} from "../../lib/filePreviewGallery";
+import { downloadAndShareAttachment } from "../../lib/attachmentDownload";
+import { writeComposerContextClipboard } from "../../lib/composerContextClipboard";
 import { composerImageGallery } from "../../lib/composerImageGallery";
 import {
   isFileBackedComposerAttachment,
   type FileBackedComposerAttachment,
 } from "../../lib/composerImages";
+import { copyTextWithHaptic } from "../../lib/copyTextWithHaptic";
+import { isDuoDevice } from "../../lib/device-type";
+import { inlineFilePreviewKind, isPdfFile } from "../../lib/filePreview";
+import {
+  filePreviewSourceIdentifier,
+  remoteAttachmentImageSource,
+} from "../../lib/filePreviewGallery";
+import { FONT_FAMILIES } from "../../lib/fontFamilies";
 import { useLocalAttachmentPreview } from "../../lib/localAttachmentPreview";
+import { splitMarkdownDetails } from "../../lib/markdownDetails";
+import { markdownReferenceDefinitions, withReferenceDefinitions } from "../../lib/markdownDocument";
+import { flattenThemeColor, themeColorWithContrast } from "../../lib/mobileTheme";
+import { scopedThreadKey } from "../../lib/scopedEntities";
 import {
   rememberSentImage,
   sentImageHandoff,
   type SentImageHandoff,
 } from "../../lib/sentImageHandoff";
-import { messageImageGallery } from "./messageImageGallery";
-import { MARKDOWN_IMAGE_MAX_WIDTH, resolveMarkdownImageDisplaySize } from "./markdownImageSize";
-import { FilePreviewModal, type FilePreviewSource } from "../../components/ui/FilePreviewModal";
-import { inlineFilePreviewKind, isPdfFile } from "../../lib/filePreview";
-import { ThreadInlineFilePreview } from "./ThreadInlineFilePreview";
-import { flattenThemeColor, themeColorWithContrast } from "../../lib/mobileTheme";
-import { PresentationSource } from "../../components/ui/NativePresentation";
-import { NativeScrollViewMarker } from "../../native/NativeScrollViewMarker";
-import Animated, { FadeIn, FadeInDown, type SharedValue } from "react-native-reanimated";
 import { useUniwindTheme } from "../../lib/useUniwindTheme";
-import { FONT_FAMILIES } from "../../lib/fontFamilies";
-import { scopedThreadKey } from "../../lib/scopedEntities";
-import { copyTextWithHaptic } from "../../lib/copyTextWithHaptic";
-import { downloadAndShareAttachment } from "../../lib/attachmentDownload";
-import { splitMarkdownDetails } from "../../lib/markdownDetails";
-import { markdownReferenceDefinitions, withReferenceDefinitions } from "../../lib/markdownDocument";
 import { hasWideMarkdownBlock } from "../../lib/wideMarkdownBlocks";
+import { useDeviceType } from "../../native/native-layout-metrics";
+import { NativeScrollViewMarker } from "../../native/NativeScrollViewMarker";
+import { useNativeWorkspaceColumnsSupported } from "../../native/NativeWorkspaceColumns";
 import {
   SelectableMarkdownText,
   type MarkdownFileContextMenu,
@@ -203,84 +191,19 @@ import {
   type NativeMarkdownTextStyle,
   type SelectableMarkdownSkill,
 } from "../../native/SelectableMarkdownText";
+import { MARKDOWN_IMAGE_MAX_WIDTH, resolveMarkdownImageDisplaySize } from "./markdownImageSize";
+import { messageImageGallery } from "./messageImageGallery";
+import { SecretRequestCard } from "./SecretRequestCard";
+import { ThreadInlineFilePreview } from "./ThreadInlineFilePreview";
+import {
+  WorktreePreparingHeader,
+  WorktreeSetupCard,
+  WorktreeSetupDetails,
+  WorktreeSetupFoldChip,
+  worktreeSetupHandedOff,
+  type WorktreeSetupCardProps,
+} from "./worktree-setup-card";
 
-import { AppText as Text } from "../../components/ui/AppText";
-import { VideoPreviewModal, type VideoPreviewSource } from "../../components/ui/VideoPreviewModal";
-import { markdownFileEmbedLabel, resolveMarkdownMediaPreview } from "../../lib/markdownMedia";
-import {
-  attachmentVideoPreviewSource,
-  mediaVideoThumbnailKey,
-  type MediaVideoPreviewSource,
-} from "../../lib/videoPreviewSource";
-import { CopyTextButton } from "./CopyTextButton";
-import { Menu } from "../../components/ui/Menu";
-import { useAndroidControlSizing } from "../../components/ui/useAndroidControlSizing";
-import { useBarInset, useContentTopInset } from "../../components/ui/useBarInset";
-import { copyPromptLink } from "../prompt-links/prompt-link-actions";
-import { parseReviewCommentMessageSegments } from "../review/reviewCommentSelection";
-import {
-  ReviewCommentCard,
-  useReviewCommentColors,
-  type ReviewCommentColors,
-} from "../review/ReviewCommentCard";
-import { cn } from "../../lib/cn";
-import {
-  deriveCenteredContentHorizontalPadding,
-  deriveThreadWorkLogSizing,
-  type LayoutVariant,
-} from "../../lib/layout";
-import { uuidv4 } from "../../lib/uuid";
-import { resolveNativeMarkdownTypography } from "../../lib/appearancePreferences";
-import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
-import { PierreEntryIcon } from "../../components/PierreEntryIcon";
-import {
-  normalizeNativeMarkdownUrl,
-  resolveMarkdownLinkPresentation,
-} from "../../lib/markdownLinks";
-import {
-  createThreadFeedCache,
-  threadFeedCompactionLabels,
-  failedFeedRunIds,
-  deriveThreadFeedPresentation,
-  threadFeedRunIsUnsettled,
-  isContextCompactionActivityGroup,
-  isContextHandoffActivityGroup,
-  isLinkRequestActivityGroup,
-  isFeedbackRequestActivityGroup,
-  isSecretRequestActivityGroup,
-  type ThreadFeedEntry,
-  type ThreadFeedLatestRun,
-  messageFoldRunId,
-} from "../../lib/threadActivity";
-import type { ThreadContentPresentation } from "./threadContentPresentation";
-import { type ThreadWorkGroupScrollPosition } from "./thread-feed-scroll-position";
-import {
-  collapsedWorkLogHeight,
-  ThreadDisclosureChevron,
-  THREAD_DISCLOSURE_TRANSITION_MS,
-  ThreadWorkGroupToggle,
-  ThreadThinkingRow,
-  ThreadWorkLog,
-  WORK_GROUP_TOGGLE_HEIGHT,
-} from "./thread-work-log";
-import {
-  appendGuestPendingMessages,
-  appendPendingThreadMessages,
-  createPendingTurnAppender,
-  createThreadFeedGrouping,
-  isCompactionCommandFeedEntry,
-  type GroupedThreadFeedRow,
-  type ThreadFeedRow,
-} from "./pending-thread-feed";
-import type { QueuedThreadMessage } from "../../state/thread-outbox-model";
-import { resolveThreadFeedFixedItemSize } from "./thread-feed-item-size";
-import { htmlRenderFrameHeight } from "@t3tools/shared/htmlRender";
-import { htmlRenderRowHeight, ThreadHtmlRender } from "./HtmlRenderWebView";
-import { ThreadMcpApp } from "./McpAppWebView";
-import { assetEnvironment, useAssetUrl, useRefreshAssetUrl } from "../../state/assets";
-import { useAtomQueryRunner } from "../../state/use-atom-query-runner";
-import { readEnvironmentScope, usePreparedConnection } from "../../state/session";
-import { environmentProjects, projectEnvironment } from "../../state/projects";
 import {
   agentWorkingDirectories,
   findAgentDirectoryMatch,
@@ -290,6 +213,50 @@ import {
   WORKSPACE_BASENAME_LOOKUP_LIMIT,
   workspaceLinkLookupQuery,
 } from "@t3tools/client-runtime/workspace-basename-lookup";
+import { htmlRenderFrameHeight } from "@t3tools/shared/htmlRender";
+import * as Option from "effect/Option";
+import { PierreEntryIcon } from "../../components/PierreEntryIcon";
+import { AppText as Text } from "../../components/ui/AppText";
+import { Menu } from "../../components/ui/Menu";
+import { useAndroidControlSizing } from "../../components/ui/useAndroidControlSizing";
+import { useBarInset, useContentTopInset } from "../../components/ui/useBarInset";
+import { VideoPreviewModal, type VideoPreviewSource } from "../../components/ui/VideoPreviewModal";
+import { resolveNativeMarkdownTypography } from "../../lib/appearancePreferences";
+import { cn } from "../../lib/cn";
+import { composerDocumentAttachmentRecord } from "../../lib/composerContext";
+import {
+  deriveCenteredContentHorizontalPadding,
+  deriveThreadWorkLogSizing,
+  type LayoutVariant,
+} from "../../lib/layout";
+import {
+  normalizeNativeMarkdownUrl,
+  resolveMarkdownLinkPresentation,
+} from "../../lib/markdownLinks";
+import { markdownFileEmbedLabel, resolveMarkdownMediaPreview } from "../../lib/markdownMedia";
+import {
+  createThreadFeedCache,
+  deriveThreadFeedPresentation,
+  failedFeedRunIds,
+  isContextCompactionActivityGroup,
+  isContextHandoffActivityGroup,
+  isFeedbackRequestActivityGroup,
+  isLinkRequestActivityGroup,
+  isSecretRequestActivityGroup,
+  messageFoldRunId,
+  threadFeedCompactionLabels,
+  threadFeedRunIsUnsettled,
+  type ThreadFeedEntry,
+  type ThreadFeedLatestRun,
+} from "../../lib/threadActivity";
+import { uuidv4 } from "../../lib/uuid";
+import {
+  attachmentVideoPreviewSource,
+  mediaVideoThumbnailKey,
+  type MediaVideoPreviewSource,
+} from "../../lib/videoPreviewSource";
+import { assetEnvironment, useAssetUrl, useRefreshAssetUrl } from "../../state/assets";
+import { appAtomRegistry } from "../../state/atom-registry";
 import {
   resolveThreadLink,
   useEnvironmentPreviewTunnelOff,
@@ -297,23 +264,25 @@ import {
   useQuietThreadShell,
   useThreadChipIcons,
 } from "../../state/entities";
-import { useEnvironmentPresentation } from "../../state/presentation";
-import { useThreadSelection } from "../../state/use-thread-selection";
-import { useEnvironmentQuery } from "../../state/query";
-import { useLinkedEnvironments } from "../../state/peerLinks";
-import { serverEnvironment } from "../../state/server";
 import { useModelMentions } from "../../state/model-mentions";
-import { composerDocumentAttachmentRecord } from "../../lib/composerContext";
-import * as Option from "effect/Option";
-import { appAtomRegistry } from "../../state/atom-registry";
+import { useLinkedEnvironments } from "../../state/peerLinks";
+import { useEnvironmentPresentation } from "../../state/presentation";
+import { environmentProjects, projectEnvironment } from "../../state/projects";
+import { useEnvironmentQuery } from "../../state/query";
+import { serverEnvironment } from "../../state/server";
+import { readEnvironmentScope, usePreparedConnection } from "../../state/session";
+import type { QueuedThreadMessage } from "../../state/thread-outbox-model";
 import {
   environmentThreadDetails,
   environmentThreadShells,
   threadEnvironment,
 } from "../../state/threads";
-import { ThreadWorkflowOpening, useWorkflowOpening } from "./thread-workflow-opening";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { useAtomQueryRunner } from "../../state/use-atom-query-runner";
+import { useThreadSelection } from "../../state/use-thread-selection";
 import { useV2ItemSupport } from "../../state/v2-item-support";
+import { loopbackUrlForDevice } from "../browser/browserTabs";
+import { useOpenLocalPreview } from "../browser/useOpenLocalPreview";
 import {
   fileRoutePathSegments,
   isAbsolutePath,
@@ -321,28 +290,59 @@ import {
   resolveWorkspaceFilePath,
   resolveWorkspaceRelativeFilePath,
 } from "../files/filePath";
-import { waitForThreadShell } from "./threadForkNavigation";
-import { resolveUserMessageIntentBadge } from "./userMessageIntentBadge";
+import { useSelectWorkspaceDetail } from "../layout/workspace/useSelectWorkspaceDetail";
+import { copyPromptLink } from "../prompt-links/prompt-link-actions";
+import {
+  ReviewCommentCard,
+  useReviewCommentColors,
+  type ReviewCommentColors,
+} from "../review/ReviewCommentCard";
+import { parseReviewCommentMessageSegments } from "../review/reviewCommentSelection";
+import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
+import { openSettings } from "../settings/settings-navigation";
+import { CopyTextButton } from "./CopyTextButton";
 import { fileChipClipboardPath, fileChipMenu, resolveFileChipTarget } from "./fileChipMenu";
-import { useFileChipShare } from "./useFileChipShare";
-import { useOpenLinkedThread } from "./useOpenLinkedThread";
-import { useOpenThreadLink } from "./useOpenThreadLink";
+import { htmlRenderRowHeight, ThreadHtmlRender } from "./HtmlRenderWebView";
+import { ThreadMcpApp } from "./McpAppWebView";
+import {
+  appendGuestPendingMessages,
+  appendPendingThreadMessages,
+  createPendingTurnAppender,
+  createThreadFeedGrouping,
+  isCompactionCommandFeedEntry,
+  type GroupedThreadFeedRow,
+  type ThreadFeedRow,
+} from "./pending-thread-feed";
+import { resolveThreadFeedFixedItemSize } from "./thread-feed-item-size";
+import { type ThreadWorkGroupScrollPosition } from "./thread-feed-scroll-position";
+import {
+  collapsedWorkLogHeight,
+  THREAD_DISCLOSURE_TRANSITION_MS,
+  ThreadDisclosureChevron,
+  ThreadThinkingRow,
+  ThreadWorkGroupToggle,
+  ThreadWorkLog,
+  WORK_GROUP_TOGGLE_HEIGHT,
+} from "./thread-work-log";
+import { ThreadWorkflowOpening, useWorkflowOpening } from "./thread-workflow-opening";
+import type { ThreadContentPresentation } from "./threadContentPresentation";
+import {
+  THREAD_FEED_MAINTAIN_SCROLL_AT_END,
+  THREAD_FEED_MAINTAIN_SCROLL_AT_END_THRESHOLD,
+} from "./threadFeedEndFollow";
+import { waitForThreadShell } from "./threadForkNavigation";
 import {
   MarkdownImageAvailableWidthContext,
   ThreadMarkdownImage,
   ThreadMarkdownImageUnavailable,
   ThreadMarkdownImageView,
 } from "./ThreadMarkdownImage";
-import { ZoomableImagePressable } from "./ZoomableImagePressable";
-import { openSettings } from "../settings/settings-navigation";
-import { loopbackUrlForDevice } from "../browser/browserTabs";
-import { useOpenLocalPreview } from "../browser/useOpenLocalPreview";
-import { useSelectWorkspaceDetail } from "../layout/workspace/useSelectWorkspaceDetail";
-import {
-  THREAD_FEED_MAINTAIN_SCROLL_AT_END,
-  THREAD_FEED_MAINTAIN_SCROLL_AT_END_THRESHOLD,
-} from "./threadFeedEndFollow";
+import { useFileChipShare } from "./useFileChipShare";
 import { useMessageTimeFormatter } from "./useMessageTimeFormatter";
+import { useOpenLinkedThread } from "./useOpenLinkedThread";
+import { useOpenThreadLink } from "./useOpenThreadLink";
+import { resolveUserMessageIntentBadge } from "./userMessageIntentBadge";
+import { ZoomableImagePressable } from "./ZoomableImagePressable";
 
 const linkedThreadEnvironmentIds = (markdown: string, environmentId: EnvironmentId) =>
   hasThreadLinks(markdown)
@@ -2203,15 +2203,7 @@ function renderFeedEntry(
     );
   }
 
-  if (entry.type === "activity-group" && isFeedbackRequestActivityGroup(entry)) {
-    return (
-      <FeedbackRequestCard
-        environmentId={props.environmentId}
-        projectedItem={entry.activities[0]!.projectedItem}
-        iconColor={iconSubtleColor}
-      />
-    );
-  }
+  if (entry.type === "activity-group" && isFeedbackRequestActivityGroup(entry)) return null;
 
   if (entry.type === "activity-group" && isLinkRequestActivityGroup(entry)) {
     return (

@@ -1,5 +1,9 @@
 import type { ProjectThreadAwarenessV2Input } from "@t3tools/shared/agentAwareness";
-import { applyOrchestrationV2ThreadVisit, pendingGuestMessageCount } from "@t3tools/contracts";
+import {
+  applyOrchestrationV2ThreadVisit,
+  OPEN_ENDED_SNOOZE_UNTIL,
+  pendingGuestMessageCount,
+} from "@t3tools/contracts";
 import { applyThreadPullRequestLinkUpdate } from "../sourceControl/threadPullRequests.ts";
 import { projectTurnItemForWire } from "./WireProjection.ts";
 import * as Stream from "effect/Stream";
@@ -197,6 +201,8 @@ export type ProjectionRecoveryKind =
 export type ProjectionLimitRecoveryCandidate = Pick<
   OrchestrationV2ThreadShell,
   | "id"
+  | "projectId"
+  | "modelSelection"
   | "status"
   | "lastErrorClass"
   | "latestRunId"
@@ -207,6 +213,7 @@ export type ProjectionLimitRecoveryCandidate = Pick<
   | "latestRunCompletedAt"
   | "updatedAt"
   | "limitRecovery"
+  | "autoResumeAtLimitReset"
   | "snoozedUntil"
 >;
 
@@ -676,6 +683,8 @@ export interface ProjectionStoreV2Shape {
     readonly now: DateTime.Utc;
     readonly autoResume: boolean;
     readonly snooze: boolean;
+    /** Also lists threads limited since then that no reset recovery holds, to switch accounts. */
+    readonly failoverSince?: DateTime.Utc | null;
   }) => Effect.Effect<ReadonlyArray<ProjectionLimitRecoveryCandidate>, ProjectionStoreV2Error>;
   /** Epoch ms of the next armed reset or snooze end after `now`, when a waiting thread becomes a candidate. */
   readonly getLimitRecoveryWakeAt: (
@@ -2025,6 +2034,9 @@ export function threadShellFromProjection(
     titleRegeneration: projection.thread.titleRegeneration ?? null,
     lastTitleRegeneration: projection.thread.lastTitleRegeneration ?? null,
     limitRecovery: projection.thread.limitRecovery ?? null,
+    ...(projection.thread.autoResumeAtLimitReset == null
+      ? {}
+      : { autoResumeAtLimitReset: projection.thread.autoResumeAtLimitReset }),
     deletedAt: projection.thread.deletedAt,
   };
 }
@@ -2326,6 +2338,9 @@ function shellFromState(input: {
     titleRegeneration: input.state.thread.titleRegeneration ?? null,
     lastTitleRegeneration: input.state.thread.lastTitleRegeneration ?? null,
     limitRecovery: input.state.thread.limitRecovery ?? null,
+    ...(input.state.thread.autoResumeAtLimitReset == null
+      ? {}
+      : { autoResumeAtLimitReset: input.state.thread.autoResumeAtLimitReset }),
     deletedAt: input.state.thread.deletedAt,
   };
 }
@@ -4977,6 +4992,8 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
 
     const getLimitRecoveryCandidates = Effect.fn("ProjectionStore.getLimitRecoveryCandidates")(
       function* (options: Parameters<ProjectionStoreV2Shape["getLimitRecoveryCandidates"]>[0]) {
+        const failoverSinceIso =
+          options.failoverSince == null ? null : DateTime.formatIso(options.failoverSince);
         const rows = yield* sql<{
           readonly payload_json: string;
           readonly run_id: string;
@@ -5032,11 +5049,26 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                   ELSE 0 END
             )
             AND t.archived_at IS NULL
+            AND (
+              json_extract(t.payload_json, '$.snoozedUntil') IS NULL
+              OR julianday(json_extract(t.payload_json, '$.snoozedUntil')) <= julianday(${DateTime.formatIso(options.now)})
+              OR (julianday(json_extract(t.payload_json, '$.snoozedUntil')) >= julianday(${OPEN_ENDED_SNOOZE_UNTIL})
+                AND json_extract(t.payload_json, '$.autoResumeAtLimitReset') = 1)
+            )
             AND json_extract(t.payload_json, '$.settledOverride') IS NOT 'settled'
             AND json_valid(item.payload_json)
             AND json_extract(item.payload_json, '$.failure.class') = 'usage_limit'
-            AND json_extract(item.payload_json, '$.failure.resetAt') IS NOT NULL
-            AND julianday(json_extract(item.payload_json, '$.failure.resetAt')) > julianday(COALESCE(r.completed_at, json_extract(t.payload_json, '$.updatedAt')))
+            AND (
+              (
+                json_extract(item.payload_json, '$.failure.resetAt') IS NOT NULL
+                AND julianday(json_extract(item.payload_json, '$.failure.resetAt')) > julianday(COALESCE(r.completed_at, json_extract(t.payload_json, '$.updatedAt')))
+              )
+              OR (
+                ${failoverSinceIso} IS NOT NULL
+                AND json_extract(t.payload_json, '$.limitRecovery.runId') IS NOT r.run_id
+                AND julianday(COALESCE(r.completed_at, json_extract(t.payload_json, '$.updatedAt'))) >= julianday(${failoverSinceIso})
+              )
+            )
             AND (
               (
                 json_extract(t.payload_json, '$.limitRecovery.runId') IS r.run_id
@@ -5046,6 +5078,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                 AND (
                   json_extract(t.payload_json, '$.snoozedUntil') IS NULL
                   OR julianday(json_extract(t.payload_json, '$.snoozedUntil')) <= julianday(${DateTime.formatIso(options.now)})
+                  OR julianday(json_extract(t.payload_json, '$.snoozedUntil')) >= julianday(${OPEN_ENDED_SNOOZE_UNTIL})
                 )
               )
               OR (
@@ -5054,8 +5087,13 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                   OR json_extract(t.payload_json, '$.limitRecovery.resetAt') IS NOT json_extract(item.payload_json, '$.failure.resetAt')
                 )
                 AND (
-                  ${booleanInt(options.autoResume)}
+                  COALESCE(json_extract(t.payload_json, '$.autoResumeAtLimitReset'), ${booleanInt(options.autoResume)}) = 1
                   OR (${booleanInt(options.snooze)} AND julianday(json_extract(item.payload_json, '$.failure.resetAt')) > julianday(${DateTime.formatIso(options.now)}))
+                  OR (
+                    ${failoverSinceIso} IS NOT NULL
+                    AND json_extract(t.payload_json, '$.autoResumeAtLimitReset') IS NOT 0
+                    AND julianday(COALESCE(r.completed_at, json_extract(t.payload_json, '$.updatedAt'))) >= julianday(${failoverSinceIso})
+                  )
                 )
                 -- A subagent of a settled, archived or deleted parent is abandoned work.
                 AND NOT EXISTS (
@@ -5087,6 +5125,8 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
           if (summary.lastErrorClass !== "usage_limit") continue;
           candidates.push({
             id: thread.id,
+            projectId: thread.projectId,
+            modelSelection: thread.modelSelection,
             status: "failed",
             lastErrorClass: summary.lastErrorClass,
             usageLimitResetAt: summary.usageLimitResetAt,
@@ -5098,6 +5138,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
             settledOverride: thread.settledOverride,
             pendingRuntimeRequest: null,
             limitRecovery: thread.limitRecovery ?? null,
+            autoResumeAtLimitReset: thread.autoResumeAtLimitReset ?? null,
             snoozedUntil: thread.snoozedUntil ?? null,
           });
         }
@@ -5117,6 +5158,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
             MIN(CASE WHEN julianday(reset_at) > julianday(${nowIso})
               THEN (julianday(reset_at) - 2440587.5) * 86400000 END) AS reset_ms,
             MIN(CASE WHEN julianday(snoozed_until) > julianday(${nowIso})
+              AND julianday(snoozed_until) < julianday(${OPEN_ENDED_SNOOZE_UNTIL})
               THEN (julianday(snoozed_until) - 2440587.5) * 86400000 END) AS snooze_ms
           FROM (
             SELECT json_extract(payload_json, '$.limitRecovery.resetAt') AS reset_at,

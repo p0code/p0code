@@ -13,6 +13,7 @@ import {
   CheckpointId,
   CheckpointRef,
   CommandId,
+  OPEN_ENDED_SNOOZE_UNTIL,
   ContextTransferId,
   EnvironmentId,
   EventId,
@@ -13987,6 +13988,7 @@ it.layer(layerTest)("usage-limit recovery", (it) => {
     "resume",
     "resume-started",
     "resume-untagged",
+    "hidden-resume",
     "queued-resume",
     "rearm",
     "snooze-race",
@@ -14180,6 +14182,40 @@ it.layer(layerTest)("usage-limit recovery", (it) => {
         );
         return;
       }
+      if (scenario === "hidden-resume") {
+        yield* orchestrator.dispatch({
+          type: "thread.snooze",
+          threadId,
+          commandId: CommandId.make("recovery:hide"),
+        });
+        yield* orchestrator.dispatch({
+          type: "thread.metadata.update",
+          threadId,
+          commandId: CommandId.make("recovery:opt-in"),
+          autoResumeAtLimitReset: true,
+        });
+        yield* orchestrator.autoArmLimitRecovery({
+          commandId: CommandId.make("recovery:arm-hidden"),
+          threadId,
+          limitRecovery: { runId: run.id, resetAt, autoResume: true, snooze: true },
+        });
+        const hidden = (yield* orchestrator.getShellSnapshot()).threads.find(
+          (row) => row.id === threadId,
+        )!;
+        assert.equal(DateTime.formatIso(hidden.snoozedUntil!), OPEN_ENDED_SNOOZE_UNTIL);
+        yield* TestClock.adjust("1 minute");
+        const resume = limitRecoveryCommand(
+          hidden,
+          true,
+          DateTime.toEpochMillis(yield* DateTime.now),
+        );
+        assert.isNotNull(resume);
+        yield* orchestrator.dispatch(resume!);
+        const resumed = yield* orchestrator.getThreadProjection(threadId);
+        assert.lengthOf(resumed.runs, 2);
+        assert.equal(DateTime.formatIso(resumed.thread.snoozedUntil!), OPEN_ENDED_SNOOZE_UNTIL);
+        return;
+      }
       const snooze = scenario === "wake" || scenario === "cancel-resume-keep-snooze";
       const autoResume = scenario !== "wake";
       const arm = limitRecoveryCommand(shell, autoResume, DateTime.toEpochMillis(now), snooze);
@@ -14317,6 +14353,27 @@ it.layer(layerTest)("usage-limit recovery", (it) => {
         )!;
         assert.isTrue(armedShell.limitRecovery!.autoResume);
         assert.isTrue(armedShell.limitRecovery!.snooze);
+        // The model picker's per-thread toggle also disarms and re-arms the waiting recovery.
+        yield* orchestrator.dispatch({
+          type: "thread.metadata.update",
+          commandId: CommandId.make("recovery:picker-off"),
+          threadId,
+          autoResumeAtLimitReset: false,
+        });
+        current = yield* orchestrator.getThreadProjection(threadId);
+        assert.isFalse(current.thread.autoResumeAtLimitReset);
+        assert.isFalse(current.thread.limitRecovery!.autoResume);
+        assert.isTrue(current.thread.limitRecovery!.snooze);
+        yield* orchestrator.dispatch({
+          type: "thread.metadata.update",
+          commandId: CommandId.make("recovery:picker-on"),
+          threadId,
+          autoResumeAtLimitReset: true,
+        });
+        armedShell = (yield* orchestrator.getShellSnapshot()).threads.find(
+          (thread) => thread.id === threadId,
+        )!;
+        assert.isTrue(armedShell.limitRecovery!.autoResume);
       }
       if (scenario === "manual-snooze") {
         yield* orchestrator.dispatch({

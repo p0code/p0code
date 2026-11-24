@@ -1,3 +1,5 @@
+import * as Option from "effect/Option";
+import * as SelfRelay from "../../../selfRelay/SelfRelay.ts";
 import { OrchestratorMcpFailure, type ServerSettings } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Environment from "../../../environment/ServerEnvironment.ts";
@@ -15,6 +17,8 @@ export function preferences(settings: ServerSettings) {
     enableProviderUpdateChecks,
     backgroundActivity,
     sourceControlWritingStyle,
+    activeAccountProfileId,
+    accountProfiles,
   } = settings;
   const characters = Array.from(sourceControlWritingStyle.customInstructions);
   return {
@@ -27,6 +31,8 @@ export function preferences(settings: ServerSettings) {
       customInstructions: characters.slice(0, 4000).join(""),
       truncated: characters.length > 4000,
     },
+    activeAccountProfileId,
+    accountProfiles: accountProfiles.map(({ id, name }) => ({ id, name })),
   };
 }
 const access = Effect.gen(function* () {
@@ -40,7 +46,37 @@ const access = Effect.gen(function* () {
     });
   return { ...context, descriptor, settings: yield* Settings.ServerSettingsService };
 });
+const relayService = Effect.gen(function* () {
+  const relay = yield* Effect.serviceOption(SelfRelay.SelfRelay);
+  if (Option.isNone(relay))
+    return yield* new OrchestratorMcpFailure({
+      code: "capability_denied",
+      message: "Self-hosted relay is not available here.",
+    });
+  return relay.value;
+});
 export const layer = McpToolAccess.toLayer(EnvironmentToolkit, {
+  t3_environment_relay_status: McpToolAccess.reads(() =>
+    Effect.gen(function* () {
+      yield* access;
+      return yield* (yield* relayService).status;
+    }),
+  ),
+  t3_environment_expose_port: McpToolAccess.writesEnvironment((input, check) =>
+    Effect.gen(function* () {
+      yield* check;
+      yield* access;
+      return yield* (yield* relayService).exposePort(input).pipe(Effect.mapError(unavailable));
+    }),
+  ),
+  t3_environment_unexpose_port: McpToolAccess.writesEnvironment((input, check) =>
+    Effect.gen(function* () {
+      yield* check;
+      yield* access;
+      yield* (yield* relayService).unexposePort(input.port).pipe(Effect.mapError(unavailable));
+      return { ok: true };
+    }),
+  ),
   t3_environment_read: McpToolAccess.reads(() =>
     Effect.gen(function* () {
       const { descriptor, settings } = yield* access;

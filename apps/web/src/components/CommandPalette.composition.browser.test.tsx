@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 import { page, userEvent } from "vite-plus/test/browser";
 import { DEFAULT_RESOLVED_KEYBINDINGS } from "@t3tools/shared/keybindings";
-import { DEFAULT_CLIENT_SETTINGS } from "@t3tools/contracts/settings";
+import { DEFAULT_CLIENT_SETTINGS, DEFAULT_SERVER_SETTINGS } from "@t3tools/contracts/settings";
 import { AuthOrchestrationOperateScope, AuthSourceControlWriteScope } from "@t3tools/contracts";
 import { act, render } from "../../test/render";
 import { CommandPalette } from "./CommandPalette";
 import { openCommandPalette } from "../commandPaletteBus";
-import { primaryServerKeybindingsAtom } from "../state/server";
+import { primaryServerKeybindingsAtom, primaryServerSettingsAtom } from "../state/server";
 
 const scopes = vi.hoisted(() => ({
   denied: undefined as string | undefined,
@@ -39,7 +39,11 @@ const githubAvailable = {
 vi.mock("@effect/atom-react", async (original) => ({
   ...(await original<typeof import("@effect/atom-react")>()),
   useAtomValue: (atom: unknown) =>
-    atom === primaryServerKeybindingsAtom ? DEFAULT_RESOLVED_KEYBINDINGS : [],
+    atom === primaryServerKeybindingsAtom
+      ? DEFAULT_RESOLVED_KEYBINDINGS
+      : atom === primaryServerSettingsAtom
+        ? DEFAULT_SERVER_SETTINGS
+        : [],
 }));
 vi.mock("../hooks/useTheme", () => ({
   useRenderedAppearance: () => "light",
@@ -49,7 +53,8 @@ vi.mock("../hooks/useCustomThemes", () => ({ useCustomThemes: () => [] }));
 vi.mock("../hooks/useEnvironmentTheme", () => ({ useEnvironmentThemeDefinitions: () => [] }));
 vi.mock("../hooks/useSettings", async (original) => ({
   ...(await original<typeof import("../hooks/useSettings")>()),
-  useClientSettings: () => DEFAULT_CLIENT_SETTINGS,
+  useClientSettings: (selector?: (settings: typeof DEFAULT_CLIENT_SETTINGS) => unknown) =>
+    selector ? selector(DEFAULT_CLIENT_SETTINGS) : DEFAULT_CLIENT_SETTINGS,
   useUpdateEnvironmentSettings: () => () => undefined,
 }));
 vi.mock("../hooks/useScratchProject", () => ({
@@ -86,7 +91,7 @@ vi.mock("../state/environments", async (original) => ({
         entry: { target: { _tag: "PrimaryConnectionTarget" } },
         serverConfig: {
           environment: { platform: { os: "linux" }, capabilities: { projectCloneTracking: true } },
-          settings: { addProjectBaseDirectory: "/workspace/" },
+          settings: { ...DEFAULT_SERVER_SETTINGS, addProjectBaseDirectory: "/workspace/" },
           newProjectsRoot: "/workspace/",
         },
       },

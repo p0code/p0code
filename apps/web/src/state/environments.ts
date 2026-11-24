@@ -1,13 +1,11 @@
 import { useAtomValue } from "@effect/atom-react";
 import {
   connectionCatalogDisplayUrl,
-  hasRelayRoute,
   type EnvironmentPresentation as BaseEnvironmentPresentation,
 } from "@t3tools/client-runtime/connection";
-import { Discovery } from "@t3tools/client-runtime/relay";
+
 import type { EnvironmentId } from "@t3tools/contracts";
 import * as Option from "effect/Option";
-import { useState } from "react";
 
 import { environmentCatalog } from "../connection/catalog";
 import { appAtomRegistry } from "../rpc/atomRegistry";
@@ -17,7 +15,7 @@ import {
   useEnvironmentPresentation,
 } from "./presentation";
 import { primaryEnvironmentIdAtom } from "./primaryEnvironment";
-import { relayEnvironmentDiscovery } from "./relay";
+
 import { usePreparedConnection } from "./session";
 
 export interface EnvironmentPresentation extends BaseEnvironmentPresentation {
@@ -36,7 +34,7 @@ function projectEnvironmentPresentation(
     environmentId,
     label: presentation.entry.target.label,
     displayUrl: connectionCatalogDisplayUrl(presentation.entry),
-    relayManaged: hasRelayRoute(presentation.entry),
+    relayManaged: false,
   };
 }
 
@@ -102,21 +100,10 @@ export function useEnvironmentHttpBaseUrl(environmentId: EnvironmentId | null): 
   return Option.isSome(prepared) ? prepared.value.httpBaseUrl : null;
 }
 
-export function useRelayEnvironmentDiscovery(): Discovery.RelayEnvironmentDiscoveryState {
-  return useAtomValue(relayEnvironmentDiscovery.stateValueAtom);
-}
-
 /**
- * The account's T3 Connect machines for a view that keeps one in front of the user. A refresh
+ * The account's Relay machines for a view that keeps one in front of the user. A refresh
  * empties the list until it answers; the machines last seen stay meanwhile.
  */
-export function useRetainedRelayEnvironments() {
-  const discovery = useRelayEnvironmentDiscovery();
-  const [seen, setSeen] = useState(discovery.environments);
-  const emptied = discovery.refreshing && discovery.environments.size === 0;
-  if (!emptied && seen !== discovery.environments) setSeen(discovery.environments);
-  return emptied ? seen : discovery.environments;
-}
 
 export function useEnvironmentIdentities() {
   return useAtomValue(environmentSummaries.identitiesAtom);

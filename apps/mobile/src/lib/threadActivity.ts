@@ -706,7 +706,7 @@ function itemSummary(
     case "secret_request":
       return item.label;
     case "feedback_request":
-      return resolve(msg("Feedback for the T3 team"));
+      return "";
     case "link_request":
       return resolve(msg("Link {target}", { target: linkRequestTargetName(item, resolve) }));
     case "dynamic_tool": {
@@ -2515,6 +2515,7 @@ export function buildThreadFeed(
     readonly locale?: string;
   },
 ): ThreadFeedEntry[] {
+  visibleTurnItems = visibleTurnItems.filter(({ item }) => item.type !== "feedback_request");
   const anchoredMessages = options?.anchoredMessages ?? [];
   const resolve = options?.resolve ?? m;
   const locale = options?.locale;

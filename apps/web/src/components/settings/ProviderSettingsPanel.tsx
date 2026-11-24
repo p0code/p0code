@@ -1,11 +1,3 @@
-import { SettingsGroup } from "./SettingsGroup";
-import { RefreshIcon } from "~/components/ui/refresh-icon";
-import {
-  AuthSettingsWriteScope,
-  AuthProvidersManageScope,
-  AuthOrchestrationReadScope,
-} from "@t3tools/contracts";
-import { useEnvironmentScope, readEnvironmentScope } from "../../state/session";
 import { useAtomValue } from "@effect/atom-react";
 import { connectionErrorText, connectionStatusTitle } from "@t3tools/client-runtime/connection";
 import {
@@ -19,18 +11,21 @@ import {
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import {
+  AuthOrchestrationReadScope,
+  AuthProvidersManageScope,
+  AuthSettingsWriteScope,
   defaultInstanceIdForDriver,
-  type EnvironmentId,
-  type AcpRegistryUrlAuthAction,
   PROVIDER_DISPLAY_NAMES,
   ProviderDriverKind,
+  resolveEnvironmentMachineKind,
+  resolveProjectProviderInstanceEnabled,
+  resolveProviderInstanceEnabled,
+  type AcpRegistryUrlAuthAction,
+  type EnvironmentId,
   type ProjectId,
   type ProviderInstanceConfig,
   type ProviderInstanceId,
   type ServerProvider,
-  resolveEnvironmentMachineKind,
-  resolveProjectProviderInstanceEnabled,
-  resolveProviderInstanceEnabled,
 } from "@t3tools/contracts";
 import { DEFAULT_UNIFIED_SETTINGS, type UnifiedSettings } from "@t3tools/contracts/settings";
 import {
@@ -40,24 +35,29 @@ import {
 import * as Arr from "effect/Array";
 import * as Duration from "effect/Duration";
 import * as Result from "effect/Result";
+import { msg, T, useGT, useMessages, Var } from "gt-react";
 import { PlusIcon } from "lucide-react";
 import { useRef, useState, type ReactNode } from "react";
-import { msg, T, useGT, useMessages, Var } from "gt-react";
+import { RefreshIcon } from "~/components/ui/refresh-icon";
 import { m as resolveNow, type MessageResolver } from "../../i18n/messages";
+import { readEnvironmentScope, useEnvironmentScope } from "../../state/session";
+import { SettingsGroup } from "./SettingsGroup";
 
+import { useManagedPolicy } from "~/state/managedPolicy";
 import { isDesktopLocalConnectionTarget } from "../../connection/desktopLocal";
+import { useRelativeTimeState } from "../../hooks/useRelativeTimeState";
 import {
   useEnvironmentSettings,
   usePersistEnvironmentProviderInstanceMutation,
-  useUpdateEnvironmentSettings,
-  useUpdateEnvironmentModelPreferences,
   useToggleEnvironmentModelFavorite,
+  useUpdateEnvironmentModelPreferences,
+  useUpdateEnvironmentSettings,
 } from "../../hooks/useSettings";
 import { useStableCallback } from "../../hooks/useStableCallback";
-import { ensureLocalApi } from "../../localApi";
-import { EnvironmentMachineIcon } from "../EnvironmentMachineIcon";
 import { cn } from "../../lib/utils";
+import { ensureLocalApi } from "../../localApi";
 import { resolveAppModelSelectionState } from "../../modelSelection";
+import { useProjects } from "../../state/entities";
 import {
   useEnvironments,
   usePrimaryEnvironmentId,
@@ -69,14 +69,13 @@ import {
   serverEnvironment,
 } from "../../state/server";
 import { useEnvironmentSessionState } from "../../state/session";
-import { useProjects } from "../../state/entities";
 import { useAtomCommand } from "../../state/use-atom-command";
-import { useRelativeTimeState } from "../../hooks/useRelativeTimeState";
 import {
-  ConnectionStatusDot,
   connectionPhaseDotClassName,
   connectionPhasePingClassName,
+  ConnectionStatusDot,
 } from "../ConnectionStatusDot";
+import { EnvironmentMachineIcon } from "../EnvironmentMachineIcon";
 import {
   isProviderSettingsUpdateCandidate,
   isProviderUpdateActive,
@@ -93,23 +92,29 @@ import {
   EmptyTitle,
 } from "../ui/empty";
 import { ScrollArea } from "../ui/scroll-area";
+import { stackedThreadToast, toastManager } from "../ui/toast";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
-import { stackedThreadToast, toastManager } from "../ui/toast";
+import { AccountProfilesSettings } from "./AccountProfilesSettings";
 import { AddProviderInstanceDialog } from "./AddProviderInstanceDialog";
-import { useManagedPolicy } from "~/state/managedPolicy";
+import { CodexManagedRuntimeFields, CodexSetupSection } from "./CodexSetupSection";
+import { readCodexSetupMode } from "./CodexSetupSection.logic";
 import { ExpandableText } from "./ExpandableText";
 import { IntervalSecondsField } from "./IntervalSecondsField";
-import { ProviderInstanceCard } from "./ProviderInstanceCard";
-import { useSecretSources } from "./SecretSourceInput";
-import { TextGeneratorsSettings } from "./TextGeneratorsSettings";
-import { UsageProviderSettings } from "./UsageProviderSettings";
-import { ProviderSetupSection, readAntigravityAuthMethod } from "./ProviderSetupSection";
 import { ProviderAuthenticationSection } from "./ProviderAuthenticationSection";
-import { CodexSetupSection, CodexManagedRuntimeFields } from "./CodexSetupSection";
-import { readCodexSetupMode } from "./CodexSetupSection.logic";
-import { providerClients } from "./providerDriverMeta";
-import { useSearchableSetting } from "./settingsSearch";
+import { ProviderInstanceCard } from "./ProviderInstanceCard";
+import {
+  buildProviderEnvironmentOptions,
+  buildProviderInstanceOverridePatch,
+  classifyProviderEnvironmentAccess,
+  isProviderSettingsEnvironmentAvailable,
+  resolveRemoteOperateAccess,
+  resolveSelectedProviderEnvironmentId,
+  type ProviderEnvironmentAccess,
+  type ProviderOperateAccess,
+} from "./ProviderSettingsPanel.logic";
+import { ProviderSetupSection, readAntigravityAuthMethod } from "./ProviderSetupSection";
+import { useSecretSources } from "./SecretSourceInput";
 import { CompactIdleThreadsRow } from "./SettingsPanels";
 import {
   backgroundActivityOverrideSettings,
@@ -117,6 +122,9 @@ import {
   durationToSeconds,
   PROVIDER_HEALTH_INTERVAL_STEP_SECONDS,
 } from "./SettingsPanels.logic";
+import { TextGeneratorsSettings } from "./TextGeneratorsSettings";
+import { UsageProviderSettings } from "./UsageProviderSettings";
+import { providerClients } from "./providerDriverMeta";
 import {
   PolicyTooltip,
   SettingResetButton,
@@ -125,16 +133,7 @@ import {
   SettingsSection,
   useSettingsSearchTargetId,
 } from "./settingsLayout";
-import {
-  buildProviderEnvironmentOptions,
-  buildProviderInstanceOverridePatch,
-  classifyProviderEnvironmentAccess,
-  isProviderSettingsEnvironmentAvailable,
-  type ProviderEnvironmentAccess,
-  type ProviderOperateAccess,
-  resolveRemoteOperateAccess,
-  resolveSelectedProviderEnvironmentId,
-} from "./ProviderSettingsPanel.logic";
+import { useSearchableSetting } from "./settingsSearch";
 
 function providerInstanceName(instance: ProviderInstanceConfig): string {
   return (
@@ -222,7 +221,7 @@ function ProviderLastChecked({ environmentId }: { environmentId: EnvironmentId }
   );
 }
 
-const T3_CONNECT_NAME = "T3 Connect";
+const T3_CONNECT_NAME = "Relay";
 
 function providerEnvironmentDetail(
   environment: EnvironmentPresentation,
@@ -1144,6 +1143,13 @@ export function EnvironmentProviderSettings({
           </div>
         </SettingsGroup>
       </SettingsSection>
+
+      <AccountProfilesSettings
+        key={`account-profiles:${environmentId}`}
+        environmentId={environmentId}
+        providers={serverProviders}
+        readOnly={readOnly || !canWriteSettings}
+      />
 
       <UsageProviderSettings
         key={environmentId}

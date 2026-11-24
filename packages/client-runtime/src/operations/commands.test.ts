@@ -45,6 +45,7 @@ import type { WsRpcProtocolClient } from "../rpc/protocol.ts";
 import { v2Now, v2Projection, v2ThreadId } from "../state/orchestrationV2TestFixtures.ts";
 import {
   archiveThread,
+  updateThreadMetadata,
   interruptThreadTurn,
   promoteQueuedRun,
   revertThreadCheckpoint,
@@ -148,6 +149,24 @@ const makeSupervisor = Effect.fn("TestEnvironmentCommands.makeSupervisor")(funct
 });
 
 describe("V2 environment commands", () => {
+  it.effect(
+    "refuses unsupported per-thread limit preferences before sending to an older server",
+    () =>
+      Effect.gen(function* () {
+        const commands: OrchestrationV2Command[] = [];
+        const supervisor = yield* makeSupervisor({ commands, projects: [] });
+        const error = yield* updateThreadMetadata({
+          threadId: v2ThreadId,
+          autoResumeAtLimitReset: true,
+        }).pipe(
+          Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor),
+          Effect.flip,
+        );
+        expect(error._tag).toBe("EnvironmentRpcUnavailableError");
+        expect(commands).toEqual([]);
+      }).pipe(Effect.provide(layerTestRandom)),
+  );
+
   it.effect("distinguishes sending a selected queued message from resuming queue order", () =>
     Effect.gen(function* () {
       const commands: OrchestrationV2Command[] = [];

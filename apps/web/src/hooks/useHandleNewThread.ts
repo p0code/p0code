@@ -1,27 +1,9 @@
+import { useAtomValue } from "@effect/atom-react";
 import {
   scopedProjectKey,
   scopeProjectRef,
   scopeThreadRef,
 } from "@t3tools/client-runtime/environment";
-import {
-  DEFAULT_SERVER_SETTINGS,
-  type ScopedProjectRef,
-  type T3ProjectFile,
-  type ThreadId,
-} from "@t3tools/contracts";
-import { type AnyRouter, useRouter } from "@tanstack/react-router";
-import { flushSync } from "react-dom";
-import {
-  composerDraftHasUserContent,
-  markPromotedDraftThreadByRef,
-  type DraftId,
-  type DraftSessionState,
-  type DraftThreadEnvMode,
-  type DraftThreadState,
-  useComposerDraftStore,
-} from "../composerDraftStore";
-import { newDraftId, newThreadId } from "../lib/utils";
-import { orderItemsByPreferredIds } from "../components/Sidebar.logic";
 import {
   deriveLogicalProjectKeyFromSettings,
   getProjectOrderKey,
@@ -29,14 +11,29 @@ import {
   selectProjectGroupingSettings,
   type ProjectGroupingSettings,
 } from "@t3tools/client-runtime/state/project-grouping";
-import { resolveNewThreadEnvMode, resolveProjectSettings } from "@t3tools/shared/projectSettings";
+import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import {
-  readProjects,
-  readThreadShell,
-  readThreadShells,
-  useProjects,
-  useQuietThreadShell,
-} from "../state/entities";
+  DEFAULT_SERVER_SETTINGS,
+  type ScopedProjectRef,
+  type T3ProjectFile,
+  type ThreadId,
+} from "@t3tools/contracts";
+import { resolveNewThreadEnvMode, resolveProjectSettings } from "@t3tools/shared/projectSettings";
+import { resolveNewThreadModelSelection } from "@t3tools/shared/usageLimits";
+import { useRouter, type AnyRouter } from "@tanstack/react-router";
+import * as Schema from "effect/Schema";
+import { flushSync } from "react-dom";
+import { orderItemsByPreferredIds } from "../components/Sidebar.logic";
+import {
+  composerDraftHasUserContent,
+  markPromotedDraftThreadByRef,
+  useComposerDraftStore,
+  type DraftId,
+  type DraftSessionState,
+  type DraftThreadEnvMode,
+  type DraftThreadState,
+} from "../composerDraftStore";
+import { routeDraftToAccountProfile } from "../lib/accountProfileDraft";
 import {
   draftModelSelectionApplies,
   hasExplicitComposerModelSelection,
@@ -44,22 +41,26 @@ import {
   resolveNewThreadModelSelectionOverride,
   threadHasStarted,
 } from "../lib/chatThreadActions";
-import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import { peekT3ProjectFile, readT3ProjectFile } from "../lib/t3ProjectFileDefaults";
+import { newDraftId, newThreadId } from "../lib/utils";
+import { resolveProjectDefaultProviderModelSelection } from "../providerInstances";
 import { appAtomRegistry } from "../rpc/atomRegistry";
+import {
+  readProjects,
+  readThreadShell,
+  readThreadShells,
+  useProjects,
+  useQuietThreadShell,
+} from "../state/entities";
+import { readUnloadedThreadCount } from "../state/olderSettledShelf";
 import { environmentSummaries } from "../state/presentation";
+import { defaultProjectFallbackReadyAtom } from "../state/projects";
 import { environmentServerConfigsAtom } from "../state/server";
 import { resolveThreadRouteTarget } from "../threadRoutes";
 import { legacyProjectCwdPreferenceKey, useUiStateStore } from "../uiStateStore";
-import { getClientSettings, useClientSettings } from "./useSettings";
 import { getLocalStorageItem, useLocalStorage } from "./useLocalStorage";
-import * as Schema from "effect/Schema";
-import { useAtomValue } from "@effect/atom-react";
-import { defaultProjectFallbackReadyAtom } from "../state/projects";
+import { getClientSettings, useClientSettings } from "./useSettings";
 import { useThreadRouteTarget } from "./useThreadRouteTarget";
-import { readUnloadedThreadCount } from "../state/olderSettledShelf";
-import { resolveProjectDefaultProviderModelSelection } from "../providerInstances";
-import { resolveNewThreadModelSelection } from "@t3tools/shared/usageLimits";
 
 export const LAST_USED_PROJECT_STORAGE_KEY = "t3code:last-used-project:v1";
 export const lastUsedProjectKeySchema = Schema.NullOr(Schema.String);
@@ -377,6 +378,12 @@ export function createNewThreadHandler(router: AnyRouter) {
               replaceOptions: true,
             });
           }
+          routeDraftToAccountProfile(
+            emptyStoredDraftThread.draftId,
+            projectRef.environmentId,
+            projectRef.projectId,
+            fallbackResolution.selection,
+          );
         }
         // Remapping physical projects clears workspace context; preserve the branch and worktree.
         setLogicalProjectDraftThreadId(
@@ -462,6 +469,12 @@ export function createNewThreadHandler(router: AnyRouter) {
       if (modelSelectionOverride) {
         setModelSelection(draftId, modelSelectionOverride, { replaceOptions: true });
       }
+      routeDraftToAccountProfile(
+        draftId,
+        projectRef.environmentId,
+        projectRef.projectId,
+        fallbackResolution.selection,
+      );
       seedPrompt(draftId);
       defaultEnvMode?.applyProjectFile(draftId);
       await router.navigate({

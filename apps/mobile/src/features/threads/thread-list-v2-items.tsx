@@ -1,50 +1,47 @@
-import * as Dialog from "../../components/ui/Dialog";
-import type { ThreadRowProviderInstance } from "./thread-provider-instance";
+import type { MenuAction } from "@react-native-menu/menu";
+import { useNavigation } from "@react-navigation/native";
+import { toServerClock } from "@t3tools/client-runtime/clock";
 import {
-  THREAD_LIST_V2_MONO_FONT as MONO_FONT,
-  THREAD_LIST_V2_ROW_CONTENT_CLASS_NAME,
-  THREAD_LIST_V2_ROW_DIVIDERS,
-  selectedThreadRowColors,
-  getThreadListV2NewBranchMenuTitle,
-  getThreadListV2RowAppearance,
-} from "./thread-list-v2-row-appearance";
-import { RowPressable } from "../../components/ui/RowPressable";
-import { CustomSnoozeSheet } from "./CustomSnoozeSheet";
-import { appAtomRegistry } from "../../state/atom-registry";
-import { threadArrangementOpenAtom } from "../../state/thread-order";
-import { threadEnvironment } from "../../state/threads";
-import { useAtomCommand } from "../../state/use-atom-command";
-import { useVisibleSecondClock } from "./use-visible-second-clock";
-import type { ThreadMoveDestination } from "./threadOrder";
+  formatWorkingDurationLabel,
+  resolveThreadWorkingStartedAt,
+} from "@t3tools/client-runtime/state/models";
 import type {
   EnvironmentProject,
   EnvironmentThreadShell,
 } from "@t3tools/client-runtime/state/shell";
 import type { EnvironmentThreadSearchMatch } from "@t3tools/client-runtime/state/thread-search";
-import {
-  formatWorkingDurationLabel,
-  resolveThreadWorkingStartedAt,
-} from "@t3tools/client-runtime/state/models";
+import { canSnooze } from "@t3tools/client-runtime/state/thread-settled";
+import { threadChipCopyTarget } from "@t3tools/client-runtime/thread-reference";
 import {
   AuthOrchestrationOperateScope,
+  MessageId,
   type EnvironmentId,
   type EnvironmentMachineKind,
 } from "@t3tools/contracts";
-import { toServerClock } from "@t3tools/client-runtime/clock";
 import type { SnoozePresetSetting } from "@t3tools/contracts/settings";
-import { canSnooze } from "@t3tools/client-runtime/state/thread-settled";
-import { threadChipCopyTarget } from "@t3tools/client-runtime/thread-reference";
-import type { MenuAction } from "@react-native-menu/menu";
-import { useNavigation } from "@react-navigation/native";
 import { msg, T, useGT, useMessages } from "gt-react-native";
 import { memo, useCallback, useMemo, useState, type ComponentProps } from "react";
 import { Platform, Pressable, Text as RNText, useWindowDimensions, View } from "react-native";
 import type { SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
+import * as Dialog from "../../components/ui/Dialog";
+import { RowPressable } from "../../components/ui/RowPressable";
+import { appAtomRegistry } from "../../state/atom-registry";
+import { threadArrangementOpenAtom } from "../../state/thread-order";
+import { threadEnvironment } from "../../state/threads";
+import { useAtomCommand } from "../../state/use-atom-command";
+import { CustomSnoozeSheet } from "./CustomSnoozeSheet";
+import {
+  getThreadListV2NewBranchMenuTitle,
+  getThreadListV2RowAppearance,
+  THREAD_LIST_V2_MONO_FONT as MONO_FONT,
+  selectedThreadRowColors,
+  THREAD_LIST_V2_ROW_CONTENT_CLASS_NAME,
+  THREAD_LIST_V2_ROW_DIVIDERS,
+} from "./thread-list-v2-row-appearance";
+import type { ThreadRowProviderInstance } from "./thread-provider-instance";
+import type { ThreadMoveDestination } from "./threadOrder";
+import { useVisibleSecondClock } from "./use-visible-second-clock";
 
-import type { ThreadListProvider } from "../../state/thread-list-environments";
-import { SymbolView, type AppSymbolName } from "../../components/ui/AppSymbol";
-import { AppText as Text } from "../../components/ui/AppText";
-import { Menu } from "../../components/ui/Menu";
 import { EnvironmentMachineSymbol } from "../../components/EnvironmentMachineSymbol";
 import { ProjectFavicon } from "../../components/ProjectFavicon";
 import {
@@ -52,50 +49,54 @@ import {
   ProviderInstanceIcon,
   providerInstanceNameLabel,
 } from "../../components/ProviderIcon";
+import { SymbolView, type AppSymbolName } from "../../components/ui/AppSymbol";
+import { AppText as Text } from "../../components/ui/AppText";
+import { Menu } from "../../components/ui/Menu";
 import { useNowAfter } from "../../lib/clock";
 import { cn } from "../../lib/cn";
 import { copyTextWithHaptic } from "../../lib/copyTextWithHaptic";
 import { copyThreadReference } from "../../lib/copyThreadReference";
 import { useUniwindTheme } from "../../lib/useUniwindTheme";
-import { useEnvironmentScope } from "../../state/session";
-import type { PendingNewTask } from "../../state/use-pending-new-tasks";
 import {
   pendingDraftBranchNeedsRefs,
   resolvePendingDraftBranch,
 } from "../../state/pending-new-tasks-model";
 import { useBranches } from "../../state/queries";
-import { useNewTaskProjectDefaults } from "./use-new-task-project-defaults";
+import { useEnvironmentScope } from "../../state/session";
+import type { ThreadListProvider } from "../../state/thread-list-environments";
 import {
   resolveThreadPrBadgeAction,
   type ThreadPrPresentation,
 } from "../../state/thread-pr-presentation";
+import type { PendingNewTask } from "../../state/use-pending-new-tasks";
 import { useThreadPr } from "../../state/use-thread-pr";
 import { useSwipeRowDormant } from "../home/swipe-row-activation";
 import { ThreadSwipeable } from "../home/thread-swipe-actions";
-import { buildThreadTitleRegenerationMenuItems } from "./thread-title-regeneration-menu";
-import { canTurnThreadIntoProject, turnThreadIntoProject } from "./turnThreadIntoProject";
 import { threadCanArchive } from "../home/threadArchive";
-import { useCanShareWithGuest } from "./useCanShareWithGuest";
-import {
-  THREAD_LIST_V2_SETTLED_PAGE_COUNT,
-  resolveThreadListV2SnoozeGateExpiryMs,
-  resolveThreadListV2SnoozeMenuSelection,
-  resolveThreadListV2SnoozePresets,
-  threadHasUnseenCompletion,
-  resolveThreadListV2RowStatus,
-  resolveThreadListV2Status,
-  resolveThreadListV2ProviderDrivers,
-  resolveThreadListV2SwipeActions,
-  layoutThreadListV2RowMenuActions,
-  threadListV2RowAccessibilityLabel,
-  type ThreadListV2Status,
-} from "./threadListV2";
+import { PullRequestGlyph } from "../pull-requests/pullRequestGlyphs";
+import { pullRequestStatus } from "../pull-requests/pullRequestStatus";
+import { useScaledTextRole } from "../settings/appearance/useScaledTextRole";
 import { QueuedMessageIcon } from "./queued-message-icon";
 import { shouldRecedeThreadRow } from "./thread-row-emphasis";
 import { ThreadSearchMatchExcerpt } from "./thread-search-match";
-import { useScaledTextRole } from "../settings/appearance/useScaledTextRole";
-import { PullRequestGlyph } from "../pull-requests/pullRequestGlyphs";
-import { pullRequestStatus } from "../pull-requests/pullRequestStatus";
+import { buildThreadTitleRegenerationMenuItems } from "./thread-title-regeneration-menu";
+import {
+  layoutThreadListV2RowMenuActions,
+  resolveThreadListV2ProviderDrivers,
+  resolveThreadListV2RowStatus,
+  resolveThreadListV2SnoozeGateExpiryMs,
+  resolveThreadListV2SnoozeMenuSelection,
+  resolveThreadListV2SnoozePresets,
+  resolveThreadListV2Status,
+  resolveThreadListV2SwipeActions,
+  THREAD_LIST_V2_SETTLED_PAGE_COUNT,
+  threadHasUnseenCompletion,
+  threadListV2RowAccessibilityLabel,
+  type ThreadListV2Status,
+} from "./threadListV2";
+import { canTurnThreadIntoProject, turnThreadIntoProject } from "./turnThreadIntoProject";
+import { useNewTaskProjectDefaults } from "./use-new-task-project-defaults";
+import { useCanShareWithGuest } from "./useCanShareWithGuest";
 
 interface StatusLabel {
   // Null when the icon and timer carry the status on their own.
@@ -910,6 +911,10 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     m,
   );
 
+  const startJudgePanel = useAtomCommand(
+    threadEnvironment.startTurn,
+    gt("Could not convene judges"),
+  );
   const visitThread = useAtomCommand(threadEnvironment.visit, { reportFailure: false });
   const markThreadUnread = useAtomCommand(threadEnvironment.markUnread, { reportFailure: false });
   const handleAcknowledgeWoke = useCallback(() => {
@@ -992,7 +997,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       ...snoozePresets.map((preset) => ({
         id: `snooze:${preset.id}`,
         title: preset.label,
-        subtitle: preset.whenLabel,
+        ...(preset.whenLabel ? { subtitle: preset.whenLabel } : {}),
       })),
       { id: "snooze:custom", title: gt("Custom…", { $context: "custom snooze time" }) },
     ],
@@ -1102,6 +1107,12 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     const nested = Platform.OS === "ios";
     const localized = (action: MenuAction): MenuAction => ({ ...action, title: m(action.title) });
     const direct: MenuAction[] = [
+      {
+        id: "judges",
+        title: gt("Convene judges"),
+        image: "person.3",
+        attributes: { disabled: !canOperateThread },
+      },
       ...(thread.branch
         ? [
             {
@@ -1194,6 +1205,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       m,
     );
   }, [
+    canOperateThread,
     autoSettleMenuItems,
     canShareWithGuest,
     canUnsettle,
@@ -1210,6 +1222,25 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   ]);
   const handleMenuAction = useCallback(
     ({ nativeEvent }: { readonly nativeEvent: { readonly event: string } }) => {
+      if (nativeEvent.event === "judges" && canOperateThread) {
+        void startJudgePanel({
+          environmentId: thread.environmentId,
+          input: {
+            threadId: thread.id,
+            message: {
+              messageId: MessageId.make(`message:judges:${thread.id}:${Date.now()}`),
+              role: "user",
+              // oxlint-disable-next-line t3code/no-untranslated-copy -- Agent instructions remain English.
+              text: "Convene the configured judges panel using convene_judges. Validate and fix actionable findings, then run relevant tests.",
+              attachments: [],
+            },
+            runtimeMode: thread.runtimeMode,
+            interactionMode: thread.interactionMode,
+            dispatchMode: "queue",
+            createdAt: new Date().toISOString(),
+          },
+        });
+      }
       if (nativeEvent.event === "new-thread-on-branch") onNewThreadOnBranch(thread);
       if (nativeEvent.event === "settle") handleSettle();
       if (nativeEvent.event === "unsettle") handleUnsettle();
@@ -1272,6 +1303,8 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       }
     },
     [
+      startJudgePanel,
+      canOperateThread,
       gt,
       m,
       onNewThreadOnBranch,

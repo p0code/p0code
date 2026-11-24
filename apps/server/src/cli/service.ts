@@ -42,7 +42,7 @@ const SERVICE_ENV_KEY = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/u;
  * Sets or removes (`undefined`) entries in `service.env` text and keeps every
  * other line, including comments, as the user wrote it.
  */
-export const upsertServiceEnv = (
+const upsertServiceEnv = (
   contents: string,
   entries: Readonly<Record<string, string | undefined>>,
 ): string => {
@@ -86,7 +86,7 @@ export const upsertServiceEnv = (
 };
 
 /** `service.env` under `baseDir`, parsed as the service launcher parses it. */
-export const readServiceEnv = Effect.fn("cli.service.read_env")(function* (baseDir: string) {
+const readServiceEnv = Effect.fn("cli.service.read_env")(function* (baseDir: string) {
   const fs = yield* FileSystem.FileSystem;
   const path = (yield* Path.Path).join(baseDir, SERVICE_ENV_FILE);
   const contents = (yield* fs.exists(path)) ? yield* fs.readFileString(path) : "";
@@ -150,7 +150,7 @@ export const reconcileService = Effect.fn("cli.service.reconcile")(function* (op
   } satisfies ServiceReconcileResult;
 });
 
-export function formatServiceChange(
+function formatServiceChange(
   result: Extract<ServiceReconcileResult, { readonly changed: true }>,
 ): string {
   if (result.plan.handedOff === true) {

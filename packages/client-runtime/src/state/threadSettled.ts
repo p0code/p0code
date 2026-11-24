@@ -1,5 +1,6 @@
 // @effect-diagnostics globalDate:off -- UI snooze presets use local calendar boundaries and Intl labels.
 import * as DateTime from "effect/DateTime";
+import { isOpenEndedSnooze, OPEN_ENDED_SNOOZE_UNTIL } from "@t3tools/contracts";
 import { DEFAULT_SNOOZE_PRESETS, type SnoozePresetSetting } from "@t3tools/contracts/settings";
 
 import type { EnvironmentThreadShell, PendingSubagentRequest } from "./models.ts";
@@ -345,11 +346,29 @@ export function resolveSnoozePreset(
   };
 }
 
-/** The snooze menu: soonest first, one row per wake minute. */
+const HIDE_SNOOZE_PRESET_ID = "hide";
+
+/** The snooze menu: soonest first, one row per wake minute, then "Until I bring it back". */
 export function resolveSnoozePresets(
   now: Date,
   options: SnoozePresetOptions = {},
   resolve: MFunctionType = mFallback,
+): ReadonlyArray<SnoozePreset> {
+  return [
+    ...resolveTimedSnoozePresets(now, options, resolve),
+    {
+      id: HIDE_SNOOZE_PRESET_ID,
+      label: resolve(msg("Until I bring it back")),
+      whenLabel: "",
+      snoozedUntil: OPEN_ENDED_SNOOZE_UNTIL,
+    },
+  ];
+}
+
+function resolveTimedSnoozePresets(
+  now: Date,
+  options: SnoozePresetOptions,
+  resolve: MFunctionType,
 ): ReadonlyArray<SnoozePreset> {
   // By minute, so a duration (which keeps the clock's seconds) and a set time in the same
   // minute tie, and the stable sort keeps whichever comes first in settings.
@@ -402,6 +421,9 @@ export function snoozeWakeLabel(
   options: { readonly now: string },
   resolve: MFunctionType = mFallback,
 ): string {
+  if (isOpenEndedSnooze(snoozedUntil)) {
+    return resolve(msg("Hidden", { $context: "a thread hidden until the user brings it back" }));
+  }
   const wakeMs = Date.parse(snoozedUntil);
   const nowMs = Date.parse(options.now);
   const now = () => resolve(msg("now", { $context: "a snoozed thread wakes now" }));

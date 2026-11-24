@@ -43,17 +43,9 @@ vi.mock("../persistence/layer", async () => {
 });
 vi.mock("../features/cloud/dpop", async () => ({
   layer: (await import("effect/Layer")).empty,
+  loadOrCreateProofKey: () => Effect.die("Key is not needed during storage startup"),
 }));
-vi.mock("../features/cloud/managedRelayLayer", async () => {
-  const Layer = await import("effect/Layer");
-  return { layer: () => Layer.empty };
-});
-vi.mock("../features/cloud/publicConfig", () => ({
-  resolveCloudPublicConfig: () => ({ relay: { url: null } }),
-}));
-vi.mock("../features/observability/tracing", async () => ({
-  layer: (await import("effect/Layer")).empty,
-}));
+
 vi.mock("@t3tools/client-runtime/rpc", async () => {
   const Layer = await import("effect/Layer");
   return { layerRemoteHttpClient: () => Layer.empty };
@@ -118,4 +110,10 @@ describe("protected storage startup", () => {
       );
     },
   );
+});
+
+vi.mock("@t3tools/client-runtime/authorization", async (original) => {
+  const actual = await original<typeof import("@t3tools/client-runtime/authorization")>();
+  const Layer = await import("effect/Layer");
+  return { ...actual, DpopProof: { ...actual.DpopProof, layerSigner: () => Layer.empty } };
 });

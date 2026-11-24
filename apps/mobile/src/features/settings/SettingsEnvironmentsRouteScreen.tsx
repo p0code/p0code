@@ -1,27 +1,21 @@
+import { useNavigation } from "@react-navigation/native";
 import { useGT } from "gt-react-native";
 import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScrollView";
-import { useNavigation } from "@react-navigation/native";
-import { useAtomValue } from "@effect/atom-react";
-import { managedRelaySessionAtom } from "@t3tools/client-runtime/relay";
+
 import type { EnvironmentId } from "@t3tools/contracts";
-import { useRef, useState } from "react";
-import { RefreshControl } from "../../components/ui/RefreshControl";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { SettingsScreen } from "./components/SettingsScreen";
-import { CloudEnvironmentRows } from "../connection/CloudEnvironmentRows";
+
+import { useUniwindTheme } from "../../lib/useUniwindTheme";
+import { useRemoteConnections } from "../../state/use-remote-environment-registry";
 import { LocalEnvironmentList } from "../connection/LocalEnvironmentList";
 import { PullRequestRoutingSettings } from "../connection/PullRequestRoutingSettings";
 import { splitEnvironmentSections } from "../connection/environmentSections";
-import { useUniwindTheme } from "../../lib/useUniwindTheme";
-import { useRemoteConnections } from "../../state/use-remote-environment-registry";
-import { relayEnvironmentDiscovery } from "../../state/relay";
-import { useAtomCommand } from "../../state/use-atom-command";
+
 import {
   applyShowcaseLocalEnvironmentDisplayUrls,
   resolveShowcaseEnvironmentUpdateDisplayUrl,
-  SHOWCASE_AVAILABLE_CLOUD_ENVIRONMENTS,
-  SHOWCASE_CONNECTED_CLOUD_ENVIRONMENTS,
 } from "../showcase/showcaseEnvironmentRows";
 
 const SHOWCASE_ENABLED = process.env.EXPO_PUBLIC_SHOWCASE === "1";
@@ -44,26 +38,7 @@ export function SettingsEnvironmentsRouteScreen() {
   const localEnvironments = SHOWCASE_ENABLED
     ? applyShowcaseLocalEnvironmentDisplayUrls(environmentSections.localEnvironments)
     : environmentSections.localEnvironments;
-  const connectedCloudEnvironments = SHOWCASE_ENABLED
-    ? SHOWCASE_CONNECTED_CLOUD_ENVIRONMENTS
-    : environmentSections.connectedCloudEnvironments;
   const headerIconColor = useUniwindTheme()["--color-icon"];
-  const relaySession = useAtomValue(managedRelaySessionAtom);
-  const refreshRelayEnvironments = useAtomCommand(
-    relayEnvironmentDiscovery.refresh,
-    "relay environment refresh",
-  );
-  const [isRefreshingCloud, setIsRefreshingCloud] = useState(false);
-  const cloudRefreshPendingRef = useRef(false);
-  async function refreshCloudEnvironments() {
-    if (!relaySession || cloudRefreshPendingRef.current) return;
-    cloudRefreshPendingRef.current = true;
-    setIsRefreshingCloud(true);
-    await refreshRelayEnvironments();
-    cloudRefreshPendingRef.current = false;
-    setIsRefreshingCloud(false);
-  }
-
   const openEnvironment = (environmentId: EnvironmentId) => {
     navigation.navigate("SettingsEnvironmentDetail", { environmentId });
   };
@@ -94,15 +69,7 @@ export function SettingsEnvironmentsRouteScreen() {
   return (
     <SettingsScreen
       title={gt("Environments")}
-      refresh={
-        relaySession
-          ? {
-              accessibilityLabel: gt("Refresh cloud environments"),
-              disabled: isRefreshingCloud,
-              onPress: () => void refreshCloudEnvironments(),
-            }
-          : undefined
-      }
+
       actions={[
         {
           accessibilityLabel: gt("Add environment"),
@@ -121,14 +88,6 @@ export function SettingsEnvironmentsRouteScreen() {
         contentContainerStyle={{
           paddingBottom: Math.max(insets.bottom, 18) + 18,
         }}
-        refreshControl={
-          relaySession ? (
-            <RefreshControl
-              refreshing={isRefreshingCloud}
-              onRefresh={() => void refreshCloudEnvironments()}
-            />
-          ) : undefined
-        }
       >
         <LocalEnvironmentList
           environments={localEnvironments}
@@ -142,18 +101,7 @@ export function SettingsEnvironmentsRouteScreen() {
         />
 
         {/* Keep connected relays visible and removable without cloud config or sign-in; this component gates discovery. */}
-        <CloudEnvironmentRows
-          connectedCloudEnvironments={connectedCloudEnvironments}
-          onOpenEnvironment={openEnvironment}
-          onSetEnvironmentEnabled={onSetEnvironmentEnabled}
-          onRemoveEnvironment={onRemoveEnvironmentPress}
-          {...(SHOWCASE_ENABLED
-            ? {
-                showcaseAvailableEnvironments: SHOWCASE_AVAILABLE_CLOUD_ENVIRONMENTS,
-                showcaseSignedIn: true,
-              }
-            : {})}
-        />
+
         <PullRequestRoutingSettings />
       </ScrollView>
     </SettingsScreen>

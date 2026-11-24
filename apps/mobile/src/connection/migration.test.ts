@@ -37,13 +37,13 @@ describe("migrateLegacyConnectionCatalog", () => {
         }),
       );
 
-      expect(catalog.targets).toHaveLength(2);
+      expect(catalog.targets).toHaveLength(1);
       expect(
         catalog.targets.find((target) => target.environmentId === bearerEnvironmentId)?._tag,
       ).toBe("BearerConnectionTarget");
       expect(
         catalog.targets.find((target) => target.environmentId === relayEnvironmentId)?._tag,
-      ).toBe("RelayConnectionTarget");
+      ).toBeUndefined();
       expect(catalog.profiles).toHaveLength(1);
       expect(catalog.credentials).toHaveLength(1);
       expect(catalog.credentials[0]?.credential).toMatchObject({

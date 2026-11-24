@@ -1,6 +1,6 @@
 // @effect-diagnostics globalDate:off -- Tests exercise local calendar snooze boundaries.
 import * as DateTime from "effect/DateTime";
-import { RunId, RuntimeRequestId } from "@t3tools/contracts";
+import { OPEN_ENDED_SNOOZE_UNTIL, RunId, RuntimeRequestId } from "@t3tools/contracts";
 import { ThreadId } from "@t3tools/contracts";
 import { TurnId } from "@t3tools/contracts";
 import type { SnoozePresetSetting } from "@t3tools/contracts/settings";
@@ -80,6 +80,24 @@ function makeQueuedTurnShell(overrides: Partial<QueuedTurnShell> = {}): QueuedTu
 describe("effectiveSnoozed", () => {
   it("never hides on malformed wake data", () => {
     expect(effectiveSnoozed(makeShell({ snoozedUntil: "not-a-date" }), { now: NOW })).toBe(false);
+  });
+
+  it("keeps a hidden thread hidden on the clock, but wakes it for a new question or failure", () => {
+    const hidden = makeShell({ snoozedUntil: OPEN_ENDED_SNOOZE_UNTIL });
+    const muchLater = "2100-01-01T00:00:00.000Z";
+    expect(effectiveSnoozed(hidden, { now: muchLater })).toBe(true);
+    expect(threadWokeAt(hidden, { now: muchLater })).toBeNull();
+
+    const question = makeShell({
+      snoozedUntil: OPEN_ENDED_SNOOZE_UNTIL,
+      pending: "user-input",
+      pendingUserInputAt: "2026-04-10T10:00:00.000Z",
+    });
+    expect(effectiveSnoozed(question, { now: NOW })).toBe(false);
+    expect(threadWokeAt(question, { now: NOW })).toBe("2026-04-10T10:00:00.000Z");
+
+    const failed = makeShell({ snoozedUntil: OPEN_ENDED_SNOOZE_UNTIL, sessionStatus: "error" });
+    expect(effectiveSnoozed(failed, { now: NOW })).toBe(false);
   });
 
   it("defers an existing question until the timer, but wakes for a new question", () => {
@@ -405,8 +423,8 @@ describe("resolveSnoozePresets", () => {
   const formatTime = (date: Date) =>
     `${date.getHours()}:${String(date.getMinutes()).padStart(2, "0")}`;
   const menu = (now: Date, presets?: ReadonlyArray<SnoozePresetSetting>) =>
-    resolveSnoozePresets(now, { formatTime, ...(presets ? { presets } : {}) }).map(
-      (preset) => `${preset.label} ${preset.whenLabel}`,
+    resolveSnoozePresets(now, { formatTime, ...(presets ? { presets } : {}) }).map((preset) =>
+      `${preset.label} ${preset.whenLabel}`.trim(),
     );
 
   it("lists custom presets soonest first and names the day when the label does not", () => {
@@ -418,7 +436,13 @@ describe("resolveSnoozePresets", () => {
         { kind: "after", minutes: 360 },
         { kind: "after", minutes: 180 },
       ]),
-    ).toEqual(["In 3 hours 23:00", "In 6 hours Thu 2:00", "Tomorrow 21:00", "Next week Mon 18:00"]);
+    ).toEqual([
+      "In 3 hours 23:00",
+      "In 6 hours Thu 2:00",
+      "Tomorrow 21:00",
+      "Next week Mon 18:00",
+      "Until I bring it back",
+    ]);
   });
 
   it("uses the German weekday with the caller's clock format", () => {
@@ -441,7 +465,7 @@ describe("resolveSnoozePresets", () => {
         { kind: "at", day: "monday", time: "09:00" },
       ],
     });
-    expect(presets.map((preset) => preset.id)).toEqual(["at:monday:09:00"]);
+    expect(presets.map((preset) => preset.id)).toEqual(["at:monday:09:00", "hide"]);
     expect(new Date(presets[0]!.snoozedUntil)).toEqual(localDate(2026, 4, 20, 9));
   });
 
@@ -456,12 +480,14 @@ describe("resolveSnoozePresets", () => {
       "Tomorrow 18:00",
       "Tomorrow 21:00",
       "Friday 17:00",
+      "Until I bring it back",
     ]);
     // Friday 10:00: today's 17:00 is a week away.
     expect(menu(localDate(2026, 9, 4, 10), theo)).toEqual([
       "Tomorrow 21:00",
       "Next week Mon 18:00",
       "Next Friday 17:00",
+      "Until I bring it back",
     ]);
   });
 
@@ -472,6 +498,7 @@ describe("resolveSnoozePresets", () => {
       "In 3 hours 10:01",
       "This evening 18:00",
       "Tomorrow 9:00",
+      "Until I bring it back",
     ]);
   });
 
@@ -483,7 +510,7 @@ describe("resolveSnoozePresets", () => {
         { kind: "after", minutes: 180 },
         { kind: "at", day: "today", time: "18:00" },
       ]),
-    ).toEqual(["In 3 hours 18:00"]);
+    ).toEqual(["In 3 hours 18:00", "Until I bring it back"]);
   });
 });
 
@@ -525,6 +552,7 @@ describe("snoozeWakeLabel", () => {
     expect(snoozeWakeLabel(wake, { now: "2026-04-10T12:01:00.000Z" })).toBe("59m");
     expect(snoozeWakeLabel(wake, { now: "2026-04-10T13:00:10.000Z" })).toBe("1m");
     expect(snoozeWakeLabel(wake, { now: "2026-04-10T13:00:30.000Z" })).toBe("now");
+    expect(snoozeWakeLabel(OPEN_ENDED_SNOOZE_UNTIL, { now: NOW })).toBe("Hidden");
   });
 });
 

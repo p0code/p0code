@@ -1,86 +1,73 @@
-import { ChildThreadApprovals } from "./ChildThreadApprovals";
+import { useAtomMount, useAtomValue } from "@effect/atom-react";
+import { useKeyboardScrollToEnd } from "@legendapp/list/keyboard";
+import type { LegendListRef } from "@legendapp/list/react-native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import { type EnvironmentConnectionPhase } from "@t3tools/client-runtime/connection";
 import { errorDisplayMessage } from "@t3tools/client-runtime/errors";
-import { useOpenThreadInspector } from "./thread-inspector-navigation";
-import { useSidebarWorkspaceTabs } from "../layout/workspace/useSystemWorkspaceTabBar";
-import { useWorkspaceTabs } from "../layout/workspace/WorkspaceTabsContext";
+import type { HandoffEndpoints } from "@t3tools/client-runtime/handoff";
+import { resolveProviderSkillsForCwd } from "@t3tools/client-runtime/providerSkills";
+import { queuedRunEditBlockedReason } from "@t3tools/client-runtime/queued-run-edit";
+import type { ActiveTurnComposerAction } from "@t3tools/client-runtime/state/composer-dispatch";
+import { parseThreadKey, threadKey } from "@t3tools/client-runtime/state/entities";
+import type { PendingUserInputDraftAnswer } from "@t3tools/client-runtime/state/pending-user-input";
 import {
   isAtomCommandInterrupted,
   settlePromise,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
-import { AsyncResult, Atom } from "effect/reactivity";
-import * as Dialog from "../../components/ui/Dialog";
-import { useAtomMount, useAtomValue } from "@effect/atom-react";
-import { mobilePreferencesAtom } from "../../state/preferences";
-import { parseThreadKey, threadKey } from "@t3tools/client-runtime/state/entities";
-import { createThreadVisitTracker } from "@t3tools/client-runtime/state/thread-visits";
-import { useChildThreadInputs, useThreadReportedModelSelection } from "../../state/entities";
-import { UsageLimitRecoveryCard } from "./UsageLimitRecoveryCard";
-import { useFocusEffect, useNavigation } from "@react-navigation/native";
-import {
-  effectiveSnoozed,
-  threadWokeAt,
-  isThreadWokeUnseen,
-  snoozeWakeLabel,
-} from "@t3tools/client-runtime/state/thread-settled";
-import type { WorktreeSetupCardProps } from "./worktree-setup-card";
-import type { ComposerTextPaste } from "../../native/T3ComposerEditor.types";
-import { type EnvironmentConnectionPhase } from "@t3tools/client-runtime/connection";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
-import type { HandoffEndpoints } from "@t3tools/client-runtime/handoff";
-import { queuedRunEditBlockedReason } from "@t3tools/client-runtime/queued-run-edit";
+import type { RunStopPresentation } from "@t3tools/client-runtime/state/thread-execution";
 import {
-  childThreadInputsTitle,
-  type CodexFeedbackSubmission,
-} from "@t3tools/client-runtime/state/threads";
-import { useKeyboardScrollToEnd } from "@legendapp/list/keyboard";
-import { resolveProviderSkillsForCwd } from "@t3tools/client-runtime/providerSkills";
-import type { LegendListRef } from "@legendapp/list/react-native";
-import { NativeLayoutObserver } from "../../native/NativeLayoutObserver";
-import {
-  deriveBottomControlInsets,
-  deriveContentSideInsets,
-  type NativeLayoutMetrics,
-} from "../../lib/reserved-regions";
-import type {
-  EnvironmentId,
-  MessageId,
-  RuntimeRequestId,
-  ScopedThreadRef,
-  ServerConfig as T3ServerConfig,
-  UsageLimitsReport,
-  RunId,
-} from "@t3tools/contracts";
-import {
-  appendCodexArtifactTemplateUsePrompt,
-  type CodexArtifactTemplate,
-} from "@t3tools/shared/codexArtifactTemplates";
+  BACKGROUND_WORK_STOP_RETRY_AFTER_MS,
+  formatModelSelectionEffort,
+  isBackgroundWorkStopPending,
+  limitRecoveryOwnsSnooze,
+  presentPendingBackgroundWork,
+  presentProviderGoal,
+  type BackgroundWorkStopRequest,
+  type ProviderSubagentStatus,
+} from "@t3tools/client-runtime/state/thread-execution";
 import {
   declinePendingApprovals,
   sendApprovalFeedback,
   type ApprovalResponder,
   type ThreadUserInputQuestion,
 } from "@t3tools/client-runtime/state/thread-requests";
-import { useDeadlinePassed } from "../../lib/clock";
 import {
-  BACKGROUND_WORK_STOP_RETRY_AFTER_MS,
-  type BackgroundWorkStopRequest,
-  isBackgroundWorkStopPending,
-  limitRecoveryOwnsSnooze,
-  presentPendingBackgroundWork,
-  presentProviderGoal,
-} from "@t3tools/client-runtime/state/thread-execution";
+  effectiveSnoozed,
+  isThreadWokeUnseen,
+  snoozeWakeLabel,
+  threadWokeAt,
+} from "@t3tools/client-runtime/state/thread-settled";
 import { resolveSubagentPillSegment } from "@t3tools/client-runtime/state/thread-subagents";
+import { createThreadVisitTracker } from "@t3tools/client-runtime/state/thread-visits";
 import {
-  formatModelSelectionEffort,
-  type ProviderSubagentStatus,
-} from "@t3tools/client-runtime/state/thread-execution";
+  childThreadInputsTitle,
+  type CodexFeedbackSubmission,
+} from "@t3tools/client-runtime/state/threads";
+import { voiceInputBlocksSubmission } from "@t3tools/client-runtime/voice-input";
+import type {
+  AssistantCitation,
+  EnvironmentId,
+  MessageId,
+  OrchestrationV2ProviderSession,
+  RunId,
+  RuntimeRequestId,
+  ScopedThreadRef,
+  ServerConfig as T3ServerConfig,
+  UsageLimitsReport,
+} from "@t3tools/contracts";
+import { isOpenEndedSnooze, isProviderNativeSubagentThread } from "@t3tools/contracts";
+import { serializeAssistantCitation } from "@t3tools/shared/assistantCitations";
+import {
+  appendCodexArtifactTemplateUsePrompt,
+  type CodexArtifactTemplate,
+} from "@t3tools/shared/codexArtifactTemplates";
 import { formatModelSlugName, resolveSelectableModel } from "@t3tools/shared/model";
-import { isProviderNativeSubagentThread } from "@t3tools/contracts";
-import type { QueuedRunEdit } from "../../state/queued-run-edit";
-import type { FollowUpBehavior } from "../../lib/followUpBehavior";
-import type { ActiveTurnComposerAction } from "@t3tools/client-runtime/state/composer-dispatch";
+import { collectProviderUsageLimits } from "@t3tools/shared/usageLimits";
+import { AsyncResult, Atom } from "effect/reactivity";
 import * as Haptics from "expo-haptics";
+import { useGT, useMessages } from "gt-react-native";
 import {
   useCallback,
   useEffect,
@@ -89,8 +76,6 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { useGT, useMessages } from "gt-react-native";
-import { m } from "../../i18n/messages";
 import {
   AppState,
   Keyboard,
@@ -118,77 +103,99 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
-import { useBarOverlap } from "../../components/ui/useBarInset";
-import {
-  useWorkspaceContentWidth,
-  WorkspaceSettledContentWidthContext,
-  useWorkspaceSettledContentWidth,
-} from "../layout/workspace-content-width";
-import { useNativeWorkspaceColumnsSupported } from "../../native/NativeWorkspaceColumns";
-import { useDeviceType, useNativeColumnLayoutMetrics } from "../../native/native-layout-metrics";
-import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
-import { collectProviderUsageLimits } from "@t3tools/shared/usageLimits";
 import type { ComposerEditorHandle } from "../../components/ComposerEditor";
-import type { StatusTone } from "../../components/StatusPill";
-import {
-  captureComposerDraftInsertion,
-  getComposerDraftSnapshot,
-  setFreshSessionPending,
-  insertComposerDraftText,
-} from "../../state/use-composer-drafts";
-import { assistantCitationDraftWithinLimit } from "../../lib/composerContext";
-import { serializeAssistantCitation } from "@t3tools/shared/assistantCitations";
-import type { AssistantCitation } from "@t3tools/contracts";
+import { useComposerBottomInset } from "../../components/ComposerSurface";
 import { RenderErrorBoundary, RenderFailureView } from "../../components/RenderErrorBoundary";
+import type { StatusTone } from "../../components/StatusPill";
+import * as Dialog from "../../components/ui/Dialog";
+import { useBarOverlap } from "../../components/ui/useBarInset";
+import { environmentCatalog } from "../../connection/catalog";
+import { m } from "../../i18n/messages";
+import { useDeadlinePassed } from "../../lib/clock";
+import { assistantCitationDraftWithinLimit } from "../../lib/composerContext";
+import type { FollowUpBehavior } from "../../lib/followUpBehavior";
 import {
   ANDROID_READING_MAX_WIDTH,
   CHAT_CONTENT_MAX_WIDTH,
   type LayoutVariant,
 } from "../../lib/layout";
-import { editPendingThreadMessage } from "../../state/edit-pending-thread-message";
-import { environmentCatalog } from "../../connection/catalog";
-import { deviceEnvironment } from "../../state/device";
-import { useEnvironmentQuery } from "../../state/query";
-import { threadDevicePreviews } from "../devices/threadDevicePreviews";
-import { ThreadBrowserFloat } from "../browser/ThreadBrowserFloat";
-import { useThreadServerBrowserTabs } from "../../state/preview";
-import type { QueuedThreadMessage } from "../../state/thread-outbox-model";
+import {
+  deriveBottomControlInsets,
+  deriveContentSideInsets,
+  type NativeLayoutMetrics,
+} from "../../lib/reserved-regions";
 import { scopedThreadKey } from "../../lib/scopedEntities";
-import {
-  finishThreadMessageJump,
-  pendingThreadMessageJump,
-  subscribeThreadMessageJump,
-} from "./threadMessageJump";
-import {
-  clearThreadComposerError,
-  threadComposerErrorsAtom,
-} from "../../state/thread-composer-error";
-import {
-  environmentThreadDetails,
-  environmentThreadShells,
-  threadEnvironment,
-} from "../../state/threads";
-import { appAtomRegistry } from "../../state/atom-registry";
-import { threadStreamHaptics } from "./threadStreamHaptics";
-import { useAtomCommand } from "../../state/use-atom-command";
-import { orchestrationEnvironment } from "../../state/orchestration";
-import type { PendingUserInputDraftAnswer } from "@t3tools/client-runtime/state/pending-user-input";
-import type { RunStopPresentation } from "@t3tools/client-runtime/state/thread-execution";
 import type {
   PendingApproval,
   PendingUserInput,
   ThreadFeedEntry,
   ThreadFeedLatestRun,
 } from "../../lib/threadActivity";
-import { PendingApprovalCard } from "./PendingApprovalCard";
+import { NativeLayoutObserver } from "../../native/NativeLayoutObserver";
+import { useNativeWorkspaceColumnsSupported } from "../../native/NativeWorkspaceColumns";
+import type { ComposerTextPaste } from "../../native/T3ComposerEditor.types";
+import { useDeviceType, useNativeColumnLayoutMetrics } from "../../native/native-layout-metrics";
+import { appAtomRegistry } from "../../state/atom-registry";
+import { deviceEnvironment } from "../../state/device";
+import { editPendingThreadMessage } from "../../state/edit-pending-thread-message";
+import { useChildThreadInputs, useThreadReportedModelSelection } from "../../state/entities";
+import { orchestrationEnvironment } from "../../state/orchestration";
+import { mobilePreferencesAtom } from "../../state/preferences";
+import { useThreadServerBrowserTabs } from "../../state/preview";
+import { useEnvironmentQuery } from "../../state/query";
+import type { QueuedRunEdit } from "../../state/queued-run-edit";
+import {
+  clearThreadComposerError,
+  threadComposerErrorsAtom,
+} from "../../state/thread-composer-error";
+import type { QueuedThreadMessage } from "../../state/thread-outbox-model";
+import {
+  environmentThreadDetails,
+  environmentThreadShells,
+  threadEnvironment,
+} from "../../state/threads";
+import { useAtomCommand } from "../../state/use-atom-command";
+import {
+  captureComposerDraftInsertion,
+  getComposerDraftSnapshot,
+  insertComposerDraftText,
+  setFreshSessionPending,
+} from "../../state/use-composer-drafts";
+import { ThreadBrowserFloat } from "../browser/ThreadBrowserFloat";
+import { threadDevicePreviews } from "../devices/threadDevicePreviews";
+import {
+  useWorkspaceContentWidth,
+  useWorkspaceSettledContentWidth,
+  WorkspaceSettledContentWidthContext,
+} from "../layout/workspace-content-width";
+import { useWorkspaceTabs } from "../layout/workspace/WorkspaceTabsContext";
+import { useSidebarWorkspaceTabs } from "../layout/workspace/useSystemWorkspaceTabBar";
+import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
+import { useGlobalVoiceInput } from "../voice-input/VoiceInputProvider";
+import { ChildThreadApprovals } from "./ChildThreadApprovals";
 import { ComposerErrorNotice } from "./ComposerErrorNotice";
-import { ManagedRuntimeModeNotice } from "./ManagedRuntimeModeNotice";
-import { FreshSessionNotice } from "./FreshSessionNotice";
 import { ComposerFeedback } from "./ComposerFeedback";
+import { ComposerPopoverHost } from "./ComposerPopoverHost";
+import { ComposerQueuedEditBanner } from "./ComposerQueuedEdit";
 import { ComposerUsageLimits } from "./ComposerUsageLimits";
+import { FreshSessionNotice } from "./FreshSessionNotice";
+import { ManagedRuntimeModeNotice } from "./ManagedRuntimeModeNotice";
+import { PendingApprovalCard } from "./PendingApprovalCard";
 import { PendingUserInputCard } from "./PendingUserInputCard";
 import { ProviderSubagentBar } from "./ProviderSubagentBar";
+import { useThreadTurnSubagents } from "./ThreadAgentsSheet";
+import {
+  COMPOSER_COLLAPSED_CHROME,
+  ThreadComposer,
+  type ThreadComposerProps,
+} from "./ThreadComposer";
 import { ThreadCreationFailedCard } from "./ThreadCreationFailedCard";
+import { ThreadFeed, type ThreadFeedHistoryControls } from "./ThreadFeed";
+import { ThreadGuestShareBar } from "./ThreadGuestShareBar";
+import { useThreadQueuedCount } from "./ThreadQueueControl";
+import { ThreadSideChatsRow } from "./ThreadSideChatsRow";
+import { UsageLimitRecoveryCard } from "./UsageLimitRecoveryCard";
+import { WorkspaceMutationIdProvider } from "./WorkspaceMutationIdProvider";
 import {
   FLOATING_WORKING_CONTROL_COVERAGE,
   FloatingWorkingControl,
@@ -198,32 +205,23 @@ import {
   type FloatingStatusAction,
   type FloatingWorkingStatus,
 } from "./floating-working-status";
-import type { ThreadStatusLineModel } from "./thread-context-divider";
 import {
   derivePendingUserInputMaxHeight,
   ESTIMATED_KEYBOARD_HEIGHT,
   USER_INPUT_TOGGLE_DURATION_MS,
 } from "./pendingUserInputLayout";
-import { useComposerBottomInset } from "../../components/ComposerSurface";
-import {
-  COMPOSER_COLLAPSED_CHROME,
-  ThreadComposer,
-  type ThreadComposerProps,
-} from "./ThreadComposer";
-import { ComposerPopoverHost } from "./ComposerPopoverHost";
-import { ThreadFeed, type ThreadFeedHistoryControls } from "./ThreadFeed";
-import { WorkspaceMutationIdProvider } from "./WorkspaceMutationIdProvider";
-import { useThreadTurnSubagents } from "./ThreadAgentsSheet";
-import { ComposerQueuedEditBanner } from "./ComposerQueuedEdit";
-import { useThreadQueuedCount } from "./ThreadQueueControl";
-import { ThreadGuestShareBar } from "./ThreadGuestShareBar";
-import { ThreadSideChatsRow } from "./ThreadSideChatsRow";
-import type { ThreadContentPresentation } from "./threadContentPresentation";
+import type { ThreadStatusLineModel } from "./thread-context-divider";
 import { resolveThreadFeedSubmissionAnchor } from "./thread-feed-scroll-position";
+import { useOpenThreadInspector } from "./thread-inspector-navigation";
+import type { ThreadContentPresentation } from "./threadContentPresentation";
+import {
+  finishThreadMessageJump,
+  pendingThreadMessageJump,
+  subscribeThreadMessageJump,
+} from "./threadMessageJump";
+import { threadStreamHaptics } from "./threadStreamHaptics";
 import { useOpenLinkedThread } from "./useOpenLinkedThread";
-import { useGlobalVoiceInput } from "../voice-input/VoiceInputProvider";
-import type { OrchestrationV2ProviderSession } from "@t3tools/contracts";
-import { voiceInputBlocksSubmission } from "@t3tools/client-runtime/voice-input";
+import type { WorktreeSetupCardProps } from "./worktree-setup-card";
 
 export interface ThreadDetailScreenProps {
   readonly header?: React.ReactNode;
@@ -774,13 +772,17 @@ function ThreadDetailBody(
   })();
   const lifecycleLine = ((): ThreadStatusLineModel | null => {
     if (contentPresentationKind !== "ready" || !(lifecycleSnoozed || settled || woke)) return null;
-    const actionLabel = lifecycleSnoozed
-      ? gt("Wake now")
-      : settled
-        ? gt("Un-settle", { $context: "verb, thread action" })
-        : gt("Dismiss");
+    const hidden = lifecycleSnoozed && isOpenEndedSnooze(snoozedUntil);
+    const actionLabel = hidden
+      ? gt("Bring back")
+      : lifecycleSnoozed
+        ? gt("Wake now")
+        : settled
+          ? gt("Un-settle", { $context: "verb, thread action" })
+          : gt("Dismiss");
     const wake =
       lifecycleSnoozed &&
+      !hidden &&
       snoozedUntil !== null &&
       Date.parse(snoozedUntil) > Date.parse(lifecycleNow)
         ? snoozeWakeLabel(snoozedUntil, { now: lifecycleNow }, messages)
@@ -788,13 +790,15 @@ function ThreadDetailBody(
     return {
       key: "lifecycle",
       icon: settled && !lifecycleSnoozed ? "checkmark.circle" : "alarm",
-      label: lifecycleSnoozed
-        ? wake === null
-          ? gt("Snoozed", { $context: "thread state" })
-          : gt("Snoozed, {time} left", { time: wake })
-        : settled
-          ? gt("Settled", { $context: "thread state" })
-          : gt("Woke from snooze"),
+      label: hidden
+        ? gt("Hidden until you bring it back")
+        : lifecycleSnoozed
+          ? wake === null
+            ? gt("Snoozed", { $context: "thread state" })
+            : gt("Snoozed, {time} left", { time: wake })
+          : settled
+            ? gt("Settled", { $context: "thread state" })
+            : gt("Woke from snooze"),
       action: {
         label: statusPending
           ? lifecycleSnoozed

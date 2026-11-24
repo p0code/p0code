@@ -6,6 +6,7 @@ import { type DraftId, useComposerDraftStore } from "../composerDraftStore";
 import { resolveProjectDefaultProviderModelSelection } from "../providerInstances";
 import { readProject } from "../state/entities";
 import { readEnvironment, readEnvironmentProviders } from "../state/environments";
+import { routeDraftToAccountProfile } from "./accountProfileDraft";
 import { hasExplicitComposerModelSelection } from "./chatThreadActions";
 
 /** Gives a draft that moved project or machine the model a new thread there would start with. */
@@ -34,4 +35,10 @@ export function seedDraftModelSelection(draftId: DraftId, projectRef: ScopedProj
   });
   const selection = resolution.fallback ? resolution.selection : defaultSelection;
   if (selection) store.setModelSelection(draftId, selection, { replaceOptions: true });
+  routeDraftToAccountProfile(
+    draftId,
+    projectRef.environmentId,
+    projectRef.projectId,
+    resolution.selection,
+  );
 }

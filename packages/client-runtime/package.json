@@ -107,10 +107,6 @@
       "types": "./src/secretRequest.ts",
       "default": "./src/secretRequest.ts"
     },
-    "./feedback-request": {
-      "types": "./src/feedbackRequest.ts",
-      "default": "./src/feedbackRequest.ts"
-    },
     "./link-batch": {
       "types": "./src/linkBatch.ts",
       "default": "./src/linkBatch.ts"
@@ -206,10 +202,6 @@
     "./t3ToolSummary": {
       "types": "./src/t3ToolSummary.ts",
       "default": "./src/t3ToolSummary.ts"
-    },
-    "./relay": {
-      "types": "./src/relay/index.ts",
-      "default": "./src/relay/index.ts"
     },
     "./state/auth": {
       "types": "./src/state/auth.ts",
@@ -315,10 +307,6 @@
       "types": "./src/state/environmentHttpAuth.ts",
       "default": "./src/state/environmentHttpAuth.ts"
     },
-    "./state/connectMcpApproval": {
-      "types": "./src/state/connectMcpApproval.ts",
-      "default": "./src/state/connectMcpApproval.ts"
-    },
     "./state/peerPairingCode": {
       "types": "./src/state/peerPairingCode.ts",
       "default": "./src/state/peerPairingCode.ts"
@@ -346,10 +334,6 @@
     "./state/project-grouping": {
       "types": "./src/state/projectGrouping.ts",
       "default": "./src/state/projectGrouping.ts"
-    },
-    "./state/relay": {
-      "types": "./src/state/relayDiscovery.ts",
-      "default": "./src/state/relayDiscovery.ts"
     },
     "./state/review": {
       "types": "./src/state/review.ts",
@@ -666,6 +650,10 @@
     "./pull-request-references": {
       "types": "./src/pullRequestReferences.ts",
       "default": "./src/pullRequestReferences.ts"
+    },
+    "./state/sharedMemory": {
+      "types": "./src/state/sharedMemory.ts",
+      "default": "./src/state/sharedMemory.ts"
     }
   },
   "scripts": {

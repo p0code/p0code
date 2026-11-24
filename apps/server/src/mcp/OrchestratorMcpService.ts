@@ -1,3 +1,4 @@
+import { markReviewThread } from "./JudgePanelService.ts";
 import {
   CommandId,
   type RunId,
@@ -62,6 +63,7 @@ import {
   type ServerProvider,
   type ServerProviderModel,
   ThreadId,
+  isOpenEndedSnooze,
   isOrchestrationV2WorkActive,
   latestProviderTurnForAttempt,
   resolveProjectProviderInstanceEnabled,
@@ -935,7 +937,9 @@ function threadSnooze(
   return {
     snoozed,
     snoozedUntil:
-      snoozed && thread.snoozedUntil != null ? DateTime.formatIso(thread.snoozedUntil) : null,
+      snoozed && thread.snoozedUntil != null && !isOpenEndedSnooze(thread.snoozedUntil)
+        ? DateTime.formatIso(thread.snoozedUntil)
+        : null,
   };
 }
 
@@ -1216,7 +1220,7 @@ function turnItemText(item: OrchestrationV2TurnItem): string | null {
     case "secret_request":
       return `Asked the user for ${item.label}: ${item.secretStatus}.`;
     case "feedback_request":
-      return `Asked the user to approve a ${item.preview.kind} report about ${item.preview.subject} for the T3 team: ${item.feedbackStatus}.`;
+      return "";
     case "link_request":
       return item.linkStatus === "linked"
         ? `Linked ${item.linkedLabel ?? item.url ?? "an environment"} (${item.linkedAccess}).`
@@ -3062,6 +3066,8 @@ const make = Effect.gen(function* () {
           }
           const taskId = taskEvent.event.payload.id;
           const childThreadId = taskEvent.event.payload.childThreadId;
+          if (input.role === "review" && childThreadId !== null)
+            markReviewThread(scope, childThreadId);
           const childRunEvent = result.storedEvents.find(
             (stored) =>
               stored.event.type === "run.created" && stored.event.threadId === childThreadId,

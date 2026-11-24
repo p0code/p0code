@@ -187,113 +187,6 @@ it.effect("aborts the upstream deadline before disposing it on interruption", ()
   }),
 );
 
-it.effect("does not charge authenticated budgets for anonymous or malformed requests", () => {
-  const limit = vi.fn(async (_options: { key: string }) => ({ success: true }));
-  return Effect.gen(function* () {
-    const cache = yield* Cache.Cache;
-    for (const operation of [
-      "fetch",
-      "store",
-      "telemetry",
-      "blob/12345678-1234-1234-1234-123456789abc",
-    ]) {
-      for (const method of ["GET", "POST"]) {
-        yield* cache.handle(
-          new Request(`https://cache.example/projects/t3code/${operation}`, { method }),
-          { waitUntil: () => {} },
-        );
-      }
-    }
-    expect(limit).not.toHaveBeenCalled();
-    const headers = {
-      authorization: `Basic ${btoa("julius:fixture-token-012345678901234567890123456789")}`,
-    };
-    yield* cache.handle(
-      new Request("https://cache.example/projects/t3code/telemetry", {
-        method: "POST",
-        headers,
-        body: "{}",
-      }),
-      { waitUntil: () => {} },
-    );
-    yield* cache.handle(
-      new Request(
-        "https://cache.example/projects/t3code/blob/12345678-1234-1234-1234-123456789abc",
-        { headers },
-      ),
-      { waitUntil: () => {} },
-    );
-    expect(limit.mock.calls).toEqual([[{ key: "t3code:telemetry" }], [{ key: "t3code:blob" }]]);
-  }).pipe(
-    Effect.provide(
-      Cache.layer.pipe(
-        Layer.provide([
-          Layer.succeed(Cache.Bindings, {
-            developerKeys: JSON.stringify({
-              julius: "210eb3d2c67a7207923e1999751300a87a2dd22839b258b80c3d805a6fe64984",
-            }),
-            readerKeys: "{}",
-            readLimit: { limit },
-            storeLimit: { limit },
-            ARTIFACTS: { get: async () => ({ size: 4, body: new Blob(["data"]).stream() }) },
-          } as unknown as Cache.Bindings["Service"]),
-          Admission.layer,
-          Layer.succeed(Savings.Savings, {
-            record: () => Effect.void,
-            emitTotals: () => Effect.void,
-            cleanup: Effect.void,
-          }),
-        ]),
-      ),
-    ),
-  );
-});
-
-it.effect("authenticates setup probes without recording empty savings", () => {
-  const record = vi.fn(() => Effect.void);
-  const emitTotals = vi.fn(() => Effect.void);
-  return Effect.gen(function* () {
-    const cache = yield* Cache.Cache;
-    const response = yield* cache.handle(
-      new Request("https://cache.example/projects/t3code/telemetry", {
-        method: "POST",
-        headers: {
-          authorization: `Basic ${btoa("julius:fixture-token-012345678901234567890123456789")}`,
-        },
-        body: JSON.stringify({
-          id: "a".repeat(64),
-          recordedAt: 0,
-          host: "setup-host",
-          platform: "linux",
-          arch: "x64",
-          ci: false,
-          runId: "setup",
-          tasks: [],
-        }),
-      }),
-      { waitUntil: () => {} },
-    );
-    expect(response.status).toBe(204);
-    expect(record).not.toHaveBeenCalled();
-    expect(emitTotals).not.toHaveBeenCalled();
-  }).pipe(
-    Effect.provide(
-      Cache.layer.pipe(
-        Layer.provide([
-          Layer.succeed(Cache.Bindings, {
-            developerKeys: JSON.stringify({
-              julius: "210eb3d2c67a7207923e1999751300a87a2dd22839b258b80c3d805a6fe64984",
-            }),
-            readLimit: { limit: async () => ({ success: true }) },
-          } as unknown as Cache.Bindings["Service"]),
-          Admission.layer,
-          Layer.succeed(Savings.Savings, { record, emitTotals, cleanup: Effect.void }),
-        ]),
-      ),
-    ),
-  );
-});
-
 it.effect("keeps artifacts private and limits CI reader credentials to reads", () =>
   Effect.gen(function* () {
     const cache = yield* Cache.Cache;
@@ -350,7 +243,7 @@ it.effect("keeps artifacts private and limits CI reader credentials to reads", (
 it.effect("rejects anonymous and invalid Basic requests before admission", () =>
   Effect.gen(function* () {
     const cache = yield* Cache.Cache;
-    for (const operation of ["store", "telemetry", "fetch"]) {
+    for (const operation of ["store", "fetch"]) {
       for (const authorization of [undefined, `Basic ${btoa("attacker:invalid")}`]) {
         const response = yield* cache.handle(
           new Request(`https://cache.example/projects/t3code/${operation}`, {

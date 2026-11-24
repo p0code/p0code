@@ -1,3 +1,4 @@
+import { PublicOrigin } from "./selfRelay/PublicOrigin.ts";
 // @effect-diagnostics nodeBuiltinImport:off - The private-network gate guards the node:http server.
 import type * as NodeHttp from "node:http";
 import * as NodeNet from "node:net";
@@ -102,7 +103,11 @@ export const closeNonPrivateNetworkConnections = Effect.fnUntraced(function* (
   let nextLogAt: bigint | undefined;
   let closedSinceLastLog = 0;
   server.on("connection", (socket) => {
-    if (acceptsPrivateNetworkConnection(socket)) return;
+    if (
+      ("encrypted" in socket && socket.encrypted === true) ||
+      acceptsPrivateNetworkConnection(socket)
+    )
+      return;
     // Read before destroy: Node forgets localAddress once the handle closes.
     const addresses = { localAddress: socket.localAddress, remoteAddress: socket.remoteAddress };
     socket.destroy();
@@ -273,11 +278,14 @@ export const issueHeadlessServeAccessInfo = Effect.fn("issueHeadlessServeAccessI
   const httpServer = yield* HttpServer.HttpServer;
   const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
   const platform = yield* HostProcess.Platform;
-  const connectionString = resolveHeadlessConnectionString(
-    serverConfig.host,
-    resolveListeningPort(httpServer.address, serverConfig.port),
-    { privateNetworkOnly: serverConfig.privateNetworkOnly, platform },
-  );
+  const publicOrigin = yield* yield* PublicOrigin;
+  const connectionString =
+    publicOrigin ??
+    resolveHeadlessConnectionString(
+      serverConfig.host,
+      resolveListeningPort(httpServer.address, serverConfig.port),
+      { privateNetworkOnly: serverConfig.privateNetworkOnly, platform },
+    );
   const issued = yield* serverAuth.issueStartupPairingCredential();
 
   return {

@@ -1,66 +1,64 @@
-import { copySnapshot } from "./copySnapshot";
-import { VoiceInputSetup } from "./VoiceInputSetup";
-import { useComposerTypingGuard } from "./useComposerTypingGuard";
-import { insertAttachmentReferencesForDraft } from "./composerAttachmentReferences";
-import type { ComposerAttachmentInsertion } from "../composerAttachmentInsertion";
-import { DESKTOP_PASTE_AS_TEXT_EVENT } from "../../lib/desktopPasteAsText";
-import { BackgroundThreadContext, HiddenThreadContext } from "./backgroundThread";
+import { formatComposerModelMention } from "@t3tools/client-runtime/composer-model-mentions";
+import type { EnvironmentConnectionPresentation } from "@t3tools/client-runtime/connection";
+import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
-  draftSupportedRuntimeModes,
-  resolveCompatibleRuntimeMode,
-  runtimeModeConfig,
-  resolveRuntimeModeOptions,
-  runtimeModeDenial,
-} from "./runtimeModeConfig";
-import { isLocalEnvironmentDisabled } from "../../localEnvironment";
-import { usePrimaryEnvironmentId } from "../../state/environments";
-import { useRightPanelStore } from "~/rightPanelStore";
-import { importPastedComposerText, readPastedComposerContext } from "../composerInlineTokenPaste";
+  resolveProviderSkillsForCwd,
+  resolveProviderSlashCommandsForCwd,
+} from "@t3tools/client-runtime/providerSkills";
 import {
-  questionAttachmentDraftId,
-  trackOpenQuestionAttachmentDraft,
-  useQuestionAttachmentPreparation,
-} from "../../questionAttachments";
+  type ComposerDispatchMode,
+  composerRunsDraftLocally,
+  resolveComposerDispatchMode,
+} from "@t3tools/client-runtime/state/composer-dispatch";
+import { settlePromise, squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
+import { isPasteAsTextShortcut } from "@t3tools/client-runtime/text-paste";
 import type {
-  KeybindingCommand,
   AssistantCitation,
-  ComposerContextId,
-  ResponseContextRecord,
-  ChatAttachment as ContractChatAttachment,
   ChatFileAttachment,
-  EnvironmentId,
-  ModelSelection,
-  ProjectId,
-  PreviewAnnotationPayload,
-  ThreadContextRecord,
+  ComposerContextId,
+  ComposerContextRecord,
+  ChatAttachment as ContractChatAttachment,
   EnvironmentContextRecord,
+  EnvironmentId,
+  KeybindingCommand,
+  ModelSelection,
+  OrchestrationV2Run,
+  PreviewAnnotationPayload,
+  ProjectId,
   ResolvedKeybindingsConfig,
+  ResponseContextRecord,
   RuntimeMode,
   RuntimeRequestId,
   ScopedThreadRef,
   ServerProvider,
+  ThreadContextRecord,
   ThreadId,
+  ThreadPullRequestLink,
 } from "@t3tools/contracts";
 import {
-  EnvironmentRequestInvalidError,
   AuthOrchestrationOperateScope,
   clampManagedRuntimeMode,
+  EnvironmentRequestInvalidError,
+  PRIMARY_LOCAL_ENVIRONMENT_ID,
+  PROVIDER_SEND_TURN_MAX_ATTACHMENTS,
   ProviderDriverKind,
   ProviderInstanceId,
-  PROVIDER_SEND_TURN_MAX_ATTACHMENTS,
-  PRIMARY_LOCAL_ENVIRONMENT_ID,
 } from "@t3tools/contracts";
-import type { EnvironmentConnectionPresentation } from "@t3tools/client-runtime/connection";
-import { settlePromise, squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
-import * as Schema from "effect/Schema";
-import { formatComposerModelMention } from "@t3tools/client-runtime/composer-model-mentions";
-import { isPasteAsTextShortcut } from "@t3tools/client-runtime/text-paste";
-import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
+import type { UnifiedSettings } from "@t3tools/contracts/settings";
+import { assistantCitationLabel } from "@t3tools/shared/assistantCitations";
+import { encodeComposerContextFragment } from "@t3tools/shared/composerContextClipboard";
+import {
+  formatComposerContextReference,
+  threadContextRecord,
+  toKindScopedComposerContextId,
+} from "@t3tools/shared/composerContextReferences";
 import { serializeComposerFileLink } from "@t3tools/shared/composerTrigger";
-import { type FolderDropTarget, folderDropTarget, resolveDroppedFolderPath } from "./folderDrop";
-import { splitTransferredFiles } from "./workspaceFileDrop";
 import { createModelSelection, normalizeModelSlug } from "@t3tools/shared/model";
 import { USAGE_LIMITS_COMMAND } from "@t3tools/shared/usageLimits";
+import { useNavigate } from "@tanstack/react-router";
+import * as Schema from "effect/Schema";
+import { msg, T, useGT, useMessages, Var } from "gt-react";
+import { BuildingIcon, PlayIcon, ReplyIcon } from "lucide-react";
 import {
   memo,
   use,
@@ -72,74 +70,72 @@ import {
   useRef,
   useState,
 } from "react";
-import { msg, T, useGT, useMessages, Var } from "gt-react";
 import { flushSync } from "react-dom";
+import type { AssistantCitationSourceAnchor } from "~/lib/assistantTextSelection";
+import {
+  attachmentContextRecord,
+  environmentContextRecord,
+  environmentContextReference,
+  previewAnnotationContextId,
+  previewAnnotationContextRecord,
+  reviewCommentContextId,
+  reviewCommentContextRecord,
+  reviewCommentContextReference,
+  terminalContextRecord,
+  terminalContextReference,
+  threadContextReference,
+  uploadedAttachmentContextRecord,
+} from "~/lib/composerContextRecords";
+import {
+  collectInlineContextIds,
+  type ComposerContextReference,
+  ensureInlineContextReferences,
+  formatInlineContextReference,
+  inlineContextReferenceReplacement,
+  insertInlineContextReference,
+} from "~/lib/composerContextReferences";
+import { rememberCopiedComposerAttachments } from "~/lib/copiedComposerAttachments";
+import { observeResize } from "~/lib/observeResize";
+import { useOpenPrLink } from "~/lib/openPullRequestLink";
+import { threadContextAttachment } from "~/lib/threadContextAttachment";
+import { cn, isMacPlatform, randomUUID } from "~/lib/utils";
+import { useRightPanelStore } from "~/rightPanelStore";
+import { readThreadShell } from "~/state/entities";
+import { useLinkedEnvironments } from "~/state/peerLinks";
 import {
   clampCollapsedComposerCursor,
-  type ComposerTrigger,
-  type ComposerSubmissionIntent,
   collapseExpandedComposerCursor,
   composerRequiresModifier,
-  composerSubmissionIntentForKey,
   composerStateAtPromptEnd,
+  type ComposerSubmissionIntent,
+  composerSubmissionIntentForKey,
+  type ComposerTrigger,
   detectComposerTrigger,
   expandCollapsedComposerCursor,
+  extendReplacementRangeForTrailingSpace,
   formatAssistantCitationForComposer,
   isPathSuggestionCurrent,
-  extendReplacementRangeForTrailingSpace,
   replaceTextRange,
 } from "../../composer-logic";
-import { DEFAULT_COMPOSER_PLACEHOLDER } from "../../composerPlaceholder";
-import { deriveComposerSendState, getAntigravitySendBlockReason } from "../ChatView.logic";
-import { threadHasStarted } from "../../lib/chatThreadActions";
 import {
-  dataTransferHasComposerMention,
-  makeComposerMentionDragHandlers,
-} from "./composerMentionDrag";
-import { serializeComposerImages } from "./composerImagePersistence";
-import {
-  isInsideCollapsedComposerControls,
-  isInsideRestingComposerControlScope,
-  markOpenToEffort,
-  markOpenToPermissions,
-} from "./composerEventScope";
-import {
-  type ComposerFileAttachment,
-  type ComposerImageAttachment,
-  type DraftId,
-  composerFileNeedsReattach,
   composerDraftHasUserContent,
+  type ComposerFileAttachment,
+  composerFileNeedsReattach,
+  type ComposerImageAttachment,
   composerTargetKey,
+  type DraftId,
   readComposerDraftPrompt,
   resolveLiveComposerDraftTarget,
   useComposerDraftStore,
   useComposerThreadDraft,
 } from "../../composerDraftStore";
-import { buildDraftThreadRouteParams, buildThreadRouteParams } from "../../threadRoutes";
-import { ComposerStashBadge } from "./ComposerStashBadge";
-import { ComposerStashMenu } from "./ComposerStashMenu";
-import { useComposerTriggerState } from "./useComposerTriggerState";
-import { useComposerMenuItems } from "./useComposerMenuItems";
-import { useComposerMultilinePrompt } from "./useComposerMultilinePrompt";
-import {
-  type QueuedAttachmentContextBinding,
-  reconcileAttachmentContextReferences,
-  useRetainedContextPayloads,
-} from "./composerContextUndo";
-import { ComposerBanner } from "./ComposerBanner";
-import { ComposerSurface } from "./ComposerSurface";
-import { CollapsedComposerPromptPreview } from "./CollapsedComposerPromptPreview";
-import { ComposerBannerStack, type ComposerBannerStackItem } from "./ComposerBannerStack";
-import {
-  attachmentsToReleaseOnUploadCapabilityLoss,
-  composerOtherFilesForPresentation,
-  fileAttachmentCapabilityBlockReason,
-  fileAttachmentStagingLimit,
-  isPreviewableComposerVideo,
-  clipboardHtmlImageContent,
-  imagesToAttachBesidePastedText,
-  shouldHandleComposerAttachmentPaste,
-} from "./composerAttachmentFiles";
+import { DEFAULT_COMPOSER_PLACEHOLDER } from "../../composerPlaceholder";
+import { useMediaQuery } from "../../hooks/useMediaQuery";
+import { useSoftwareKeyboardOpen } from "../../hooks/useSoftwareKeyboardOpen";
+import { useStableCallback } from "../../hooks/useStableCallback";
+import { m as resolveMessage } from "../../i18n/messages";
+import { shortcutLabelForCommand, type ShortcutMatchContext } from "../../keybindings";
+import { assistantCitationNavigation } from "../../lib/assistantCitationNavigation";
 import {
   releaseAttachmentUpload,
   releaseDraftAttachment,
@@ -147,74 +143,52 @@ import {
   useAttachmentUploadStore,
 } from "../../lib/attachmentUploadQueue";
 import { attachmentUploadBlockReason } from "../../lib/attachmentUploadState";
-import { useDictationShortcut } from "../../speech/useDictationShortcut";
-import { useDictationSubmissionShortcut } from "../../speech/useDictationSubmissionShortcut";
-import { useEnvironmentSpeechInput } from "../../speech/useEnvironmentSpeechInput";
-import { ComposerSpeechButton, ComposerSpeechRecordingPill } from "./ComposerSpeechButton";
-import type { AssistantCitationSourceAnchor } from "~/lib/assistantTextSelection";
-import { shortcutLabelForCommand, type ShortcutMatchContext } from "../../keybindings";
+import { threadHasStarted } from "../../lib/chatThreadActions";
+import { DESKTOP_PASTE_AS_TEXT_EVENT } from "../../lib/desktopPasteAsText";
 import {
   type TerminalContextDraft,
   type TerminalContextSelection,
 } from "../../lib/terminalContext";
+import { isLocalEnvironmentDisabled } from "../../localEnvironment";
+import { type AppModelOption, getAppModelOptionsForInstance } from "../../modelSelection";
+import { usePanelAnimationSettings } from "../../panelAnimations";
 import {
-  formatComposerContextReference,
-  threadContextRecord,
-  toKindScopedComposerContextId,
-} from "@t3tools/shared/composerContextReferences";
-import {
-  shouldUseCompactComposerPrimaryActions,
-  shouldUseCompactComposerFooter,
-} from "../composerFooterLayout";
+  questionAttachmentDraftId,
+  trackOpenQuestionAttachmentDraft,
+  useQuestionAttachmentPreparation,
+} from "../../questionAttachments";
+import type { ReviewCommentContext } from "../../reviewCommentContext";
+import type { PendingApproval, PendingUserInput, TimelineEntry } from "../../session-logic";
+import { useDictationShortcut } from "../../speech/useDictationShortcut";
+import { useDictationSubmissionShortcut } from "../../speech/useDictationSubmissionShortcut";
+import { useEnvironmentSpeechInput } from "../../speech/useEnvironmentSpeechInput";
+import { usePrimaryEnvironmentId } from "../../state/environments";
+import { useManagedPolicy } from "../../state/managedPolicy";
+import { readEnvironmentScope, readPreparedConnection } from "../../state/session";
+import { buildDraftThreadRouteParams, buildThreadRouteParams } from "../../threadRoutes";
+import { isVideoAttachment, type SessionPhase, type Thread } from "../../types";
+import { deriveComposerSendState, getAntigravitySendBlockReason } from "../ChatView.logic";
 import {
   type ComposerCitationCommentRequest,
-  type ComposerPromptEditorHandle,
   ComposerPromptEditorTiptap as ComposerPromptEditor,
+  type ComposerPromptEditorHandle,
 } from "../ComposerPromptEditorTiptap";
+import type { ComposerAttachmentInsertion } from "../composerAttachmentInsertion";
 import {
   ComposerContextActionsContext,
   composerContextRecordsFromDraft,
 } from "../composerContextPresentation";
-import { useOpenPrLink } from "~/lib/openPullRequestLink";
 import {
-  collectInlineContextIds,
-  type ComposerContextReference,
-  ensureInlineContextReferences,
-  formatInlineContextReference,
-  insertInlineContextReference,
-  inlineContextReferenceReplacement,
-} from "~/lib/composerContextReferences";
-import {
-  attachmentContextRecord,
-  uploadedAttachmentContextRecord,
-  previewAnnotationContextId,
-  previewAnnotationContextRecord,
-  reviewCommentContextId,
-  reviewCommentContextReference,
-  reviewCommentContextRecord,
-  terminalContextReference,
-  terminalContextRecord,
-  threadContextReference,
-  environmentContextRecord,
-  environmentContextReference,
-} from "~/lib/composerContextRecords";
-import { rememberCopiedComposerAttachments } from "~/lib/copiedComposerAttachments";
-import { useThreadContextDrop, threadContextDropTargetProps } from "./threadContextDrag";
-import { droppedThreadContextRecord } from "./threadContextDrop.logic";
-import { readThreadShell } from "~/state/entities";
-import { useLinkedEnvironments } from "~/state/peerLinks";
-import { encodeComposerContextFragment } from "@t3tools/shared/composerContextClipboard";
-import type {
-  ComposerContextRecord,
-  OrchestrationV2Run,
-  ThreadPullRequestLink,
-} from "@t3tools/contracts";
-import { threadContextAttachment } from "~/lib/threadContextAttachment";
-import {
-  type ComposerCommandItem,
-  ComposerCommandMenu,
-  composerSuggestionOptionId,
-} from "./ComposerCommandMenu";
+  shouldUseCompactComposerFooter,
+  shouldUseCompactComposerPrimaryActions,
+} from "../composerFooterLayout";
+import { importPastedComposerText, readPastedComposerContext } from "../composerInlineTokenPaste";
+import { buildPullRequestReferenceContext } from "../pullRequest/pullRequestDetail.logic";
+import { Button } from "../ui/button";
+import { Kbd } from "../ui/kbd";
+import { Spinner } from "../ui/spinner";
+import { toastManager } from "../ui/toast";
+import { CollapsedComposerPromptPreview } from "./CollapsedComposerPromptPreview";
 import {
   ComposerAttachButton,
   ComposerAttachInput,
@@ -224,77 +198,78 @@ import {
   ComposerQueuedAttachmentRow,
   ComposerRestingImagePreviews,
 } from "./ComposerAttachmentStrip";
-import { CollapsedComposerStopAction, ComposerPrimaryActions } from "./ComposerPrimaryActions";
+import { ComposerBanner } from "./ComposerBanner";
+import { ComposerBannerStack, type ComposerBannerStackItem } from "./ComposerBannerStack";
+import {
+  type ComposerCommandItem,
+  ComposerCommandMenu,
+  composerSuggestionOptionId,
+} from "./ComposerCommandMenu";
+import {
+  ComposerCommandMenuLayer,
+  DeferredComposerCommandMenuLayer,
+} from "./ComposerCommandMenuLayer";
+import { ComposerControlsBar } from "./ComposerControlsBar";
 import { ComposerFooterPrimaryActions } from "./ComposerFooterControls";
+import { HELD_COMPOSER_SEND_BANNER_ID } from "./ComposerHeldSendBanner";
 import { ComposerPendingUserInputPanel } from "./ComposerPendingUserInputPanel";
-import { resolveComposerMenuActiveItemId } from "./composerMenuHighlight";
-import { buildPullRequestReferenceContext } from "../pullRequest/pullRequestDetail.logic";
-import { getComposerPromptInjectionState, getComposerReasoningStep } from "./composerProviderState";
-import { readPromptUltrathink } from "./TraitsPicker";
-import { useApplyThreadModelPick } from "./useApplyThreadModelPick";
+import { CollapsedComposerStopAction, ComposerPrimaryActions } from "./ComposerPrimaryActions";
+import { ComposerPromptLengthValidation } from "./ComposerPromptLengthValidation";
+import { ComposerSpeechButton, ComposerSpeechRecordingPill } from "./ComposerSpeechButton";
+import { ComposerStashBadge } from "./ComposerStashBadge";
+import { ComposerStashMenu } from "./ComposerStashMenu";
+import { ComposerSurface } from "./ComposerSurface";
 import {
   buildAttachmentVideoPreview,
   buildExpandedImagePreview,
   type ExpandedImagePreview,
 } from "./ExpandedImagePreview";
-import { cn, isMacPlatform, randomUUID } from "~/lib/utils";
+import { hasProviderSetup } from "./ProviderStatusBanner";
+import { readPromptUltrathink } from "./TraitsPicker";
+import { VoiceInputSetup } from "./VoiceInputSetup";
+import { BackgroundThreadContext, HiddenThreadContext } from "./backgroundThread";
+import {
+  attachmentsToReleaseOnUploadCapabilityLoss,
+  clipboardHtmlImageContent,
+  composerOtherFilesForPresentation,
+  fileAttachmentCapabilityBlockReason,
+  fileAttachmentStagingLimit,
+  imagesToAttachBesidePastedText,
+  isPreviewableComposerVideo,
+  shouldHandleComposerAttachmentPaste,
+} from "./composerAttachmentFiles";
+import { insertAttachmentReferencesForDraft } from "./composerAttachmentReferences";
+import { composerCommandKeyHandler } from "./composerCommandKey";
+import {
+  type QueuedAttachmentContextBinding,
+  reconcileAttachmentContextReferences,
+  useRetainedContextPayloads,
+} from "./composerContextUndo";
+import {
+  isInsideCollapsedComposerControls,
+  isInsideRestingComposerControlScope,
+  markOpenToEffort,
+  markOpenToPermissions,
+} from "./composerEventScope";
+import { serializeComposerImages } from "./composerImagePersistence";
+import {
+  dataTransferHasComposerMention,
+  makeComposerMentionDragHandlers,
+} from "./composerMentionDrag";
+import { resolveComposerMenuActiveItemId } from "./composerMenuHighlight";
+import { type ComposerPromptHistoryPosition } from "./composerPromptHistory";
+import { getComposerPromptInjectionState, getComposerReasoningStep } from "./composerProviderState";
 import {
   getComposerPromptLengthValidationMessage,
   getComposerSubmissionValidationMessage,
   isComposerSubmissionBlocked,
   submitComposerDraft,
 } from "./composerSubmission";
-import { ComposerPromptLengthValidation } from "./ComposerPromptLengthValidation";
-import { pendingDraftWork } from "./pendingDraftWork";
 import { importComposerThreadAttachment } from "./composerThreadImport";
-import { observeResize } from "~/lib/observeResize";
-
-const isEnvironmentRequestInvalidError = Schema.is(EnvironmentRequestInvalidError);
-import { toastManager } from "../ui/toast";
-import { m as resolveMessage } from "../../i18n/messages";
-import { BuildingIcon, PlayIcon, ReplyIcon } from "lucide-react";
-import { useNavigate } from "@tanstack/react-router";
-import { assistantCitationLabel } from "@t3tools/shared/assistantCitations";
-import { assistantCitationNavigation } from "../../lib/assistantCitationNavigation";
-import { Button } from "../ui/button";
-import { Spinner } from "../ui/spinner";
-import { useManagedPolicy } from "../../state/managedPolicy";
-import { hasProviderSetup } from "./ProviderStatusBanner";
-import { type AppModelOption, getAppModelOptionsForInstance } from "../../modelSelection";
-import type { UnifiedSettings } from "@t3tools/contracts/settings";
-import { isVideoAttachment, type SessionPhase, type Thread } from "../../types";
-import { type ComposerPromptHistoryPosition } from "./composerPromptHistory";
-import { usePendingUserInputDraft } from "./usePendingThreadRequests";
-import type { PendingApproval, PendingUserInput, TimelineEntry } from "../../session-logic";
-import {
-  composerRunsDraftLocally,
-  resolveComposerDispatchMode,
-  type ComposerDispatchMode,
-} from "@t3tools/client-runtime/state/composer-dispatch";
-import {
-  resolveProviderSkillsForCwd,
-  resolveProviderSlashCommandsForCwd,
-} from "@t3tools/client-runtime/providerSkills";
-import { useMediaQuery } from "../../hooks/useMediaQuery";
-import { Kbd } from "../ui/kbd";
-import { useSoftwareKeyboardOpen } from "../../hooks/useSoftwareKeyboardOpen";
-import { useStableCallback } from "../../hooks/useStableCallback";
-import { usePanelAnimationSettings } from "../../panelAnimations";
-import { readEnvironmentScope, readPreparedConnection } from "../../state/session";
-import type { ReviewCommentContext } from "../../reviewCommentContext";
-import { useComposerRestingTransition } from "./useComposerRestingTransition";
-import {
-  ComposerCommandMenuLayer,
-  DeferredComposerCommandMenuLayer,
-} from "./ComposerCommandMenuLayer";
-import { useRestingComposerControlsLayout } from "./useRestingComposerControlsLayout";
-import { useProviderWorkspaceSnapshotRefresh } from "./useProviderWorkspaceSnapshotRefresh";
-import { useComposerProviderModel } from "./useComposerProviderModel";
-import { useComposerImageGroups } from "./useComposerImageGroups";
-import { useComposerStash } from "./useComposerStash";
-import { useComposerContextImport } from "./useComposerContextImport";
-import { useComposerAttachmentIntake } from "./useComposerAttachmentIntake";
-import { isQueuedFileAttachment, isQueuedImageAttachment } from "./queuedMessageEdit";
+import { copySnapshot } from "./copySnapshot";
+import { type FolderDropTarget, folderDropTarget, resolveDroppedFolderPath } from "./folderDrop";
+import { useFreshSessionArmed } from "./freshSessionArms";
+import { pendingDraftWork } from "./pendingDraftWork";
 import {
   cancelHeldComposerSend,
   countPreparingComposerImages,
@@ -302,11 +277,34 @@ import {
   usePreparingComposerImages,
   useSubmitAfterPreparingImages,
 } from "./preparingComposerImages";
-import { HELD_COMPOSER_SEND_BANNER_ID } from "./ComposerHeldSendBanner";
-import { ComposerControlsBar } from "./ComposerControlsBar";
-import { composerCommandKeyHandler } from "./composerCommandKey";
+import { isQueuedFileAttachment, isQueuedImageAttachment } from "./queuedMessageEdit";
+import {
+  draftSupportedRuntimeModes,
+  resolveCompatibleRuntimeMode,
+  resolveRuntimeModeOptions,
+  runtimeModeConfig,
+  runtimeModeDenial,
+} from "./runtimeModeConfig";
+import { threadContextDropTargetProps, useThreadContextDrop } from "./threadContextDrag";
+import { droppedThreadContextRecord } from "./threadContextDrop.logic";
+import { useApplyThreadModelPick } from "./useApplyThreadModelPick";
+import { useComposerAttachmentIntake } from "./useComposerAttachmentIntake";
+import { useComposerContextImport } from "./useComposerContextImport";
+import { useComposerImageGroups } from "./useComposerImageGroups";
+import { useComposerMenuItems } from "./useComposerMenuItems";
+import { useComposerMultilinePrompt } from "./useComposerMultilinePrompt";
+import { useComposerProviderModel } from "./useComposerProviderModel";
+import { useComposerRestingTransition } from "./useComposerRestingTransition";
+import { useComposerStash } from "./useComposerStash";
+import { useComposerTriggerState } from "./useComposerTriggerState";
+import { useComposerTypingGuard } from "./useComposerTypingGuard";
+import { usePendingUserInputDraft } from "./usePendingThreadRequests";
 import { promptSuggestionToAccept, usePromptSuggestion } from "./usePromptSuggestion";
-import { useFreshSessionArmed } from "./freshSessionArms";
+import { useProviderWorkspaceSnapshotRefresh } from "./useProviderWorkspaceSnapshotRefresh";
+import { useRestingComposerControlsLayout } from "./useRestingComposerControlsLayout";
+import { splitTransferredFiles } from "./workspaceFileDrop";
+
+const isEnvironmentRequestInvalidError = Schema.is(EnvironmentRequestInvalidError);
 
 function consumePasteAsTextShortcut(deadline: { current: number }): boolean {
   const armed = Date.now() <= deadline.current;
@@ -2088,6 +2086,16 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       return;
     }
     if (item.type === "slash-command") {
+      if (item.command === "judges") {
+        const applied = applyPromptReplacement(
+          trigger.rangeStart,
+          trigger.rangeEnd,
+          "Convene the configured judges panel using convene_judges. Validate its findings, fix real issues, and run relevant tests. ",
+          { expectedText: snapshot.value.slice(trigger.rangeStart, trigger.rangeEnd) },
+        );
+        if (applied) setComposerHighlightedItemId(null);
+        return;
+      }
       if (item.command === "model") {
         const applied = applyPromptReplacement(trigger.rangeStart, trigger.rangeEnd, "", {
           expectedText: snapshot.value.slice(trigger.rangeStart, trigger.rangeEnd),

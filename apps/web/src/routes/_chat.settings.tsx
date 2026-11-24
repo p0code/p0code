@@ -1,21 +1,20 @@
-import { workspaceAreaProps } from "../lib/workspaceFocus";
-import { Outlet, createFileRoute, redirect, useLocation } from "@tanstack/react-router";
-import { useState, type ReactNode } from "react";
+import { createFileRoute, Outlet, redirect, useLocation } from "@tanstack/react-router";
 import { T, useGT, useMessages, Var } from "gt-react";
 import { RotateCcwIcon } from "lucide-react";
-import { Button } from "../components/ui/button";
+import { useState, type ReactNode } from "react";
 import { useSettingsRestore } from "../components/settings/SettingsPanels";
+import { Button } from "../components/ui/button";
+import { workspaceAreaProps } from "../lib/workspaceFocus";
 
 import { AppRouteModal, AppRouteModalClose } from "../components/AppRouteModal";
 import { SettingsBreadcrumb } from "../components/settings/SettingsBreadcrumb";
-import { SettingsSidebarNav } from "../components/settings/SettingsSidebarNav";
 import {
   SettingsScopeProvider,
   useSettingsScope,
 } from "../components/settings/SettingsScopeContext";
-import { useEnvironments } from "../state/environments";
 import { SettingsScopeNotice } from "../components/settings/SettingsScopeNotice";
 import { SETTINGS_DEVICE_ONLY_PATHS } from "../components/settings/SettingsScopeSentence";
+import { SettingsSidebarNav } from "../components/settings/SettingsSidebarNav";
 import { SettingsPageContainer } from "../components/settings/settingsLayout";
 import {
   retainSettingsScope,
@@ -27,6 +26,7 @@ import {
   isSettingsSearchScopeAvailable,
   movedSettingsPath,
 } from "../components/settings/settingsSearch";
+import { useEnvironments } from "../state/environments";
 
 function RestoreDeviceDefaultsButton({ onRestored }: { onRestored: () => void }) {
   const { changedSettingLabels, restoreDefaults } = useSettingsRestore(onRestored);
@@ -52,28 +52,9 @@ function SettingsScopeBoundary({ pathname, children }: { pathname: string; child
   const m = useMessages();
   const hash = useLocation({ select: (location) => location.hash });
   const searchTarget = getSettingsSearchTargetScope(hash);
-  const agentFeedbackAvailability = searchTarget?.agentFeedbackOnly
-    ? {
-        eligibleEnvironmentIds: environments
-          .filter(
-            (environment) =>
-              environment.connection.phase === "connected" &&
-              environment.serverConfig?.environment.capabilities.agentFeedback === true,
-          )
-          .map((environment) => environment.environmentId),
-        isTargetAvailable:
-          connectedEnvironments.length > 0 &&
-          connectedEnvironments.every(
-            (environment) =>
-              environment.serverConfig?.environment.capabilities.agentFeedback === true,
-          ),
-      }
+  const targetAvailability = searchTarget?.requiresThreadAutoSettlement
+    ? getThreadAutoSettlementSearchAvailability(environments, scope)
     : null;
-  const targetAvailability =
-    agentFeedbackAvailability ??
-    (searchTarget?.requiresThreadAutoSettlement
-      ? getThreadAutoSettlementSearchAvailability(environments, scope)
-      : null);
   if (
     scope.kind !== "unavailable" &&
     searchTarget &&

@@ -1,28 +1,20 @@
+import { ConnectionBlockedError, Connectivity, Wakeups } from "@t3tools/client-runtime/connection";
 import { ClientCapabilities, PlatformConnectionSource } from "@t3tools/client-runtime/platform";
-import {
-  ConnectionBlockedError,
-  ConnectionTransientError,
-  Connectivity,
-  Wakeups,
-} from "@t3tools/client-runtime/connection";
-import { managedRelayAccountChanges, managedRelaySessionAtom } from "@t3tools/client-runtime/relay";
+
 import * as Clock from "effect/Clock";
-import { msg } from "gt-react-native";
-import { m } from "../i18n/messages";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
 import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
 import Constants from "expo-constants";
 import * as Network from "expo-network";
+import { msg } from "gt-react-native";
 import { AppState } from "react-native";
+import { m } from "../i18n/messages";
 
 import { authClientMetadata } from "../lib/authClientMetadata";
 import * as Runtime from "../lib/runtime";
-import * as MobileStorage from "../persistence/mobile-storage";
-import { appAtomRegistry } from "../state/atom-registry";
 import { mobileApplicationActiveWakeup } from "./app-state-wakeups";
 import * as EnvironmentOwnedDataCleanup from "./environment-owned-data-cleanup";
 import * as ConnectionStorage from "./storage";
@@ -137,9 +129,6 @@ const layerWakeups = Wakeups.layer({
           (subscription) => Effect.sync(() => subscription.remove()),
         ).pipe(Effect.asVoid),
       ),
-      managedRelayAccountChanges(appAtomRegistry).pipe(
-        Stream.map(() => "credentials-changed" as const),
-      ),
       networkPathChanges,
     ],
     { concurrency: "unbounded" },
@@ -148,42 +137,7 @@ const layerWakeups = Wakeups.layer({
 
 const layerCapabilities = Layer.effectContext(
   Effect.gen(function* () {
-    const storage = yield* MobileStorage.MobileStorage;
-    return Context.make(
-      ClientCapabilities.CloudSession,
-      ClientCapabilities.CloudSession.of({
-        identity: Effect.sync(() =>
-          Option.fromNullishOr(appAtomRegistry.get(managedRelaySessionAtom)),
-        ),
-        clerkToken: Effect.gen(function* () {
-          const session = appAtomRegistry.get(managedRelaySessionAtom);
-          if (session === null) {
-            return yield* new ConnectionBlockedError({
-              reason: "authentication",
-              detail: m(
-                msg("Sign in to {product} to connect this environment.", { product: "T3 Connect" }),
-              ),
-            });
-          }
-          const token = yield* session.readClerkToken().pipe(
-            Effect.mapError(
-              (error) =>
-                new ConnectionTransientError({
-                  reason: "network",
-                  detail: error.message,
-                }),
-            ),
-          );
-          if (token === null) {
-            return yield* new ConnectionBlockedError({
-              reason: "authentication",
-              detail: m(msg("The {product} session is unavailable.", { product: "T3 Connect" })),
-            });
-          }
-          return token;
-        }),
-      }),
-    ).pipe(
+    return Context.empty().pipe(
       Context.add(
         ClientCapabilities.PrimaryEnvironmentAuth,
         ClientCapabilities.PrimaryEnvironmentAuth.of({
@@ -191,28 +145,8 @@ const layerCapabilities = Layer.effectContext(
         }),
       ),
       // The relay device id already persists in secure storage; analytics only sends its hash.
-      Context.add(ClientCapabilities.AnalyticsDevice, {
-        id: storage.loadOrCreateAgentAwarenessDeviceId.pipe(Effect.option),
-      }),
-      Context.add(
-        ClientCapabilities.RelayDeviceIdentity,
-        ClientCapabilities.RelayDeviceIdentity.of({
-          deviceId: storage.loadOrCreateAgentAwarenessDeviceId.pipe(
-            Effect.mapError(
-              (cause) =>
-                new ConnectionTransientError({
-                  reason: "remote-unavailable",
-                  detail: m(
-                    msg("Could not load the mobile device identity: {cause}", {
-                      cause: String(cause),
-                    }),
-                  ),
-                }),
-            ),
-            Effect.asSome,
-          ),
-        }),
-      ),
+
+      Context.merge(Context.empty()),
       Context.add(
         ClientCapabilities.ClientPresentation,
         ClientCapabilities.ClientPresentation.of({

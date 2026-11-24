@@ -1,4 +1,3 @@
-import type { RelayAgentActivityAggregateState } from "@t3tools/contracts/relay";
 import { msg } from "gt-react-native";
 
 import { m, type MessageResolver } from "../i18n/messages";
@@ -13,7 +12,7 @@ export type AgentActivityWidgetSource =
   | { readonly kind: "signed-out" }
   | { readonly kind: "unavailable" }
   | { readonly kind: "loading" }
-  | { readonly kind: "snapshot"; readonly aggregate: RelayAgentActivityAggregateState | null };
+  | { readonly kind: "snapshot"; readonly aggregate: AgentActivitySnapshot | null };
 
 function countTable(maxCount: number, format: (count: number) => string) {
   return Object.fromEntries(
@@ -76,9 +75,9 @@ export function agentActivityWidgetTimeline(
       title: "T3 Code",
       subtitle:
         source.kind === "signed-out"
-          ? resolve(msg("Sign in to {product} to see agents", { product: "T3 Connect" }))
+          ? resolve(msg("Connect to an environment to see agents"))
           : source.kind === "unavailable"
-            ? resolve(msg("Couldn't reach {product}", { product: "T3 Connect" }))
+            ? resolve(msg("Couldn't reach your environment"))
             : source.kind === "loading"
               ? resolve(msg("Loading agents…"))
               : resolve(msg("No active agents")),
@@ -117,3 +116,5 @@ export function agentActivityWidgetTimeline(
     { date: new Date(now + AGENT_ACTIVITY_WIDGET_STALE_AFTER_MS), props: staleProps },
   ];
 }
+
+export type AgentActivitySnapshot = Omit<AgentActivityProps, "text">;

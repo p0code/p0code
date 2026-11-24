@@ -150,7 +150,8 @@ describe("rankModelPickerSearch", () => {
       "Claude Opus 4.5",
     ]);
     expect(search("opus 5")).toEqual(["Claude Opus 5.5", "Claude Opus 5", "Claude Opus 4.5"]);
-    expect(search("opus 5.")).toEqual(["Claude Opus 5.5"]);
+    // A trailing separator collapses, so "5." is just "5".
+    expect(search("opus 5.")).toEqual(["Claude Opus 5.5", "Claude Opus 5", "Claude Opus 4.5"]);
   });
 
   it("still ranks an exact name above newer models that extend it", () => {
@@ -166,6 +167,77 @@ describe("rankModelPickerSearch", () => {
   it("finds a model by its full or bare ID when the name is written differently", () => {
     expect(search("opencode-go/deepseek-v4.1-flash")).toEqual(["DeepSeek V4.1 Flash 1017"]);
     expect(search("deepseek-v4.1-flash")).toEqual(["DeepSeek V4.1 Flash 1017"]);
+  });
+
+  it("never matches driver kind or provider display name by bare subsequence", () => {
+    const openCodeModels: CatalogModel[] = [
+      {
+        driverKind: "opencode",
+        providerDisplayName: "OpenCode",
+        name: "Kimi K2",
+        slug: "openrouter/moonshotai/kimi-k2",
+      },
+      {
+        driverKind: "opencode",
+        providerDisplayName: "OpenCode",
+        name: "Qwen 3",
+        slug: "openrouter/qwen/qwen3",
+      },
+    ];
+    // Each token is a bare subsequence of "opencode" that appears in none of
+    // the slugs or names, so nothing may match.
+    for (const query of ["code", "ode", "ncod", "pencod", "ncode"]) {
+      expect(search(query, openCodeModels)).toEqual([]);
+    }
+    // A prefix of the driver/provider name still matches.
+    expect(search("open", openCodeModels)).toEqual(["Kimi K2", "Qwen 3"]);
+  });
+
+  it("normalizes separators so slug and label spellings agree", () => {
+    const models: CatalogModel[] = [
+      {
+        driverKind: "opencode",
+        providerDisplayName: "OpenCode",
+        name: "Claude Sonnet 4.5",
+        slug: "openrouter/anthropic/claude-sonnet-4-5",
+      },
+      {
+        driverKind: "opencode",
+        providerDisplayName: "OpenCode",
+        name: "GLM 5.3 Flash",
+        slug: "opencode-go/glm-5.3-flash",
+      },
+      { driverKind: "codex", providerDisplayName: "Codex", name: "GPT-6 Sol" },
+    ];
+    expect(search("claude sonnet 4.5", models)).toEqual(["Claude Sonnet 4.5"]);
+    expect(search("claude-sonnet-4-5", models)).toEqual(["Claude Sonnet 4.5"]);
+    expect(search("claude_sonnet 4.5", models)).toEqual(["Claude Sonnet 4.5"]);
+    expect(search("sonnet 4 5", models)).toEqual(["Claude Sonnet 4.5"]);
+    expect(search("glm 5.3 flash", models)).toEqual(["GLM 5.3 Flash"]);
+    expect(search("glm:5.3_flash", models)).toEqual(["GLM 5.3 Flash"]);
+    // The label has no slug, so only normalization lets the hyphenated query match.
+    expect(search("gpt-6-sol", models)).toEqual(["GPT-6 Sol"]);
+    expect(search("gpt 6 sol", models)).toEqual(["GPT-6 Sol"]);
+  });
+
+  it("requires every token to match, across name, slug, and subProvider", () => {
+    const models: CatalogModel[] = [
+      {
+        driverKind: "opencode",
+        providerDisplayName: "OpenCode",
+        name: "Claude Sonnet 4.5",
+        slug: "openrouter/anthropic/claude-sonnet-4.5",
+        subProvider: "Anthropic",
+      },
+      { driverKind: "claudeAgent", providerDisplayName: "Claude", name: "Claude Sonnet 5" },
+      { driverKind: "opencode", providerDisplayName: "OpenCode", name: "Claude Sonnet 4.5" },
+    ];
+    // "anthropic" lives in the subProvider of the first model and nowhere else.
+    expect(search("anthropic sonnet", models)).toEqual(["Claude Sonnet 4.5"]);
+    expect(search("anthropic claude", models)).toEqual(["Claude Sonnet 4.5"]);
+    // Every token must match: "moonshot" is in no field of any model.
+    expect(search("claude moonshot", models)).toEqual([]);
+    expect(search("anthropic moonshot", models)).toEqual([]);
   });
 
   it("ranks a favorite above newer models in the same family", () => {

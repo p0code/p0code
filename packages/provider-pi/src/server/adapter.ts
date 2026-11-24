@@ -1,3 +1,4 @@
+import { buildSharedMemoryInstructions } from "@t3tools/provider-core/server/runtimeInstructions";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as NodeUtil from "node:util";
 import { AgentScope } from "@t3tools/shared/AgentScope";
@@ -497,6 +498,7 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
     ) {
       const scope = yield* Effect.scope;
       const cwd = input.runtimePolicy.cwd ?? host.paths.cwd;
+      const memoryInstructionPath = `${host.paths.providerStatusCacheDir}/shared-memory-${input.providerSessionId}.txt`;
       const mcpSession = yield* mcpSessions.read(input.threadId);
       const provideCacheFs = <A, E>(effect: Effect.Effect<A, E, FileSystem.FileSystem>) =>
         effect.pipe(
@@ -545,7 +547,11 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
           const launch = buildPiRpcLaunch({
             launchArgs: resolvedLaunchArgs.args,
             // PortScanner.AGENT_THREAD_ENV, as a literal because this package cannot reach apps/server.
-            environment: { ...options.environment, T3CODE_THREAD_ID: input.threadId },
+            environment: {
+              ...options.environment,
+              T3CODE_THREAD_ID: input.threadId,
+              T3_SHARED_MEMORY_INSTRUCTIONS_FILE: memoryInstructionPath,
+            },
             mcpSession,
             extensionPath,
             sessionPath,
@@ -3486,6 +3492,14 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
                 Effect.ignore,
               );
             }
+            yield* fileSystem
+              .writeFileString(
+                memoryInstructionPath,
+                turnInput.runtimePolicy.sharedMemory
+                  ? buildSharedMemoryInstructions(turnInput.runtimePolicy.sharedMemory)
+                  : "",
+              )
+              .pipe(Effect.orDie);
             // Resolve attachments before turn installation so failures cannot strand activeTurn.
             // Inject instructions through before_agent_start; wrapping user text breaks slash-command expansion.
             const compactCommand = continuation

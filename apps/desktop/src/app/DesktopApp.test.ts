@@ -1,24 +1,23 @@
-import { assert, it } from "@effect/vitest";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import { assert, it } from "@effect/vitest";
+import * as NetService from "@t3tools/shared/Net";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
-import * as Layer from "effect/Layer";
-import * as FileSystem from "effect/FileSystem";
-import * as Path from "effect/Path";
-import * as HttpClient from "effect/http/HttpClient";
-import { ChildProcessSpawner } from "effect/process";
-import * as NetService from "@t3tools/shared/Net";
 import * as Fiber from "effect/Fiber";
+import * as FileSystem from "effect/FileSystem";
+import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Path from "effect/Path";
 import * as Ref from "effect/Ref";
 import * as Stream from "effect/Stream";
+import * as HttpClient from "effect/http/HttpClient";
+import { ChildProcessSpawner } from "effect/process";
 import { vi } from "vite-plus/test";
 
 vi.mock("electron", () => ({}));
-vi.mock("@clerk/electron", () => ({ createClerkBridge: vi.fn() }));
-vi.mock("@clerk/electron/storage", () => ({ storage: vi.fn() }));
+
 vi.mock("../ipc/DesktopIpcHandlers.ts", () => ({
   installDesktopIpcHandlers: () => Effect.void,
 }));
@@ -28,14 +27,7 @@ vi.mock("./DesktopStartupRecovery.ts", () => ({ listen: Effect.void }));
 import * as DesktopApp from "./DesktopApp.ts";
 import * as DesktopAppActivation from "./DesktopAppActivation.ts";
 import * as DesktopAppIdentity from "./DesktopAppIdentity.ts";
-import * as DesktopClerk from "./DesktopClerk.ts";
-import * as DesktopEnvironment from "./DesktopEnvironment.ts";
-import * as DesktopLegacyLocalStorage from "./DesktopLegacyLocalStorage.ts";
-import * as DesktopLifecycle from "./DesktopLifecycle.ts";
-import * as DesktopLinuxUrlHandler from "./DesktopLinuxUrlHandler.ts";
-import * as DesktopPreReadyPlatform from "./DesktopPreReadyPlatform.ts";
-import * as DesktopShutdown from "./DesktopShutdown.ts";
-import * as DesktopState from "./DesktopState.ts";
+
 import * as DesktopBackendPool from "../backend/DesktopBackendPool.ts";
 import * as DesktopServerExposure from "../backend/DesktopServerExposure.ts";
 import * as ElectronApp from "../electron/ElectronApp.ts";
@@ -51,30 +43,37 @@ import * as DesktopUpdates from "../updates/DesktopUpdates.ts";
 import * as DesktopApplicationMenu from "../window/DesktopApplicationMenu.ts";
 import * as DesktopWindow from "../window/DesktopWindow.ts";
 import * as DesktopWslBackend from "../wsl/DesktopWslBackend.ts";
+import * as DesktopEnvironment from "./DesktopEnvironment.ts";
+import * as DesktopLegacyLocalStorage from "./DesktopLegacyLocalStorage.ts";
+import * as DesktopLifecycle from "./DesktopLifecycle.ts";
+import * as DesktopLinuxUrlHandler from "./DesktopLinuxUrlHandler.ts";
+import * as DesktopPreReadyPlatform from "./DesktopPreReadyPlatform.ts";
+import * as DesktopShutdown from "./DesktopShutdown.ts";
+import * as DesktopState from "./DesktopState.ts";
 
-import * as BrowserImport from "../preview/BrowserImport/BrowserImport.ts";
 import * as DesktopBackendConfiguration from "../backend/DesktopBackendConfiguration.ts";
-import * as DesktopCliCommand from "./DesktopCliCommand.ts";
-import * as DesktopCliShim from "./DesktopCliShim.ts";
-import * as DesktopClientSettings from "../settings/DesktopClientSettings.ts";
-import * as DesktopConnectionCatalogStore from "./DesktopConnectionCatalogStore.ts";
-import * as DesktopIpc from "../ipc/DesktopIpc.ts";
 import * as DesktopLocalEnvironmentAuth from "../backend/DesktopLocalEnvironmentAuth.ts";
-import * as DesktopManagedPolicy from "./DesktopManagedPolicy.ts";
-import * as DesktopPrimaryPaste from "./DesktopPrimaryPaste.ts";
-import * as DesktopSshEnvironment from "../ssh/DesktopSshEnvironment.ts";
-import * as DesktopSshPasswordPrompts from "../ssh/DesktopSshPasswordPrompts.ts";
-import * as DesktopTelemetryPublisher from "../telemetry/DesktopTelemetryPublisher.ts";
-import * as DesktopWebLinks from "./DesktopWebLinks.ts";
-import * as DesktopWslEnvironment from "../wsl/DesktopWslEnvironment.ts";
 import * as ElectronMenu from "../electron/ElectronMenu.ts";
 import * as ElectronShell from "../electron/ElectronShell.ts";
 import * as ElectronTheme from "../electron/ElectronTheme.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
+import * as DesktopIpc from "../ipc/DesktopIpc.ts";
 import * as MacPermissions from "../permissions/MacPermissions.ts";
+import * as BrowserImport from "../preview/BrowserImport/BrowserImport.ts";
 import * as LoopbackTunnel from "../preview/LoopbackTunnel.ts";
 import * as PreviewManager from "../preview/Manager.ts";
+import * as DesktopClientSettings from "../settings/DesktopClientSettings.ts";
 import * as AppleSpeech from "../speech/AppleSpeech.ts";
+import * as DesktopSshEnvironment from "../ssh/DesktopSshEnvironment.ts";
+import * as DesktopSshPasswordPrompts from "../ssh/DesktopSshPasswordPrompts.ts";
+import * as DesktopTelemetryPublisher from "../telemetry/DesktopTelemetryPublisher.ts";
+import * as DesktopWslEnvironment from "../wsl/DesktopWslEnvironment.ts";
+import * as DesktopCliCommand from "./DesktopCliCommand.ts";
+import * as DesktopCliShim from "./DesktopCliShim.ts";
+import * as DesktopConnectionCatalogStore from "./DesktopConnectionCatalogStore.ts";
+import * as DesktopManagedPolicy from "./DesktopManagedPolicy.ts";
+import * as DesktopPrimaryPaste from "./DesktopPrimaryPaste.ts";
+import * as DesktopWebLinks from "./DesktopWebLinks.ts";
 
 interface StubbedDesktop {
   readonly localEnvironmentEnabled: boolean;
@@ -137,9 +136,6 @@ const runStubbedDesktop = (stub: StubbedDesktop) =>
           register: Effect.void,
           relaunch: () => Effect.void,
         }),
-        Effect.provideService(DesktopClerk.DesktopClerk, {
-          configure: Effect.void,
-        } as DesktopClerk.DesktopClerk["Service"]),
         Effect.provideService(ElectronSafeStorage.ElectronSafeStorage, {
           selectedStorageBackend: Effect.succeedNone,
         } as unknown as ElectronSafeStorage.ElectronSafeStorage["Service"]),

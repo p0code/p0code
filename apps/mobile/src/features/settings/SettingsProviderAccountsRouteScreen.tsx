@@ -36,6 +36,7 @@ import { useSettingsEnvironmentMenu } from "./components/SettingsEnvironmentFilt
 import { SettingsScreen } from "./components/SettingsScreen";
 import { SettingsSection } from "./components/SettingsSection";
 import { AddClaudeAccount, ClaudeAccount } from "./ClaudeAccounts";
+import { AccountProfilesSection } from "./AccountProfilesSection";
 import { CLAUDE_DRIVER } from "./claude-accounts";
 import { useSettingsEnvironmentFilter, type SettingsTarget } from "./settings-environment-filter";
 
@@ -60,26 +61,35 @@ export function SettingsProviderAccountsRouteScreen() {
           </Text>
         ) : (
           selectedTargets.map((environment) => (
-            <SettingsSection key={environment.environmentId} title={environment.label}>
-              {!permittedEnvironments.has(environment.environmentId) ? (
-                <View className="gap-1 p-4">
-                  <Text className="text-base text-foreground">
-                    <T>Limited permissions</T>
-                  </Text>
-                  <Text className="text-sm text-foreground-muted">
-                    {gt(
-                      "This session can view {environment}''s providers but can't change their settings.",
-                      { environment: environment.label },
-                    )}
-                  </Text>
-                </View>
-              ) : (
-                <EnvironmentProviders
+            <View key={environment.environmentId} className="gap-6">
+              {/* Profiles come first: switching them is the quick action on this page. */}
+              {permittedEnvironments.has(environment.environmentId) ? (
+                <AccountProfilesSection
                   environment={environment}
                   providers={managedProviders(environment, providersByEnvironment)}
                 />
-              )}
-            </SettingsSection>
+              ) : null}
+              <SettingsSection title={environment.label}>
+                {!permittedEnvironments.has(environment.environmentId) ? (
+                  <View className="gap-1 p-4">
+                    <Text className="text-base text-foreground">
+                      <T>Limited permissions</T>
+                    </Text>
+                    <Text className="text-sm text-foreground-muted">
+                      {gt(
+                        "This session can view {environment}''s providers but can't change their settings.",
+                        { environment: environment.label },
+                      )}
+                    </Text>
+                  </View>
+                ) : (
+                  <EnvironmentProviders
+                    environment={environment}
+                    providers={managedProviders(environment, providersByEnvironment)}
+                  />
+                )}
+              </SettingsSection>
+            </View>
           ))
         )}
       </ScreenScrollView>

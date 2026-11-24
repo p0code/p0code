@@ -1,10 +1,10 @@
-import type { ClientSettings } from "@t3tools/contracts/settings";
+import type { ComposerPathSearchTarget } from "@t3tools/client-runtime/state/threads";
 import type {
   AssistantCitation,
   EnvironmentId,
   ResolvedKeybindingsConfig,
 } from "@t3tools/contracts";
-import type { ComposerPathSearchTarget } from "@t3tools/client-runtime/state/threads";
+import type { ClientSettings } from "@t3tools/contracts/settings";
 import {
   serializeAssistantCitation,
   withAssistantCitationComment,
@@ -26,7 +26,7 @@ import {
 } from "./keybindings";
 
 export type ComposerTriggerKind = "path" | "pull-request" | "slash-command" | "skill";
-export type ComposerSlashCommand = "model" | "side" | "btw" | "clear";
+export type ComposerSlashCommand = "judges" | "model" | "side" | "btw" | "clear";
 export type ComposerSubmissionIntent = "foreground" | "background" | "alternate";
 
 export interface ComposerTrigger {

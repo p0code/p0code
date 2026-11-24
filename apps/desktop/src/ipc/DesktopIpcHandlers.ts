@@ -1,27 +1,53 @@
-import { startFileDrag } from "./methods/fileDrag.ts";
 import * as Effect from "effect/Effect";
+import { startFileDrag } from "./methods/fileDrag.ts";
 
-import { receiveProviderAuthCallback, cancelProviderAuthCallback } from "./methods/providerAuth.ts";
+import * as DesktopIpc from "./DesktopIpc.ts";
+import * as AppActivationIpc from "./methods/appActivation.ts";
 import {
   appleSpeechAvailable,
   appleSpeechPrepare,
   appleSpeechTranscribe,
 } from "./methods/appleSpeech.ts";
-import * as DesktopIpc from "./DesktopIpc.ts";
-import { installNotificationBadge } from "./methods/notificationBadge.ts";
+import {
+  addCliCommandToPath,
+  getCliCommandState,
+  installCliCommand,
+  uninstallCliCommand,
+} from "./methods/cliCommand.ts";
 import { getClientSettings, setClientSettings } from "./methods/clientSettings.ts";
 import { getConnectionCatalog, setConnectionCatalog } from "./methods/connectionCatalog.ts";
+import {
+  completeLegacyLocalStorage,
+  takeLegacyLocalStorage,
+} from "./methods/legacyLocalStorage.ts";
 import {
   getHostEnvironmentId,
   getLocalEnvironmentEnabled,
   setLocalEnvironmentEnabled,
 } from "./methods/localEnvironment.ts";
+import { installNotificationBadge } from "./methods/notificationBadge.ts";
+import * as PreviewIpc from "./methods/preview.ts";
+import { cancelProviderAuthCallback, receiveProviderAuthCallback } from "./methods/providerAuth.ts";
 import {
   getAdvertisedEndpoints,
   getServerExposureState,
   setServerExposureMode,
   setTailscaleServeEnabled,
 } from "./methods/serverExposure.ts";
+import {
+  acknowledgeSnapShot,
+  applySnapShotConfig,
+  checkSnapShotShortcut,
+  dismissSnapShotAnimation,
+  getSnapShotState,
+  listPendingSnapShots,
+  previewSnapShotConfig,
+  readSnapShot,
+  requestSnapShotPermissions,
+  setSnapShotAnimationDestination,
+  setSnapShotShortcutSuppressed,
+  setupSnapShot,
+} from "./methods/snapShot.ts";
 import {
   bootstrapSshBearerSession,
   disconnectSshEnvironment,
@@ -39,59 +65,32 @@ import {
   installUpdate,
   setUpdateChannel,
 } from "./methods/updates.ts";
-import {
-  getAppBranding,
-  getLocalEnvironmentBootstraps,
-  getLocalEnvironmentBearerToken,
-  installRelayTelemetryEnabled,
-  getSystemLocale,
-  getPreferredSystemLanguages,
-  getPrimaryPasteEnabled,
-  getWindowFullscreenState,
-  openExternal,
-  readMedia,
-  restartAudioService,
-  openSystemSettings,
-  checkSystemPermission,
-  pasteAsText,
-  probeRemoteEditors,
-  revealWindow,
-  pickFolder,
-  toLocalBackendPath,
-  pickProjectFavicon,
-  pickThemeFiles,
-  setTheme,
-  syncHtmlFullscreen,
-  showContextMenu,
-} from "./methods/window.ts";
-import {
-  acknowledgeSnapShot,
-  checkSnapShotShortcut,
-  dismissSnapShotAnimation,
-  getSnapShotState,
-  setupSnapShot,
-  previewSnapShotConfig,
-  applySnapShotConfig,
-  listPendingSnapShots,
-  readSnapShot,
-  requestSnapShotPermissions,
-  setSnapShotAnimationDestination,
-  setSnapShotShortcutSuppressed,
-} from "./methods/snapShot.ts";
-import * as PreviewIpc from "./methods/preview.ts";
-import * as AppActivationIpc from "./methods/appActivation.ts";
 import * as WebLinksIpc from "./methods/webLinks.ts";
 import {
-  completeLegacyLocalStorage,
-  takeLegacyLocalStorage,
-} from "./methods/legacyLocalStorage.ts";
+  checkSystemPermission,
+  getAppBranding,
+  getLocalEnvironmentBearerToken,
+  getLocalEnvironmentBootstraps,
+  getPreferredSystemLanguages,
+  getPrimaryPasteEnabled,
+  getSystemLocale,
+  getWindowFullscreenState,
+  openExternal,
+  openSystemSettings,
+  pasteAsText,
+  pickFolder,
+  pickProjectFavicon,
+  pickThemeFiles,
+  probeRemoteEditors,
+  readMedia,
+  restartAudioService,
+  revealWindow,
+  setTheme,
+  showContextMenu,
+  syncHtmlFullscreen,
+  toLocalBackendPath,
+} from "./methods/window.ts";
 import { getWslState, setWslBackendEnabled, setWslDistro, setWslOnly } from "./methods/wsl.ts";
-import {
-  getCliCommandState,
-  installCliCommand,
-  uninstallCliCommand,
-  addCliCommandToPath,
-} from "./methods/cliCommand.ts";
 
 export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers")(function* () {
   const ipc = yield* DesktopIpc.DesktopIpc;
@@ -105,7 +104,7 @@ export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers"
   yield* ipc.handleSync(takeLegacyLocalStorage);
   yield* ipc.handle(completeLegacyLocalStorage);
   yield* ipc.handleSync(getAppBranding);
-  yield* installRelayTelemetryEnabled();
+
   yield* ipc.handleSync(getSystemLocale);
   yield* ipc.handleSync(getPreferredSystemLanguages);
   yield* ipc.handleSync(getPrimaryPasteEnabled);

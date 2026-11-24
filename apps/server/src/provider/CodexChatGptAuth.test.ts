@@ -22,7 +22,7 @@ import { FetchHttpClient, HttpClient, HttpClientResponse } from "effect/http";
 import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import * as ProviderCredentialStore from "./ProviderCredentialStore.ts";
-import * as AnalyticsService from "../telemetry/AnalyticsService.ts";
+
 import { makeCodexChatGptAuth } from "./CodexChatGptAuth.ts";
 
 const assertSameCallback = (actual: string | null, expected: string | null) => {
@@ -37,7 +37,6 @@ const instanceId = ProviderInstanceId.make("managed-codex-test");
 const makeHarnessFor = Effect.fnUntraced(function* (
   instanceId: ProviderInstanceId,
   bytes: Map<string, Uint8Array> = new Map(),
-  failAnalytics = false,
 ) {
   const environmentId = environmentIds.get(bytes) ?? EnvironmentId.make(NodeCrypto.randomUUID());
   environmentIds.set(bytes, environmentId);
@@ -224,27 +223,12 @@ const makeHarnessFor = Effect.fnUntraced(function* (
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("mock address");
   origin = `http://127.0.0.1:${address.port}`;
-  const analyticsEvents: {
-    event: string;
-    properties: Readonly<Record<string, unknown>> | undefined;
-  }[] = [];
-  const analytics = AnalyticsService.AnalyticsService.of({
-    record: (event, properties) =>
-      failAnalytics
-        ? Effect.die("analytics unavailable")
-        : Effect.sync(() => {
-            analyticsEvents.push({ event, properties });
-            return true;
-          }),
-    flush: Effect.void,
-    recordOwners: () => Effect.void,
-  });
+
   const auth = yield* makeCodexChatGptAuth({
     instanceId,
     discoveryUrl: `${origin}/discovery`,
     resource: `${origin}/v1`,
   }).pipe(
-    Effect.provideService(AnalyticsService.AnalyticsService, analytics),
     Effect.provideService(ServerSecretStore.ServerSecretStore, secrets),
     Effect.provideService(ServerEnvironment.ServerEnvironmentIdentity, environment),
   );
@@ -300,7 +284,6 @@ const makeHarnessFor = Effect.fnUntraced(function* (
     rotateSigningKey: () => {
       signingKey = signingKeyFor("rotated");
     },
-    analyticsEvents,
     secrets,
     environmentId,
     bytes,
@@ -315,7 +298,7 @@ const makeHarnessFor = Effect.fnUntraced(function* (
         },
         "owner",
         { discoveryUrl: `${origin}/discovery`, resource: `${origin}/v1` },
-      ).pipe(Stream.provideService(AnalyticsService.AnalyticsService, analytics)),
+      ),
     finishCallback: (state: { authorizationUrl: string | null }) =>
       Effect.promise(() => fetch(prepareCallback(state))),
     destination: Effect.gen(function* () {
@@ -337,7 +320,6 @@ const makeHarnessFor = Effect.fnUntraced(function* (
         discoveryUrl: `${origin}/discovery`,
         resource: `${origin}/v1`,
       }).pipe(
-        Effect.provideService(AnalyticsService.AnalyticsService, analytics),
         Effect.provideService(ServerSecretStore.ServerSecretStore, destinationStore),
         Effect.provideService(ServerEnvironment.ServerEnvironmentIdentity, environment),
       );
@@ -1548,92 +1530,6 @@ it.effect(
     ),
 );
 
-it.effect("primary completes OAuth and destination imports and owns the refresh session", () =>
-  provision(
-    Effect.gen(function* () {
-      const h = yield* makeHarness;
-      const destination = yield* h.destination;
-      const before = h.bytes.size;
-      const waiting = yield* Deferred.make<{ authorizationUrl: string | null }>();
-      const transferred = yield* h.handoff(null).pipe(
-        Stream.tap((state) =>
-          state.phase === "auth" && state.state.phase === "waiting"
-            ? Deferred.succeed(waiting, state.state)
-            : Effect.void,
-        ),
-        Stream.filter((state) => state.phase === "finished"),
-        Stream.runHead,
-        Effect.map(Option.getOrThrow),
-        Effect.forkChild,
-      );
-      yield* h.finishCallback(yield* Deferred.await(waiting));
-      const result = yield* Fiber.join(transferred);
-      assert.strictEqual(result.phase, "finished");
-      if (result.phase !== "finished") return;
-      assert.strictEqual(h.bytes.size, before);
-      assert.isTrue(Option.isNone(yield* h.auth.read));
-      let stopped = false;
-      const imported = yield* destination.auth.controller.importProfile!(
-        result.profile,
-        Effect.sync(() => {
-          stopped = true;
-        }),
-      );
-      assert.isTrue(stopped);
-      assert.strictEqual(imported.phase, "succeeded");
-      assert.deepStrictEqual(
-        h.analyticsEvents.map(({ event }) => event),
-        [
-          "chatgpt.auth.started",
-          "chatgpt.auth.completed",
-          "chatgpt.transfer.started",
-          "chatgpt.transfer.completed",
-        ],
-      );
-      assert.isTrue(
-        h.analyticsEvents.every(({ properties }) => properties?.flow === "primary_handoff"),
-      );
-      assert.strictEqual(h.analyticsEvents[1]?.properties?.outcome, "succeeded");
-      assert.strictEqual(h.analyticsEvents[3]?.properties?.outcome, "succeeded");
-      assert.notProperty(h.analyticsEvents[1]?.properties ?? {}, "connectedAccountCount");
-      assert.strictEqual(h.analyticsEvents[1]?.properties?.intent, "different_account");
-      assert.strictEqual(h.analyticsEvents[3]?.properties?.connectedAccountCount, 1);
-      assert.strictEqual(h.analyticsEvents[3]?.properties?.savedConnectionCount, 1);
-      const saved = Option.getOrThrow(yield* destination.auth.read);
-      assert.strictEqual(saved.clientId, result.profile.registration.clientId);
-      assert.strictEqual(saved.refreshToken, "initial-refresh");
-      const reconnect = yield* destination.auth.controller.reconnectProfile!("chatgpt");
-      assert.strictEqual(reconnect?.idTokenHint, result.profile.credentials.idToken);
-      assert.isFalse("refreshToken" in reconnect!);
-      const store = yield* ProviderCredentialStore.make("codex-chatgpt", instanceId).pipe(
-        Effect.provideService(
-          ServerSecretStore.ServerSecretStore,
-          ServerSecretStore.ServerSecretStore.of({
-            get: (name) => Effect.sync(() => Option.fromUndefinedOr(destination.bytes.get(name))),
-            set: (name, value) =>
-              Effect.sync(() => {
-                destination.bytes.set(name, value);
-              }),
-            remove: () => Effect.void,
-            create: () => Effect.die("unused"),
-            getOrCreateRandom: () => Effect.die("unused"),
-          }),
-        ),
-      );
-      yield* store.set(new TextEncoder().encode(JSON.stringify({ ...saved, expiresAt: 0 })));
-      yield* destination.auth.access;
-      assert.strictEqual(
-        h.exchanges.filter((entry) => entry.get("grant_type") === "authorization_code").length,
-        1,
-      );
-      assert.strictEqual(
-        h.exchanges.filter((entry) => entry.get("grant_type") === "refresh_token").length,
-        1,
-      );
-    }),
-  ),
-);
-
 it.effect("transferred profiles reject mismatched identities without overwriting credentials", () =>
   provision(
     Effect.gen(function* () {
@@ -1725,17 +1621,6 @@ it.effect(
     ),
 );
 
-it.effect("telemetry failures do not fail a verified ChatGPT sign-in", () =>
-  provision(
-    Effect.gen(function* () {
-      const h = yield* makeHarnessFor(instanceId, new Map(), true);
-      yield* h.signIn;
-      const state = yield* h.phase("succeeded");
-      assert.strictEqual(state.phase, "succeeded");
-      assert.isTrue(Option.isSome(yield* h.auth.read));
-    }),
-  ),
-);
 it.effect("a running session renews its bound profile but refuses a replacement sign-in", () =>
   provision(
     Effect.gen(function* () {
@@ -1935,6 +1820,75 @@ it.live("the private broker refuses another environment, instance, or sign-in pr
       });
       yield* h.broker.awaitIdle;
       assert.deepEqual(h.refreshTokens, ["single-use-refresh"]);
+    }),
+  ),
+);
+
+it.effect("primary completes OAuth and destination imports and owns the refresh session", () =>
+  provision(
+    Effect.gen(function* () {
+      const h = yield* makeHarness;
+      const destination = yield* h.destination;
+      const before = h.bytes.size;
+      const waiting = yield* Deferred.make<{ authorizationUrl: string | null }>();
+      const transferred = yield* h.handoff(null).pipe(
+        Stream.tap((state) =>
+          state.phase === "auth" && state.state.phase === "waiting"
+            ? Deferred.succeed(waiting, state.state)
+            : Effect.void,
+        ),
+        Stream.filter((state) => state.phase === "finished"),
+        Stream.runHead,
+        Effect.map(Option.getOrThrow),
+        Effect.forkChild,
+      );
+      yield* h.finishCallback(yield* Deferred.await(waiting));
+      const result = yield* Fiber.join(transferred);
+      assert.strictEqual(result.phase, "finished");
+      if (result.phase !== "finished") return;
+      assert.strictEqual(h.bytes.size, before);
+      assert.isTrue(Option.isNone(yield* h.auth.read));
+      let stopped = false;
+      const imported = yield* destination.auth.controller.importProfile!(
+        result.profile,
+        Effect.sync(() => {
+          stopped = true;
+        }),
+      );
+      assert.isTrue(stopped);
+      assert.strictEqual(imported.phase, "succeeded");
+
+      const saved = Option.getOrThrow(yield* destination.auth.read);
+      assert.strictEqual(saved.clientId, result.profile.registration.clientId);
+      assert.strictEqual(saved.refreshToken, "initial-refresh");
+      const reconnect = yield* destination.auth.controller.reconnectProfile!("chatgpt");
+      assert.strictEqual(reconnect?.idTokenHint, result.profile.credentials.idToken);
+      assert.isFalse("refreshToken" in reconnect!);
+      const store = yield* ProviderCredentialStore.make("codex-chatgpt", instanceId).pipe(
+        Effect.provideService(
+          ServerSecretStore.ServerSecretStore,
+          ServerSecretStore.ServerSecretStore.of({
+            get: (name) => Effect.sync(() => Option.fromUndefinedOr(destination.bytes.get(name))),
+            set: (name, value) =>
+              Effect.sync(() => {
+                destination.bytes.set(name, value);
+              }),
+            remove: () => Effect.void,
+            create: () => Effect.die("unused"),
+            getOrCreateRandom: () => Effect.die("unused"),
+          }),
+        ),
+      );
+      yield* store.set(new TextEncoder().encode(JSON.stringify({ ...saved, expiresAt: 0 })));
+      yield* destination.auth.access;
+      assert.strictEqual(
+        h.exchanges.filter((entry) => entry.get("grant_type") === "authorization_code").length,
+        1,
+      );
+      assert.strictEqual(
+        h.exchanges.filter((entry) => entry.get("grant_type") === "refresh_token").length,
+        1,
+      );
     }),
   ),
 );

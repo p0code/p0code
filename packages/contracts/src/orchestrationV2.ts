@@ -447,6 +447,25 @@ export const OrchestrationV2ProviderCapabilities = Schema.Struct({
 });
 export type OrchestrationV2ProviderCapabilities = typeof OrchestrationV2ProviderCapabilities.Type;
 
+/**
+ * "Hide for now": a snooze with no wake time is stored as this far-future wake, so every
+ * reader that checks `snoozedUntil > now` (server, SQL indexes, older clients) treats the
+ * thread as snoozed, and the early-wake triggers still apply.
+ */
+export const OPEN_ENDED_SNOOZE_UNTIL = "9999-12-31T00:00:00.000Z";
+const OPEN_ENDED_SNOOZE_UNTIL_MS = Date.parse(OPEN_ENDED_SNOOZE_UNTIL);
+
+export function isOpenEndedSnooze(
+  snoozedUntil: string | DateTime.DateTime | null | undefined,
+): boolean {
+  if (snoozedUntil == null) return false;
+  const wakeMs =
+    typeof snoozedUntil === "string"
+      ? Date.parse(snoozedUntil)
+      : DateTime.toEpochMillis(snoozedUntil);
+  return wakeMs >= OPEN_ENDED_SNOOZE_UNTIL_MS;
+}
+
 export const OrchestrationV2LimitRecovery = Schema.Struct({
   requestId: Schema.optional(CommandId),
   runId: RunId,
@@ -544,6 +563,8 @@ export const OrchestrationV2AppThread = Schema.Struct({
   snoozedAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
   lastSnoozeWakeAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
   limitRecovery: Schema.optional(Schema.NullOr(OrchestrationV2LimitRecovery)),
+  /** Resume at a usage-limit reset; null or absent follows the environment setting. */
+  autoResumeAtLimitReset: Schema.optional(Schema.NullOr(Schema.Boolean)),
   guestShare: Schema.optional(Schema.NullOr(ThreadGuestShare)),
   pinnedAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
   autoSettleDisabledAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
@@ -2466,6 +2487,8 @@ export const OrchestrationV2ThreadShell = Schema.Struct({
   snoozedUntil: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
   snoozedAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
   limitRecovery: Schema.optional(Schema.NullOr(OrchestrationV2LimitRecovery)),
+  /** Absent when it follows the environment setting. */
+  autoResumeAtLimitReset: Schema.optional(Schema.NullOr(Schema.Boolean)),
   pinnedAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
   autoSettleDisabledAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
   pinOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
@@ -3410,7 +3433,8 @@ export const OrchestrationV2Command = Schema.Union([
     type: Schema.Literal("thread.snooze"),
     commandId: CommandId,
     threadId: ThreadId,
-    snoozedUntil: IsoDateTime,
+    /** Omitted or null hides the thread until the user brings it back. */
+    snoozedUntil: Schema.optional(Schema.NullOr(IsoDateTime)),
   }),
   Schema.Struct({
     type: Schema.Literal("thread.unsnooze"),
@@ -3484,6 +3508,8 @@ export const OrchestrationV2Command = Schema.Union([
     /** Reject unless no message or run has landed on this thread. */
     expectedEmpty: Schema.optional(Schema.Boolean),
     limitRecovery: Schema.optional(Schema.NullOr(OrchestrationV2LimitRecoveryUpdate)),
+    /** Pre-arm (true), opt out (false) or follow the environment setting (null). */
+    autoResumeAtLimitReset: Schema.optional(Schema.NullOr(Schema.Boolean)),
     /** Link (object) or unlink (null) a pull request; absent leaves it unchanged. */
     linkedPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
   }),
@@ -3841,7 +3867,7 @@ const OrchestrationV2InternalCommand = Schema.Union([
     runId: RunId,
     value: Schema.Json,
   }),
-  // Guest share commands the server issues after checking T3 Connect and the guest token.
+  // Guest share commands the server issues after checking self-hosted relay and the guest token.
   Schema.Struct({
     type: Schema.Literal("thread.guest-share.open"),
     commandId: CommandId,
@@ -4035,18 +4061,6 @@ const OrchestrationV2InternalCommand = Schema.Union([
     delivery: Schema.optional(OrchestrationV2SecretRequestDelivery),
     fields: Schema.optional(Schema.Array(OrchestrationV2SecretRequestField)),
     secretStatus: OrchestrationV2SecretRequestStatus,
-  }),
-  /** Internal so no client can mark a report sent without it being stored and sent. */
-  Schema.Struct({
-    type: Schema.Literal("feedback_request.record"),
-    commandId: CommandId,
-    threadId: ThreadId,
-    runId: RunId,
-    nodeId: NodeId,
-    turnItemId: TurnItemId,
-    preview: AgentFeedbackPreview,
-    conversationTrace: Schema.optionalKey(AgentFeedbackTrace),
-    feedbackStatus: AgentFeedbackRequestStatus,
   }),
   /**
    * Records or updates a link an agent asked the user to make. Internal so no

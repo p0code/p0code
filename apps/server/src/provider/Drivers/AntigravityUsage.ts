@@ -39,19 +39,23 @@ const make = Effect.gen(function* () {
   const cache = makeAntigravityUsageCache();
 
   const dataRoots = Effect.fn("AntigravityUsage.dataRoots")(function* (
-    environment: NodeJS.ProcessEnv,
+    instance: ProviderUsageInstance<AntigravitySettings>,
   ) {
     const home = yield* HostProcess.HomeDirectory;
-    const configured = environment["ANTIGRAVITY_DATA_DIR"]
+    const configured = instance.environment["ANTIGRAVITY_DATA_DIR"]
       ?.split(",")
       .map((value) => value.trim())
       .filter(Boolean);
-    const defaults = [
-      ...["antigravity", "antigravity-cli", "antigravity-ide", "antigravity-backup"].map((name) =>
-        path.join(home, ".gemini", name),
-      ),
-      path.join(home, ".config", "antigravity"),
-    ];
+    // A configured instance runs in its own GEMINI_HOME, so the shared ~/.gemini history belongs to
+    // whichever account the standalone CLI or IDE signed into; only the driver's default entry reads it.
+    const defaults = instance.configured
+      ? []
+      : [
+          ...["antigravity", "antigravity-cli", "antigravity-ide", "antigravity-backup"].map(
+            (name) => path.join(home, ".gemini", name),
+          ),
+          path.join(home, ".config", "antigravity"),
+        ];
     const canonical = new Set<string>();
     for (const root of configured?.length ? configured : defaults) {
       const resolved = path.resolve(expandHomePath(root, home));
@@ -67,7 +71,7 @@ const make = Effect.gen(function* () {
     windowStartMs,
   }) {
     const roots: Array<string> = [];
-    for (const instance of instances) roots.push(...(yield* dataRoots(instance.environment)));
+    for (const instance of instances) roots.push(...(yield* dataRoots(instance)));
     for (const { instanceId } of instances) {
       const directories = yield* resolveAntigravityInstanceDirectories(
         host.paths.stateDir,

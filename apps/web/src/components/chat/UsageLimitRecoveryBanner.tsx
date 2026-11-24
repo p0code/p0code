@@ -1,25 +1,26 @@
-import { T, msg, useGT } from "gt-react";
+import { deadlineStore } from "@t3tools/client-runtime/clock";
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
-import { m, type MessageResolver } from "~/i18n/messages";
+import { limitRecoveryOwnsSnooze } from "@t3tools/client-runtime/state/thread-execution";
 import {
+  isOpenEndedSnooze,
   type OrchestrationV2LimitRecovery,
   type OrchestrationV2LimitRecoveryUpdate,
   type RunId,
 } from "@t3tools/contracts";
 import { type TimestampFormat } from "@t3tools/contracts/settings";
-import { deadlineStore } from "@t3tools/client-runtime/clock";
-import { limitRecoveryOwnsSnooze } from "@t3tools/client-runtime/state/thread-execution";
 import {
   CHATGPT_USAGE_LIMIT_CODE,
   CHATGPT_WORKSPACE_USAGE_LIMIT_CODE,
 } from "@t3tools/shared/usageLimits";
+import { T, msg, useGT } from "gt-react";
 import { GaugeIcon } from "lucide-react";
 import { useState } from "react";
+import { m, type MessageResolver } from "~/i18n/messages";
 import { useDeadlinePassed } from "../../hooks/useDeadline";
+import { formatUpcomingTimestamp } from "../../timestampFormat";
 import { OpenAI } from "../Icons";
 import { ChatGptUsageButton } from "../settings/ChatGptUsageButton";
 import { Button, InlineButton } from "../ui/button";
-import { formatUpcomingTimestamp } from "../../timestampFormat";
 import { toastManager } from "../ui/toast";
 import type { ComposerBannerStackItem } from "./ComposerBannerStack";
 import { copyAdminRequest } from "./ThreadErrorBanner";
@@ -37,6 +38,8 @@ type RecoveryProps = {
   resetPassed?: boolean;
   displayPassed?: boolean;
   onChange: (recovery: OrchestrationV2LimitRecoveryUpdate) => Promise<void>;
+  /** The next account in the active profile, offered instead of waiting for the reset. */
+  failover?: { readonly accountName: string; readonly onSwitch: () => Promise<void> } | null;
 };
 
 function parseEpochMs(isoDate: string | null): number | null {
@@ -66,6 +69,7 @@ function limitRecoveryScheduleState(
     resumes &&
     props.resetAt &&
     props.snoozedUntil &&
+    !isOpenEndedSnooze(props.snoozedUntil) &&
     Date.parse(props.snoozedUntil) > Date.parse(props.resetAt)
       ? props.snoozedUntil
       : props.resetAt;
@@ -95,9 +99,17 @@ export function usageLimitRecoveryBannerItem(
   const displayPassed = props.displayPassed ?? (displayAtMs !== null && displayAtMs <= Date.now());
   const workspaceLimit = errorCode === CHATGPT_WORKSPACE_USAGE_LIMIT_CODE;
   const chatGptLimit = workspaceLimit || errorCode === CHATGPT_USAGE_LIMIT_CODE;
-  const recoveryActions = canSchedule ? (
-    <RecoveryActions key={`${runId}:${resetAt}`} {...props} />
-  ) : null;
+  const failoverAction =
+    props.failover && !props.settled && !props.requestPending ? (
+      <FailoverAction key={`failover:${runId}`} {...props.failover} />
+    ) : null;
+  const recoveryActions =
+    canSchedule || failoverAction ? (
+      <>
+        {failoverAction}
+        {canSchedule ? <RecoveryActions key={`${runId}:${resetAt}`} {...props} /> : null}
+      </>
+    ) : null;
   const resumesUpcoming = resumes && !displayPassed;
   const shownAt = resumesUpcoming ? displayAt : resetAt;
   const formattedTime = shownAt
@@ -147,6 +159,29 @@ export function usageLimitRecoveryBannerItem(
       </>
     ),
   };
+}
+
+function FailoverAction(props: {
+  readonly accountName: string;
+  readonly onSwitch: () => Promise<void>;
+}) {
+  const gt = useGT();
+  const [pending, setPending] = useState(false);
+  return (
+    <span className="flex items-center px-1">
+      <InlineButton
+        touchTarget="padded"
+        disabled={pending}
+        onClick={async () => {
+          setPending(true);
+          await props.onSwitch();
+          setPending(false);
+        }}
+      >
+        {gt("Continue on {account}", { account: props.accountName })}
+      </InlineButton>
+    </span>
+  );
 }
 
 function RecoveryActions({ runId, resetAt, recovery, snoozedUntil, onChange }: RecoveryProps) {

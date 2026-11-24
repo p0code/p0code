@@ -1,3 +1,4 @@
+import { SelfRelaySection } from "./SelfRelaySection";
 import { useGT } from "gt-react-native";
 import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScrollView";
 
@@ -67,6 +68,7 @@ export function ConnectionsRouteScreen() {
           .filter((environment) => environment.connectionState === "connected")
           .map((environment) => (
             <Fragment key={environment.environmentId}>
+              <SelfRelaySection environmentId={environment.environmentId} />
               <LinkedEnvironmentsSection
                 environmentId={environment.environmentId}
                 environmentLabel={environment.environmentLabel}

@@ -1,20 +1,19 @@
 import {
   BearerConnectionTarget,
   PrimaryConnectionTarget,
-  RelayConnectionTarget,
   type PreparedConnection,
 } from "@t3tools/client-runtime/connection";
-import type * as Effect from "effect/Effect";
 import {
   EnvironmentId,
   type EnvironmentSpeechModel,
   type EnvironmentSpeechStatus,
 } from "@t3tools/contracts";
+import type * as Effect from "effect/Effect";
 import { expect, it, vi } from "vite-plus/test";
 import { userEvent } from "vite-plus/test/browser";
 import { act, render } from "../../../test/render";
-import { __setClientSettingsForTests, getClientSettings } from "../../hooks/useSettings";
 import { readBrowserClientSettings } from "../../clientPersistenceStorage";
+import { __setClientSettingsForTests, getClientSettings } from "../../hooks/useSettings";
 import { chooseRecordingMicrophone } from "../../speech/browserMicrophones";
 import {
   useEnvironmentSpeechInput,
@@ -34,7 +33,7 @@ vi.mock(import("../../state/session"), { spy: true });
 // The real connection runtime authorizes relay requests with a signed-in cloud session.
 vi.mock("../../connection/runtime", async () => {
   const [{ ManagedRelay }, rpc, { Atom }, Context, Effect, Layer] = await Promise.all([
-    import("@t3tools/client-runtime/relay"),
+    import("@t3tools/client-runtime/authorization"),
     import("@t3tools/client-runtime/rpc"),
     import("effect/reactivity"),
     import("effect/Context"),
@@ -395,8 +394,9 @@ it.each([
 ] as const)(
   "loads relay models using the server tier $tier (legacy: $legacy)",
   async ({ tier, legacy }) => {
-    const target = new RelayConnectionTarget({
+    const target = new BearerConnectionTarget({
       environmentId: EnvironmentId.make("voice-relay"),
+      connectionId: "voice-remote",
       label: "MacBook Pro",
     });
     const prepared = {

@@ -32,7 +32,6 @@ import {
   type CodexRateLimitSnapshot,
 } from "../../provider/codexUsageLimits.ts";
 import {
-  type AgentFeedbackMode,
   CodexSettings,
   defaultInstanceIdForDriver,
   isOrchestrationV2WorkActive,
@@ -167,7 +166,10 @@ import {
 } from "@t3tools/provider-core/server/subagentProjection";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
-import { buildWorkspaceInstructions } from "@t3tools/provider-core/server/runtimeInstructions";
+import {
+  buildSharedMemoryInstructions,
+  buildWorkspaceInstructions,
+} from "@t3tools/provider-core/server/runtimeInstructions";
 
 const CODEX_PROVIDER = ProviderDriverKind.make("codex");
 const CODEX_CAPACITY_MAX_RETRIES = 5;
@@ -917,7 +919,7 @@ export const buildCodexTurnStartParams = Effect.fn("CodexAdapterV2.buildCodexTur
     readonly runtimePolicy: ProviderAdapter.ProviderAdapterV2RuntimePolicy;
     readonly modelSelection: ModelSelection;
     readonly hasT3Mcp?: boolean;
-    readonly agentFeedback?: AgentFeedbackMode;
+
     readonly browserToolsAvailable?: boolean;
     readonly deviceToolsAvailable?: boolean;
     /** ChatGPT token sharing does not accept service tiers. */
@@ -977,7 +979,6 @@ export const buildCodexTurnStartParams = Effect.fn("CodexAdapterV2.buildCodexTur
             {
               model: input.modelSelection.model,
               reasoningEffort: effort ?? undefined,
-              agentFeedback: input.agentFeedback ?? "off",
             },
             {
               browser: input.browserToolsAvailable ?? true,
@@ -986,7 +987,14 @@ export const buildCodexTurnStartParams = Effect.fn("CodexAdapterV2.buildCodexTur
           )
         : undefined;
     // Its own entry, so the folder list reaches the model without T3 Code's MCP tools too.
-    const workspaceInstructions = buildWorkspaceInstructions(input.runtimePolicy);
+    const workspaceInstructions = [
+      buildWorkspaceInstructions(input.runtimePolicy),
+      input.runtimePolicy.sharedMemory
+        ? buildSharedMemoryInstructions(input.runtimePolicy.sharedMemory)
+        : "",
+    ]
+      .filter(Boolean)
+      .join("\n\n");
     const workspaceContext =
       workspaceInstructions === ""
         ? undefined
@@ -8041,7 +8049,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
               runtimePolicy: turnInput.runtimePolicy,
               modelSelection: turnInput.modelSelection,
               hasT3Mcp: mcpSession !== undefined,
-              agentFeedback: turnInput.agentFeedback ?? "off",
+
               browserToolsAvailable: mcpSession?.browserToolsAvailable ?? true,
               deviceToolsAvailable: mcpSession?.capabilities?.has("device") ?? false,
               omitServiceTier: adapterOptions.resolveRuntime !== undefined,

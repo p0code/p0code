@@ -30,8 +30,7 @@ The desktop app includes the `t3` command; see [The `t3` command](./install.md#t
   },
   "limits": {
     "maxRuntimeMode": "auto-accept-edits",
-    "clients": ["desktop", "local-browser"],
-    "telemetry": false
+    "clients": ["desktop", "local-browser"]
   }
 }
 ```
@@ -75,7 +74,7 @@ Administrative Templates > T3 Code. Set **Organization** whenever you set any ot
 Locks and provider fields go in the two JSON policies, as the same objects a policy file would hold.
 Machines pick up a change at the next Group Policy refresh; run `gpupdate /target:computer /force`
 to apply it now, then restart T3 Code.
-Setting **Allow T3 Connect**, **Allow webhook tasks**, **Allow importing browser cookies**, or
+Setting **Allow self-hosted relay**, **Allow webhook tasks**, **Allow importing browser cookies**, or
 **Allow usage data** to **Disabled** turns that feature off. Setting any other T3 Code policy to
 **Disabled** restricts nothing, the same as **Not Configured**.
 
@@ -170,7 +169,6 @@ A few settings need care:
     "webhookTasks": false,
     "browserCookieImport": false,
     "previewTunnel": false,
-    "telemetry": false,
     "providers": {
       "allowedDrivers": ["claudeAgent", "codex"],
       "instances": {
@@ -213,7 +211,7 @@ T3 Code can place under the limit. Users still choose which ACP Registry agent r
 The limit decides which modes T3 Code asks the provider for. It is not a sandbox; see
 [What a policy does not cover](#what-a-policy-does-not-cover).
 
-### Clients and T3 Connect
+### Clients and the relay
 
 `clients` lists how the server may run:
 
@@ -232,7 +230,8 @@ address or `localhost`. A [background service](./background-service.md) installe
 Run `t3 up --no-lan` when its `service.env` sets no `T3CODE_HOST`, or set
 `T3CODE_HOST=127.0.0.1` in `service.env`, then run `t3 service restart`. The desktop app starts
 with network access and Tailscale Serve off, whatever the user chose. That also turns off
-T3 Connect. To keep other remote access but turn off T3 Connect alone, set `"connect": false`.
+the self-hosted relay. To keep other remote access but turn off the relay alone, set
+`"connect": false`.
 
 When it starts, the server also turns off each Tailscale Serve route, HTTPS or TCP, that forwards
 to it, such as one `t3 pair --tailscale` set up, and leaves other routes alone. It does not start
@@ -256,30 +255,6 @@ so restart T3 Code after that.
   Browser tabs stream from it instead, and port forwarding and **Open on this device** are
   unavailable. This wins over the user's
   [Preview tunnel setting](./remote-access.md#browser-on-a-remote-environment).
-- `telemetry: false`: the server and desktop app send no [product usage data](./telemetry.md) or
-  relay connection traces. A policy cannot turn them on. A browser that opens the server, such as
-  app.t3.codes, still sends its own relay traces.
-
-### Providers
-
-`providers.allowedDrivers` lists the providers that may run, by ID: `codex` (Codex),
-`claudeAgent` (Claude), `cursor` (Cursor), `grok` (Grok), `opencode` (OpenCode), `antigravity`
-(Antigravity), `fx` (fx), `kiro` (Kiro), `pi` (Pi), `muse` (Muse Code), and `acpRegistry` (ACP
-Registry).
-`t3 policy check` rejects an ID this version does not know. Threads on other providers stay,
-marked unavailable, and users can still turn those providers off.
-
-`providers.instances` sets fields on every instance of a provider, such as an environment variable
-that routes Claude through Amazon Bedrock or a base URL for a company gateway. `binaryPath` and
-`launchArgs` work only for providers that have those settings. With `"locked": true`, users cannot
-change the fields you set. With `"locked": false`, the fields fill in only what the user left
-empty. A `codex` entry that is locked, or any `codex` entry under `maxRuntimeMode`, also rules out
-[Connect with ChatGPT](./providers-codex.md#connect-with-chatgpt), since that runtime would skip
-your fields. In the same way, an `opencode` entry like that rules out a server URL, so OpenCode
-starts the binary you set.
-
-### Updates
-
 - `mode`: `auto` keeps the normal update flow. `off` stops T3 Code from checking for updates, for
   machines that get T3 Code through device management.
 - `feedUrl`: T3 Code updates from your own mirror instead of GitHub: the desktop app, `t3 update`,

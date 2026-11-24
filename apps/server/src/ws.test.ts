@@ -82,7 +82,7 @@ import * as AcpRegistryRuntimeCoordinator from "@t3tools/provider-acp-registry/s
 import * as AcpRegistrySupport from "@t3tools/provider-acp-registry/server/AcpRegistrySupport";
 import * as AgentSessionImporter from "./project/AgentSessionImporter.ts";
 import * as AgentSessionScanner from "./project/AgentSessionScanner.ts";
-import * as AnalyticsService from "./telemetry/AnalyticsService.ts";
+
 import * as AntigravityInstallation from "./provider/AntigravityInstallation.ts";
 import * as ProviderInstallation from "./provider/providerInstallation.ts";
 import * as BackgroundPolicy from "./background/BackgroundPolicy.ts";
@@ -130,7 +130,7 @@ import * as ThreadIssueService from "./orchestration-v2/ThreadIssueService.ts";
 import * as IssueTrackerConnections from "./issue/IssueTrackerConnections.ts";
 import * as PullRequestService from "./pullRequest/PullRequestService.ts";
 import * as PullRequestSyncReactor from "./orchestration-v2/PullRequestSyncReactor.ts";
-import * as RelayClient from "@t3tools/shared/relayClient";
+import * as SelfRelay from "./selfRelay/SelfRelay.ts";
 import * as RemoteOpenTargets from "./environment/RemoteOpenTargets.ts";
 import * as RepositoryIdentityResolver from "./project/RepositoryIdentityResolver.ts";
 import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
@@ -139,7 +139,7 @@ import * as ScheduledTasks from "./scheduledTasks/ScheduledTaskService.ts";
 import * as Workflows from "./workflows/Workflows.ts";
 import * as WorkflowRuntime from "./workflows/WorkflowRuntime.ts";
 import * as SecretRequests from "./secrets/SecretRequests.ts";
-import * as FeedbackStore from "./feedback/FeedbackStore.ts";
+
 import * as GuestShareService from "./guest/GuestShareService.ts";
 import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import * as ServerLifecycleEvents from "./serverLifecycleEvents.ts";
@@ -843,7 +843,7 @@ const layerUnusedConfigRpcServices = Layer.mergeAll(
   Layer.mock(AcpRegistrySessions.AcpRegistrySessions)({}),
   Layer.mock(AgentSessionImporter.AgentSessionImporter)({}),
   Layer.mock(AgentSessionScanner.AgentSessionScanner)({}),
-  Layer.mock(AnalyticsService.AnalyticsService)({}),
+
   Layer.mock(AntigravityInstallation.AntigravityInstallation)({ managedDirectory: "/unused" }),
   Layer.mock(BackgroundPolicy.BackgroundPolicy)({}),
   Layer.mock(CheckpointDiffQuery.CheckpointDiffQuery)({}),
@@ -886,7 +886,7 @@ const layerUnusedConfigRpcServices = Layer.mergeAll(
   Layer.mock(ThreadIssueService.ThreadIssueService)({}),
   Layer.mock(IssueTrackerConnections.IssueTrackerConnections)({}),
   Layer.mock(PullRequestSyncReactor.PullRequestSyncReactor)({}),
-  Layer.mock(RelayClient.RelayClient)({}),
+  Layer.mock(SelfRelay.SelfRelay)({}),
   Layer.mock(RepositoryIdentityResolver.RepositoryIdentityResolver)({}),
   Layer.mock(ResourceTelemetry.ResourceTelemetry)({}),
   Layer.mock(ReviewService.ReviewService)({}),
@@ -894,7 +894,7 @@ const layerUnusedConfigRpcServices = Layer.mergeAll(
   Workflows.layerDisabled,
   Layer.mock(WorkflowRuntime.WorkflowDefinitions)({}),
   Layer.mock(SecretRequests.SecretRequests)({}),
-  Layer.mock(FeedbackStore.FeedbackStore)({}),
+
   Layer.mock(SecretResolver.SecretResolver)({}),
   Layer.mock(GuestShareService.GuestShareService)({}),
   Layer.mock(ServerLifecycleEvents.ServerLifecycleEvents)({}),
@@ -937,99 +937,6 @@ const layerConfigSources = Layer.mergeAll(
     ),
   ),
   Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
-);
-
-it.live.each([
-  { subject: "desktop-bootstrap", extensions: "", framed: false },
-  { subject: "desktop-bootstrap", extensions: "", framed: true },
-  { subject: "one-time-token", extensions: "permessage-deflate", framed: false },
-  { subject: "cloud-connect", extensions: "permessage-deflate", framed: false },
-])(
-  "negotiates compression for $subject sessions (framed=$framed)",
-  ({ subject, extensions, framed }) =>
-    Effect.gen(function* () {
-      const services = Layer.mergeAll(
-        layerUnusedConfigRpcServices,
-        Layer.mock(ServerBrowser.ServerBrowser)({
-          profileReporter: Effect.succeed(() => Effect.void),
-        }),
-        Layer.mock(EnvironmentAuth.EnvironmentAuth)({
-          authenticateWebSocketUpgrade: () =>
-            Effect.succeed({
-              sessionId: AuthSessionId.make("compression-test"),
-              subject,
-              method: "bearer-access-token",
-              scopes: [],
-            }),
-        }),
-        Layer.mock(SessionStore.SessionStore)({
-          cookieName: "compression-test",
-          legacyCookieName: undefined,
-          markConnected: () => Effect.void,
-          markDisconnected: () => Effect.void,
-          awaitInvalidation: () => Effect.never,
-        }),
-        Layer.mock(AnalyticsService.AnalyticsService)({ recordOwners: () => Effect.void }),
-        Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({
-          namedProjectsRoot: process.cwd(),
-        }),
-        Layer.mock(ScratchThreadPromotion.ScratchThreadPromotion)({}),
-        Layer.mock(ProviderRegistry.ProviderRegistry)({}),
-        Layer.mock(UsageLimitSources.UsageLimitSources)({}),
-        Layer.mock(ExternalLauncher.ExternalLauncher)({}),
-        Layer.mock(RemoteOpenTargets.RemoteOpenTargets)({}),
-        Layer.mock(DirectEndpoints.DirectEndpoints)({}),
-        Layer.mock(ServerEnvironment.ServerEnvironment)({}),
-        Layer.mock(VcsProcess.VcsProcess)({
-          run: (input) =>
-            Effect.fail(
-              new VcsProcessSpawnError({
-                operation: input.operation,
-                command: input.command,
-                cwd: input.cwd,
-                cause: "No VCS commands in the compression fixture",
-              }),
-            ),
-        }),
-        ProviderInstallationGate.layer,
-        FetchHttpClient.layer,
-      );
-      const context = yield* Layer.build(
-        HttpRouter.serve(Ws.layer, { disableListenLog: true }).pipe(
-          Layer.provideMerge(
-            NodeHttpServer.layer(NodeHttp.createServer, {
-              host: "127.0.0.1",
-              port: 0,
-              websocket: { perMessageDeflate: true },
-            }),
-          ),
-          Layer.provide(services),
-          Layer.provide(layerConfigSources),
-        ),
-      );
-      const server = Context.get(context, HttpServer.HttpServer);
-      const origin = HttpServer.formatAddress(server.address).replace(/^http/, "ws");
-      const socket = yield* Effect.acquireRelease(
-        Effect.sync(
-          () =>
-            new WebSocket(
-              `${origin}/ws?${ORCHESTRATION_PROTOCOL_QUERY_PARAM}=${ORCHESTRATION_PROTOCOL_VERSION}${framed ? `&${SOCKET_FRAME_PARTS_QUERY_PARAM}=1` : ""}`,
-              {
-                origin: "t3code://app",
-              },
-            ),
-        ),
-        (socket) => Effect.sync(() => socket.terminate()),
-      );
-      yield* Effect.promise(
-        () =>
-          new Promise<void>((resolve, reject) => {
-            socket.once("open", resolve);
-            socket.once("error", reject);
-          }),
-      );
-      assert.equal(socket.extensions, extensions);
-    }).pipe(Effect.scoped),
 );
 
 it.effect.each([
@@ -1168,7 +1075,7 @@ it.effect.each([
               method: "browser-session-cookie",
               scopes: [],
             },
-            {},
+
             yield* ServerBrowser.ServerBrowser,
             () => Effect.void,
             { secretReferences: true },
@@ -1323,7 +1230,7 @@ it.effect("access changes made while the snapshot loads reach the client after i
             method: "browser-session-cookie",
             scopes: [],
           },
-          {},
+
           yield* ServerBrowser.ServerBrowser,
           () => Effect.void,
           { secretReferences: true },
@@ -1344,7 +1251,6 @@ it.effect("access changes made while the snapshot loads reach the client after i
               Layer.mock(ServerEnvironment.ServerEnvironment)({}),
               Layer.mock(EnvironmentAuth.EnvironmentAuth)({
                 listPairingLinks: () => Effect.succeed([]),
-                listConnectDevices: () => Effect.succeed([]),
                 // Another client revokes a session after the snapshot read it.
                 listClientSessions: () =>
                   PubSub.publish(sessionChanges, {
@@ -1539,7 +1445,7 @@ it.effect("on-demand clients get provider config without workspace snapshots", (
             method: "browser-session-cookie",
             scopes: [],
           },
-          {},
+
           yield* ServerBrowser.ServerBrowser,
           () => Effect.void,
           { secretReferences: true },
@@ -1900,7 +1806,7 @@ it.effect("a missing thread worktree gets its project's skills in the cwd snapsh
             method: "browser-session-cookie",
             scopes: [],
           },
-          {},
+
           yield* ServerBrowser.ServerBrowser,
           () => Effect.void,
           { secretReferences: true },
@@ -1981,7 +1887,7 @@ it.effect(
                 method: "browser-session-cookie",
                 scopes: [...scopes],
               },
-              {},
+
               browser,
               () => Effect.void,
               { secretReferences: true },
@@ -2069,7 +1975,7 @@ it.effect("a git action that fails partway still refreshes the repository status
             method: "browser-session-cookie",
             scopes: [AuthSourceControlWriteScope],
           },
-          {},
+
           yield* ServerBrowser.ServerBrowser,
           () => Effect.void,
           { secretReferences: true },
@@ -2149,7 +2055,7 @@ it.effect("a publish whose push fails still refreshes the new remote", () =>
             method: "browser-session-cookie",
             scopes: [AuthSourceControlWriteScope],
           },
-          {},
+
           yield* ServerBrowser.ServerBrowser,
           () => Effect.void,
           { secretReferences: true },
@@ -2740,7 +2646,7 @@ it.effect("ACP session RPCs list a thread missing its history and repair it on i
             method: "browser-session-cookie",
             scopes: [],
           },
-          {},
+
           yield* ServerBrowser.ServerBrowser,
           () => Effect.void,
           { secretReferences: true },
@@ -2887,7 +2793,7 @@ const makeWorkflowClient = Effect.fn("test.makeWorkflowClient")(function* (
           method: "browser-session-cookie",
           scopes: [...scopes],
         },
-        {},
+
         yield* ServerBrowser.ServerBrowser,
         () => Effect.void,
         { secretReferences: true },
@@ -2955,7 +2861,7 @@ const makeAcpRegistryClient = Effect.fn("test.makeAcpRegistryClient")(function* 
           method: "browser-session-cookie",
           scopes,
         },
-        {},
+
         yield* ServerBrowser.ServerBrowser,
         () => Effect.void,
         { secretReferences: true },
@@ -3081,4 +2987,97 @@ it.effect("a session that can only read sees a workflow run but cannot steer it"
     );
     assert.deepEqual(calls, []);
   }).pipe(Effect.provide(layerWorkflowRpcTest), Effect.scoped),
+);
+
+it.live.each([
+  { subject: "desktop-bootstrap", extensions: "", framed: false },
+  { subject: "desktop-bootstrap", extensions: "", framed: true },
+  { subject: "one-time-token", extensions: "permessage-deflate", framed: false },
+  { subject: "cloud-connect", extensions: "permessage-deflate", framed: false },
+])(
+  "negotiates compression for $subject sessions (framed=$framed)",
+  ({ subject, extensions, framed }) =>
+    Effect.gen(function* () {
+      const services = Layer.mergeAll(
+        layerUnusedConfigRpcServices,
+        Layer.mock(ServerBrowser.ServerBrowser)({
+          profileReporter: Effect.succeed(() => Effect.void),
+        }),
+        Layer.mock(EnvironmentAuth.EnvironmentAuth)({
+          authenticateWebSocketUpgrade: () =>
+            Effect.succeed({
+              sessionId: AuthSessionId.make("compression-test"),
+              subject,
+              method: "bearer-access-token",
+              scopes: [],
+            }),
+        }),
+        Layer.mock(SessionStore.SessionStore)({
+          cookieName: "compression-test",
+          legacyCookieName: undefined,
+          markConnected: () => Effect.void,
+          markDisconnected: () => Effect.void,
+          awaitInvalidation: () => Effect.never,
+        }),
+
+        Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({
+          namedProjectsRoot: process.cwd(),
+        }),
+        Layer.mock(ScratchThreadPromotion.ScratchThreadPromotion)({}),
+        Layer.mock(ProviderRegistry.ProviderRegistry)({}),
+        Layer.mock(UsageLimitSources.UsageLimitSources)({}),
+        Layer.mock(ExternalLauncher.ExternalLauncher)({}),
+        Layer.mock(RemoteOpenTargets.RemoteOpenTargets)({}),
+        Layer.mock(DirectEndpoints.DirectEndpoints)({}),
+        Layer.mock(ServerEnvironment.ServerEnvironment)({}),
+        Layer.mock(VcsProcess.VcsProcess)({
+          run: (input) =>
+            Effect.fail(
+              new VcsProcessSpawnError({
+                operation: input.operation,
+                command: input.command,
+                cwd: input.cwd,
+                cause: "No VCS commands in the compression fixture",
+              }),
+            ),
+        }),
+        ProviderInstallationGate.layer,
+        FetchHttpClient.layer,
+      );
+      const context = yield* Layer.build(
+        HttpRouter.serve(Ws.layer, { disableListenLog: true }).pipe(
+          Layer.provideMerge(
+            NodeHttpServer.layer(NodeHttp.createServer, {
+              host: "127.0.0.1",
+              port: 0,
+              websocket: { perMessageDeflate: true },
+            }),
+          ),
+          Layer.provide(services),
+          Layer.provide(layerConfigSources),
+        ),
+      );
+      const server = Context.get(context, HttpServer.HttpServer);
+      const origin = HttpServer.formatAddress(server.address).replace(/^http/, "ws");
+      const socket = yield* Effect.acquireRelease(
+        Effect.sync(
+          () =>
+            new WebSocket(
+              `${origin}/ws?${ORCHESTRATION_PROTOCOL_QUERY_PARAM}=${ORCHESTRATION_PROTOCOL_VERSION}${framed ? `&${SOCKET_FRAME_PARTS_QUERY_PARAM}=1` : ""}`,
+              {
+                origin: "t3code://app",
+              },
+            ),
+        ),
+        (socket) => Effect.sync(() => socket.terminate()),
+      );
+      yield* Effect.promise(
+        () =>
+          new Promise<void>((resolve, reject) => {
+            socket.once("open", resolve);
+            socket.once("error", reject);
+          }),
+      );
+      assert.equal(socket.extensions, extensions);
+    }).pipe(Effect.scoped),
 );

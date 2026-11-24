@@ -2,6 +2,8 @@ import * as Schema from "effect/Schema";
 import { GitPreparePullRequestThreadInput, GitRunStackedActionInput } from "./git.ts";
 import {
   AuthAccessWriteScope,
+  AuthRelayWriteScope,
+  AuthRelayConfigureScope,
   AuthEnvironmentMaintainScope,
   AuthOrchestrationOperateScope,
   AuthOrchestrationReadScope,
@@ -19,6 +21,13 @@ import { WS_METHODS } from "./rpc.ts";
 
 /** Incremental client enforcement; the server still authorizes every request. */
 export const CLIENT_GUARDED_RPC_SCOPES = {
+  [WS_METHODS.sharedMemoryCommand]: AuthProvidersManageScope,
+  [WS_METHODS.sharedMemoryVaults]: AuthProvidersManageScope,
+  [WS_METHODS.serverRelayLink]: AuthRelayWriteScope,
+  [WS_METHODS.serverRelayUnlink]: AuthRelayWriteScope,
+  [WS_METHODS.serverExposePort]: AuthRelayWriteScope,
+  [WS_METHODS.serverUnexposePort]: AuthRelayWriteScope,
+  [WS_METHODS.serverPortLink]: AuthTerminalOperateScope,
   [WS_METHODS.providerAuthRemoveMethod]: AuthProvidersManageScope,
   // An MCP sign-in stores a credential for the agent, as an account sign-in does.
   [WS_METHODS.providerMcpSignInStart]: AuthProvidersManageScope,
@@ -102,7 +111,6 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
   [WS_METHODS.peerLinksPairClient]: AuthAccessWriteScope,
   [WS_METHODS.peerLinksPairLink]: AuthAccessWriteScope,
   // Send stores and sends a report from a thread's turn: the bar of running that thread.
-  [WS_METHODS.agentFeedbackAnswerRequest]: AuthOrchestrationOperateScope,
 } as const;
 export type ClientGuardedRpcTag = keyof typeof CLIENT_GUARDED_RPC_SCOPES;
 
@@ -114,6 +122,14 @@ export function clientRpcRequiredScopes(
   method: string,
   input: unknown,
 ): readonly AuthEnvironmentScope[] {
+  if (method === WS_METHODS.sharedMemoryCommand)
+    return [AuthSettingsWriteScope, AuthProvidersManageScope];
+  if (method === WS_METHODS.serverRelayLink || method === WS_METHODS.serverRelayUnlink)
+    return [AuthAccessWriteScope, AuthRelayWriteScope, AuthRelayConfigureScope];
+  if (method === WS_METHODS.serverExposePort)
+    return [AuthAccessWriteScope, AuthRelayWriteScope, AuthTerminalOperateScope];
+  if (method === WS_METHODS.serverPortLink) return [AuthAccessWriteScope, AuthTerminalOperateScope];
+
   if (method === WS_METHODS.gitPreparePullRequestThread && input !== undefined) {
     const payload = decodePrepareThread(input);
     if (payload.mode === "worktree" && payload.threadId !== undefined)

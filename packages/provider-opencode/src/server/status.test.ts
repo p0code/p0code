@@ -810,6 +810,39 @@ it.layer(layerTest)("checkOpenCodeProviderStatus", (it) => {
     }),
   );
 
+  it.effect("labels nameless OpenCode models with their model id", () =>
+    Effect.gen(function* () {
+      runtimeMock.state.inventory = {
+        providerList: {
+          connected: ["openai"],
+          all: [
+            {
+              id: "openai",
+              name: "OpenAI",
+              models: {
+                "gpt-5.4": { id: "gpt-5.4", name: "GPT-5.4", variants: {} },
+                unnamed: { id: "unnamed", name: "   ", variants: {} },
+                "also-unnamed": { id: "also-unnamed", name: "", variants: {} },
+              },
+            },
+          ],
+          default: {},
+        },
+        agents: [],
+      };
+
+      const snapshot = yield* checkProvider(makeOpenCodeSettings());
+      NodeAssert.deepEqual(
+        snapshot.models.map((model) => ({ slug: model.slug, name: model.name })),
+        [
+          { slug: "openai/also-unnamed", name: "also-unnamed" },
+          { slug: "openai/gpt-5.4", name: "GPT-5.4" },
+          { slug: "openai/unnamed", name: "unnamed" },
+        ],
+      );
+    }),
+  );
+
   it.effect("includes OpenCode skills in the provider snapshot", () =>
     Effect.gen(function* () {
       runtimeMock.state.inventory = {

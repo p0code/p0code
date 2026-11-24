@@ -2,7 +2,6 @@ import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import type {
   AuthBrowserSessionResult,
   AuthClientMetadata,
-  AuthConnectDeviceRequest,
   AuthEnvironmentScope,
   ServerAuthSessionMethod,
   AuthSessionId,
@@ -119,7 +118,6 @@ export interface ServerPairingLinkRecord {
   readonly label?: string;
   readonly createdAt: string;
   readonly expiresAt: string;
-  readonly connectDeviceRequest?: AuthConnectDeviceRequest;
 }
 
 export interface ServerClientSessionRecord {

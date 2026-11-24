@@ -1,3 +1,5 @@
+import { serverEnvironment } from "../state/server";
+import { useAtomCommand } from "../state/use-atom-command";
 import {
   AuthTerminalOperateScope,
   type DesktopPortForward,
@@ -51,6 +53,7 @@ export function useCommandPalettePortForwardItem(input: {
   readonly query: string;
 }): CommandPaletteSubmenuItem | null {
   const gt = useGT();
+  const exposeRelay = useAtomCommand(serverEnvironment.relayExposePort);
   const forwards = usePortForwards();
   const { environments } = useEnvironments();
   const reachable = environments.filter(
@@ -72,7 +75,13 @@ export function useCommandPalettePortForwardItem(input: {
     environmentId: threadEnvironmentId,
     threadId: threadEnvironmentId === null ? null : (input.activeThread?.id ?? null),
   });
-  if (forwards.length === 0 && sources.length === 0) return null;
+  const relaySources = environments.filter(
+    (environment) =>
+      environment.connection.phase === "connected" &&
+      environment.serverConfig?.environment.capabilities.selfRelay,
+  );
+  const relayPermissions = useEnvironmentsWithScope(relaySources, "relay:write");
+  if (forwards.length === 0 && sources.length === 0 && relaySources.length === 0) return null;
 
   const labelOf = (environmentId: EnvironmentId) =>
     environments.find((environment) => environment.environmentId === environmentId)?.label ??
@@ -177,6 +186,33 @@ export function useCommandPalettePortForwardItem(input: {
   }
 
   const groups: CommandPaletteGroup[] = [];
+  const relayPort = parsePort(input.query);
+  if (relayPort !== null)
+    groups.push({
+      value: PORT_FORWARD_GROUP_PREFIX + "relay",
+      label: gt("Expose through relay"),
+      items: relaySources
+        .filter((environment) => relayPermissions.has(environment.environmentId))
+        .flatMap((environment) =>
+          (["private", "link"] as const).map((access) => ({
+            kind: "action" as const,
+            value: "relay:" + environment.environmentId + ":" + access + ":" + relayPort,
+            title: environment.label + ": " + relayPort + " · " + access,
+            searchTerms: ["relay", "public", String(relayPort)],
+            icon: <CableIcon className={ITEM_ICON_CLASS} />,
+            run: async () => {
+              const result = await exposeRelay({
+                environmentId: environment.environmentId,
+                input: { port: relayPort, access, expiresInSeconds: 86400 },
+              });
+              if (result._tag === "Success") {
+                await writeTextToClipboard(result.value.url);
+                toastManager.add({ type: "success", title: gt("Port link copied") });
+              }
+            },
+          })),
+        ),
+    });
   if (forwards.length > 0) {
     groups.push({
       value: `${PORT_FORWARD_GROUP_PREFIX}forwarded`,
@@ -184,7 +220,7 @@ export function useCommandPalettePortForwardItem(input: {
       items: forwards.map(forwardedItem),
     });
   }
-  if (startItems.length === 0 && sources.length > 0) {
+  if (startItems.length === 0 && (sources.length > 0 || relaySources.length > 0)) {
     startItems.push({
       kind: "action",
       value: "port-forward:hint",

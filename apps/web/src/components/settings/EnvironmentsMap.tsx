@@ -12,7 +12,6 @@ import {
   linkableMachines,
   offersLinkedEnvironments,
 } from "@t3tools/client-runtime/link-request";
-import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import type { PeerLinkHealth } from "@t3tools/client-runtime/state/peerLinks";
 import { AuthAccessWriteScope, type EnvironmentId } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
@@ -24,6 +23,7 @@ import {
   CheckIcon,
   CircleHelpIcon,
   CloudIcon,
+  FoldVerticalIcon,
   GlobeIcon,
   MaximizeIcon,
   MinusIcon,
@@ -31,16 +31,15 @@ import {
   SearchIcon,
   TriangleAlertIcon,
   UnfoldVerticalIcon,
-  FoldVerticalIcon,
   XIcon,
 } from "lucide-react";
 import {
-  memo,
   type FocusEvent,
   type KeyboardEvent,
   type MouseEvent,
   type PointerEvent,
   type ReactNode,
+  memo,
   useContext,
   useEffect,
   useEffectEvent,
@@ -48,25 +47,18 @@ import {
   useState,
 } from "react";
 
-import { hasCloudPublicConfig } from "~/cloud/publicConfig";
 import { isElectron } from "~/env";
 import { useLiveRefresh } from "~/hooks/useLiveRefresh";
 import { useNowMinute } from "~/hooks/useNowMinute";
 import { useStableCallback } from "~/hooks/useStableCallback";
 import { observeResize } from "~/lib/observeResize";
 import { cn } from "~/lib/utils";
-import {
-  type EnvironmentPresentation,
-  useEnvironments,
-  useRelayEnvironmentDiscovery,
-  useRetainedRelayEnvironments,
-} from "~/state/environments";
 import { environmentIdsKey } from "~/state/environmentAtomList";
+import { type EnvironmentPresentation, useEnvironments } from "~/state/environments";
 import { peerLinkEnvironment, peerLinkListsAtom, usePeerLinkHosts } from "~/state/peerLinks";
 import { formatEnvironmentQueryError } from "~/state/query";
-import { relayEnvironmentDiscovery } from "~/state/relay";
+
 import { preparedConnectionsAtom, useEnvironmentsWithScope } from "~/state/session";
-import { useAtomCommand } from "~/state/use-atom-command";
 import { accessConfig } from "../auth/ConnectAgentSurface";
 import { connectionPhaseDotClassName } from "../ConnectionStatusDot";
 import { EnvironmentMachineIcon } from "../EnvironmentMachineIcon";
@@ -76,25 +68,7 @@ import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import {
-  buildFleetGraph,
-  anchorFleetView,
-  fitFleetLayout,
-  fleetCanvasHeight,
   FLEET_CLIENT_NODE_ID,
-  fleetDrawnLinkId,
-  fleetEnvironmentNodeId,
-  fleetFocusRects,
-  fleetLinkAction,
-  fleetLinkOffer,
-  fleetMoreNodeId,
-  fleetNeighborhood,
-  fleetNodesInBox,
-  fleetSearch,
-  fleetLayoutWidth,
-  fleetShapeKey,
-  fleetStackPartial,
-  fleetStacks,
-  fleetTwoWayLinks,
   type FleetArrow,
   type FleetColumn,
   type FleetDirection,
@@ -114,21 +88,39 @@ import {
   type FleetRouteState,
   type FleetStack,
   type FleetViewTransform,
+  anchorFleetView,
+  buildFleetGraph,
+  fitFleetLayout,
+  fleetCanvasHeight,
+  fleetDrawnLinkId,
+  fleetEnvironmentNodeId,
+  fleetFocusRects,
+  fleetLayoutWidth,
+  fleetLinkAction,
+  fleetLinkOffer,
+  fleetMoreNodeId,
+  fleetNeighborhood,
+  fleetNodesInBox,
+  fleetSearch,
+  fleetShapeKey,
+  fleetStackPartial,
+  fleetStacks,
+  fleetTwoWayLinks,
   isLinkEdge,
   isRouteEdge,
   layoutFleetGraph,
   linkNeedsAttention,
   linkTroubleRank,
+  nextFleetNode,
   worseLinkHealth,
   zoomFleetView,
-  nextFleetNode,
 } from "./environmentsMap.logic";
 import {
   AccessMeter,
-  accessLevel,
   FleetDetails,
   type FleetDetailsProps,
   HealthGlyph,
+  accessLevel,
   healthLabel,
   healthTone,
 } from "./EnvironmentsMapDetails";
@@ -205,7 +197,7 @@ const ROUTE_STYLES: Record<
 function routeKindLabel(kind: ConnectionRouteKind, gt: GT): string {
   switch (kind) {
     case "relay":
-      return "T3 Connect";
+      return gt("Relay");
     case "loopback":
       return gt("This device");
     case "lan":
@@ -240,31 +232,7 @@ function routeStateLabel(state: FleetRouteState, gt: GT): string {
   }
 }
 
-/** Asks T3 Connect for the account's machines once, as the list's own rows do on mount. */
-function useConnectMachines() {
-  const gt = useGT();
-  const m = useMessages();
-  const discovery = useRelayEnvironmentDiscovery();
-  const refresh = useAtomCommand(relayEnvironmentDiscovery.refresh, { reportFailure: false });
-  const discoverIfUnasked = useEffectEvent(() => {
-    if (hasCloudPublicConfig() && !discovery.listed && !discovery.refreshing) void refresh();
-  });
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- one T3 Connect listing when the map mounts, the request the list makes on mount
-  useEffect(() => {
-    discoverIfUnasked();
-  }, []);
-  const machines = useRetainedRelayEnvironments();
-  // A failed listing is not an account with no machines: say so, with a way to ask again.
-  const message = discovery.refreshing
-    ? null
-    : discovery.offline && !discovery.listed
-      ? gt("You appear to be offline.")
-      : thrownErrorMessage(Option.getOrNull(discovery.error), m);
-  return {
-    machines,
-    problem: message === null ? null : { message, retry: () => void refresh() },
-  };
-}
+/** Asks Relay for the account's machines once, as the list's own rows do on mount. */
 
 function useFleetGraph() {
   const gt = useGT();
@@ -293,12 +261,11 @@ function useFleetGraph() {
     ),
   );
   const writable = useEnvironmentsWithScope(environments, AuthAccessWriteScope);
-  const { machines: connect, problem: connectProblem } = useConnectMachines();
+  const connectProblem = null;
   const machines = linkableMachines({
     environments,
     threadEnvironmentId: null,
     links: [],
-    connect,
   });
   const machineById = new Map(machines.map((machine) => [machine.environmentId, machine]));
   const listByHost = new Map(hosts.map((host, index) => [host.environmentId, lists[index]]));
@@ -339,14 +306,7 @@ function useFleetGraph() {
   const graph = buildFleetGraph({
     clientLabel: isElectron ? gt("This device") : gt("This browser"),
     environments: inputs,
-    connectMachines: machines
-      .filter((machine) => machine.connectOnly)
-      .map((machine) => ({
-        environmentId: machine.environmentId,
-        label: machine.label,
-        machine: machine.machine,
-        availability: connect.get(machine.environmentId)?.availability ?? "checking",
-      })),
+    connectMachines: [],
     now: DateTime.makeUnsafe(nowMinute),
   });
   return { graph, environments, connectProblem };
@@ -2115,7 +2075,7 @@ const FleetScene = memo(function FleetScene({
               {...focusProps(
                 target,
                 rect,
-                gt("{label}, on your T3 Connect account, not added to this app. {status}", {
+                gt("{label}, on your Relay account, not added to this app. {status}", {
                   label: node.label,
                   status: connectAvailabilityText(node.availability, gt),
                 }),

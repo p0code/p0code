@@ -1,17 +1,16 @@
-import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
-import { m as resolveMessage } from "~/i18n/messages";
+import { SharedMemorySettings } from "./SharedMemorySettings";
 import { useAtomValue } from "@effect/atom-react";
-import { NotificationSettings } from "./NotificationSettings";
-import { PRIVACY_POLICY_URL } from "../../legalLinks";
-import { CheckIcon } from "lucide-react";
-import { msg, T, useGT, useMessages } from "gt-react";
-import { Link, useNavigate } from "@tanstack/react-router";
-import { useRef, useState } from "react";
+import {
+  managedUpdatesDenial,
+  managedUpdatesMessage,
+} from "@t3tools/client-runtime/contract-labels";
+import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
+import { nativeLanguageName, SYSTEM_LANGUAGE } from "@t3tools/client-runtime/locales";
 import {
   type DesktopUpdateChannel,
+  globalIdleCompaction,
   IDLE_COMPACTION_MODES,
   type IdleCompactionMode,
-  globalIdleCompaction,
   ProviderDriverKind,
   type ProviderInstanceId,
   type SidebarProjectGroupingMode,
@@ -21,25 +20,25 @@ import {
   type DiffLayout,
   MAX_SIDEBAR_AUTO_SETTLE_AFTER_DAYS,
   MIN_SIDEBAR_AUTO_SETTLE_AFTER_DAYS,
-  type ResponseStreamingMode,
   type QuitConfirmationMode,
-  SidebarProjectSortOrder,
+  type ResponseStreamingMode,
   ScreenReaderAnnouncements,
+  SidebarProjectSortOrder,
   ToolCallVisibility,
 } from "@t3tools/contracts/settings";
-import {
-  managedUpdatesDenial,
-  managedUpdatesMessage,
-} from "@t3tools/client-runtime/contract-labels";
 import { desktopUpdateChannelOf } from "@t3tools/shared/cliRelease";
 import { createModelSelection, pickModelSelection } from "@t3tools/shared/model";
 import { resolvePastedPath } from "@t3tools/shared/path";
+import { Link, useNavigate } from "@tanstack/react-router";
 import * as Equal from "effect/Equal";
 import * as Schema from "effect/Schema";
+import { msg, T, useGT, useMessages } from "gt-react";
+import { CheckIcon } from "lucide-react";
+import { useRef, useState } from "react";
+import { m as resolveMessage } from "~/i18n/messages";
+import { environmentIdsKey } from "~/state/environmentAtomList";
+import { environmentSessionStatesAtom } from "~/state/session";
 import { APP_VERSION, HOSTED_APP_CHANNEL, HOSTED_APP_CHANNEL_LABEL } from "../../branding";
-import { AboutVersionTitle } from "./AboutVersionTitle";
-import { CliCommandSettingsRow } from "./CliCommandSettingsRow";
-import { MobileAppSettingsRow } from "./MobileAppSettingsRow";
 import {
   canCheckForUpdate,
   getDesktopUpdateActionError,
@@ -50,51 +49,57 @@ import {
   isDesktopUpdateButtonDisabled,
   resolveDesktopUpdateButtonAction,
 } from "../../components/desktopUpdate.logic";
-import { ProviderModelPicker } from "../chat/ProviderModelPicker";
-import { TraitsPicker } from "../chat/TraitsPicker";
 import { isElectron } from "../../env";
-import { buildHostedChannelSelectionUrl, type HostedAppChannel } from "../../hostedPairing";
 import {
   readAppearanceModePreference,
   readThemeHalves,
   readThemePreference,
   useTheme,
 } from "../../hooks/useTheme";
-import {
-  useScopedSettings,
-  useScopedSettingsMixed,
-  useUpdateScopedSettings,
-} from "./useScopedSettings";
-import { useScopedModelDisabledReason } from "./useScopedModelAvailability";
-import { useOptionalSettingsScope, useSettingsScope } from "./SettingsScopeContext";
-import { scopedIdleCompaction } from "./scopedSettings";
-import { ProjectDefaultsSettings } from "./ProjectDefaultsSettings";
-import { ThreadTitleInstructionsSettings } from "./ThreadTitleInstructionsSettings";
-import { SnoozePresetsRow } from "./SnoozePresetsSettings";
-import { useDesktopUpdateState } from "../../state/desktopUpdate";
-import { managedTelemetryOffMessage, usePrimaryManagedPolicy } from "../../state/managedPolicy";
+import { buildHostedChannelSelectionUrl, type HostedAppChannel } from "../../hostedPairing";
+import { SUPPORTED_LOCALES } from "../../i18n/locales";
+import { PRIVACY_POLICY_URL } from "../../legalLinks";
+import { isMacPlatform } from "../../lib/utils";
+import { ensureLocalApi, readLocalApi } from "../../localApi";
 import {
   getTextGenerationModelOptionsByInstance,
   resolveAppModelSelectionState,
   selectsPlanAgent,
 } from "../../modelSelection";
-import { useTextGenerationTargets } from "../../textGenerators";
-import { ensureLocalApi, readLocalApi } from "../../localApi";
-import { isMacPlatform } from "../../lib/utils";
+import { useDesktopUpdateState } from "../../state/desktopUpdate";
 import {
   useEnvironmentProviders,
   useEnvironments,
   usePrimaryEnvironmentId,
 } from "../../state/environments";
+import { usePrimaryManagedPolicy } from "../../state/managedPolicy";
 import { EMPTY_SERVER_PROVIDERS } from "../../state/server";
+import { useTextGenerationTargets } from "../../textGenerators";
+import { useCheckProviderUpdates } from "../ProviderUpdatesAction";
+import { canUpdateServer } from "../ServerUpdateAction";
+import { ProviderModelPicker } from "../chat/ProviderModelPicker";
+import { TraitsPicker } from "../chat/TraitsPicker";
+import { downloadLocalUpdate } from "../sidebar/SidebarUpdatePill";
+import { awaitsTrackSwitch, channelSwitchLabel } from "../sidebar/updateEverything.logic";
+import { useUpdateEverythingRun } from "../sidebar/updateEverythingRun";
+import { isHostedByThisApp } from "../sidebar/useUpdateEverything";
 import { Button } from "../ui/button";
 import { DraftInput } from "../ui/draft-input";
 import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Switch } from "../ui/switch";
-import { ScopedSwitch } from "./ScopedSwitch";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { AboutVersionTitle } from "./AboutVersionTitle";
+import { AdvancedSettings } from "./AdvancedSettings";
+import { BackgroundActivitySettingsRow } from "./BackgroundActivitySettings";
+import { CliCommandSettingsRow } from "./CliCommandSettingsRow";
+import { PullRequestLinksOpenInAppSetting } from "./IntegrationsSettings";
+import { JudgesSettingsSection } from "./JudgesSettingsSection";
+import { MobileAppSettingsRow } from "./MobileAppSettingsRow";
+import { NotificationSettings } from "./NotificationSettings";
+import { ProjectDefaultsSettings } from "./ProjectDefaultsSettings";
+import { ScopedSwitch } from "./ScopedSwitch";
 import {
   autoSettleDaysField,
   cancelAutoSettleDaysField,
@@ -110,29 +115,26 @@ import {
   rememberEnabledProjectGroupingMode,
   syncAutoSettleDaysField,
 } from "./SettingsPanels.logic";
+import { useOptionalSettingsScope, useSettingsScope } from "./SettingsScopeContext";
+import { SnoozePresetsRow } from "./SnoozePresetsSettings";
+import { StorageCleanupSections } from "./StorageSettings";
+import { ThreadTitleInstructionsSettings } from "./ThreadTitleInstructionsSettings";
+import { UpdateTrackSwitchDialog } from "./UpdateTrackSwitchDialog";
+import { scopedIdleCompaction } from "./scopedSettings";
 import {
-  SETTINGS_PICKER_TRIGGER_CLASSNAME,
   SettingResetButton,
+  SETTINGS_PICKER_TRIGGER_CLASSNAME,
   SettingsPageContainer,
   SettingsRow,
   SettingsSection,
 } from "./settingsLayout";
 import { useSearchableSetting } from "./settingsSearch";
-import { nativeLanguageName, SYSTEM_LANGUAGE } from "@t3tools/client-runtime/locales";
-import { SUPPORTED_LOCALES } from "../../i18n/locales";
-import { BackgroundActivitySettingsRow } from "./BackgroundActivitySettings";
-import { AdvancedSettings } from "./AdvancedSettings";
-import { PullRequestLinksOpenInAppSetting } from "./IntegrationsSettings";
-import { StorageCleanupSections } from "./StorageSettings";
-import { UpdateTrackSwitchDialog } from "./UpdateTrackSwitchDialog";
-import { environmentIdsKey } from "~/state/environmentAtomList";
-import { environmentSessionStatesAtom } from "~/state/session";
-import { useCheckProviderUpdates } from "../ProviderUpdatesAction";
-import { canUpdateServer } from "../ServerUpdateAction";
-import { downloadLocalUpdate } from "../sidebar/SidebarUpdatePill";
-import { useUpdateEverythingRun } from "../sidebar/updateEverythingRun";
-import { awaitsTrackSwitch, channelSwitchLabel } from "../sidebar/updateEverything.logic";
-import { isHostedByThisApp } from "../sidebar/useUpdateEverything";
+import { useScopedModelDisabledReason } from "./useScopedModelAvailability";
+import {
+  useScopedSettings,
+  useScopedSettingsMixed,
+  useUpdateScopedSettings,
+} from "./useScopedSettings";
 
 const RESPONSE_STREAMING_MODE_LABELS: Record<ResponseStreamingMode, string> = {
   turn: msg("Wait for the full response"),
@@ -858,6 +860,7 @@ export function GeneralSettingsPanel() {
 
   return (
     <SettingsPageContainer>
+      <SharedMemorySettings />
       <SettingsSection id="notifications" title={gt("Notifications")}>
         <NotificationSettings />
         <SettingsRow
@@ -1997,6 +2000,7 @@ export function ThreadsSettingsPanel() {
 
   return (
     <SettingsPageContainer>
+      <JudgesSettingsSection />
       <SettingsSection id="new-projects" title={gt("New projects")}>
         <SettingsRow
           serverScoped
@@ -2526,11 +2530,10 @@ export function MaintenanceSettingsPanel() {
 export function AboutSettingsPanel() {
   const setting = useSearchableSetting();
   const gt = useGT();
-  const messages = useMessages();
   const primaryPolicy = usePrimaryManagedPolicy();
   // The Welcome page sets up this computer, so it needs one.
   const primaryEnvironmentId = usePrimaryEnvironmentId();
-  const telemetryOff = managedTelemetryOffMessage(primaryPolicy, messages);
+
   return (
     <SettingsPageContainer>
       <SettingsSection id="about" title={gt("App")}>
@@ -2584,11 +2587,7 @@ export function AboutSettingsPanel() {
       <SettingsSection id="legal" title={gt("Legal")}>
         <SettingsRow
           {...setting("privacy-policy")}
-          description={
-            telemetryOff === undefined
-              ? gt("How we handle your data, including the anonymous usage data T3 Code collects.")
-              : gt("How we handle your data. {telemetryOff}", { telemetryOff })
-          }
+          description={gt("How we handle your data.")}
           control={
             <Button
               render={<a href={PRIVACY_POLICY_URL} target="_blank" rel="noreferrer noopener" />}

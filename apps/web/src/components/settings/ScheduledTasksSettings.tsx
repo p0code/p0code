@@ -1,21 +1,21 @@
-import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
-import { managedCapabilityDenial } from "@t3tools/client-runtime/contract-labels";
 import { useAtomValue } from "@effect/atom-react";
 import { connectionStatusTitle } from "@t3tools/client-runtime/connection";
-import { AsyncResult } from "effect/reactivity";
+import { managedCapabilityDenial } from "@t3tools/client-runtime/contract-labels";
+import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
+import { scheduleTimeZoneLabel } from "@t3tools/client-runtime/scheduled-task-time-zone";
 import {
-  ChevronDownIcon,
-  Clock3Icon,
-  CopyIcon,
-  InboxIcon,
-  MessageSquareIcon,
-  MoreHorizontalIcon,
-  PencilIcon,
-  PlayIcon,
-  PlusIcon,
-  Trash2Icon,
-} from "lucide-react";
-import { type ReactNode, useRef, useState } from "react";
+  DEFAULT_WEBHOOK_PROMPT,
+  emptyWebhookFilterDraft,
+  parseWebhookFilterDrafts,
+  removeWebhookFilterDraft,
+  WEBHOOK_FILTER_OPS,
+  type WebhookFilterDraft,
+} from "@t3tools/client-runtime/scheduled-task-webhook";
+import { scheduledTaskWorktreeBaseRef } from "@t3tools/client-runtime/scheduled-task-worktree";
+import {
+  isAtomCommandInterrupted,
+  squashAtomCommandFailure,
+} from "@t3tools/client-runtime/state/runtime";
 import type {
   EnvironmentId,
   OrchestrationV2ThreadLaunchWorkspaceStrategy,
@@ -28,16 +28,6 @@ import type {
   ThreadId,
 } from "@t3tools/contracts";
 import {
-  DEFAULT_WEBHOOK_PROMPT,
-  emptyWebhookFilterDraft,
-  parseWebhookFilterDrafts,
-  removeWebhookFilterDraft,
-  WEBHOOK_FILTER_OPS,
-  type WebhookFilterDraft,
-} from "@t3tools/client-runtime/scheduled-task-webhook";
-import { scheduleTimeZoneLabel } from "@t3tools/client-runtime/scheduled-task-time-zone";
-import { scheduledTaskWorktreeBaseRef } from "@t3tools/client-runtime/scheduled-task-worktree";
-import {
   MAX_WEBHOOK_DELIVERY_AGE_MINUTES,
   MAX_WEBHOOK_FILTERS,
   MIN_SCHEDULED_TASK_INTERVAL_MS,
@@ -45,81 +35,62 @@ import {
   resolveEnvironmentMachineKind,
   scheduledTaskThreadMode,
 } from "@t3tools/contracts";
-import {
-  isAtomCommandInterrupted,
-  squashAtomCommandFailure,
-} from "@t3tools/client-runtime/state/runtime";
+import { AsyncResult } from "effect/reactivity";
 import { msg, T, useGT, useLocale, useMessages, Var } from "gt-react";
+import {
+  ChevronDownIcon,
+  Clock3Icon,
+  CopyIcon,
+  InboxIcon,
+  MessageSquareIcon,
+  MoreHorizontalIcon,
+  PencilIcon,
+  PlayIcon,
+  PlusIcon,
+  Trash2Icon,
+} from "lucide-react";
+import { useRef, useState, type ReactNode } from "react";
 import { m, type MessageResolver } from "../../i18n/messages";
 
-import { formatRelativeTime } from "../../timestampFormat";
 import { useClientSettings, useEnvironmentSettings } from "../../hooks/useSettings";
 import { getCustomModelOptionsByInstance, selectsPlanAgent } from "../../modelSelection";
 import { providerInstanceEntriesFor } from "../../providerInstances";
-import { usePrimaryCloudLinkState } from "../../cloud/cloudLinkState";
-import { requestConfirmDialog } from "../../confirmDialog";
+import { formatRelativeTime } from "../../timestampFormat";
+
+import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { webhookAddress } from "@t3tools/client-runtime/webhook-address";
+import { AuthOrchestrationOperateScope, clampManagedRuntimeMode } from "@t3tools/contracts";
+import { createModelSelection } from "@t3tools/shared/model";
+import { resolvePastedPath } from "@t3tools/shared/path";
 import { Link, useNavigate } from "@tanstack/react-router";
+import { useManagedPolicy } from "~/state/managedPolicy";
+import { readEnvironmentScope } from "~/state/session";
+import { requestConfirmDialog } from "../../confirmDialog";
 import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
 import { useNowMinute } from "../../hooks/useNowMinute";
-import {
-  useEnvironment,
-  useEnvironmentHttpBaseUrl,
-  type EnvironmentPresentation,
-} from "../../state/environments";
 import {
   useProjects,
   useQuietThreadShell,
   useThreadShell,
   useVisibleThreadShells,
 } from "../../state/entities";
-import { buildThreadRouteParams } from "../../threadRoutes";
-import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { environmentAtomList, environmentIdsKey } from "../../state/environmentAtomList";
+import {
+  useEnvironment,
+  useEnvironmentHttpBaseUrl,
+  type EnvironmentPresentation,
+} from "../../state/environments";
 import { usePaginatedBranches, useThreadSearch } from "../../state/queries";
 import { formatEnvironmentQueryError, useEnvironmentQuery } from "../../state/query";
 import { EMPTY_SERVER_PROVIDERS, serverEnvironment } from "../../state/server";
 import { threadFamilies } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
-import { WorktreeBaseBranchPicker } from "../WorktreeBaseBranchPicker";
-import { EnvironmentMachineIcon } from "../EnvironmentMachineIcon";
-import { ConnectionStatusDot, connectionPhaseDotClassName } from "../ConnectionStatusDot";
-import { AuthOrchestrationOperateScope, clampManagedRuntimeMode } from "@t3tools/contracts";
-import { resolvePastedPath } from "@t3tools/shared/path";
-import { useManagedPolicy } from "~/state/managedPolicy";
-import { ManagedNotice } from "../ManagedPolicy";
-import { readEnvironmentScope } from "~/state/session";
-import { useSettingsScope } from "./SettingsScopeContext";
-import { EnvironmentRow, useEnvironmentTransportLabel } from "./EnvironmentRow";
-import { SettingsGroup } from "./SettingsGroup";
-import { settingsScopeEnvironmentLabel, settingsScopeEnvironmentLabels } from "./settingsScopeAxis";
-import {
-  WEBHOOK_SIGNATURE_DEFAULTS,
-  changeDraftProject,
-  moveDraftToThread,
-  scheduleDraftErrors,
-  scheduledTaskDestinationThreads,
-  toDateTimeLocalValue,
-  webhookDeliveryLabel,
-  defaultScheduledTaskProjectId,
-  matchesScheduledTaskScope,
-  scheduleFromDraft,
-  scheduleLabel,
-  scheduledTaskDefaultModel,
-  weekdayShortLabel,
-  taskToDraft,
-  unbindDraftFromThread,
-  type DraftState,
-  type ScheduleMode,
-  type WorkspaceMode,
-} from "./scheduledTasksSettings.logic";
-import { Label } from "../ui/label";
-import { Menu, MenuTrigger, MenuPopup, MenuItem, MenuSeparator } from "../ui/menu";
-import { ToggleGroup, Toggle } from "../ui/toggle-group";
-import { Empty, EmptyHeader, EmptyTitle, EmptyDescription, EmptyMedia } from "../ui/empty";
+import { buildThreadRouteParams } from "../../threadRoutes";
 import { ProviderModelPicker } from "../chat/ProviderModelPicker";
 import { TraitsPicker } from "../chat/TraitsPicker";
-import { createModelSelection } from "@t3tools/shared/model";
+import { connectionPhaseDotClassName, ConnectionStatusDot } from "../ConnectionStatusDot";
+import { EnvironmentMachineIcon } from "../EnvironmentMachineIcon";
+import { ManagedNotice } from "../ManagedPolicy";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import {
@@ -141,19 +112,48 @@ import {
   DialogPopup,
   DialogTitle,
 } from "../ui/dialog";
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "../ui/empty";
 import { Input } from "../ui/input";
+import { Label } from "../ui/label";
+import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuTrigger } from "../ui/menu";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Switch } from "../ui/switch";
 import { Textarea } from "../ui/textarea";
 import { stackedThreadToast, toastManager } from "../ui/toast";
+import { Toggle, ToggleGroup } from "../ui/toggle-group";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
-import { useSearchableSetting } from "./settingsSearch";
+import { WorktreeBaseBranchPicker } from "../WorktreeBaseBranchPicker";
+import { EnvironmentRow, useEnvironmentTransportLabel } from "./EnvironmentRow";
 import {
+  changeDraftProject,
+  defaultScheduledTaskProjectId,
+  matchesScheduledTaskScope,
+  moveDraftToThread,
+  scheduleDraftErrors,
+  scheduledTaskDefaultModel,
+  scheduledTaskDestinationThreads,
+  scheduleFromDraft,
+  scheduleLabel,
+  taskToDraft,
+  toDateTimeLocalValue,
+  unbindDraftFromThread,
+  WEBHOOK_SIGNATURE_DEFAULTS,
+  webhookDeliveryLabel,
+  weekdayShortLabel,
+  type DraftState,
+  type ScheduleMode,
+  type WorkspaceMode,
+} from "./scheduledTasksSettings.logic";
+import { SettingsGroup } from "./SettingsGroup";
+import {
+  SETTINGS_PICKER_TRIGGER_CLASSNAME,
   SettingsPageContainer,
   SettingsRow,
   SettingsSection,
-  SETTINGS_PICKER_TRIGGER_CLASSNAME,
 } from "./settingsLayout";
+import { settingsScopeEnvironmentLabel, settingsScopeEnvironmentLabels } from "./settingsScopeAxis";
+import { useSettingsScope } from "./SettingsScopeContext";
+import { useSearchableSetting } from "./settingsSearch";
 
 const WEEKDAY_ORDER = [1, 2, 3, 4, 5, 6, 0] as const;
 const WEEKDAY_SHORT = [
@@ -1229,22 +1229,6 @@ function WebhookEndpointField({
       {note !== null ? <p className="text-xs text-muted-foreground">{note}</p> : null}
       {endpoint.url !== null ? <WebhookDeliveryMode environmentId={environmentId} /> : null}
     </div>
-  );
-}
-
-function WebhookDeliveryMode({ environmentId }: { readonly environmentId: EnvironmentId }) {
-  const gt = useGT();
-  const cloudLink = usePrimaryCloudLinkState();
-  if (cloudLink.target?.environmentId !== environmentId || cloudLink.data === null) return null;
-  return (
-    <p className="text-xs text-muted-foreground">
-      {cloudLink.data.holdWebhooksWhileOffline
-        ? gt("Held for up to 24 hours while this environment is offline. ")
-        : gt("Forwarded live. Requests fail while this environment is offline. ")}
-      <Link to="/settings/access" className="underline underline-offset-2">
-        <T>Change in Sharing & access</T>
-      </Link>
-    </p>
   );
 }
 
@@ -2377,4 +2361,12 @@ function ScheduledTaskEditorForm({
       </DialogFooter>
     </>
   );
+}
+
+function WebhookDeliveryMode({
+  environmentId: _environmentId,
+}: {
+  readonly environmentId: EnvironmentId;
+}) {
+  return null;
 }

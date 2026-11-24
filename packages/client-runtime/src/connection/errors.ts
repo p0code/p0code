@@ -1,16 +1,9 @@
 import type { ClientConnectionMethod, EnvironmentId } from "@t3tools/contracts";
-import type { RelayProtectedError } from "@t3tools/contracts/relay";
-import type { ManagedRelayClientError } from "../relay/managedRelay.ts";
 import { msg } from "gt-i18n";
-import { dpopFailureText, relayProtectedErrorText } from "../relay/errorPresentation.ts";
+import { dpopFailureText } from "../authorization/dpopFailureText.ts";
 import type { RemoteEnvironmentAuthError } from "../authorization/remote.ts";
 import { NETWORK_BLOCKING_HINT } from "../errors/network.ts";
-import {
-  detailFromError,
-  errorI18nMessage,
-  markedTextEnglish,
-  translatableDetail,
-} from "../errors/translatable.ts";
+import { detailFromError, errorI18nMessage, translatableDetail } from "../errors/translatable.ts";
 import {
   ConnectionBlockedError,
   type ConnectionAttemptError,
@@ -62,165 +55,6 @@ export function environmentMismatchError(input: {
   });
 }
 
-function relayProtectedError(error: RelayProtectedError): ConnectionAttemptError {
-  const text = relayProtectedErrorText(error);
-  const detail = markedTextEnglish(text);
-  const i18nMessage = text;
-  const traceId = error.traceId;
-  switch (error._tag) {
-    case "RelayAuthInvalidError":
-      return new ConnectionBlockedError({
-        reason: "authentication",
-        detail,
-        i18nMessage,
-        traceId,
-        hop: "relay",
-        ...(error.dpopFailureReason === "time_window" ? { failureCause: "clock_skew" } : {}),
-      });
-    case "RelayEnvironmentLinkProofExpiredError":
-    case "RelayAgentActivityPublishProofExpiredError":
-    case "RelayAgentActivityPublishProofInvalidError":
-      return new ConnectionBlockedError({
-        reason: "authentication",
-        detail,
-        i18nMessage,
-        traceId,
-        hop: "relay",
-      });
-    case "RelayEnvironmentConnectNotAuthorizedError":
-      // A host swapping in a new tunnel leaves its allocation unready until
-      // the tunnel is up, and nothing on the client changes when it is.
-      if (error.reason === "managed_endpoint_allocation_not_ready") {
-        return new ConnectionTransientError({
-          reason: "endpoint-unavailable",
-          detail,
-          i18nMessage,
-          traceId,
-          hop: "tunnel",
-          failureCause: "tunnel_pending",
-        });
-      }
-      if (error.reason === "endpoint_provider_not_managed") {
-        return new ConnectionBlockedError({
-          reason: "permission",
-          detail,
-          i18nMessage,
-          traceId,
-          hop: "tunnel",
-          failureCause: "tunnel_not_enabled",
-        });
-      }
-      return new ConnectionBlockedError({
-        reason: "permission",
-        detail,
-        i18nMessage,
-        traceId,
-        hop: "relay",
-        ...(error.reason === "environment_link_not_found" ? { failureCause: "not_linked" } : {}),
-      });
-    case "RelayEnvironmentLinkProofInvalidError":
-    case "RelayEnvironmentLinkLimitExceededError":
-      return new ConnectionBlockedError({
-        reason: "permission",
-        detail,
-        i18nMessage,
-        traceId,
-        hop: "relay",
-      });
-    case "RelayEnvironmentEndpointTimedOutError":
-      return new ConnectionTransientError({
-        reason: "timeout",
-        detail,
-        i18nMessage,
-        traceId,
-        hop: "tunnel",
-        failureCause: "timeout",
-      });
-    case "RelayEnvironmentEndpointUnavailableError": {
-      const endpointFailure =
-        error.endpointFailure ??
-        (error.reason === "endpoint_response_invalid" ? "invalid_response" : undefined);
-      return new ConnectionTransientError({
-        reason: "endpoint-unavailable",
-        detail,
-        i18nMessage,
-        traceId,
-        // The tunnel carried the request when T3 Code is what failed to answer.
-        hop:
-          endpointFailure === "origin_unreachable" || endpointFailure === "invalid_response"
-            ? "server"
-            : "tunnel",
-        via: "relay",
-        ...(endpointFailure ? { failureCause: endpointFailure } : {}),
-        ...(error.endpointStatus ? { httpStatus: error.endpointStatus } : {}),
-      });
-    }
-    case "RelayEnvironmentLinkUnavailableError":
-      return new ConnectionTransientError({
-        reason: "endpoint-unavailable",
-        detail,
-        i18nMessage,
-        traceId,
-        hop: "tunnel",
-      });
-    case "RelayEnvironmentLinkFailedError":
-    case "RelayInternalError":
-      return new ConnectionTransientError({
-        reason: "relay-unavailable",
-        detail,
-        i18nMessage,
-        traceId,
-        hop: "relay",
-        failureCause: "relay_error",
-      });
-  }
-}
-
-export function mapManagedRelayError(error: ManagedRelayClientError): ConnectionAttemptError {
-  switch (error._tag) {
-    case "ManagedRelayRequestFailedError":
-      if (error.relayError) {
-        return relayProtectedError(error.relayError);
-      }
-      return new ConnectionTransientError({
-        reason: "relay-unavailable",
-        ...detailFromError(error),
-        hop: "relay",
-        // A status means the relay answered, so this device did reach it.
-        ...(error.status !== undefined
-          ? { httpStatus: error.status, failureCause: "relay_error" }
-          : {}),
-        ...(error.traceId ? { traceId: error.traceId } : {}),
-      });
-    case "ManagedRelayRequestTimeoutError":
-      return new ConnectionTransientError({
-        reason: "timeout",
-        ...detailFromError(error),
-        hop: "relay",
-      });
-    case "ManagedRelayUrlInvalidError":
-      return new ConnectionBlockedError({
-        reason: "configuration",
-        ...detailFromError(error),
-        hop: "relay",
-      });
-    case "ManagedRelayAccessTokenScopesUnexpectedError":
-      return new ConnectionBlockedError({
-        reason: "permission",
-        ...detailFromError(error),
-        hop: "relay",
-      });
-    case "ManagedRelayDpopKeyLoadError":
-    case "ManagedRelayTokenProofCreationError":
-    case "ManagedRelayRequestProofCreationError":
-      return new ConnectionBlockedError({
-        reason: "authentication",
-        ...detailFromError(error),
-        hop: "device",
-      });
-  }
-}
-
 export function mapRemoteEnvironmentError(
   error: RemoteEnvironmentAuthError,
   connectionMethod: ClientConnectionMethod = "direct",
@@ -232,7 +66,7 @@ export function mapRemoteEnvironmentError(
       ? { detail: `${cause.message} ${NETWORK_BLOCKING_HINT}` }
       : translatableDetail(...text, NETWORK_BLOCKING_HINT);
   };
-  // Over T3 Connect the relay already reached the host, so a request that never
+  // Over self-hosted relay the relay already reached the host, so a request that never
   // arrives was blocked between this device and the tunnel.
   const unreachableHop = connectionMethod === "relay" ? "tunnel" : "server";
   const via = connectionMethod === "relay" ? "relay" : "direct";

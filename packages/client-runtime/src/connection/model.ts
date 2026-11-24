@@ -1,5 +1,4 @@
 import { EnvironmentId, type ExecutionEnvironmentDescriptor } from "@t3tools/contracts";
-import { RelayEnvironmentEndpointFailure } from "@t3tools/contracts/relay";
 import * as Schema from "effect/Schema";
 
 import { MarkedText } from "../errors/translatable.ts";
@@ -78,13 +77,20 @@ export const ConnectionBlockedReason = Schema.Literals([
 ]);
 export type ConnectionBlockedReason = typeof ConnectionBlockedReason.Type;
 
-/** A part of the path to an environment: this device, T3 Connect, the host's tunnel, or T3 Code on the host. */
+/** A part of the path to an environment: this device, self-hosted relay, the host's tunnel, or T3 Code on the host. */
 export const ConnectionHop = Schema.Literals(["device", "relay", "tunnel", "server"]);
 export type ConnectionHop = typeof ConnectionHop.Type;
 
 /** The relay's endpoint failures plus the causes the client can name from other errors. */
 export const ConnectionFailureCause = Schema.Literals([
-  ...RelayEnvironmentEndpointFailure.literals,
+  "tunnel_down",
+  "origin_unreachable",
+  "dns",
+  "tls",
+  "refused",
+  "timeout",
+  "invalid_response",
+  "unknown",
   "clock_skew",
   "not_linked",
   "relay_error",
@@ -153,7 +159,7 @@ export type PreparedHttpAuthorization =
       readonly _tag: "Dpop";
       readonly accessToken: string;
       readonly expiresAtEpochMs: number;
-      /** Set when the token renews directly with the host instead of through T3 Connect. */
+      /** Set when the token renews directly with the host instead of through self-hosted relay. */
       readonly directConnection?: DirectDpopConnection;
     };
 

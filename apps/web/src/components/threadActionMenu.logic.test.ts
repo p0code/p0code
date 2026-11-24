@@ -39,6 +39,7 @@ describe("buildThreadActionMenuItems", () => {
       });
       const expected = reversed
         ? [
+            "judges",
             "unpin",
             "unsettle",
             "unsnooze",
@@ -49,6 +50,7 @@ describe("buildThreadActionMenuItems", () => {
             "delete",
           ]
         : [
+            "judges",
             "pin",
             "settle",
             "snooze",

@@ -29,7 +29,7 @@ import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.t
 import * as PeerLinks from "./PeerLinks.ts";
 import * as PeerMcpClient from "./PeerMcpClient.ts";
 
-// Match local waits: return before MCP client timeouts and T3 Connect's ~100 s idle drop.
+// Match local waits: return before MCP client timeouts and self-hosted relay's ~100 s idle drop.
 const DEFAULT_WAIT_TIMEOUT_MS = 30_000;
 const MAX_WAIT_TIMEOUT_MS = 45_000;
 
@@ -179,6 +179,19 @@ const make = Effect.gen(function* () {
     ).pipe(Effect.mapError(unavailable))) as Record<string, unknown>;
     const { environmentId: _target, ...args } = encoded;
     yield* assertWithinLinkAccess(environmentId, args.runtimeMode);
+    if (
+      toolName === "t3_thread_organize" &&
+      args.action === "snooze" &&
+      args.snoozedUntil === undefined
+    ) {
+      const peer = yield* links.resolve(environmentId).pipe(Effect.mapError(linkStorageFailure));
+      if (peer.capabilities.threadOpenEndedSnooze !== true)
+        return yield* new OrchestratorMcpFailure({
+          code: "capability_denied",
+          message:
+            "This linked server does not support hiding threads. Supply a snoozedUntil time or upgrade it.",
+        });
+    }
     // A pending upload lives here, so it cannot go with the call.
     if (Array.isArray(args.attachments) && args.attachments.length > 0) {
       return yield* new OrchestratorMcpFailure({

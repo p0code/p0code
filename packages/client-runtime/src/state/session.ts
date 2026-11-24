@@ -22,7 +22,7 @@ import * as RemoteEnvironmentAuthorization from "../authorization/service.ts";
 import * as EnvironmentRegistry from "../connection/registry.ts";
 import type { PreparedConnection } from "../connection/model.ts";
 import * as EnvironmentSupervisor from "../connection/supervisor.ts";
-import * as ManagedRelay from "../relay/managedRelay.ts";
+import * as ManagedRelay from "../authorization/dpopSigner.ts";
 import {
   RemoteEnvironmentAuthFetchError,
   RemoteEnvironmentAuthUndeclaredStatusError,

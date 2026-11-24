@@ -1,3 +1,4 @@
+import { isOpenEndedSnooze } from "@t3tools/contracts";
 import type {
   OrchestrationV2ThreadLinkMetadata,
   GuestShareId,
@@ -13,7 +14,7 @@ import {
   runRanAfter,
   usageLimitBlockedRun,
 } from "@t3tools/shared/orchestrationV2ThreadError";
-import { threadIssueKeysEqual } from "@t3tools/contracts";
+import { OPEN_ENDED_SNOOZE_UNTIL, threadIssueKeysEqual } from "@t3tools/contracts";
 import { canonicalizeGitCafePullRequestUrl } from "@t3tools/source-control-definitions/registry";
 import { threadPullRequestsOf } from "../sourceControl/threadPullRequests.ts";
 import {
@@ -718,7 +719,6 @@ function commandThreadId(command: OrchestrationV2ServerCommand): ThreadId {
       return command.parentThreadId;
     case "secret_request.record":
     case "link_request.record":
-    case "feedback_request.record":
       return command.threadId;
     case "thread.fork":
     case "thread.merge_back":
@@ -4971,7 +4971,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       const projection = yield* loadProjectionForCommand(command, ["runs", "runtimeRequests"], {
         turnItemTypes: [],
       });
-      const parsedSnoozedUntil = DateTime.make(command.snoozedUntil);
+      const parsedSnoozedUntil = DateTime.make(command.snoozedUntil ?? OPEN_ENDED_SNOOZE_UNTIL);
       if (
         Option.isNone(parsedSnoozedUntil) ||
         DateTime.toEpochMillis(parsedSnoozedUntil.value) <= DateTime.toEpochMillis(now)
@@ -5220,8 +5220,26 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
             ...thread,
             ...(command.title === undefined ? {} : { title: command.title, titleRenamed: true }),
             ...(command.limitRecovery === undefined ? {} : { limitRecovery }),
+            ...(command.autoResumeAtLimitReset === undefined
+              ? {}
+              : {
+                  autoResumeAtLimitReset: command.autoResumeAtLimitReset,
+                  // An explicit choice also re-arms a limit the thread is already waiting on.
+                  ...(command.limitRecovery === undefined &&
+                  command.autoResumeAtLimitReset !== null &&
+                  thread.limitRecovery != null &&
+                  thread.settledOverride !== "settled"
+                    ? {
+                        limitRecovery: {
+                          ...thread.limitRecovery,
+                          autoResume: command.autoResumeAtLimitReset,
+                        },
+                      }
+                    : {}),
+                }),
             ...(command.limitRecovery !== undefined &&
             limitRecovery?.snooze === true &&
+            !isOpenEndedSnooze(thread.snoozedUntil) &&
             Date.parse(limitRecovery.resetAt) > DateTime.toEpochMillis(now)
               ? {
                   snoozedUntil: DateTime.makeUnsafe(limitRecovery.resetAt),
@@ -7397,6 +7415,8 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         projection.thread.providerInstanceId !== run.providerInstanceId ||
         projection.runtimeRequests.some((request) => request.status === "pending") ||
         (projection.thread.snoozedUntil != null &&
+          (!isOpenEndedSnooze(projection.thread.snoozedUntil) ||
+            projection.thread.autoResumeAtLimitReset !== true) &&
           DateTime.toEpochMillis(projection.thread.snoozedUntil) > DateTime.toEpochMillis(now))
       ) {
         yield* emit(
@@ -7412,6 +7432,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
             recovery.requestId === command.usageLimitRecoveryRequestId &&
             recovery.runId === command.usageLimitContinuationOfRunId &&
             projection.thread.snoozedUntil != null &&
+            !isOpenEndedSnooze(projection.thread.snoozedUntil) &&
             DateTime.toEpochMillis(projection.thread.snoozedUntil) > DateTime.toEpochMillis(now)
               ? { limitRecovery: { ...recovery, requestId: command.commandId } }
               : {}),
@@ -7538,7 +7559,13 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     // Background wakes and delegated completions continue work the user already snoozed, so
     // only a message someone actually sent ends the snooze.
     const automaticWake =
-      command.notification !== undefined || command.delegatedCompletion !== undefined;
+      command.notification !== undefined ||
+      command.delegatedCompletion !== undefined ||
+      command.usageLimitContinuationOfRunId !== undefined ||
+      (command.createdBy === "agent" &&
+        command.creationSource === "server" &&
+        command.manualContinuationOfRunId !== undefined &&
+        isOpenEndedSnooze(projection.thread.snoozedUntil));
     if (projection.thread.snoozedUntil != null && !automaticWake) {
       const now = yield* DateTime.now;
       const thread: OrchestrationV2AppThread = {
@@ -11241,98 +11268,6 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         providerInstanceId: run.providerInstanceId,
         occurredAt: now,
         payload: turnItem,
-      });
-    },
-  );
-
-  /** Records or updates the card for a feedback report the user asked the agent to send. */
-  const dispatchFeedbackRequestRecord = Effect.fn("orchestrationV2.dispatch.feedbackRequestRecord")(
-    function* (
-      command: Extract<
-        OrchestrationV2InternalCommand,
-        { readonly type: "feedback_request.record" }
-      >,
-      events: Ref.Ref<Array<OrchestrationV2DomainEvent>>,
-    ) {
-      const projection = yield* projectionStore
-        .getThreadRecords(
-          command.threadId,
-          ["runs", "nodes", "turnItems", "attempts", "providerTurns"],
-          { turnItemTypes: ["feedback_request"], messageRoles: [] },
-        )
-        .pipe(
-          Effect.mapError(
-            (cause) => new OrchestratorProjectionError({ threadId: command.threadId, cause }),
-          ),
-        );
-      const fail = (cause: string) =>
-        new OrchestratorDispatchError({
-          commandId: command.commandId,
-          commandType: command.type,
-          cause,
-        });
-      const run = projection.runs.find((candidate) => candidate.id === command.runId);
-      const existing = projection.turnItems.find((item) => item.id === command.turnItemId);
-      if (
-        existing !== undefined &&
-        (existing.type !== "feedback_request" || existing.runId !== command.runId)
-      ) {
-        return yield* fail(
-          `Turn item ${command.turnItemId} is not a feedback report of run ${command.runId}.`,
-        );
-      }
-      // A decided card stays decided, so a late close cannot reopen or relabel it.
-      if (existing !== undefined && existing.feedbackStatus !== "pending") return;
-      if (existing !== undefined && command.feedbackStatus === "pending") return;
-      if (run === undefined) return yield* fail(`Run ${command.runId} does not exist.`);
-      // Only a new card must sit on the run's current root. A steering restart can replace the
-      // root before the user answers, and the answer must still close the card.
-      if (existing === undefined && run.rootNodeId !== command.nodeId) {
-        return yield* fail(`Node ${command.nodeId} is not the root of run ${command.runId}.`);
-      }
-      const nodeId = existing?.nodeId ?? command.nodeId;
-      const now = yield* DateTime.now;
-      const pending = command.feedbackStatus === "pending";
-      yield* emit(
-        events,
-        command,
-      )({
-        type: "turn-item.updated",
-        threadId: command.threadId,
-        runId: command.runId,
-        ...(nodeId === null ? {} : { nodeId }),
-        providerInstanceId: run.providerInstanceId,
-        occurredAt: now,
-        payload: {
-          id: command.turnItemId,
-          threadId: command.threadId,
-          runId: command.runId,
-          nodeId,
-          providerThreadId: existing?.providerThreadId ?? run.providerThreadId,
-          providerTurnId:
-            existing === undefined
-              ? (providerTurnForRun(projection, run)?.id ?? null)
-              : existing.providerTurnId,
-          nativeItemRef: null,
-          parentItemId: null,
-          ordinal: existing?.ordinal ?? (yield* nextTurnItemOrdinal(projection)),
-          status: pending
-            ? "waiting"
-            : command.feedbackStatus === "sent"
-              ? "completed"
-              : "cancelled",
-          title: "Feedback for the T3 team",
-          startedAt: existing?.startedAt ?? now,
-          completedAt: pending ? null : now,
-          updatedAt: now,
-          type: "feedback_request",
-          preview: command.preview,
-          // An answered card keeps only what was sent, so its answer drops the unsent text.
-          ...(command.conversationTrace === undefined
-            ? {}
-            : { conversationTrace: command.conversationTrace }),
-          feedbackStatus: command.feedbackStatus,
-        },
       });
     },
   );
@@ -16452,9 +16387,6 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         break;
       case "secret_request.record":
         yield* dispatchSecretRequestRecord(command, events);
-        break;
-      case "feedback_request.record":
-        yield* dispatchFeedbackRequestRecord(command, events);
         break;
       case "link_request.record":
         yield* dispatchLinkRequestRecord(command, events, effects);

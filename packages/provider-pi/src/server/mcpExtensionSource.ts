@@ -253,6 +253,19 @@ function createMcpClient(endpoint: string, token: string) {
 }
 
 export default async function t3McpExtension(pi: ExtensionAPI) {
+  pi.on("before_agent_start", async (event) => {
+    const file = process.env.T3_SHARED_MEMORY_INSTRUCTIONS_FILE;
+    if (!file) return;
+    let memory = "";
+    try { memory = await NodeFSP.readFile(file, "utf8"); } catch { return; }
+    if (!memory) return;
+    const sections = event.systemPromptOptions?.sections;
+    if (sections && typeof sections === "object" && event.systemPromptOptions?.forceSystemPrompt === undefined) {
+      sections.t3_shared_memory = memory;
+      return;
+    }
+    return { systemPrompt: event.systemPrompt + "\\n\\n" + memory };
+  });
   // RPC has no trust prompt, so Pi skips an untrusted folder's protected resources. Session
   // replacement reruns this factory without project_trust, and T3 drops notices outside a turn,
   // so check each session's first turn. An explicit --no-approve is deliberate and stays quiet.

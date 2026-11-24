@@ -1,0 +1,22 @@
+{
+  "name": "@t3tools/relay",
+  "private": true,
+  "bin": {
+    "hhh-relay": "./src/cli.ts"
+  },
+  "type": "module",
+  "scripts": {
+    "start": "node src/cli.ts",
+    "typecheck": "effect-tsgo tsrs --noEmit",
+    "test": "vp test run --config ../../vite.config.ts --dir ."
+  },
+  "dependencies": {
+    "@t3tools/relay-tunnel": "workspace:*",
+    "ws": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@types/ws": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}

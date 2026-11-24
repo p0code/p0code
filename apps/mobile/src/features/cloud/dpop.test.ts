@@ -2,15 +2,15 @@
 
 import * as NodeCrypto from "node:crypto";
 
-import { vi } from "vite-plus/test";
 import { describe, expect, it } from "@effect/vitest";
-import { DpopProof } from "@t3tools/client-runtime/relay";
+import { DpopProof } from "@t3tools/client-runtime/authorization";
 import { verifyDpopProof } from "@t3tools/shared/dpop";
 import * as Digest from "effect/crypto/Digest";
 import * as Effect from "effect/Effect";
+import { vi } from "vite-plus/test";
 
-import { loadOrCreateDpopProofKeyPair, loadOrCreateProofKey } from "./dpop";
 import * as Dpop from "./dpop";
+import { loadOrCreateDpopProofKeyPair, loadOrCreateProofKey } from "./dpop";
 
 vi.mock("expo-crypto", () => ({
   CryptoDigestAlgorithm: {

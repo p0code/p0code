@@ -1,20 +1,3 @@
-import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
-import { msg, T, useGT, useMessages } from "gt-react";
-import { m } from "../i18n/messages";
-import { attachSidebarTree } from "../lib/sidebarTree";
-import { type EnvironmentId, type ScopedProjectRef } from "@t3tools/contracts";
-import type { EnvironmentServerConfig } from "@t3tools/client-runtime/connection";
-import {
-  dropThreadContext,
-  endThreadContextDrag,
-  moveThreadContextDrag as moveThreadContextDragGhost,
-} from "./chat/threadContextDrag";
-import { discardComposerDraft } from "../lib/discardComposerDraft";
-import { requestCustomSnooze } from "./CustomSnoozeDialog";
-import { useAtomValue } from "@effect/atom-react";
-import * as Option from "effect/Option";
-import { Atom } from "effect/reactivity";
-import * as Schema from "effect/Schema";
 import {
   DndContext,
   useSensor,
@@ -25,49 +8,69 @@ import {
   type DragStartEvent,
   type Modifier,
 } from "@dnd-kit/core";
-import { SortableContext } from "@dnd-kit/sortable";
 import { restrictToFirstScrollableAncestor, restrictToVerticalAxis } from "@dnd-kit/modifiers";
+import { SortableContext } from "@dnd-kit/sortable";
+import { useAtomValue } from "@effect/atom-react";
+import type { EnvironmentServerConfig } from "@t3tools/client-runtime/connection";
 import {
-  canSnooze,
-  effectiveSnoozed,
-  threadWokeAt,
-} from "@t3tools/client-runtime/state/thread-settled";
+  parseScopedThreadKey,
+  scopedThreadKey,
+  scopeProjectRef,
+  scopeThreadRef,
+} from "@t3tools/client-runtime/environment";
+import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
+import {
+  threadRuntimeCanArchive,
+  type EnvironmentThreadShell,
+} from "@t3tools/client-runtime/state/models";
 import {
   asLaunchingThread,
   createInboxReturnTracker,
   isThreadWorking,
 } from "@t3tools/client-runtime/state/thread-inbox";
-import { activeThreadSortKey, sortSettledThreads } from "@t3tools/client-runtime/state/thread-sort";
 import {
   nextShownOrder,
   threadSearchMatchKey,
   threadSearchSubject,
   type ShownOrder,
 } from "@t3tools/client-runtime/state/thread-search";
-import { foldSearchQuery, rankMessageMatches } from "@t3tools/shared/paletteSearch";
-import { findForMessageMatch, openThreadFindOnQuery } from "./chat/threadFindStore";
 import {
-  threadRuntimeCanArchive,
-  type EnvironmentThreadShell,
-} from "@t3tools/client-runtime/state/models";
-import {
-  parseScopedThreadKey,
-  scopeProjectRef,
-  scopeThreadRef,
-  scopedThreadKey,
-} from "@t3tools/client-runtime/environment";
-import {
-  AuthOrchestrationOperateScope,
-  type ContextMenuSource,
-  ProjectId,
-  type ScopedThreadRef,
-  type ThreadId,
-} from "@t3tools/contracts";
+  canSnooze,
+  effectiveSnoozed,
+  threadWokeAt,
+} from "@t3tools/client-runtime/state/thread-settled";
+import { activeThreadSortKey, sortSettledThreads } from "@t3tools/client-runtime/state/thread-sort";
 import {
   resolveListedAncestorThreadRef,
   type OlderSettledScope,
 } from "@t3tools/client-runtime/state/threads";
+import {
+  AuthOrchestrationOperateScope,
+  ProjectId,
+  type ContextMenuSource,
+  type EnvironmentId,
+  type ScopedProjectRef,
+  type ScopedThreadRef,
+  type ThreadId,
+} from "@t3tools/contracts";
+import { foldSearchQuery, rankMessageMatches } from "@t3tools/shared/paletteSearch";
+import * as Option from "effect/Option";
+import { Atom } from "effect/reactivity";
+import * as Schema from "effect/Schema";
+import { msg, T, useGT, useMessages } from "gt-react";
+import { useConveneJudges } from "../hooks/useConveneJudges";
+import { m } from "../i18n/messages";
+import { discardComposerDraft } from "../lib/discardComposerDraft";
+import { attachSidebarTree } from "../lib/sidebarTree";
+import {
+  dropThreadContext,
+  endThreadContextDrag,
+  moveThreadContextDrag as moveThreadContextDragGhost,
+} from "./chat/threadContextDrag";
+import { findForMessageMatch, openThreadFindOnQuery } from "./chat/threadFindStore";
+import { requestCustomSnooze } from "./CustomSnoozeDialog";
 
+import { useRouter, type AnyRouter } from "@tanstack/react-router";
 import {
   CheckIcon,
   ChevronDownIcon,
@@ -87,15 +90,43 @@ import {
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
 } from "react";
-import { type AnyRouter, useRouter } from "@tanstack/react-router";
 
+import {
+  pickableProjectGroups,
+  selectProjectGroupingSettings,
+} from "@t3tools/client-runtime/state/project-grouping";
 import {
   isAtomCommandInterrupted,
   settlePromise,
   squashAtomCommandFailure,
   type AtomCommandResult,
 } from "@t3tools/client-runtime/state/runtime";
+import { threadChipCopyTarget } from "@t3tools/client-runtime/thread-reference";
+import { cn, isMacPlatform } from "~/lib/utils";
+import { isCommandPaletteOpen, openCommandPalette } from "../commandPaletteBus";
+import {
+  composerDraftHasUserContent,
+  DraftId,
+  useComposerDraftStore,
+  usePromotingDraftThreadKeys,
+} from "../composerDraftStore";
 import { isElectron } from "../env";
+import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
+import { useHandleNewThread } from "../hooks/useHandleNewThread";
+import { useLocalStorage } from "../hooks/useLocalStorage";
+import { useNowMinute } from "../hooks/useNowMinute";
+import { useOrderWhileOpen } from "../hooks/useOrderWhileOpen";
+import { useProjectPin } from "../hooks/useProjectGroupUpdate";
+import { useClientSettings } from "../hooks/useSettings";
+import { useShownThreadRouteTarget } from "../hooks/useShownThreadRouteTarget";
+import { useSidebarProjectGroups } from "../hooks/useSidebarProjectGroups";
+import { useStableCallback } from "../hooks/useStableCallback";
+import {
+  canTurnThreadIntoProject,
+  useAcknowledgeThreadWoke,
+  useThreadActions,
+} from "../hooks/useThreadActions";
+import { configuredHostedAppUrl } from "../hostedPairing";
 import {
   resolveShortcutCommand,
   shortcutLabelForCommand,
@@ -103,128 +134,105 @@ import {
   threadJumpIndexFromCommand,
   threadTraversalDirectionFromCommand,
 } from "../keybindings";
-import { isModelPickerOpen } from "../modelPickerVisibility";
-import { isMacPlatform } from "~/lib/utils";
+import { resolveThreadActionProjectRef, startNewThreadFromContext } from "../lib/chatThreadActions";
+import { copyThreadReference } from "../lib/copyThreadReference";
 import { readLocalApi } from "../localApi";
-import { configuredHostedAppUrl } from "../hostedPairing";
+import { isModelPickerOpen } from "../modelPickerVisibility";
+import { deriveProviderEntriesByEnvironment } from "../providerInstances";
+import { appAtomRegistry } from "../rpc/atomRegistry";
+import { registerSettleAndAdvance } from "../settleAndAdvance";
 import { useSidebarPendingFileDropStore } from "../sidebarPendingFileDropStore";
-import { SidebarFolderDrop } from "./sidebar/SidebarFolderDrop";
-import {
-  pickableProjectGroups,
-  selectProjectGroupingSettings,
-} from "@t3tools/client-runtime/state/project-grouping";
 import {
   buildSidebarProjectPickerEntries,
+  getSidebarProjectSettingsKey,
   projectGroupsSpanEnvironments,
   resolveSidebarProjectScopeKeys,
-  getSidebarProjectSettingsKey,
   type SidebarProjectSnapshot,
 } from "../sidebarProjectGrouping";
-import { resolveProjectExpanded, useUiStateStore } from "../uiStateStore";
-import {
-  getThreadKeysToDeselectAfterDelete,
-  useThreadSelectionStore,
-} from "../threadSelectionStore";
-import {
-  canTurnThreadIntoProject,
-  useAcknowledgeThreadWoke,
-  useThreadActions,
-} from "../hooks/useThreadActions";
-import { useHandleNewThread } from "../hooks/useHandleNewThread";
-import { useOrderWhileOpen } from "../hooks/useOrderWhileOpen";
-import { useProjectPin } from "../hooks/useProjectGroupUpdate";
-import { useSidebarProjectGroups } from "../hooks/useSidebarProjectGroups";
-import { isCommandPaletteOpen, openCommandPalette } from "../commandPaletteBus";
-import { registerSettleAndAdvance } from "../settleAndAdvance";
-import { resolveThreadActionProjectRef, startNewThreadFromContext } from "../lib/chatThreadActions";
-import { useClientSettings } from "../hooks/useSettings";
-import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
-import { useLocalStorage } from "../hooks/useLocalStorage";
-import { useNowMinute } from "../hooks/useNowMinute";
-import {
-  useEnvironmentIdentities,
-  useConnectedEnvironmentIds,
-  useEnvironmentMachines,
-  usePrimaryEnvironmentId,
-} from "../state/environments";
 import {
   readThreadShell,
   useAllEnvironmentProjectSnapshotsReady,
   useDelegatedUnderParent,
   useProjects,
-  useServerConfigs,
   useQuietThreadShells,
+  useServerConfigs,
 } from "../state/entities";
-import { environmentPresentations } from "../state/presentation";
-import { primaryServerKeybindingsAtom } from "../state/server";
-import { environmentProjects } from "../state/projects";
-import { threadEnvironment } from "../state/threads";
+import {
+  useConnectedEnvironmentIds,
+  useEnvironmentIdentities,
+  useEnvironmentMachines,
+  usePrimaryEnvironmentId,
+} from "../state/environments";
 import { useOlderSettledShelf, useOlderSettledShelfGrowth } from "../state/olderSettledShelf";
+import { environmentPresentations } from "../state/presentation";
+import { environmentProjects } from "../state/projects";
 import { useThreadSearch } from "../state/queries";
-import { useOrchestrationCommand } from "../state/use-orchestration-command";
+import { primaryServerKeybindingsAtom } from "../state/server";
 import { readEnvironmentScope, useEnvironmentScope } from "../state/session";
-import { appAtomRegistry } from "../rpc/atomRegistry";
-import { canShareWithGuestAtom } from "./chat/guestShareAvailability";
-import { openGuestShareDialog } from "./chat/guestShareDialogState";
+import { threadEnvironment } from "../state/threads";
+import { useOrchestrationCommand } from "../state/use-orchestration-command";
 import {
   buildThreadRouteParams,
   resolveActiveThreadRouteRef,
   resolveThreadRouteTarget,
 } from "../threadRoutes";
+import {
+  getThreadKeysToDeselectAfterDelete,
+  useThreadSelectionStore,
+} from "../threadSelectionStore";
 import type { SidebarThreadSummary } from "../types";
-import { cn } from "~/lib/utils";
-import { ProjectEnvironmentBadge } from "./ProjectEnvironmentBadge";
+import { resolveProjectExpanded, useUiStateStore } from "../uiStateStore";
+import { canShareWithGuestAtom } from "./chat/guestShareAvailability";
+import { openGuestShareDialog } from "./chat/guestShareDialogState";
 import { ProjectRowActions } from "./ProjectComboboxRow";
+import { ProjectEnvironmentBadge } from "./ProjectEnvironmentBadge";
+import { ProjectFavicon } from "./ProjectFavicon";
+import { isProjectPinShortcut, ProjectPinButton } from "./ProjectPinButton";
 import {
-  buildDraftActionMenuItems,
-  buildThreadActionMenuItems,
-  threadActionRequiresOperate,
-} from "./threadActionMenu.logic";
+  createSidebarCollisionDetection,
+  createSidebarSortingStrategy,
+  restrictBelowSidebarLabel,
+} from "./Sidebar.drag";
 import {
+  ADD_PROJECT_SCOPE_ITEM_VALUE,
   applySidebarThreadDrop,
-  filterSidebarV2VisibleThreads,
-  groupSidebarThreadsByProject,
-  sidebarFolderExpansionKeys,
   buildBulkTitleRegenerationContextMenuItem,
   buildBulkUnpinContextMenuItem,
   deleteSelectedThreadEntries,
-  ADD_PROJECT_SCOPE_ITEM_VALUE,
   filterSidebarProjectScopeItems,
+  filterSidebarV2VisibleThreads,
   firstValidTimestampMs,
+  groupSidebarThreadsByProject,
   isSidebarNestedLinkClick,
   isTrailingDoubleClick,
   orderItemsByPreferredIds,
   planSidebarThreadDrop,
   reduceSidebarProjectScopeMenuState,
   resolveAdjacentThreadId,
-  resolveSidebarSweepKeys,
+  resolveScopedNewThreadProjectRef,
   resolveSidebarDropTarget,
   resolveSidebarDropVerb,
-  resolveSidebarThreadSection,
   resolveSidebarReorderableThreadKeys,
+  resolveSidebarSweepKeys,
+  resolveSidebarThreadSection,
   searchSidebarThreads,
   shouldCreateNewThreadInCurrentProject,
-  resolveScopedNewThreadProjectRef,
   shouldNavigateAfterThreadPark,
+  sidebarFolderExpansionKeys,
   sidebarListItemId,
   sidebarThreadKeyAtY,
   sortInboxThreadsByReturn,
   sortPinnedThreadsForSidebar,
   sortThreadsForSidebar,
   sortWorkingThreadsBySend,
-  useSnoozeWakeClock,
   threadShortcutContext,
+  useSnoozeWakeClock,
   useThreadJumpHintsVisible,
   type SidebarListItem,
   type SidebarSection,
 } from "./Sidebar.logic";
-import {
-  createSidebarCollisionDetection,
-  createSidebarSortingStrategy,
-  restrictBelowSidebarLabel,
-} from "./Sidebar.drag";
-import { SidebarPointerSensor } from "./Sidebar.pointer";
 import { createSidebarListMotion } from "./Sidebar.motion";
+import { SidebarPointerSensor } from "./Sidebar.pointer";
 import { createSidebarShiftGuard } from "./Sidebar.shiftGuard";
 import {
   pickSnoozePreset,
@@ -232,41 +240,29 @@ import {
   snoozeWakeLabel,
   type SnoozePreset,
 } from "./Sidebar.snooze";
-import { ProjectFavicon } from "./ProjectFavicon";
-import { deriveProviderEntriesByEnvironment } from "../providerInstances";
-import { useStableCallback } from "../hooks/useStableCallback";
 import {
   resolveSidebarRouteReveal,
-  type SidebarRouteReveal,
   useActiveRowReveal,
+  type SidebarRouteReveal,
 } from "./sidebar/routeReveal";
-import { stackedThreadToast, toastManager } from "./ui/toast";
-import { titleRegenerationToast } from "./threadTitleRegenerationToast";
-import { copyThreadReference } from "../lib/copyThreadReference";
-import { threadChipCopyTarget } from "@t3tools/client-runtime/thread-reference";
-import { Button } from "./ui/button";
-import { isProjectPinShortcut, ProjectPinButton } from "./ProjectPinButton";
-import {
-  Combobox,
-  ComboboxEmpty,
-  ComboboxSearchInput,
-  ComboboxItem,
-  ComboboxList,
-  ComboboxPopup,
-  ComboboxTrigger,
-  useComboboxFilter,
-} from "./ui/combobox";
-import { SidebarContent, SidebarGroup, useSidebar } from "./ui/sidebar";
 import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
-import { SidebarHeaderIconButton, SidebarThreadHeader } from "./sidebar/SidebarThreadHeader";
-import { TooltipProvider } from "./ui/tooltip";
 import {
-  composerDraftHasUserContent,
-  DraftId,
-  useComposerDraftStore,
-  usePromotingDraftThreadKeys,
-} from "../composerDraftStore";
-import { useShownThreadRouteTarget } from "../hooks/useShownThreadRouteTarget";
+  draftTerminalLabel,
+  SidebarDraftBlock,
+  useDraftTerminalLabels,
+  useSidebarDrafts,
+} from "./sidebar/SidebarDraftBlock";
+import { SidebarFolderDrop } from "./sidebar/SidebarFolderDrop";
+import {
+  SidebarDragBoundary,
+  SidebarSectionHeader,
+  SidebarSectionPlaceholder,
+} from "./sidebar/SidebarListMarkers";
+import {
+  sidebarFolderRowId,
+  SidebarProjectFolderHeader,
+} from "./sidebar/SidebarProjectFolderHeader";
+import { SidebarHeaderIconButton, SidebarThreadHeader } from "./sidebar/SidebarThreadHeader";
 import {
   SidebarSearchResultRow,
   SortableThreadRow,
@@ -274,20 +270,25 @@ import {
   type SidebarSweepAction,
 } from "./sidebar/SidebarThreadRow";
 import {
-  draftTerminalLabel,
-  SidebarDraftBlock,
-  useDraftTerminalLabels,
-  useSidebarDrafts,
-} from "./sidebar/SidebarDraftBlock";
+  buildDraftActionMenuItems,
+  buildThreadActionMenuItems,
+  threadActionRequiresOperate,
+} from "./threadActionMenu.logic";
+import { titleRegenerationToast } from "./threadTitleRegenerationToast";
+import { Button } from "./ui/button";
 import {
-  SidebarProjectFolderHeader,
-  sidebarFolderRowId,
-} from "./sidebar/SidebarProjectFolderHeader";
-import {
-  SidebarDragBoundary,
-  SidebarSectionHeader,
-  SidebarSectionPlaceholder,
-} from "./sidebar/SidebarListMarkers";
+  Combobox,
+  ComboboxEmpty,
+  ComboboxItem,
+  ComboboxList,
+  ComboboxPopup,
+  ComboboxSearchInput,
+  ComboboxTrigger,
+  useComboboxFilter,
+} from "./ui/combobox";
+import { SidebarContent, SidebarGroup, useSidebar } from "./ui/sidebar";
+import { stackedThreadToast, toastManager } from "./ui/toast";
+import { TooltipProvider } from "./ui/tooltip";
 
 function sameSidebarProviderEntries(
   left: ReadonlyMap<string, SidebarProviderEntry>,
@@ -1026,6 +1027,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const projectGroupsRef = useRef(projectGroups);
   const persistedProjectScopeKeys = useUiStateStore((store) => store.sidebarProjectScopeKeys);
   const setPersistedProjectScopeKeys = useUiStateStore((store) => store.setSidebarProjectScopeKeys);
+  const conveneJudges = useConveneJudges();
   const [projectScopeMenuState, dispatchProjectScopeMenu] = useReducer(
     reduceSidebarProjectScopeMenuState,
     { open: false, query: "" },
@@ -2765,6 +2767,13 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           return;
         }
         switch (clicked.value) {
+          case "judges":
+            await conveneJudges({
+              ...threadRef,
+              runtimeMode: thread.runtimeMode,
+              interactionMode: thread.interactionMode,
+            });
+            return;
           case "filter-by-project":
             if (threadProjectGroup) {
               setProjectScopeKeys(

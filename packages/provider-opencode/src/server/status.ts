@@ -386,10 +386,7 @@ function flattenOpenCodeModels(
     }
 
     for (const model of Object.values(provider.models)) {
-      const name = nonEmptyTrimmed(model.name);
-      if (!name) {
-        continue;
-      }
+      const name = nonEmptyTrimmed(model.name) ?? model.id;
 
       const subProvider = nonEmptyTrimmed(provider.name);
       const released = Date.parse(model.release_date);

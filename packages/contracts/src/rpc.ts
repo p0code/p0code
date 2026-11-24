@@ -1,4 +1,18 @@
 import {
+  SharedMemoryStatus,
+  SharedMemoryVaults,
+  SharedMemoryCommand,
+  SharedMemoryError,
+} from "./sharedMemory.ts";
+import {
+  SelfRelayStatus,
+  SelfRelayLink,
+  RelayExposePort,
+  RelayPortLink,
+  SelfRelayOperationError,
+} from "./selfRelay.ts";
+import { PortSchema } from "./baseSchemas.ts";
+import {
   OrchestrationV2SearchThreadError,
   OrchestrationV2SearchThreadInput,
   OrchestrationV2SearchThreadResult,
@@ -270,11 +284,6 @@ import {
   PullRequestUpdateInput,
 } from "./pullRequest.ts";
 import {
-  RelayClientInstallFailedError,
-  RelayClientInstallProgressEventSchema,
-  RelayClientStatusSchema,
-} from "./relayClient.ts";
-import {
   ORCHESTRATION_V2_WS_METHODS,
   OrchestrationGetWorkflowScriptError,
   OrchestrationV2GetNativeChildWorkError,
@@ -454,7 +463,6 @@ import {
   ScheduledTaskMutationResult,
 } from "./scheduledTask.ts";
 import { SecretRequestAnswerInput, SecretRequestError } from "./secretRequest.ts";
-import { AgentFeedbackAnswerInput, AgentFeedbackRequestError } from "./agentFeedback.ts";
 import {
   ProjectCloneActionInput,
   ProjectCloneActionResult,
@@ -604,6 +612,9 @@ export const WS_METHODS = {
   peerLinksThreadItem: "peerLinks.threadItem",
   peerLinksPairClient: "peerLinks.pairClient",
   peerLinksPairLink: "peerLinks.pairLink",
+  sharedMemoryStatus: "sharedMemory.status",
+  sharedMemoryVaults: "sharedMemory.vaults",
+  sharedMemoryCommand: "sharedMemory.command",
   serverGetSettings: "server.getSettings",
   serverUpdateSettings: "server.updateSettings",
   serverDiscoverSourceControl: "server.discoverSourceControl",
@@ -650,13 +661,17 @@ export const WS_METHODS = {
   scheduledTasksRunNow: "scheduledTasks.runNow",
   scheduledTasksRotateWebhookToken: "scheduledTasks.rotateWebhookToken",
   secretsAnswerRequest: "secrets.answerRequest",
-  agentFeedbackAnswerRequest: "agentFeedback.answerRequest",
+
   guestShareCreate: "guestShare.create",
   scheduledTasksListWebhookDeliveries: "scheduledTasks.listWebhookDeliveries",
   scheduledTasksGetWebhookDelivery: "scheduledTasks.getWebhookDelivery",
 
-  cloudGetRelayClientStatus: "cloud.getRelayClientStatus",
-  cloudInstallRelayClient: "cloud.installRelayClient",
+  serverRelayStatus: "relay.status",
+  serverRelayLink: "relay.link",
+  serverRelayUnlink: "relay.unlink",
+  serverExposePort: "relay.exposePort",
+  serverUnexposePort: "relay.unexposePort",
+  serverPortLink: "relay.portLink",
 
   pullRequestsList: "pullRequests.list",
   pullRequestsListStats: "pullRequests.listStats",
@@ -1015,6 +1030,22 @@ const WsPeerLinksAnswerRequestRpc = Rpc.make(WS_METHODS.peerLinksAnswerRequest, 
 });
 
 // No in-tree caller; installed Swift TestFlight builds still request it.
+const WsSharedMemoryStatusRpc = Rpc.make(WS_METHODS.sharedMemoryStatus, {
+  payload: Schema.Struct({}),
+  success: SharedMemoryStatus,
+  error: Schema.Union([SharedMemoryError, EnvironmentAuthorizationError]),
+});
+const WsSharedMemoryVaultsRpc = Rpc.make(WS_METHODS.sharedMemoryVaults, {
+  payload: Schema.Struct({}),
+  success: SharedMemoryVaults,
+  error: Schema.Union([SharedMemoryError, EnvironmentAuthorizationError]),
+});
+const WsSharedMemoryCommandRpc = Rpc.make(WS_METHODS.sharedMemoryCommand, {
+  payload: SharedMemoryCommand,
+  success: SharedMemoryStatus,
+  error: Schema.Union([SharedMemoryError, EnvironmentAuthorizationError]),
+});
+
 const WsServerGetSettingsRpc = Rpc.make(WS_METHODS.serverGetSettings, {
   payload: Schema.Struct({}),
   success: ServerSettings,
@@ -1189,17 +1220,35 @@ const WsServerSignalProcessRpc = Rpc.make(WS_METHODS.serverSignalProcess, {
   error: EnvironmentAuthorizationError,
 });
 
-const WsCloudGetRelayClientStatusRpc = Rpc.make(WS_METHODS.cloudGetRelayClientStatus, {
+const WsserverRelayStatusRpc = Rpc.make(WS_METHODS.serverRelayStatus, {
   payload: Schema.Struct({}),
-  success: RelayClientStatusSchema,
-  error: EnvironmentAuthorizationError,
+  success: SelfRelayStatus,
+  error: Schema.Union([SelfRelayOperationError, EnvironmentAuthorizationError]),
 });
-
-const WsCloudInstallRelayClientRpc = Rpc.make(WS_METHODS.cloudInstallRelayClient, {
+const WsserverRelayLinkRpc = Rpc.make(WS_METHODS.serverRelayLink, {
+  payload: SelfRelayLink,
+  success: SelfRelayStatus,
+  error: Schema.Union([SelfRelayOperationError, EnvironmentAuthorizationError]),
+});
+const WsserverRelayUnlinkRpc = Rpc.make(WS_METHODS.serverRelayUnlink, {
   payload: Schema.Struct({}),
-  success: RelayClientInstallProgressEventSchema,
-  error: Schema.Union([RelayClientInstallFailedError, EnvironmentAuthorizationError]),
-  stream: true,
+  success: Schema.Void,
+  error: Schema.Union([SelfRelayOperationError, EnvironmentAuthorizationError]),
+});
+const WsserverExposePortRpc = Rpc.make(WS_METHODS.serverExposePort, {
+  payload: RelayExposePort,
+  success: RelayPortLink,
+  error: Schema.Union([SelfRelayOperationError, EnvironmentAuthorizationError]),
+});
+const WsserverUnexposePortRpc = Rpc.make(WS_METHODS.serverUnexposePort, {
+  payload: Schema.Struct({ port: PortSchema }),
+  success: Schema.Void,
+  error: Schema.Union([SelfRelayOperationError, EnvironmentAuthorizationError]),
+});
+const WsserverPortLinkRpc = Rpc.make(WS_METHODS.serverPortLink, {
+  payload: Schema.Struct({ port: PortSchema }),
+  success: RelayPortLink,
+  error: Schema.Union([SelfRelayOperationError, EnvironmentAuthorizationError]),
 });
 
 const WsServerReportClientActivityRpc = Rpc.make(WS_METHODS.serverReportClientActivity, {
@@ -2416,11 +2465,6 @@ const WsSecretsAnswerRequestRpc = Rpc.make(WS_METHODS.secretsAnswerRequest, {
   error: Schema.Union([SecretRequestError, EnvironmentAuthorizationError]),
 });
 
-const WsAgentFeedbackAnswerRequestRpc = Rpc.make(WS_METHODS.agentFeedbackAnswerRequest, {
-  payload: AgentFeedbackAnswerInput,
-  error: Schema.Union([AgentFeedbackRequestError, EnvironmentAuthorizationError]),
-});
-
 const WsScheduledTasksListWebhookDeliveriesRpc = Rpc.make(
   WS_METHODS.scheduledTasksListWebhookDeliveries,
   {
@@ -2502,6 +2546,9 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerRunStorageCleanupRpc,
   WsServerGetStorageCleanupReportRpc,
   WsServerGetDatabaseStorageRpc,
+  WsSharedMemoryStatusRpc,
+  WsSharedMemoryVaultsRpc,
+  WsSharedMemoryCommandRpc,
   WsServerGetSettingsRpc,
   WsServerReclaimDatabaseSpaceRpc,
   WsServerUpdateSettingsRpc,
@@ -2556,12 +2603,16 @@ export const WsRpcGroup = RpcGroup.make(
   WsScheduledTasksRunNowRpc,
   WsScheduledTasksRotateWebhookTokenRpc,
   WsSecretsAnswerRequestRpc,
-  WsAgentFeedbackAnswerRequestRpc,
+
   WsScheduledTasksListWebhookDeliveriesRpc,
   WsScheduledTasksGetWebhookDeliveryRpc,
   WsServerReportClientActivityRpc,
-  WsCloudGetRelayClientStatusRpc,
-  WsCloudInstallRelayClientRpc,
+  WsserverRelayStatusRpc,
+  WsserverRelayLinkRpc,
+  WsserverRelayUnlinkRpc,
+  WsserverExposePortRpc,
+  WsserverUnexposePortRpc,
+  WsserverPortLinkRpc,
   WsPullRequestsListRpc,
   WsPullRequestsListStatsRpc,
   WsPullRequestsFilterOptionsRpc,

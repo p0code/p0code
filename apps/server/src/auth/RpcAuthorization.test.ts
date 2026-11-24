@@ -39,77 +39,6 @@ import {
 } from "./RpcAuthorization.ts";
 import * as RpcAuthorization from "./RpcAuthorization.ts";
 
-describe("RPC authorization scopes", () => {
-  it("declares exactly one scope for every RPC in the server group", () => {
-    expect(new Set(Object.keys(RPC_REQUIRED_SCOPES))).toEqual(new Set(WsRpcGroup.requests.keys()));
-  });
-
-  it("keeps webhook delivery logs, which hold request bodies, behind operate scope", () => {
-    for (const method of [
-      WS_METHODS.scheduledTasksListWebhookDeliveries,
-      WS_METHODS.scheduledTasksGetWebhookDelivery,
-      WS_METHODS.scheduledTasksRotateWebhookToken,
-    ]) {
-      expect(requiredScopeForRpcMethod(method)).toBe(AuthOrchestrationOperateScope);
-    }
-  });
-
-  it("lets only a session that operates threads approve sending a feedback report", () => {
-    // Guest links have no RPC session, and read-only sessions lack this scope.
-    expect(requiredScopeForRpcMethod(WS_METHODS.agentFeedbackAnswerRequest)).toBe(
-      AuthOrchestrationOperateScope,
-    );
-  });
-
-  it("keeps triage, which seeds an agent that reads logs and the database, behind operate scope", () => {
-    expect(requiredScopeForRpcMethod(WS_METHODS.serverPrepareTriage)).toBe(
-      AuthOrchestrationOperateScope,
-    );
-  });
-
-  it("separates passive terminal observation from operations that can change a shell", () => {
-    for (const method of [WS_METHODS.terminalObserve, WS_METHODS.subscribeTerminalMetadata]) {
-      expect(requiredScopeForRpcMethod(method)).toBe(AuthTerminalReadScope);
-    }
-    for (const method of [
-      WS_METHODS.terminalAttach,
-      WS_METHODS.terminalOpen,
-      WS_METHODS.terminalWrite,
-      WS_METHODS.terminalResize,
-      WS_METHODS.terminalClear,
-      WS_METHODS.terminalClose,
-      WS_METHODS.previewStopLocalServer,
-    ]) {
-      expect(requiredScopeForRpcMethod(method)).toBe(AuthTerminalOperateScope);
-    }
-  });
-
-  it("lets thread readers observe and refresh checkout branches", () => {
-    for (const method of [WS_METHODS.subscribeVcsBranch, WS_METHODS.vcsRefreshBranch]) {
-      expect(requiredScopeForRpcMethod(method)).toBe(AuthOrchestrationReadScope);
-    }
-  });
-
-  it("lets file readers see a task folder and takes source control to add a repository to it", () => {
-    expect(requiredScopeForRpcMethod(WS_METHODS.workspaceTaskFolder)).toBe(AuthFilesystemReadScope);
-    expect(requiredScopeForRpcMethod(WS_METHODS.workspaceAddTaskFolderRepository)).toBe(
-      AuthSourceControlWriteScope,
-    );
-  });
-
-  it("still lets readers load settings the way installed Swift clients ask", () => {
-    expect(requiredScopeForRpcMethod("server.getSettings")).toBe(AuthOrchestrationReadScope);
-  });
-
-  it("rejects unknown RPC method names", () => {
-    for (const method of ["server.notRegistered", "toString", "constructor"]) {
-      expect(() => requiredScopeForRpcMethod(method)).toThrow(
-        `RPC method ${method} has no declared authorization scope.`,
-      );
-    }
-  });
-});
-
 it("requires operate permission for host retry while preserving read-only listing", () => {
   expect(requiredScopeForDeviceList({})).toBe(AuthOrchestrationReadScope);
   expect(requiredScopeForDeviceList({ retryHostId: "remote-host" })).toBe(
@@ -550,7 +479,7 @@ describe("settings mutation authorization", () => {
   );
 
   it.effect(
-    "does not let a settings grant manage providers or turn off T3 Connect device approval",
+    "does not let a settings grant manage providers or turn off self-hosted relay device approval",
     () =>
       Effect.gen(function* () {
         let handled = false;
@@ -1029,3 +958,85 @@ it.effect("requires provider management to send /logout through chat", () =>
     ]);
   }).pipe(Effect.scoped),
 );
+
+describe("RPC authorization scopes", () => {
+  it("declares exactly one scope for every RPC in the server group", () => {
+    expect(new Set(Object.keys(RPC_REQUIRED_SCOPES))).toEqual(new Set(WsRpcGroup.requests.keys()));
+  });
+
+  it("keeps webhook delivery logs, which hold request bodies, behind operate scope", () => {
+    for (const method of [
+      WS_METHODS.scheduledTasksListWebhookDeliveries,
+      WS_METHODS.scheduledTasksGetWebhookDelivery,
+      WS_METHODS.scheduledTasksRotateWebhookToken,
+    ]) {
+      expect(requiredScopeForRpcMethod(method)).toBe(AuthOrchestrationOperateScope);
+    }
+  });
+
+  it("keeps triage, which seeds an agent that reads logs and the database, behind operate scope", () => {
+    expect(requiredScopeForRpcMethod(WS_METHODS.serverPrepareTriage)).toBe(
+      AuthOrchestrationOperateScope,
+    );
+  });
+
+  it("separates passive terminal observation from operations that can change a shell", () => {
+    for (const method of [WS_METHODS.terminalObserve, WS_METHODS.subscribeTerminalMetadata]) {
+      expect(requiredScopeForRpcMethod(method)).toBe(AuthTerminalReadScope);
+    }
+    for (const method of [
+      WS_METHODS.terminalAttach,
+      WS_METHODS.terminalOpen,
+      WS_METHODS.terminalWrite,
+      WS_METHODS.terminalResize,
+      WS_METHODS.terminalClear,
+      WS_METHODS.terminalClose,
+      WS_METHODS.previewStopLocalServer,
+    ]) {
+      expect(requiredScopeForRpcMethod(method)).toBe(AuthTerminalOperateScope);
+    }
+  });
+
+  it("lets thread readers observe and refresh checkout branches", () => {
+    for (const method of [WS_METHODS.subscribeVcsBranch, WS_METHODS.vcsRefreshBranch]) {
+      expect(requiredScopeForRpcMethod(method)).toBe(AuthOrchestrationReadScope);
+    }
+  });
+
+  it("lets file readers see a task folder and takes source control to add a repository to it", () => {
+    expect(requiredScopeForRpcMethod(WS_METHODS.workspaceTaskFolder)).toBe(AuthFilesystemReadScope);
+    expect(requiredScopeForRpcMethod(WS_METHODS.workspaceAddTaskFolderRepository)).toBe(
+      AuthSourceControlWriteScope,
+    );
+  });
+
+  it("still lets readers load settings the way installed Swift clients ask", () => {
+    expect(requiredScopeForRpcMethod("server.getSettings")).toBe(AuthOrchestrationReadScope);
+  });
+
+  it("rejects unknown RPC method names", () => {
+    for (const method of ["server.notRegistered", "toString", "constructor"]) {
+      expect(() => requiredScopeForRpcMethod(method)).toThrow(
+        `RPC method ${method} has no declared authorization scope.`,
+      );
+    }
+  });
+});
+
+it("requires relay configuration and access scopes consistently on WS RPC", () => {
+  for (const method of [WS_METHODS.serverRelayLink, WS_METHODS.serverRelayUnlink])
+    expect(RpcAuthorization.requiredScopesForRpcCall(method, {})).toEqual([
+      AuthAccessWriteScope,
+      "relay:write",
+      "relay:configure",
+    ]);
+  expect(RpcAuthorization.requiredScopesForRpcCall(WS_METHODS.serverExposePort, {})).toEqual([
+    AuthAccessWriteScope,
+    "relay:write",
+    AuthTerminalOperateScope,
+  ]);
+  expect(RpcAuthorization.requiredScopesForRpcCall(WS_METHODS.serverPortLink, {})).toEqual([
+    AuthAccessWriteScope,
+    AuthTerminalOperateScope,
+  ]);
+});

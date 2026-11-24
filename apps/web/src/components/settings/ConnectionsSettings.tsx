@@ -1,74 +1,52 @@
-import { errorDisplayMessage, thrownErrorMessage } from "@t3tools/client-runtime/errors";
-import { m as resolveMessage } from "~/i18n/messages";
-import { managedCapabilityDenial } from "@t3tools/client-runtime/contract-labels";
-import { SessionPermissions } from "./SessionPermissions";
-import { useSearch } from "@tanstack/react-router";
-import { ChevronRightIcon, EllipsisIcon } from "lucide-react";
+import { publicOriginAdvertisedEndpoint } from "./pairingUrls";
+import { SelfRelaySettings } from "./SelfRelaySettings";
+import { useUpdateEnvironmentSettings } from "~/hooks/useSettings";
 import { useAtom, useAtomValue } from "@effect/atom-react";
-import { type ReactNode, useState } from "react";
-import { T, useGT, useMessages, Var } from "gt-react";
-import {
-  AuthAccessReadScope,
-  AuthAccessWriteScope,
-  AuthEnvironmentMaintainScope,
-  AuthRelayReadScope,
-  AuthRelayWriteScope,
-  allowsPreviewTunnel,
-  isManagedSettingPath,
-  type AuthClientSession,
-  type AuthPairingLink,
-  type AuthPairingCredentialResult,
-  type AdvertisedEndpoint,
-  type DesktopServerExposureState,
-  type DesktopWslState,
-  EnvironmentId,
-  resolveEnvironmentMachineKind,
-} from "@t3tools/contracts";
+import { managedCapabilityDenial } from "@t3tools/client-runtime/contract-labels";
+import { errorDisplayMessage, thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import {
   isAtomCommandInterrupted,
   settlePromise,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
+import {
+  type AdvertisedEndpoint,
+  allowsPreviewTunnel,
+  AuthAccessReadScope,
+  AuthAccessWriteScope,
+  type AuthClientSession,
+  AuthEnvironmentMaintainScope,
+  type AuthPairingCredentialResult,
+  type AuthPairingLink,
+  AuthRelayReadScope,
+  type DesktopServerExposureState,
+  type DesktopWslState,
+  EnvironmentId,
+  isManagedSettingPath,
+  resolveEnvironmentMachineKind,
+} from "@t3tools/contracts";
+import { useSearch } from "@tanstack/react-router";
 import * as Cause from "effect/Cause";
+import { T, useGT, useMessages, Var } from "gt-react";
+import { ChevronRightIcon, EllipsisIcon } from "lucide-react";
+import { type ReactNode, useState } from "react";
+import { m as resolveMessage } from "~/i18n/messages";
+import { SessionPermissions } from "./SessionPermissions";
 
-import { isLocalEnvironmentDisabled } from "../../localEnvironment";
-import {
-  applyWslEnableSelection,
-  connectDeviceName,
-  isWslSettingsRowVisible,
-  missingTailscaleEndpointDescription,
-  resolveLocalVersionStatusLabel,
-  resolveTailscaleServeBaseUrl,
-} from "./ConnectionsSettings.logic";
-import { settingsScopeEnvironmentLabel } from "./settingsScopeAxis";
-import { useAccessEnvironment } from "./useAccessEnvironment";
-import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
-import { ManagedByOrganization } from "../ManagedPolicy";
-import { LocalEnvironmentSetting } from "./LocalEnvironmentSetting";
-import { useSearchableSetting } from "./settingsSearch";
-import { ConnectDeviceApprovalSettings } from "./ConnectDeviceApprovalSettings";
-import { EnvironmentIconMenu } from "./EnvironmentIconPicker";
-import { FoldedSettingsSection } from "./FoldedSettingsSection";
-import { EnvironmentsMap } from "./EnvironmentsMap";
-import { LinkedEnvironmentsSettings } from "./LinkedEnvironmentsSettings";
-import { addEnvironmentPrefillAtom } from "~/state/linkedThreadView";
-import { Toggle, ToggleGroup } from "../ui/toggle-group";
+import { isDesktopLocalConnectionTarget } from "~/connection/desktopLocal";
+import { type ServerClientSessionRecord } from "~/environments/primary";
 import { useMediaQuery } from "~/hooks/useMediaQuery";
+import { addEnvironmentPrefillAtom } from "~/state/linkedThreadView";
 import { usePeerLinkHosts } from "~/state/peerLinks";
-import { LoadBalancingSettings } from "./LoadBalancingSettings";
-import { PullRequestRoutingSettings } from "./PullRequestRoutingSettings";
-import { Input } from "../ui/input";
+import { useUiStateStore } from "~/uiStateStore";
 import {
-  Dialog,
-  DialogClose,
-  DialogFooter,
-  DialogDescription,
-  DialogHeader,
-  DialogPanel,
-  DialogPopup,
-  DialogTitle,
-} from "../ui/dialog";
-import { ScrollArea } from "../ui/scroll-area";
+  resolveServerConfigVersionMismatch,
+  resolveServerSelfUpdateCapability,
+  supportsDesktopAppUpdate,
+} from "~/versionSkew";
+import { isLocalEnvironmentDisabled } from "../../localEnvironment";
+import { EnvironmentMachineIcon } from "../EnvironmentMachineIcon";
+import { ManagedByOrganization } from "../ManagedPolicy";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -78,86 +56,98 @@ import {
   AlertDialogPopup,
   AlertDialogTitle,
 } from "../ui/alert-dialog";
-import { Spinner } from "../ui/spinner";
-import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
+import { Button } from "../ui/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogPanel,
+  DialogPopup,
+  DialogTitle,
+} from "../ui/dialog";
+import { Input } from "../ui/input";
 import { Menu, MenuPopup, MenuTrigger } from "../ui/menu";
+import { ScrollArea } from "../ui/scroll-area";
+import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
+import { Spinner } from "../ui/spinner";
 import { Switch } from "../ui/switch";
 import { stackedThreadToast, toastManager } from "../ui/toast";
+import { Toggle, ToggleGroup } from "../ui/toggle-group";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
-import { Button } from "../ui/button";
-import { EnvironmentMachineIcon } from "../EnvironmentMachineIcon";
-import { type ServerClientSessionRecord } from "~/environments/primary";
-import { isDesktopLocalConnectionTarget } from "~/connection/desktopLocal";
-import { useUiStateStore } from "~/uiStateStore";
+
 import {
-  resolveServerConfigVersionMismatch,
-  resolveServerSelfUpdateCapability,
-  supportsDesktopAppUpdate,
-} from "~/versionSkew";
-import { hasCloudPublicConfig } from "~/cloud/publicConfig";
-import { RemoveT3ConnectEnvironmentDialog } from "../clerk/RemoveT3ConnectEnvironmentDialog";
-import { authEnvironment } from "~/state/auth";
+  applyWslEnableSelection,
+  isWslSettingsRowVisible,
+  missingTailscaleEndpointDescription,
+  resolveLocalVersionStatusLabel,
+  resolveTailscaleServeBaseUrl,
+} from "./ConnectionsSettings.logic";
+import { EnvironmentIconMenu } from "./EnvironmentIconPicker";
+import { EnvironmentsMap } from "./EnvironmentsMap";
+import { FoldedSettingsSection } from "./FoldedSettingsSection";
+import { LinkedEnvironmentsSettings } from "./LinkedEnvironmentsSettings";
+import { LoadBalancingSettings } from "./LoadBalancingSettings";
+import { LocalEnvironmentSetting } from "./LocalEnvironmentSetting";
+import { PullRequestRoutingSettings } from "./PullRequestRoutingSettings";
+import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
+import { settingsScopeEnvironmentLabel } from "./settingsScopeAxis";
+import { useSearchableSetting } from "./settingsSearch";
+import { useAccessEnvironment } from "./useAccessEnvironment";
+
+import { requestConfirmDialog } from "~/confirmDialog";
 import { environmentCatalog } from "~/connection/catalog";
-import {
-  readEnvironmentScope,
-  useEnvironmentScope,
-  useEnvironmentSessionState,
-} from "~/state/session";
-import { useEnvironmentQuery } from "~/state/query";
+import { authEnvironment } from "~/state/auth";
 import {
   desktopNetworkAccessStateAtom,
   refreshDesktopNetworkAccessState,
 } from "~/state/desktopNetworkAccess";
-import { desktopWslAccessStateAtom, refreshDesktopWslState } from "~/state/desktopWslState";
 import { useDesktopUpdateState } from "~/state/desktopUpdate";
+import { desktopWslAccessStateAtom, refreshDesktopWslState } from "~/state/desktopWslState";
+import { environmentIdsKey } from "~/state/environmentAtomList";
 import {
   type EnvironmentPresentation,
   useEnvironment,
   useEnvironments,
   usePrimaryEnvironment,
 } from "~/state/environments";
-import { requestConfirmDialog } from "~/confirmDialog";
-import { useUpdateEnvironmentSettings } from "~/hooks/useSettings";
-import { useAtomCommand } from "../../state/use-atom-command";
-import { environmentIdsKey } from "~/state/environmentAtomList";
+import { useEnvironmentQuery } from "~/state/query";
 import { environmentUpdateStatesAtom, serverEnvironment } from "~/state/server";
+import {
+  readEnvironmentScope,
+  useEnvironmentScope,
+  useEnvironmentSessionState,
+} from "~/state/session";
+import { useAtomCommand } from "../../state/use-atom-command";
 import {
   ServerUpdateAction,
   ServerUpdateProgress,
   ServerUpdatesAction,
   type ServerUpdateTarget,
 } from "../ServerUpdateAction";
-import {
-  sortDesktopPairingLinks,
-  summarizeAuthorizedClients,
-  sortDesktopClientSessions,
-  toDesktopPairingLinkRecord,
-  toDesktopClientSessionRecord,
-  selectPairingEndpoint,
-  isServerNetworkAccessible,
-  isTailscaleHttpsEndpoint,
-  endpointDefaultPreferenceKey,
-} from "./ConnectionsSettings.logic";
+import { AddEnvironmentDialog } from "./AddEnvironmentDialog";
 import {
   AdvertisedEndpointListRow,
   AuthorizedClientsHeaderAction,
   NetworkAccessDescription,
   PairingClientsList,
 } from "./AuthorizedClientsSettings";
+import {
+  endpointDefaultPreferenceKey,
+  isServerNetworkAccessible,
+  isTailscaleHttpsEndpoint,
+  selectPairingEndpoint,
+  sortDesktopClientSessions,
+  sortDesktopPairingLinks,
+  summarizeAuthorizedClients,
+  toDesktopClientSessionRecord,
+  toDesktopPairingLinkRecord,
+} from "./ConnectionsSettings.logic";
 import { ITEM_ROW_CLASSNAME } from "./itemRows";
-import {
-  CloudLinkRow,
-  CloudRemoteEnvironmentRows,
-  SavedBackendListRow,
-} from "./SavedEnvironmentRows";
-import { AddEnvironmentDialog } from "./AddEnvironmentDialog";
-import {
-  type ConnectDeviceRevokeRequest,
-  RevokeConnectDeviceDialog,
-} from "./RevokeConnectDeviceDialog";
 
-// Sessions T3 Connect minted for a device signed in to the linked account.
-const CLOUD_CONNECT_SESSION_SUBJECT = "cloud-connect";
+import { SavedBackendListRow } from "./SavedEnvironmentRows";
+
 const DEFAULT_TAILSCALE_SERVE_PORT = 443;
 const EMPTY_ADVERTISED_ENDPOINTS: ReadonlyArray<AdvertisedEndpoint> = [];
 
@@ -434,7 +424,6 @@ function ConnectionsSettingsContent({
   const canWriteAccess = useEnvironmentScope(accessEnvironmentId, AuthAccessWriteScope);
   const canReadRelay = useEnvironmentScope(accessEnvironmentId, AuthRelayReadScope);
   const canMaintain = useEnvironmentScope(accessEnvironmentId, AuthEnvironmentMaintainScope);
-  const canManageRelay = useEnvironmentScope(accessEnvironmentId, AuthRelayWriteScope);
   const canManageLocalBackend = isPrimaryAccess && !isLocalEnvironmentDisabled() && canMaintain;
   const showsAccess = view === "access";
   const authAccessChanges = useEnvironmentQuery(
@@ -465,6 +454,16 @@ function ConnectionsSettingsContent({
   const desktopWslError = desktopWslMutationError ?? desktopWsl.error;
   const isLoadingWslState = desktopWsl.isPending && desktopWsl.data === null;
   const desktopServerExposureState = desktopNetworkAccess.data?.serverExposureState ?? null;
+  const relayStatus = useEnvironmentQuery(
+    accessEnvironmentId &&
+      canReadRelay &&
+      accessEnvironment?.serverConfig?.environment.capabilities.selfRelay
+      ? serverEnvironment.relayStatus({ environmentId: accessEnvironmentId, input: {} })
+      : null,
+  );
+  const publicOrigin =
+    relayStatus.data?.publicOrigin ?? accessEnvironment?.serverConfig?.environment.publicOrigin;
+  const publicEndpoint = publicOrigin ? publicOriginAdvertisedEndpoint(publicOrigin) : null;
   const desktopAdvertisedEndpoints =
     desktopNetworkAccess.data?.advertisedEndpoints ?? EMPTY_ADVERTISED_ENDPOINTS;
   const desktopServerExposureError =
@@ -768,15 +767,7 @@ function ConnectionsSettingsContent({
     }
   };
 
-  // Removing a T3 Connect route preserves account registration; use a separate dialog pointing to
-  // deregistration.
-  const [pendingT3ConnectRemoval, setPendingT3ConnectRemoval] =
-    useState<EnvironmentPresentation | null>(null);
   const handleRemoveSavedBackend = async (environment: EnvironmentPresentation) => {
-    if (environment.relayManaged && hasCloudPublicConfig()) {
-      setPendingT3ConnectRemoval(environment);
-      return;
-    }
     const confirmed = await requestConfirmDialog(
       gt(
         "Remove {environment} from this device?\nThis forgets its pairing, credentials, and cached threads here. Switch it off instead to keep it saved.",
@@ -787,70 +778,31 @@ function ConnectionsSettingsContent({
     if (confirmed === true) await removeSavedBackend(environment);
   };
 
-  // T3 Connect devices waiting for approval have their own list.
-  const visibleDesktopPairingLinks = desktopPairingLinks.filter(
-    (pairingLink) => pairingLink.connectDeviceRequest === undefined,
-  );
-  const connectDeviceRequests = desktopPairingLinks.filter(
-    (pairingLink) => pairingLink.connectDeviceRequest !== undefined,
-  );
-  // Older servers omit the list; they cannot hold devices for approval.
-  const connectDevices =
-    authAccessChanges.data?.type === "snapshot"
-      ? (authAccessChanges.data.payload.connectDevices ?? null)
-      : null;
+  const visibleDesktopPairingLinks = desktopPairingLinks;
   const updateAccessSettings = useUpdateEnvironmentSettings(accessEnvironmentId);
-  const [pendingConnectRevoke, setPendingConnectRevoke] =
-    useState<ConnectDeviceRevokeRequest | null>(null);
-  // With approval off a revoked T3 Connect device signs straight back in, so offer to turn it
-  // on. Older servers have no such setting, and revoking there goes ahead as before.
-  const connectApprovalOff =
-    accessEnvironment?.serverConfig?.settings.requireConnectDeviceApproval === false;
-  const requestConnectRevoke = (title: string, revoke: () => Promise<void>) => {
-    if (connectApprovalOff && canWriteAccess) setPendingConnectRevoke({ title, revoke });
-    else void revoke();
-  };
-  const requireConnectApproval = () =>
-    new Promise<boolean>((resolve) =>
-      updateAccessSettings(
-        { requireConnectDeviceApproval: true },
-        { onSaved: () => resolve(true), onFailed: () => resolve(false) },
-      ),
-    );
   const requestRevokeClientSession = (sessionId: ServerClientSessionRecord["sessionId"]) => {
-    const session = desktopClientSessions.find((candidate) => candidate.sessionId === sessionId);
-    if (session?.subject === CLOUD_CONNECT_SESSION_SUBJECT) {
-      requestConnectRevoke(gt("Revoke {name}?", { name: connectDeviceName(session, m) }), () =>
-        handleRevokeDesktopClientSession(sessionId),
-      );
-    } else {
-      void handleRevokeDesktopClientSession(sessionId);
-    }
+    void handleRevokeDesktopClientSession(sessionId);
   };
   const requestRevokeOtherClients = () => {
-    const revokesConnectDevices =
-      (connectDevices?.length ?? 0) > 0 ||
-      desktopClientSessions.some(
-        (session) => !session.current && session.subject === CLOUD_CONNECT_SESSION_SUBJECT,
-      );
-    if (revokesConnectDevices) {
-      requestConnectRevoke(gt("Revoke all other clients?"), handleRevokeOtherDesktopClients);
-    } else {
-      void handleRevokeOtherDesktopClients();
-    }
+    void handleRevokeOtherDesktopClients();
   };
   const tailscaleHttpsEndpoint = desktopAdvertisedEndpoints.find(isTailscaleHttpsEndpoint) ?? null;
   const visibleDesktopNetworkAdvertisedEndpoints = isLocalBackendNetworkAccessible
     ? desktopAdvertisedEndpoints.filter((endpoint) => !isTailscaleHttpsEndpoint(endpoint))
     : [];
-  const visibleDesktopAdvertisedEndpoints = tailscaleHttpsEndpoint
+  const networkAdvertisedEndpoints = tailscaleHttpsEndpoint
     ? [...visibleDesktopNetworkAdvertisedEndpoints, tailscaleHttpsEndpoint]
     : visibleDesktopNetworkAdvertisedEndpoints;
+  const visibleDesktopAdvertisedEndpoints = [
+    ...(publicEndpoint ? [publicEndpoint] : []),
+    ...networkAdvertisedEndpoints,
+  ];
   const defaultDesktopNetworkAdvertisedEndpoint = selectPairingEndpoint(
     visibleDesktopNetworkAdvertisedEndpoints,
     defaultAdvertisedEndpointKey,
   );
   const defaultDesktopAdvertisedEndpoint =
+    publicEndpoint ??
     defaultDesktopNetworkAdvertisedEndpoint ??
     selectPairingEndpoint(
       tailscaleHttpsEndpoint ? [tailscaleHttpsEndpoint] : [],
@@ -1396,21 +1348,7 @@ function ConnectionsSettingsContent({
             ) : canManageLocalBackend ? (
               renderDisabledNetworkAccessRow()
             ) : null}
-            {canReadRelay || canManageRelay ? (
-              <CloudLinkRow
-                environmentId={accessEnvironmentId}
-                canReadRelay={canReadRelay}
-                canManageRelay={canManageRelay}
-                connectDeviceApproval={
-                  accessServerConfig?.settings.requireConnectDeviceApproval === undefined
-                    ? null
-                    : {
-                        required: accessServerConfig.settings.requireConnectDeviceApproval,
-                        canManage: canWriteAccess,
-                      }
-                }
-              />
-            ) : null}
+
             {accessServerConfig?.environment.capabilities.previewTunnelSetting ? (
               <SettingsRow
                 title={searchableSetting("preview-tunnel").title}
@@ -1498,22 +1436,7 @@ function ConnectionsSettingsContent({
               </ScrollArea>
             </FoldedSettingsSection>
           ) : null}
-          {canReadAccess &&
-          connectDevices !== null &&
-          (connectDeviceRequests.length > 0 || connectDevices.length > 0) ? (
-            <ConnectDeviceApprovalSettings
-              environmentId={accessEnvironmentId}
-              requests={connectDeviceRequests}
-              devices={connectDevices}
-              canWrite={canWriteAccess}
-              requestRevoke={requestConnectRevoke}
-            />
-          ) : null}
-          <RevokeConnectDeviceDialog
-            request={pendingConnectRevoke}
-            onClose={() => setPendingConnectRevoke(null)}
-            requireApproval={requireConnectApproval}
-          />
+
           <AlertDialog
             open={pendingDesktopServerExposureMode !== null && canManageLocalBackend}
             onOpenChange={(open) => {
@@ -1534,7 +1457,7 @@ function ConnectionsSettingsContent({
                         "Let your other devices connect to T3 Code over the network. Pair devices to give them access. T3 Code will restart.",
                       )
                     : gt(
-                        "Devices connected over your local network will disconnect. Existing tunnels, such as T3 Connect or Tailscale HTTPS, keep working. T3 Code will restart.",
+                        "Devices connected over your local network will disconnect. Existing tunnels, such as Tailscale HTTPS, keep working. T3 Code will restart.",
                       )}
                 </AlertDialogDescription>
               </AlertDialogHeader>
@@ -1822,10 +1745,22 @@ function ConnectionsSettingsContent({
     </>
   );
 
-  if (showsAccess) return <SettingsPageContainer>{primarySettings}</SettingsPageContainer>;
+  if (showsAccess)
+    return (
+      <SettingsPageContainer>
+        {primarySettings}
+        {accessEnvironmentId &&
+        accessEnvironment?.serverConfig?.environment.capabilities.selfRelay ? (
+          <SelfRelaySettings environmentId={accessEnvironmentId} />
+        ) : null}
+      </SettingsPageContainer>
+    );
 
   return (
     <SettingsPageContainer>
+      {primaryEnvironment?.serverConfig?.environment.capabilities.selfRelay ? (
+        <SelfRelaySettings environmentId={primaryEnvironment.environmentId} />
+      ) : null}
       {desktopBridge ? (
         <SettingsSection id="this-app" title={gt("This app")}>
           <LocalEnvironmentSetting />
@@ -1875,6 +1810,7 @@ function ConnectionsSettingsContent({
       >
         {environmentsView === "map" ? (
           <EnvironmentsMap
+            renderConnectMachine={() => null}
             footerId={searchableSetting("linked-environments").id}
             onAddEnvironment={openAddEnvironment}
             renderSavedEnvironment={(environment) =>
@@ -1892,13 +1828,6 @@ function ConnectionsSettingsContent({
                 />
               ) : null
             }
-            renderConnectMachine={(environmentId) => (
-              <CloudRemoteEnvironmentRows
-                only={environmentId}
-                primaryEnvironmentId={primaryEnvironmentId}
-                savedEnvironments={savedEnvironments}
-              />
-            )}
           />
         ) : (
           <>
@@ -1912,25 +1841,10 @@ function ConnectionsSettingsContent({
                 onAddRoute={openAddRoute}
               />
             ))}
-            <CloudRemoteEnvironmentRows
-              primaryEnvironmentId={primaryEnvironmentId}
-              savedEnvironments={savedEnvironments}
-            />
           </>
         )}
       </SettingsSection>
-      {hasCloudPublicConfig() ? (
-        <RemoveT3ConnectEnvironmentDialog
-          environmentLabel={pendingT3ConnectRemoval?.label ?? null}
-          environmentId={pendingT3ConnectRemoval?.environmentId ?? null}
-          onCancel={() => setPendingT3ConnectRemoval(null)}
-          onConfirm={() => {
-            if (!pendingT3ConnectRemoval) return;
-            setPendingT3ConnectRemoval(null);
-            void removeSavedBackend(pendingT3ConnectRemoval);
-          }}
-        />
-      ) : null}
+
       {environmentsView === "list"
         ? peerLinkHosts.map((environment, index) => (
             <LinkedEnvironmentsSettings

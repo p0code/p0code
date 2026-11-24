@@ -1,3 +1,4 @@
+import { JudgeMember } from "./settings.ts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as SchemaTransformation from "effect/SchemaTransformation";
@@ -416,6 +417,7 @@ export const OrchestratorMcpThreadListItem = Schema.Struct({
   settled: Schema.Boolean,
   settledAt: Schema.NullOr(IsoDateTime),
   snoozed: Schema.Boolean,
+  /** Null while snoozed means hidden until someone unsnoozes it. */
   snoozedUntil: Schema.NullOr(IsoDateTime),
   /** Absent from linked environments that predate it. */
   pinned: Schema.optional(Schema.Boolean),
@@ -493,6 +495,7 @@ export const OrchestratorMcpThreadDetail = Schema.Struct({
   settled: Schema.Boolean,
   settledAt: Schema.NullOr(IsoDateTime),
   snoozed: Schema.Boolean,
+  /** Null while snoozed means hidden until someone unsnoozes it. */
   snoozedUntil: Schema.NullOr(IsoDateTime),
   /** Absent from linked environments that predate it. */
   pinned: Schema.optional(Schema.Boolean),
@@ -767,7 +770,7 @@ export const OrchestratorMcpScheduledTask = Schema.Struct({
   lastRunStatus: ScheduledTaskRunStatus,
   webhookUrl: Schema.optional(Schema.String).annotate({
     description:
-      "Webhook bearer URL, returned only on task creation to callers allowed to run it. Lists and updates omit it; the user can copy it from Settings. Creation may omit it without T3 Connect remote access or run permission.",
+      "Webhook bearer URL, returned only on task creation to callers allowed to run it. Lists and updates omit it; the user can copy it from Settings. Creation may omit it without self-hosted relay remote access or run permission.",
   }),
   webhookSignature: Schema.optional(Schema.Literals(["none", "set"])),
   blockedByPolicy: Schema.optional(Schema.String).annotate({
@@ -1008,3 +1011,13 @@ export class OrchestratorMcpFailure extends Schema.TaggedError<OrchestratorMcpFa
     message: Schema.String,
   },
 ) {}
+
+/** The panel is owned by the calling thread; the coordinator returns one report. */
+export const OrchestratorMcpConveneJudgesInput = Schema.Struct({
+  /** Reserved for the panel coordinator: launch the reviewers in its completion cohort. */
+  asCoordinator: Schema.optionalKey(Schema.Boolean),
+  focus: Schema.optionalKey(Schema.String),
+  members: Schema.optionalKey(Schema.Array(JudgeMember)),
+  clientRequestId: Schema.optionalKey(Schema.String),
+});
+export type OrchestratorMcpConveneJudgesInput = typeof OrchestratorMcpConveneJudgesInput.Type;

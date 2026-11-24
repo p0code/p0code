@@ -1,3 +1,5 @@
+import { Link } from "@tanstack/react-router";
+import { RelayPortAction } from "../RelayPortAction";
 import { useAtomValue } from "@effect/atom-react";
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
@@ -177,6 +179,9 @@ function ThreadServersList(props: ThreadServersPanelProps) {
       headingId="thread-details-servers-heading"
       title={gt("Servers", { $context: "thread details section: running dev servers" })}
     >
+      <Link to="/settings/access" className="text-xs text-muted-foreground">
+        <T>Share agent access</T>
+      </Link>
       <ul className="m-0 list-none p-0">
         {servers.slice(0, visibleCount).map((server, index) => {
           const key = serverKey(server);
@@ -241,6 +246,9 @@ function ThreadServersList(props: ThreadServersPanelProps) {
                   </T>
                 </TooltipPopup>
               </Tooltip>
+              {environment?.serverConfig?.environment.capabilities.selfRelay ? (
+                <RelayPortAction environmentId={props.environmentId} port={server.port} />
+              ) : null}
               {actionCount > 0 ? (
                 <div
                   className={cn(

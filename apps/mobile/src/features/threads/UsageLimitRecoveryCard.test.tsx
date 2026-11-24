@@ -35,6 +35,13 @@ vi.mock("../../components/ui/Button", () => ({
 }));
 vi.mock("../../state/threads", () => ({ threadEnvironment: { updateMetadata: {} } }));
 vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => vi.fn() }));
+// Without a second account in an active profile the card offers no account switch.
+vi.mock("../../state/presentation", () => ({
+  environmentPresentations: { providersByEnvironmentAtom: {} },
+  useEnvironmentPresentation: () => ({ isReady: true, presentation: null }),
+}));
+vi.mock("@effect/atom-react", () => ({ useAtomValue: () => new Map() }));
+vi.mock("../../lib/uuid", () => ({ uuidv4: () => "uuid" }));
 
 import { UsageLimitRecoveryCard } from "./UsageLimitRecoveryCard";
 

@@ -123,10 +123,14 @@ const RPC_AGGREGATES = {
   [WS_METHODS.scheduledTasksListWebhookDeliveries]: "scheduledTasks",
   [WS_METHODS.scheduledTasksGetWebhookDelivery]: "scheduledTasks",
   [WS_METHODS.secretsAnswerRequest]: "secrets",
-  [WS_METHODS.agentFeedbackAnswerRequest]: "agentFeedback",
+
   [WS_METHODS.guestShareCreate]: "guest-share",
-  [WS_METHODS.cloudGetRelayClientStatus]: "cloud",
-  [WS_METHODS.cloudInstallRelayClient]: "cloud",
+  [WS_METHODS.serverRelayStatus]: "relay",
+  [WS_METHODS.serverRelayLink]: "relay",
+  [WS_METHODS.serverRelayUnlink]: "relay",
+  [WS_METHODS.serverExposePort]: "relay",
+  [WS_METHODS.serverUnexposePort]: "relay",
+  [WS_METHODS.serverPortLink]: "relay",
   [WS_METHODS.pullRequestsList]: "pull-requests",
   [WS_METHODS.pullRequestsListStats]: "pull-requests",
   [WS_METHODS.pullRequestsFilterOptions]: "pull-requests",
@@ -268,6 +272,9 @@ const RPC_AGGREGATES = {
   [WS_METHODS.subscribeDeviceState]: "device",
   [WS_METHODS.subscribeServerConfig]: "server",
   [WS_METHODS.subscribeServerLifecycle]: "server",
+  [WS_METHODS.sharedMemoryStatus]: "sharedMemory",
+  [WS_METHODS.sharedMemoryVaults]: "sharedMemory",
+  [WS_METHODS.sharedMemoryCommand]: "sharedMemory",
   [WS_METHODS.subscribeAuthAccess]: "auth",
 } as const satisfies Readonly<Record<WsRpcMethod, string>>;
 

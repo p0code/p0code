@@ -1,0 +1,12 @@
+**
+!apps
+!apps/relay
+!apps/relay/**
+!packages
+!packages/relay-tunnel
+!packages/relay-tunnel/**
+**/node_modules
+**/.vite-plus
+**/*.tsbuildinfo
+**/*.test.ts
+**/testing

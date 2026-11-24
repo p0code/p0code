@@ -32,6 +32,7 @@ import * as ServerSettings from "../../../serverSettings.ts";
 import * as ProviderRegistry from "../../../provider/ProviderRegistry.ts";
 import * as DateTime from "effect/DateTime";
 import { resolveNewThreadModelSelection } from "@t3tools/shared/usageLimits";
+import { routeSelectionToAccountProfile } from "@t3tools/shared/accountProfiles";
 import {
   resolveProjectFileBackedSetting,
   resolveProjectSettings,
@@ -417,22 +418,36 @@ export const layer = McpToolAccess.toLayer(ProjectToolkit, {
         // project's effective defaults, as the composer does. Its mode stays
         // within the ceiling it was approved with.
         const projectDefaults = caller === undefined ? projectSettings : undefined;
+        const defaultModelSelection = projectDefaults
+          ? yield* Effect.gen(function* () {
+              const providers = yield* ProviderRegistry.ProviderRegistry.pipe(
+                Effect.flatMap((registry) => registry.getProviders),
+              );
+              const now = DateTime.toEpochMillis(yield* DateTime.now);
+              const selection = resolveNewThreadModelSelection({
+                defaultSelection: projectDefaults.defaultModelSelection,
+                fallbackSelection: projectDefaults.fallbackModelSelection,
+                providers,
+                settings: projectDefaults,
+                projectId,
+                now,
+              }).selection;
+              return selection === null
+                ? null
+                : routeSelectionToAccountProfile({
+                    selection,
+                    providers,
+                    settings: projectDefaults,
+                    projectId,
+                    now,
+                  });
+            })
+          : null;
         const modelSelection =
           validatedModelSelection ??
           launchedModel ??
           caller?.modelSelection ??
-          (projectDefaults
-            ? resolveNewThreadModelSelection({
-                defaultSelection: projectDefaults.defaultModelSelection,
-                fallbackSelection: projectDefaults.fallbackModelSelection,
-                providers: yield* ProviderRegistry.ProviderRegistry.pipe(
-                  Effect.flatMap((registry) => registry.getProviders),
-                ),
-                settings: projectDefaults,
-                projectId,
-                now: DateTime.toEpochMillis(yield* DateTime.now),
-              }).selection
-            : null) ??
+          defaultModelSelection ??
           undefined;
         if (modelSelection === undefined)
           return yield* new OrchestratorMcpFailure({

@@ -275,6 +275,11 @@ the continuation finishes. If the queue was held by a restart, resume it then.
 When the provider reports a reset time, choose **Resume at reset** to schedule a
 continuation. You can cancel it from the thread. Enable **Resume after
 usage limits** in **Settings → Threads** to schedule limit stops by default.
+To decide for one thread before it hits a limit, turn on **Resume when limit resets**
+in the model picker (on mobile, **Resume automatically when limit resets** in the
+model sheet). The thread's choice overrides the setting, and turning it off cancels a
+scheduled continuation. Antigravity reports a reset time only when its quota error
+includes one; otherwise resume manually.
 The environment must be running when the reset arrives; it resumes overdue
 continuations after a restart. Stopping the thread, sending a new message,
 archiving, or settling it prevents a pending continuation from starting.
@@ -385,6 +390,11 @@ Choose **Snooze → Custom…** from a thread's menu to pick a date and time in 
 local time zone, or a duration in minutes, hours, or days. Durations start when
 you confirm; one day means 24 hours. On web and desktop, you can also snooze
 several selected threads together. Choose **Wake thread** to bring a thread back early.
+
+Choose **Snooze → Until I bring it back** to hide a thread with no wake time. It shows
+as **Hidden** under **Snoozed** and never wakes on the clock; bring it back from its
+menu, the command palette (**Bring thread back**), or the **Thread: Hide or Bring Back**
+shortcut. A hidden thread with a scheduled limit continuation still resumes at the reset.
 
 A snoozed thread keeps working and stays hidden until its wake time, even while
 its agent wakes itself for background work. It comes back early for an approval,

@@ -1,5 +1,10 @@
-import { useAuth } from "@clerk/react";
 import { useAtomValue } from "@effect/atom-react";
+import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { resolveProviderInstanceDisplayName as agentName } from "@t3tools/client-runtime/state/provider-instance-display";
+import {
+  isAtomCommandInterrupted,
+  squashAtomCommandFailure,
+} from "@t3tools/client-runtime/state/runtime";
 import type {
   AgentSessionProjectCandidate,
   EnvironmentId,
@@ -9,26 +14,21 @@ import type {
   ServerConfig,
   ServerProvider,
 } from "@t3tools/contracts";
-import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { resolveProviderInstanceDisplayName as agentName } from "@t3tools/client-runtime/state/provider-instance-display";
-import {
-  isAtomCommandInterrupted,
-  squashAtomCommandFailure,
-} from "@t3tools/client-runtime/state/runtime";
 import {
   AgentSessionSource,
+  AuthOrchestrationOperateScope,
   AuthProvidersManageScope,
   AuthRelayReadScope,
   AuthRelayWriteScope,
   AuthTerminalOperateScope,
   CommandId,
-  AuthOrchestrationOperateScope,
   isManagedDriverAllowed,
   ProviderDriverKind,
   ThreadId,
 } from "@t3tools/contracts";
 import { Link, useBlocker } from "@tanstack/react-router";
 import * as Schema from "effect/Schema";
+import { msg, T, useGT, useLocale, useMessages, Var } from "gt-react";
 import {
   CheckIcon,
   ChevronDownIcon,
@@ -37,7 +37,6 @@ import {
   SmartphoneIcon,
   TerminalIcon,
 } from "lucide-react";
-import { msg, T, useGT, useLocale, useMessages, Var } from "gt-react";
 import { useEffect, useEffectEvent, useRef, useState, type ReactNode } from "react";
 
 import { TYPOGRAPHY_ADVANCED_STORAGE_KEY } from "../../appearanceFonts";
@@ -45,27 +44,26 @@ import { MOBILE_APP_URL } from "../../branding";
 import { isElectron } from "../../env";
 import { useLocalStorage } from "../../hooks/useLocalStorage";
 import { usePersistEnvironmentProviderInstanceMutation } from "../../hooks/useSettings";
-import { useCloudLinkState } from "../../cloud/cloudLinkState";
-import { hasCloudPublicConfig } from "../../cloud/publicConfig";
-import { PRIVACY_POLICY_URL } from "../../legalLinks";
+
 import { workspaceAreaProps } from "../../lib/workspaceFocus";
-import { retryClerkLoad, useClerkLoadFailed } from "../clerk/clerkLoadFailure";
-import { useT3ConnectAuthPrompt } from "../clerk/useT3ConnectAuthPrompt";
+
+import { cn, newProjectId, randomUUID } from "../../lib/utils";
 import { completeOnboarding } from "../../onboarding/firstRun";
 import {
   groupOnboardingProjects,
-  partitionOnboardingProjects,
-  onboardingProjectKey,
-  resolveOnboardingLandingProject,
   isNewOnboardingProject,
+  onboardingProjectKey,
+  partitionOnboardingProjects,
+  resolveOnboardingLandingProject,
   resolveOnboardingProjectId,
-  type OnboardingProjectGroup,
   splitOnboardingProjectPath,
+  type OnboardingProjectGroup,
 } from "../../onboarding/projectImport.logic";
 import {
   resolveOnboardingProviderInstallCommand,
   resolveOnboardingProviderLoginCommand,
 } from "../../onboarding/providerReadiness.logic";
+import { useProjectScans } from "../../onboarding/useProjectScans";
 import {
   cliTerminalStep,
   codexCardProvider,
@@ -78,15 +76,13 @@ import {
 } from "../../onboarding/welcomePage.logic";
 import {
   StoredWelcomeImportSelection,
-  type WelcomeImportSelection,
   welcomeImportSelectionKey,
+  type WelcomeImportSelection,
 } from "../../onboarding/welcomeState";
-import { newProjectId, randomUUID } from "../../lib/utils";
 import { agentSessionImport } from "../../state/agentSessions";
 import { readProjects, useProjects, waitForProject } from "../../state/entities";
 import { useEnvironments, usePrimaryEnvironmentId } from "../../state/environments";
-import { managedTelemetryOffMessage, useManagedPolicy } from "../../state/managedPolicy";
-import { useProjectScans } from "../../onboarding/useProjectScans";
+import { useManagedPolicy } from "../../state/managedPolicy";
 import { projectEnvironment } from "../../state/projects";
 import { serverEnvironment } from "../../state/server";
 import {
@@ -97,25 +93,24 @@ import {
 import { terminalEnvironment } from "../../state/terminal";
 import { useThreadRunningTerminalIds } from "../../state/terminalSessions";
 import { useAtomCommand } from "../../state/use-atom-command";
-import { getProviderSummary } from "../settings/providerStatus";
+import { formatRelativeTime } from "../../timestampFormat";
+import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
+import { ACPRegistryIcon } from "../Icons";
 import { AddProviderInstanceDialog } from "../settings/AddProviderInstanceDialog";
 import { useDesktopCliCommand } from "../settings/CliCommandSettingsRow";
 import { CodexSetupSection } from "../settings/CodexSetupSection";
 import { readCodexSetupMode } from "../settings/CodexSetupSection.logic";
+import { getProviderSummary } from "../settings/providerStatus";
 import { TerminalViewport } from "../ThreadTerminalDrawer";
-import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
-import { ACPRegistryIcon } from "../Icons";
 import { Button } from "../ui/button";
 import { Checkbox } from "../ui/checkbox";
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "../ui/collapsible";
 import { QRCodeSvg } from "../ui/qr-code";
-import { Tooltip, TooltipTrigger, TooltipPopup } from "../ui/tooltip";
 import { ScrollArea } from "../ui/scroll-area";
 import { SidebarInset } from "../ui/sidebar";
 import { toastManager } from "../ui/toast";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
-import { cn } from "../../lib/utils";
-import { formatRelativeTime } from "../../timestampFormat";
 
 const AGENT_ONBOARDING_THREAD_ID = ThreadId.make("onboarding-agent-setup");
 const SCAN_LIMIT_MESSAGE = msg(
@@ -146,7 +141,7 @@ export function WelcomePage({
   const canWriteRelay = useEnvironmentScope(environmentId, AuthRelayWriteScope);
   const showPhone = welcomeOffersPhone({
     isPrimary,
-    cloud: hasCloudPublicConfig(),
+    cloud: false,
     canShare: canReadRelay && canWriteRelay,
     policy: useManagedPolicy(environmentId),
   });
@@ -303,7 +298,7 @@ export function WelcomePage({
                 projectImport={projectImport}
                 isImporting={isImporting}
               />
-              {showPhone ? <PhoneSection environmentId={environmentId} /> : null}
+              {showPhone ? <PhoneSection /> : null}
             </div>
             <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
               {agentReady ? (
@@ -335,50 +330,10 @@ export function WelcomePage({
                 </Button>
               </div>
             </div>
-            <TelemetryNotice environmentId={environmentId} />
           </div>
         </div>
       </div>
     </SidebarInset>
-  );
-}
-
-function TelemetryNotice({ environmentId }: { readonly environmentId: EnvironmentId }) {
-  const messages = useMessages();
-  const telemetryOff = managedTelemetryOffMessage(useManagedPolicy(environmentId), messages);
-  return (
-    <p className="mt-auto pt-12 text-2xs leading-relaxed text-muted-foreground/70">
-      {telemetryOff === undefined ? (
-        <T>
-          T3 Code collects anonymous usage data to improve the app. To opt out, see the{" "}
-          <a
-            className="underline decoration-current/40 underline-offset-2 hover:text-muted-foreground"
-            href={PRIVACY_POLICY_URL}
-            target="_blank"
-            rel="noreferrer noopener"
-          >
-            privacy policy
-          </a>
-          .
-        </T>
-      ) : (
-        <>
-          {telemetryOff}{" "}
-          <T>
-            See the{" "}
-            <a
-              className="underline decoration-current/40 underline-offset-2 hover:text-muted-foreground"
-              href={PRIVACY_POLICY_URL}
-              target="_blank"
-              rel="noreferrer noopener"
-            >
-              privacy policy
-            </a>
-            .
-          </T>
-        </>
-      )}
-    </p>
   );
 }
 
@@ -978,7 +933,7 @@ function ProjectsSection({
   );
 }
 
-function PhoneSection({ environmentId }: { readonly environmentId: EnvironmentId }) {
+function PhoneSection() {
   const gt = useGT();
   const [open, setOpen] = useState(false);
   return (
@@ -1005,7 +960,7 @@ function PhoneSection({ environmentId }: { readonly environmentId: EnvironmentId
                 </p>
               </PhoneStep>
               <PhoneStep step={2}>
-                <PhoneConnectLink environmentId={environmentId} />
+                <T>Add this computer using its pairing link.</T>
               </PhoneStep>
             </ol>
             {/* One code for both stores: the link opens the store that matches the phone. */}
@@ -1031,97 +986,6 @@ function PhoneStep({ step, children }: { readonly step: number; readonly childre
       <span className="w-3 shrink-0 text-sm text-muted-foreground tabular-nums">{step}</span>
       <div className="flex min-w-0 flex-col items-start gap-2">{children}</div>
     </li>
-  );
-}
-
-function PhoneConnectLink({ environmentId }: { readonly environmentId: EnvironmentId }) {
-  const { isLoaded, isSignedIn, userId } = useAuth({ treatPendingAsSignedOut: false });
-  const gt = useGT();
-  const loadFailed = useClerkLoadFailed();
-  const { openAuthPrompt } = useT3ConnectAuthPrompt();
-  const linkState = useCloudLinkState(environmentId);
-  const refreshLinkState = useEffectEvent(linkState.refresh);
-  // The server rechecks the tunnel every 30 s; read its latest result while this panel is open.
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- 30 s interval that refreshes the cloud link reachability while mounted
-  useEffect(() => {
-    const interval = window.setInterval(() => refreshLinkState(), 30_000);
-    return () => window.clearInterval(interval);
-  }, []);
-  const link = linkState.data;
-  // The phone reaches this computer through its tunnel; older servers leave that flag out.
-  const shared =
-    link !== null &&
-    link.linked &&
-    link.linkRevoked !== true &&
-    link.cloudUserId === userId &&
-    link.managedTunnelActive !== false;
-  // The server checks the tunnel on its own; until it has, the result is unknown.
-  const reachability = shared ? link.reachability?.status : undefined;
-  const settingsLink = (label: string) => (
-    <Button variant="outline" size="xs" render={<Link to="/settings/access" />}>
-      {label}
-    </Button>
-  );
-  if (isSignedIn && link === null && linkState.isPending) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        <T>Checking T3 Connect…</T>
-      </p>
-    );
-  }
-  if (isSignedIn && linkState.error !== null) {
-    return (
-      <>
-        <p className="text-sm text-foreground">
-          <T>Could not check T3 Connect.</T>
-        </p>
-        {settingsLink(gt("Check T3 Connect"))}
-      </>
-    );
-  }
-  if (isSignedIn && reachability === "reachable") {
-    return (
-      <p className="flex gap-1.5 text-sm text-foreground">
-        <CheckIcon className="mt-0.5 size-4 shrink-0 text-success-foreground" />
-        <T>Your phone can reach this computer. Sign in to the app with the same account.</T>
-      </p>
-    );
-  }
-  if (isSignedIn && shared && reachability === undefined) {
-    return (
-      <p className="text-sm text-foreground">
-        <T>T3 Connect is on for this computer. Sign in to the app with the same account.</T>
-      </p>
-    );
-  }
-  if (isSignedIn) {
-    // Signing in alone does not share this computer, for example after "Not now".
-    return (
-      <>
-        <p className="text-sm text-foreground">
-          {shared
-            ? gt("T3 Connect is on, but the app cannot reach this computer.")
-            : gt("Signed in. Share this computer so the app can reach it.")}
-        </p>
-        {settingsLink(shared ? gt("Check T3 Connect") : gt("Set up T3 Connect"))}
-      </>
-    );
-  }
-  return (
-    <>
-      <p className="text-sm text-foreground">
-        <T>Sign in to T3 Connect here, then in the app with the same account.</T>
-      </p>
-      {loadFailed ? (
-        <Button variant="outline" size="xs" onClick={retryClerkLoad}>
-          <T>Retry sign-in</T>
-        </Button>
-      ) : (
-        <Button variant="outline" size="xs" disabled={!isLoaded} onClick={openAuthPrompt}>
-          <T>Sign in to T3 Connect</T>
-        </Button>
-      )}
-    </>
   );
 }
 

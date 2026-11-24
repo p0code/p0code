@@ -1,7 +1,6 @@
 import { assert, describe, it } from "@effect/vitest";
 
 import {
-  AGENT_FEEDBACK_INSTRUCTIONS,
   buildRuntimeInstructions,
   PULL_REQUEST_LINKING_INSTRUCTIONS,
 } from "./runtimeInstructions.ts";
@@ -58,22 +57,6 @@ describe("buildRuntimeInstructions", () => {
     assert.include(instructions, "call unwatch_pull_request");
   });
 
-  it("carries the feedback line of the agent feedback mode, and none while it is off", () => {
-    assert.notInclude(buildRuntimeInstructions({ harness: "Codex" }), "t3_feedback");
-    assert.notInclude(
-      buildRuntimeInstructions({ harness: "Codex", agentFeedback: "off" }),
-      "t3_feedback",
-    );
-    for (const agentFeedback of ["on-request", "auto"] as const) {
-      for (const pullRequestLinking of [true, false]) {
-        assert.include(
-          buildRuntimeInstructions({ harness: "Codex", agentFeedback, pullRequestLinking }),
-          AGENT_FEEDBACK_INSTRUCTIONS[agentFeedback],
-        );
-      }
-    }
-  });
-
   it("lists a multi-folder thread's folders and leaves single-folder text unchanged", () => {
     const base = { runtimeMode: "full-access", interactionMode: "default" } as const;
     const single = buildRuntimeInstructions({ harness: "Codex" });
@@ -103,11 +86,11 @@ describe("buildRuntimeInstructions", () => {
       },
     });
     assert.isTrue(listed.startsWith(`${single}\n\n<workspace_folders>\n`));
-    const withFeedback = buildRuntimeInstructions({ harness: "Codex", agentFeedback: "auto" });
+    const withFeedback = buildRuntimeInstructions({ harness: "Codex" });
     assert.isTrue(
       buildRuntimeInstructions({
         harness: "Codex",
-        agentFeedback: "auto",
+
         runtimePolicy: {
           ...base,
           cwd: "/work/app",
@@ -154,4 +137,19 @@ describe("buildRuntimeInstructions", () => {
     assert.include(block, `\n- Not listed: ${128 - shown} more\n</workspace_folders>`);
     assert.isBelow(new TextEncoder().encode(block).length, 4000);
   });
+});
+
+it("includes shared memory only when the runtime policy enables it", () => {
+  assert.notInclude(buildRuntimeInstructions({ harness: "Codex" }), "<shared_memory>");
+  const text = buildRuntimeInstructions({
+    harness: "Codex",
+    runtimePolicy: {
+      cwd: "/repo",
+      sharedMemory: { folder: "/shared/memory", agentId: "shared-agent" },
+    },
+  });
+  assert.include(text, "/shared/memory");
+  assert.include(text, "shared-agent");
+  assert.include(text, "MEMORY.md");
+  assert.include(text, "root cause");
 });

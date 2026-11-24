@@ -555,3 +555,35 @@ describe("server model preferences", () => {
     expect(decodeServerSettingsPatch(input)).toEqual(input);
   });
 });
+
+it("defaults the judges panel for existing settings and preserves explicit member choices", () => {
+  const defaults = decodeServerSettings({});
+  expect(defaults.judges.map((member) => member.model)).toEqual([
+    "opencode-go/glm-5.3-flash",
+    "opencode-go/deepseek-v4.1-flash",
+    "gpt-6.1-sol",
+    "claude-opus-5-5",
+  ]);
+  const settings = decodeServerSettings({
+    judges: [
+      {
+        providerInstanceId: "custom-codex",
+        model: "gpt-6.1-sol",
+        options: [{ id: "reasoningEffort", value: "high" }],
+      },
+    ],
+    judgeInstructions: "Review security",
+    judgeDefaultScope: "Current diff",
+  });
+  expect(settings.judges[0]).toMatchObject({
+    enabled: true,
+    providerInstanceId: "custom-codex",
+    options: [{ id: "reasoningEffort", value: "high" }],
+  });
+  expect(settings.judgeInstructions).toBe("Review security");
+  expect(decodeServerSettings({ judges: [] }).judges).toEqual([]);
+  expect(decodeServerSettingsPatch({ judges: [], judgeDefaultScope: "Diff" })).toEqual({
+    judges: [],
+    judgeDefaultScope: "Diff",
+  });
+});

@@ -1,3 +1,8 @@
+import { handlers as orchestratorHandlers } from "./toolkits/orchestrator/handlers.ts";
+import { OrchestratorToolkit } from "./toolkits/orchestrator/tools.ts";
+import * as JudgeSettings from "../serverSettings.ts";
+import * as JudgeProviders from "../provider/ProviderRegistry.ts";
+import * as JudgeOrchestrator from "./OrchestratorMcpService.ts";
 import { expect, it } from "@effect/vitest";
 import {
   EnvironmentId,
@@ -533,4 +538,31 @@ it.effect("refuses to build a thread-bound tool that outside clients would be of
       "reads_as_caller acts as its calling thread",
     );
   }),
+);
+
+it.effect(
+  "refuses judges from read-only clients and stale agent sessions before dispatching",
+  () => {
+    const toolkit = Toolkit.make(OrchestratorToolkit.tools.convene_judges);
+    const handlers = McpToolAccess.toLayer(toolkit, {
+      convene_judges: orchestratorHandlers.convene_judges,
+    });
+    const layer = McpHttpServer.toolkitRegistration(toolkit, handlers).pipe(
+      Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
+      Layer.provideMerge(
+        Layer.mock(ThreadManagement.ThreadManagementService)({
+          getThreadShell: (id) => Effect.succeed(shells.get(id)!),
+        }),
+      ),
+      Layer.provideMerge(Layer.mock(JudgeSettings.ServerSettingsService)({})),
+      Layer.provideMerge(Layer.mock(JudgeProviders.ProviderRegistry)({})),
+      Layer.provideMerge(Layer.mock(JudgeOrchestrator.OrchestratorMcpService)({})),
+    );
+    return Effect.gen(function* () {
+      expect((yield* call("convene_judges", readOnlyClient).pipe(Effect.result))._tag).toBe(
+        "Failure",
+      );
+      expect(yield* call("convene_judges", ended)).toBe("parent_not_active");
+    }).pipe(Effect.provide(layer));
+  },
 );

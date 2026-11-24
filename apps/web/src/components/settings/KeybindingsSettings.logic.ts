@@ -486,6 +486,7 @@ const COMMAND_LABELS: Partial<Record<KeybindingCommand, string>> = {
   "usage.open": msg("Usage: Open"),
   "theme.select": msg("Theme: Select"),
   "appearance.cycle": msg("Appearance: Cycle"),
+  "accountProfile.cycle": msg("Account Profile: Cycle"),
   "themeEditor.toggle": msg("Theme Editor: Toggle"),
   "composer.stash": msg("Composer: Stash"),
   "composer.host": msg("Composer: Host"),
@@ -510,6 +511,7 @@ const COMMAND_LABELS: Partial<Record<KeybindingCommand, string>> = {
   "thread.next": msg("Thread: Next"),
   "thread.settle": msg("Thread: Settle"),
   "thread.pin": msg("Thread: Pin"),
+  "thread.hide": msg("Thread: Hide or Bring Back"),
   "thread.regenerateTitle": msg("Thread: Regenerate Title"),
   "thread.undo": msg("Thread: Undo"),
 };

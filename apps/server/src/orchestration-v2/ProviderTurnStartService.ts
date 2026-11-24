@@ -1,3 +1,4 @@
+import * as SharedMemorySync from "../memory/SharedMemorySync.ts";
 import { classifyCodexManagedError } from "../provider/CodexManagedErrors.ts";
 import { modelSelectionsEqual } from "@t3tools/shared/model";
 import { projectComposerContextForProvider } from "@t3tools/shared/composerContextReferences";
@@ -51,7 +52,7 @@ import {
 } from "../workspace/restoreMissingWorktree.ts";
 import type * as TaskFolders from "../workspace/TaskFolders.ts";
 import * as EventSink from "./EventSink.ts";
-import * as ProviderUsageAnalytics from "../telemetry/ProviderUsageAnalytics.ts";
+
 import * as ContextHandoffService from "./ContextHandoffService.ts";
 import { canForkBusySourceNatively, isActiveRun } from "./CommandPolicy.ts";
 import { contextBoundaryOrdinal, isScheduledFreshRun } from "./contextBoundary.ts";
@@ -309,7 +310,7 @@ export const layer: Layer.Layer<
   ProviderTurnStartServiceV2,
   Effect.gen(function* () {
     const eventSink = yield* EventSink.EventSinkV2;
-    const turnAnalytics = yield* ProviderUsageAnalytics.ProviderTurnAnalytics;
+
     const contextHandoffService = yield* ContextHandoffService.ContextHandoffServiceV2;
     const idAllocator = yield* IdAllocator.IdAllocatorV2;
     const fileSystem = yield* FileSystem.FileSystem;
@@ -539,22 +540,13 @@ export const layer: Layer.Layer<
             } satisfies OrchestrationV2DomainEvent;
           }),
         );
-        const written = yield* eventSink.writeIfRunCurrent({
+        yield* eventSink.writeIfRunCurrent({
           threadId: run.threadId,
           runId,
           activeAttemptId: attempt.id,
           expectedStatus: "starting",
           events,
         });
-        // A steering restart that cannot start still ends a run whose earlier turns counted.
-        if (written.committed) {
-          yield* turnAnalytics.runSettled({
-            runId,
-            status,
-            completedAt: now,
-            childrenRunning: false,
-          });
-        }
       },
     );
 
@@ -958,7 +950,14 @@ export const layer: Layer.Layer<
         });
         return;
       }
-      const resolvedRuntimePolicy = resolvedPolicy.success;
+      const memoryService = yield* Effect.serviceOption(SharedMemorySync.SharedMemorySync);
+      const sharedMemory = Option.isSome(memoryService)
+        ? yield* memoryService.value.instructions
+        : undefined;
+      const resolvedRuntimePolicy = {
+        ...resolvedPolicy.success,
+        ...(sharedMemory ? { sharedMemory } : {}),
+      };
       if (!(yield* isCurrentAttemptInStatus("starting"))) return;
       const existingSessionProjection = projection.providerSessions.find(
         (candidate) => candidate.id === providerSessionId,

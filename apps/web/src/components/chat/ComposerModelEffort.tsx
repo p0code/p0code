@@ -1,18 +1,36 @@
+import { isOpenEndedSnooze } from "@t3tools/contracts";
+import { useAtomValue } from "@effect/atom-react";
 import {
   buildTraitsTriggerDisplay,
   getDescriptorStringValue,
   isReasoningControl,
   selectableProviderOptionChoices,
 } from "@t3tools/client-runtime/model-traits";
-import type { ProviderOptionDescriptor, RuntimeMode } from "@t3tools/contracts";
+import {
+  AuthOrchestrationOperateScope,
+  type ProviderOptionDescriptor,
+  type RuntimeMode,
+  type ScopedThreadRef,
+} from "@t3tools/contracts";
 import type { EffortDisplay } from "@t3tools/contracts/settings";
 import { getProviderOptionCurrentLabel } from "@t3tools/shared/model";
 import { msg, T, useGT, useMessages } from "gt-react";
-import { CheckIcon, ChevronRightIcon, ChevronUpIcon, WorkflowIcon } from "lucide-react";
+import {
+  CheckIcon,
+  ChevronRightIcon,
+  ChevronUpIcon,
+  TimerResetIcon,
+  WorkflowIcon,
+} from "lucide-react";
 import { type KeyboardEvent, type ReactNode, use, useRef, useState } from "react";
 
 import { m, type MessageResolver } from "~/i18n/messages";
 import { cn } from "~/lib/utils";
+import { useThreadShell } from "~/state/entities";
+import { serverEnvironment } from "~/state/server";
+import { useEnvironmentScope } from "~/state/session";
+import { threadEnvironment } from "~/state/threads";
+import { useOrchestrationCommand } from "~/state/use-orchestration-command";
 import {
   Menu,
   MenuPopup,
@@ -24,8 +42,8 @@ import {
 import { Switch } from "../ui/switch";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import type { ComposerControlSize } from "./ComposerControl";
-import { ComposerPermissionsSection, type RuntimeModeOption } from "./ComposerFooterControls";
 import { composerFloatingLayerProps, focusCheckedPermission } from "./composerEventScope";
+import { ComposerPermissionsSection, type RuntimeModeOption } from "./ComposerFooterControls";
 import { EffortGlyph, FastBolt, resolveEffortGlyph } from "./EffortGlyph";
 import { DockedPickerContext } from "./ProviderModelPicker";
 import {
@@ -675,6 +693,57 @@ function UltracodeControl(props: { traits: TraitsSelectionInput }) {
   );
 }
 
+/** Pre-arms this thread to resume on its own once a provider usage limit resets. */
+function AutoResumeAtLimitResetControl(props: { threadRef: ScopedThreadRef }) {
+  const gt = useGT();
+  const thread = useThreadShell(props.threadRef);
+  const config = useAtomValue(serverEnvironment.configValueAtom(props.threadRef.environmentId));
+  const settings = useAtomValue(serverEnvironment.settingsValueAtom(props.threadRef.environmentId));
+  const canOperate = useEnvironmentScope(
+    props.threadRef.environmentId,
+    AuthOrchestrationOperateScope,
+  );
+  const updateMetadata = useOrchestrationCommand(threadEnvironment.updateMetadata);
+  if (thread === null || config?.environment.capabilities.threadLimitRecoveryPreference !== true)
+    return null;
+  const on =
+    thread.autoResumeAtLimitReset ??
+    (isOpenEndedSnooze(thread.snoozedUntil)
+      ? false
+      : (settings?.autoResumeLimitedThreads ?? false));
+  const description = on
+    ? gt("This thread continues on its own when its usage limit resets.")
+    : gt("Turn on to continue this thread on its own when its usage limit resets.");
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <div className="flex rounded-lg bg-input/40 p-0.5">
+            <button
+              type="button"
+              aria-pressed={on}
+              aria-description={description}
+              data-checked={on || undefined}
+              disabled={!canOperate}
+              className={FOOTER_SEGMENT}
+              onClick={() =>
+                void updateMetadata({
+                  environmentId: props.threadRef.environmentId,
+                  input: { threadId: props.threadRef.threadId, autoResumeAtLimitReset: !on },
+                })
+              }
+            >
+              <TimerResetIcon aria-hidden="true" className="size-3" />
+              {gt("Resume when limit resets")}
+            </button>
+          </div>
+        }
+      />
+      <TooltipPopup side="top">{description}</TooltipPopup>
+    </Tooltip>
+  );
+}
+
 /** Permissions change rarely, so the footer names the mode and nests the choice in a menu. */
 function PermissionsMenu(props: {
   runtimeMode: RuntimeMode;
@@ -724,11 +793,14 @@ export function ComposerPickerFooter(props: {
   runtimeMode: RuntimeMode;
   runtimeModeOptions: ReadonlyArray<RuntimeModeOption>;
   onRuntimeModeChange: (mode: RuntimeMode) => void;
+  /** A started thread; drafts have no server thread to arm yet. */
+  threadRef?: ScopedThreadRef | null;
 }) {
   return (
     <div className="flex flex-wrap items-center gap-2 border-t border-border/70 bg-muted/40 px-3 py-2">
       {props.traits ? <SpeedControl traits={props.traits} /> : null}
       {props.traits ? <UltracodeControl traits={props.traits} /> : null}
+      {props.threadRef ? <AutoResumeAtLimitResetControl threadRef={props.threadRef} /> : null}
       <PermissionsMenu
         runtimeMode={props.runtimeMode}
         options={props.runtimeModeOptions}

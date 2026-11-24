@@ -8,11 +8,11 @@ import * as Schema from "effect/Schema";
 import * as ExpoCrypto from "expo-crypto";
 import { msg } from "gt-react-native";
 
-import { m } from "../../i18n/messages";
-import * as SecureStore from "expo-secure-store";
-import { DpopProof } from "@t3tools/client-runtime/relay";
+import { DpopProof } from "@t3tools/client-runtime/authorization";
 import { DpopPublicJwk } from "@t3tools/shared/dpopCommon";
 import * as Layer from "effect/Layer";
+import * as SecureStore from "expo-secure-store";
+import { m } from "../../i18n/messages";
 
 export class CloudDpopError extends Schema.TaggedError<CloudDpopError>()("CloudDpopError", {
   message: Schema.String,

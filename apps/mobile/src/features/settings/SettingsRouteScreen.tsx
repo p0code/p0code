@@ -1,3 +1,5 @@
+import { EmptyState } from "../../components/ui/EmptyState";
+import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScrollView";
 import {
   navigationCustomizationAvailable,
   overflowNavigationTabs,
@@ -5,35 +7,32 @@ import {
 import {
   NAVIGATION_TAB_ICONS,
   WORKSPACE_TAB_LABELS,
-  useNavigationTabOrder,
   useHiddenNavigationTabs,
+  useNavigationTabOrder,
 } from "../layout/workspace/navigation-tabs";
+import { useSelectWorkspaceTab } from "../layout/workspace/useSelectWorkspaceTab";
 import { currentWorkspaceSelections } from "../layout/workspace/workspace-selection-store";
 import { rememberedSettingsPage } from "../layout/workspace/workspace-tab-navigation";
-import { useSelectWorkspaceTab } from "../layout/workspace/useSelectWorkspaceTab";
 import { useWorkspaceTabs } from "../layout/workspace/WorkspaceTabsContext";
-import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScrollView";
-import { EmptyState } from "../../components/ui/EmptyState";
-import { useAuth, useUser } from "@clerk/expo";
-import { useNavigation, useNavigationState } from "@react-navigation/native";
+
+import { useNavigationState } from "@react-navigation/native";
+import { deriveProjectGroupLabel } from "@t3tools/client-runtime/state/project-grouping";
 import { use, type ComponentProps } from "react";
 import { Platform, View } from "react-native";
-import { useNativeColumnLayoutMetrics } from "../../native/native-layout-metrics";
-import { deriveProjectGroupLabel } from "@t3tools/client-runtime/state/project-grouping";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useNativeColumnLayoutMetrics } from "../../native/native-layout-metrics";
 
-import { hasCloudPublicConfig } from "../cloud/publicConfig";
-import { useAdaptiveWorkspaceLayout } from "../layout/adaptive-workspace-context";
+import { useGT, useMessages } from "gt-react-native";
+import { usePaneRole } from "../../components/ui/Pane";
 import { useSavedRemoteConnections } from "../../state/use-remote-environment-registry";
-import { SettingsRow } from "./components/SettingsRow";
-import { SettingsSection, SettingsSidebarContext } from "./components/SettingsSection";
-import { SettingsScreen } from "./components/SettingsScreen";
+import { useAdaptiveWorkspaceLayout } from "../layout/adaptive-workspace-context";
 import type { SettingsPageTarget } from "./components/settings-page-targets";
 import { useSettingsEnvironmentMenu } from "./components/SettingsEnvironmentFilterHeader";
+import { SettingsRow } from "./components/SettingsRow";
+import { SettingsScreen } from "./components/SettingsScreen";
+import { SettingsSection, SettingsSidebarContext } from "./components/SettingsSection";
 import { useSettingsEnvironmentFilter } from "./settings-environment-filter";
 import { filterSettingsSections } from "./settings-search";
-import { usePaneRole } from "../../components/ui/Pane";
-import { useGT, useMessages } from "gt-react-native";
 
 export function SettingsRouteScreen() {
   const list = useSettingsListPlacement();
@@ -67,7 +66,7 @@ function useSettingsListPlacement() {
 }
 
 function SettingsListContent() {
-  return hasCloudPublicConfig() ? <ConfiguredSettingsRouteScreen /> : <LocalSettingsRouteScreen />;
+  return <LocalSettingsRouteScreen />;
 }
 
 export function SettingsListScreen(props: {
@@ -109,29 +108,12 @@ interface SettingsListSection {
   readonly rows: readonly SettingsListRow[];
 }
 
-function ConfiguredSettingsRouteScreen() {
+function LocalSettingsRouteScreen() {
   const gt = useGT();
-  const navigation = useNavigation();
-  const { isLoaded, isSignedIn } = useAuth({ treatPendingAsSignedOut: false });
-  const { user } = useUser();
   const { savedConnectionsById } = useSavedRemoteConnections();
-  const accountLabel = !isLoaded
-    ? gt("Checking")
-    : !isSignedIn
-      ? gt("Sign in")
-      : (user?.primaryEmailAddress?.emailAddress ?? gt("Signed in"));
-
   return (
     <SettingsList
       connections={[
-        {
-          id: "account",
-          icon: "person.crop.circle",
-          label: gt("T3 Account"),
-          value: accountLabel,
-          disabled: !isLoaded,
-          onPress: () => navigation.navigate("SettingsAuth"),
-        },
         environmentsRow(gt("Environments"), Object.keys(savedConnectionsById).length),
         {
           id: "SettingsNotifications",
@@ -140,16 +122,6 @@ function ConfiguredSettingsRouteScreen() {
           target: "SettingsNotifications",
         },
       ]}
-    />
-  );
-}
-
-function LocalSettingsRouteScreen() {
-  const gt = useGT();
-  const { savedConnectionsById } = useSavedRemoteConnections();
-  return (
-    <SettingsList
-      connections={[environmentsRow(gt("Environments"), Object.keys(savedConnectionsById).length)]}
     />
   );
 }
@@ -253,6 +225,12 @@ function useSettingsIndexSections(): SettingsListSection[] {
   ): SettingsListRow => ({ id: target, icon, label, target, ...extra });
   const serverPage = (target: SettingsPageTarget, icon: SettingsListRow["icon"], label: string) =>
     page(target, icon, label, { disabled: noServerTargets });
+  // With one environment in scope, the Providers row shows which account profile is active.
+  const onlyTargetSettings =
+    selectedTargets.length === 1 ? selectedTargets[0]?.serverConfig.settings : undefined;
+  const activeProfileName = onlyTargetSettings?.accountProfiles.find(
+    (profile) => profile.id === onlyTargetSettings.activeAccountProfileId,
+  )?.name;
   // The same pages and groups as Settings on web, minus what mobile has no setting for.
   return [
     {
@@ -270,7 +248,10 @@ function useSettingsIndexSections(): SettingsListSection[] {
     {
       title: gt("Agents"),
       rows: [
-        serverPage("SettingsProviderAccounts", "person.crop.circle", gt("Providers")),
+        page("SettingsProviderAccounts", "person.crop.circle", gt("Providers"), {
+          disabled: noServerTargets,
+          ...(activeProfileName ? { value: activeProfileName } : {}),
+        }),
         serverPage("SettingsThreads", "text.bubble", gt("Threads")),
         page("SettingsScheduledTasks", "clock", gt("Scheduled tasks")),
       ],

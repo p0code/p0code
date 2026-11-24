@@ -8,10 +8,12 @@ and the phone app. Only an agent is needed to start chatting.
 To see the page again, go to **Settings → About → Welcome page** and select
 **Open**. Direct links, such as Settings, open normally before setup is done.
 
-The hosted app at app.t3.codes does not open the page. With no computer connected,
-it asks you to sign in to T3 Connect, then to install T3 Code and run
-`t3 connect` on your computer. From home, it adds compatible computers linked to your account and
-opens the app. To add more computers later, use **Settings → Environments**.
+The hosted app at app.t3.codes does not open the page. It connects directly to your
+servers, so a computer needs an address the browser can reach: the local network,
+a [self-hosted relay](./remote-access.md#self-hosted-relay), or Tailscale. With
+no computer connected, it asks you to install T3 Code on a computer and pair
+with it. From home, it lists the environments you have added and opens the app.
+To add more computers later, use **Settings → Environments**.
 
 If T3 Code cannot confirm the workspace during startup, it shows
 **Still connecting** instead of opening the app. Select **Reload** to try again.
@@ -54,13 +56,13 @@ without one. Checked projects are still imported.
 ## Phone
 
 Select **Set up** and scan the code with your phone. It opens the App Store on an
-iPhone and Google Play on Android. Then select **Sign in to T3 Connect** and allow
-this computer when T3 Code asks, so the app can reach it. Sign in to the app with
-the same account. If you are signed in but this computer is not shared yet, select
-**Set up T3 Connect**. If T3 Connect is on but the app cannot reach this computer,
-select **Check T3 Connect** to see why. The page leaves the phone out on builds
-without T3 Connect, or when your organization turns it off. You can still pair the
-app with a code from **Settings → Sharing & access**.
+iPhone and Google Play on Android. Then add this computer using its pairing
+link, so the app can reach it; if the computer has no public address yet, link a
+relay for it first (see [Remote access](./remote-access.md#self-hosted-relay)).
+If the relay is linked but the app cannot reach this computer, check the
+connection to see why. The page leaves the phone out on builds without a relay,
+or when your organization turns it off. You can still pair the app with a code
+from **Settings → Sharing & access**.
 
 ## Projects
 

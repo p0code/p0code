@@ -11,13 +11,14 @@ in once, and you choose what it may do.
 Open the command palette (`Cmd/Ctrl+K`) and choose **Use T3 Code in another
 app (MCP)**, or use the button in **Settings → Sharing & access**. Pick the
 app and follow the step for that app. Assistants like
-Poke and Claude run in the cloud, so the wizard first asks you to sign in to T3
-Connect and turn it on for the environment. To reach your other machines through
+Poke and Claude run in the cloud, so the environment needs a public HTTPS
+address—a [self-hosted relay](./remote-access.md#self-hosted-relay) or another
+origin agents can reach from the internet. To reach your other machines through
 the same connection, turn on **Linked environments** in Labs and
 [link them](./remote-access.md#link-another-environment).
 
-When the app opens the sign-in page, choose what it may do and approve with your
-T3 Connect account. On an older environment, the wizard asks for the level and
+When the app opens the sign-in page, choose what it may do and approve it. On an
+older environment, the wizard asks for the level and
 gives you a code to paste instead. A code works once, for 5 minutes, and
 approves only that level.
 
@@ -35,27 +36,27 @@ example:
 https://<environment-address>/mcp
 ```
 
-When T3 Connect serves the environment, the copied URL is its T3 Connect
-address, which agents can reach from anywhere. Otherwise it uses the route this
-device is connected over, so an agent on the same device can reach it.
+When a relay serves the environment, the copied URL is its relay address,
+which agents can reach from anywhere. Otherwise it uses the route this device is
+connected over, so an agent on the same device can reach it.
 
-- **An agent on your own computers** can use `localhost` on the host, T3
-  Connect, or any `https` address, such as
+- **An agent on your own computers** can use `localhost` on the host, the
+  relay, or any `https` address, such as
   [Tailscale HTTPS](./remote-access.md#tailscale-https). Signing in sends the
   agent's credentials to the environment, and agents only do that over `https`
   or to `localhost`. A plain-`http` LAN or Tailscale address, like
   `http://100.x.y.z:3773`, lets an agent find the environment but not finish
   signing in.
 - **A hosted agent**, such as ChatGPT or a bot running in the cloud, must reach
-  the environment from the internet. Use the T3 Connect address. A Tailscale
+  the environment from the internet. Use the relay address. A Tailscale
   address only works from your own tailnet.
 
 ## Approve a sign-in
 
 The first time an agent connects, it opens a sign-in page. When the agent
-reaches the environment through T3 Connect, the page opens on the T3 Code web
-app: sign in with the T3 Connect account the environment is linked to and
-approve there, without a code. Otherwise the page opens on the environment.
+reaches the environment through a relay, the page opens on the environment's
+own web app at its public origin, where you approve it without a code.
+Otherwise the page opens on the environment.
 Either page names the agent and where its access goes:
 
 - For an agent on your computer, approval returns to a `localhost` address on

@@ -6,6 +6,7 @@ import {
   MessageId,
   EventId,
   NodeId,
+  OPEN_ENDED_SNOOZE_UNTIL,
   type OrchestrationV2DomainEvent,
   type OrchestrationV2ProviderTurn,
   type OrchestrationV2Run,
@@ -48,6 +49,7 @@ import * as EffectOutbox from "./EffectOutbox.ts";
 import * as EventSink from "./EventSink.ts";
 import * as Orchestrator from "./Orchestrator.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
+import { isSnoozed } from "./ThreadSettlementService.ts";
 import * as ProviderAdapterRegistry from "./ProviderAdapterRegistry.ts";
 import * as ProviderReplayHarness from "./testkit/ProviderReplayHarness.ts";
 import type * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
@@ -547,6 +549,84 @@ it.effect("mark unread retires an expired snooze so a dismissed wake stays dismi
       snoozedAt: null,
       lastSnoozeWakeAt: snoozedUntil,
     });
+  }).pipe(Effect.provide(layerTest)),
+);
+
+const createIdleThread = Effect.fn("test.createIdleThread")(function* (name: string) {
+  const orchestrator = yield* Orchestrator.OrchestratorV2;
+  const threadId = ThreadId.make(`thread:${name}`);
+  yield* orchestrator.dispatch({
+    type: "thread.create",
+    commandId: CommandId.make(`create-${name}`),
+    threadId,
+    projectId: ProjectId.make(`project:${name}`),
+    title: "Idle thread",
+    modelSelection,
+    runtimeMode: "full-access",
+    interactionMode: "default",
+    branch: null,
+    worktreePath: null,
+    createdBy: "user",
+    creationSource: "web",
+  });
+  return threadId;
+});
+
+it.effect("a snooze without a wake time hides the thread until it is unsnoozed", () =>
+  Effect.gen(function* () {
+    const orchestrator = yield* Orchestrator.OrchestratorV2;
+    const projections = yield* ProjectionStore.ProjectionStoreV2;
+    const threadId = yield* createIdleThread("hide-for-now");
+    yield* orchestrator.dispatch({
+      type: "thread.snooze",
+      commandId: CommandId.make("hide-for-now"),
+      threadId,
+    });
+    const hidden = yield* projections.getThread(threadId);
+    assert.equal(DateTime.formatIso(hidden.snoozedUntil!), OPEN_ENDED_SNOOZE_UNTIL);
+    assert.deepEqual(hidden.snoozedAt, yield* DateTime.now);
+
+    // No clock wake: years later it is still hidden.
+    yield* TestClock.adjust("1000 days");
+    const [candidate] = yield* projections.getSettlementCandidates(threadId);
+    assert.isTrue(isSnoozed(candidate!, DateTime.toEpochMillis(yield* DateTime.now)));
+
+    yield* orchestrator.dispatch({
+      type: "thread.unsnooze",
+      commandId: CommandId.make("bring-back"),
+      threadId,
+      reason: "user",
+    });
+    const back = yield* projections.getThread(threadId);
+    assert.isNull(back.snoozedUntil);
+    assert.isNull(back.snoozedAt);
+  }).pipe(Effect.provide(layerTest)),
+);
+
+it.effect("pre-arms auto-resume per thread and can return it to the environment default", () =>
+  Effect.gen(function* () {
+    const orchestrator = yield* Orchestrator.OrchestratorV2;
+    const projections = yield* ProjectionStore.ProjectionStoreV2;
+    const threadId = yield* createIdleThread("pre-arm-auto-resume");
+    const setAutoResume = (name: string, autoResumeAtLimitReset: boolean | null) =>
+      orchestrator.dispatch({
+        type: "thread.metadata.update",
+        commandId: CommandId.make(name),
+        threadId,
+        autoResumeAtLimitReset,
+      });
+
+    yield* setAutoResume("arm", true);
+    assert.isTrue((yield* projections.getThread(threadId)).autoResumeAtLimitReset);
+    assert.isTrue((yield* projections.getThreadShell(threadId))?.autoResumeAtLimitReset);
+
+    yield* setAutoResume("opt-out", false);
+    assert.isFalse((yield* projections.getThreadShell(threadId))?.autoResumeAtLimitReset);
+
+    yield* setAutoResume("follow-default", null);
+    assert.isNull((yield* projections.getThread(threadId)).autoResumeAtLimitReset);
+    // The shell omits the default, so it costs nothing on the wire.
+    assert.notProperty(yield* projections.getThreadShell(threadId), "autoResumeAtLimitReset");
   }).pipe(Effect.provide(layerTest)),
 );
 

@@ -11,6 +11,7 @@ import {
 import { subagentResultForRun } from "@t3tools/provider-core/server/subagentProjection";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import { resolveNewThreadModelSelection } from "@t3tools/shared/usageLimits";
+import { routeSelectionToAccountProfile } from "@t3tools/shared/accountProfiles";
 import * as Digest from "effect/crypto/Digest";
 import * as Clock from "effect/Clock";
 import * as DateTime from "effect/DateTime";
@@ -187,14 +188,27 @@ const make = Effect.gen(function* () {
       const defaults = yield* projectDefaults(projectId);
       const modelSelection: ModelSelection | undefined =
         input.model === undefined
-          ? (resolveNewThreadModelSelection({
-              defaultSelection: defaults.defaultModelSelection,
-              fallbackSelection: defaults.fallbackModelSelection,
-              providers: yield* providers.getProviders,
-              settings: defaults,
-              projectId,
-              now: DateTime.toEpochMillis(yield* DateTime.now),
-            }).selection ?? undefined)
+          ? yield* Effect.gen(function* () {
+              const available = yield* providers.getProviders;
+              const now = DateTime.toEpochMillis(yield* DateTime.now);
+              const selection = resolveNewThreadModelSelection({
+                defaultSelection: defaults.defaultModelSelection,
+                fallbackSelection: defaults.fallbackModelSelection,
+                providers: available,
+                settings: defaults,
+                projectId,
+                now,
+              }).selection;
+              return selection === null
+                ? undefined
+                : routeSelectionToAccountProfile({
+                    selection,
+                    providers: available,
+                    settings: defaults,
+                    projectId,
+                    now,
+                  });
+            })
           : {
               instanceId: ProviderInstanceId.make(input.model.instanceId),
               model: input.model.model,

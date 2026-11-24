@@ -1511,6 +1511,32 @@ export function createServerEnvironmentAtoms<R, E>(
 
   return {
     configValueAtom,
+    relayStatus: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:relay:status",
+      tag: WS_METHODS.serverRelayStatus,
+      staleTimeMs: 1000,
+      refreshIntervalMs: 5000,
+    }),
+    relayLink: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:relay:link",
+      tag: WS_METHODS.serverRelayLink,
+    }),
+    relayUnlink: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:relay:unlink",
+      tag: WS_METHODS.serverRelayUnlink,
+    }),
+    relayExposePort: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:relay:expose",
+      tag: WS_METHODS.serverExposePort,
+    }),
+    relayUnexposePort: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:relay:unexpose",
+      tag: WS_METHODS.serverUnexposePort,
+    }),
+    relayPortLink: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:relay:port-link",
+      tag: WS_METHODS.serverPortLink,
+    }),
     runStorageCleanup: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:run-storage-cleanup",
       tag: WS_METHODS.serverRunStorageCleanup,
@@ -2019,15 +2045,7 @@ export function createServerEnvironmentAtoms<R, E>(
           JSON.stringify([environmentId, input.threadId, input.turnItemId]),
       },
     }),
-    answerFeedbackRequest: createEnvironmentRpcCommand(runtime, {
-      label: "environment-data:server:agent-feedback:answer-request",
-      tag: WS_METHODS.agentFeedbackAnswerRequest,
-      concurrency: {
-        mode: "singleFlight",
-        key: ({ environmentId, input }) =>
-          JSON.stringify([environmentId, input.threadId, input.turnItemId]),
-      },
-    }),
+
     refreshUsageRates: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:refresh-usage-rates",
       tag: WS_METHODS.serverRefreshUsageRates,

@@ -1,10 +1,11 @@
-import type { ContextMenuItem } from "@t3tools/contracts";
 import type { SnoozePreset } from "@t3tools/client-runtime/state/thread-settled";
+import type { ContextMenuItem } from "@t3tools/contracts";
 import { msg } from "gt-react";
 
 import { m, type MessageResolver } from "../i18n/messages";
 
 export type ThreadActionMenuId =
+  | "judges"
   | "find"
   | "new-thread-on-branch"
   | "filter-by-project"
@@ -148,6 +149,12 @@ export function buildThreadActionMenuItems(
   resolve: MessageResolver = m,
 ): ReadonlyArray<ContextMenuItem<ThreadActionMenuId>> {
   const items: ReadonlyArray<ContextMenuItem<ThreadActionMenuId>> = [
+    {
+      id: "judges",
+      label: resolve(msg("Convene judges")),
+      icon: "messages-square",
+      disabled: !state.canOperate,
+    },
     ...(state.canFind
       ? [{ id: "find" as const, label: resolve(msg("Find in thread")), icon: "text-search" }]
       : []),

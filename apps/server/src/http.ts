@@ -1,3 +1,4 @@
+import { PublicOrigin } from "./selfRelay/PublicOrigin.ts";
 import * as Mime from "effect/http/Mime";
 import {
   AuthOrchestrationOperateScope,
@@ -54,7 +55,7 @@ import {
 } from "./assets/AttachmentUpload.ts";
 import * as BrowserTraceCollector from "./observability/BrowserTraceCollector.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
-import { traceRelayRequest } from "./cloud/traceRelayRequest.ts";
+
 import {
   annotateEnvironmentRequest,
   failEnvironmentScopeRequired,
@@ -407,8 +408,10 @@ export const layerServerEnvironmentHttpApi = HttpApiBuilder.group(
       "descriptor",
       Effect.fn("environment.metadata.descriptor")(function* (args) {
         yield* annotateEnvironmentRequest(args.endpoint.name);
-        return yield* serverEnvironment.getDescriptor;
-      }, traceRelayRequest),
+        const descriptor = yield* serverEnvironment.getDescriptor;
+        const origin = yield* yield* PublicOrigin;
+        return { ...descriptor, ...(origin === null ? {} : { publicOrigin: origin }) };
+      }),
     );
   }),
 );

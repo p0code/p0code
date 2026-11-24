@@ -22,3 +22,14 @@ describe("settings pairing URL helpers", () => {
     );
   });
 });
+
+it("advertises the server public origin for stock mobile pairing without a hosted hop", async () => {
+  const { publicOriginAdvertisedEndpoint, resolveDesktopPairingUrl } =
+    await import("./pairingUrls");
+  const endpoint = publicOriginAdvertisedEndpoint("https://abcdef.relay.example.com");
+  expect(endpoint.reachability).toBe("public");
+  expect(endpoint.wsBaseUrl).toBe("wss://abcdef.relay.example.com");
+  expect(resolveDesktopPairingUrl(endpoint.httpBaseUrl, "pairing-code")).toBe(
+    "https://abcdef.relay.example.com/pair#token=pairing-code",
+  );
+});

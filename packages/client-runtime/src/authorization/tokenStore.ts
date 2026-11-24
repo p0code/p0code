@@ -1,5 +1,4 @@
 import { EnvironmentId } from "@t3tools/contracts";
-import { RelayManagedEndpoint } from "@t3tools/contracts/relay";
 import * as Context from "effect/Context";
 import type * as Effect from "effect/Effect";
 import type * as Option from "effect/Option";
@@ -13,7 +12,11 @@ export class RemoteDpopAccessToken extends Schema.Class<RemoteDpopAccessToken>(
   environmentId: EnvironmentId,
   accountId: Schema.optionalKey(Schema.String),
   label: Schema.String,
-  endpoint: RelayManagedEndpoint,
+  endpoint: Schema.Struct({
+    httpBaseUrl: Schema.String,
+    wsBaseUrl: Schema.String,
+    providerKind: Schema.String,
+  }),
   accessToken: Schema.String,
   expiresAtEpochMs: Schema.Number,
   dpopThumbprint: Schema.String,

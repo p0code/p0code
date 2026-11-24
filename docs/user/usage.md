@@ -178,6 +178,22 @@ Until then it shows no limits. Readings are not kept across a server restart.
 API-key accounts may not report subscription limits. This also applies to Claude connections
 using a proxy through `ANTHROPIC_AUTH_TOKEN`.
 
+## Switch accounts with profiles
+
+If you run several accounts of one provider, such as a personal and a company Claude account,
+**Settings → Providers → Account profiles** orders them. Each environment starts with a
+**Personal** and a **Work** profile; drag an account up to make it that profile's first choice.
+
+New threads, including ones agents and workflows start, use the active profile's first account
+that is not at its usage limit for the model you chose. Picking an account in the model picker
+always wins. Switch profiles from the sidebar's profile button, the command palette
+(**Switch account profile**), `mod+alt+shift+p`, or **Settings → Providers** on mobile.
+
+When a thread hits a usage limit, its notice offers **Continue on** the profile's next account.
+Turn on **Switch accounts at usage limits** for a profile to do that without asking; switching
+takes priority over waiting for the reset. The new account receives the conversation as a
+handoff, because accounts do not share sessions. A thread set not to resume after limits stays put.
+
 ## Connect a CLIProxyAPI hub
 
 To see pooled accounts, open **Settings → Providers → Usage providers → Add hub**. Choose the
