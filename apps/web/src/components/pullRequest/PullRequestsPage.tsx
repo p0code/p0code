@@ -1009,7 +1009,6 @@ export function PullRequestsPage() {
     viewers,
     sort,
     text: typedParsed.text,
-    involvement: search.involvement,
   });
   const showProvider = hosts.length > 1;
   const [closeSweepKeys, setCloseSweepKeys] = useState<ReadonlySet<string>>(() => new Set());

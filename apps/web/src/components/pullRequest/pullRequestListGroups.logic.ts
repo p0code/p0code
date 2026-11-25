@@ -100,7 +100,15 @@ export function pullRequestGroups({
   );
 
   const groups = (() => {
-    if (involvement !== "all") return [{ key: "others" as const, label: "", entries }];
+    if (involvement !== "all") {
+      return [
+        {
+          key: involvement === "reviewing" ? ("reviewRequested" as const) : ("authored" as const),
+          label: "",
+          entries,
+        },
+      ];
+    }
     if (baselineEmpty) {
       return groupPullRequestsByInvolvement(entries, viewers);
     }

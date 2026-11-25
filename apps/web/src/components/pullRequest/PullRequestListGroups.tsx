@@ -1,5 +1,5 @@
 import type { EnvironmentId, PullRequestAction } from "@t3tools/contracts";
-import { EyeIcon, LayersIcon, PenLineIcon, UsersIcon, type LucideIcon } from "lucide-react";
+import { EyeIcon, LayersIcon, PenLineIcon, type LucideIcon } from "lucide-react";
 import { useMessages } from "gt-react";
 import { useDeferredValue, type RefCallback } from "react";
 
@@ -20,7 +20,6 @@ import {
 const GROUP_ICONS: Record<string, LucideIcon> = {
   authored: PenLineIcon,
   reviewRequested: EyeIcon,
-  others: UsersIcon,
 };
 
 const MATCHED_ELSEWHERE_SCORE = 10;

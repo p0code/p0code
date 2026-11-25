@@ -274,7 +274,7 @@ describe("default merge-readiness ranking", () => {
     const measured = entry({ number: 2 });
     const empty = entry({ number: 3, additions: 0, deletions: 0 });
     const groups = [
-      { key: "others", label: "Others", entries: [unknown, measured, empty] },
+      { key: "reviewRequested", label: "Review requested", entries: [unknown, measured, empty] },
     ] as const;
 
     const sorted = sortPullRequestGroups(groups, "ready", "", (row) => row.number !== 1);
@@ -301,13 +301,17 @@ describe("default merge-readiness ranking", () => {
     const sorted = sortPullRequestGroups(
       [
         { key: "authored", label: "Authored", entries: [authoredWaiting, authoredReady] },
-        { key: "others", label: "Others", entries: [otherReady] },
+        {
+          key: "reviewRequested",
+          label: "Review requested",
+          entries: [otherReady],
+        },
       ],
       "ready",
       "",
     );
 
-    expect(sorted.map((group) => group.key)).toEqual(["authored", "others"]);
+    expect(sorted.map((group) => group.key)).toEqual(["authored", "reviewRequested"]);
     expect(sorted.flatMap((group) => group.entries).map((row) => row.number)).toEqual([2, 1, 3]);
   });
 });
@@ -362,14 +366,15 @@ describe("partitioning with the hosts' own priority reads", () => {
   const authoredRow = (number: number, updatedAt: string) =>
     entry({ number, updatedAt, author: { login: "Bilal", name: null, avatarUrl: null } });
 
-  it("keeps Others in feed order when a continuation lands an authored row already partitioned", () => {
+  it("lists only the authored rows when a continuation lands rows the feed already partitioned", () => {
     const older = entry({ number: 1, updatedAt: "2026-07-05T00:00:00Z" });
     const newer = entry({ number: 2, updatedAt: "2026-07-06T00:00:00Z" });
     const mine = authoredRow(3, "2026-07-04T00:00:00Z");
     const groups = partitionPullRequestsWithPriority([newer, older, mine], [mine], []);
-    expect(groups.map((group) => group.key)).toEqual(["authored", "others"]);
-    expect(groups[1]!.entries.map((item) => item.number)).toEqual([2, 1]);
-    expect(groups[0]!.entries.map((item) => item.number)).toEqual([3]);
+    // Other people's pull requests are not listed at all.
+    expect(groups.map((group) => [group.key, group.entries.map((item) => item.number)])).toEqual([
+      ["authored", [3]],
+    ]);
   });
 
   it("gives authored precedence over review-requested and orders partitions by recency", () => {
@@ -627,6 +632,7 @@ describe('who "I" am, per server', () => {
     ])!;
 
     const groups = groupPullRequestsByInvolvement(merged.entries, merged.viewers);
+    expect(groups.map((group) => group.key)).toEqual(["authored"]);
     expect(
       groups.find((group) => group.key === "authored")?.entries.map((row) => row.number),
     ).toEqual([1]);
@@ -691,9 +697,9 @@ describe("the priority groups against a paginated feed", () => {
     expect(
       groups.find((group) => group.key === "authored")?.entries.map((row) => row.number),
     ).toEqual([6039, 5499, 5544]);
-    expect(
-      groups.find((group) => group.key === "others")?.entries.map((row) => row.number),
-    ).toEqual([6123]);
+    // Other people's pull requests are not listed at all.
+    expect(groups.map((group) => group.key)).toEqual(["authored"]);
+    expect(groups.flatMap((group) => group.entries).map((row) => row.number)).not.toContain(6123);
   });
 });
 

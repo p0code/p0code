@@ -37,7 +37,7 @@ export interface EnvironmentPullRequestError extends PullRequestListProjectError
   readonly environmentId: EnvironmentId;
 }
 
-export type PullRequestGroupKey = "reviewRequested" | "authored" | "others";
+export type PullRequestGroupKey = "reviewRequested" | "authored";
 
 export interface PullRequestGroup<Entry extends PullRequestListEntry = PullRequestListEntry> {
   readonly key: PullRequestGroupKey;
@@ -65,7 +65,6 @@ const pullRequestViewerKey = (entry: ScopedEntry): string =>
 const GROUP_LABELS: Record<PullRequestGroupKey, string> = {
   reviewRequested: msg("Review requested"),
   authored: msg("Authored"),
-  others: msg("Others"),
 };
 
 function normalize(value: string | null | undefined): string | null {
@@ -279,21 +278,19 @@ export function groupPullRequestsByInvolvement<Entry extends ScopedEntry>(
   entries: ReadonlyArray<Entry>,
   viewers: PullRequestViewers,
 ): ReadonlyArray<PullRequestGroup<Entry>> {
+  // PRs the viewer neither authored nor was asked to review are not listed at all.
   const buckets: Record<PullRequestGroupKey, Entry[]> = {
     reviewRequested: [],
     authored: [],
-    others: [],
   };
   for (const entry of entries) {
     if (isAuthoredByViewer(entry, viewers)) {
       buckets.authored.push(entry);
     } else if (entry.viewerReviewRequested) {
       buckets.reviewRequested.push(entry);
-    } else {
-      buckets.others.push(entry);
     }
   }
-  return (["authored", "reviewRequested", "others"] as const)
+  return (["authored", "reviewRequested"] as const)
     .filter((key) => buckets[key].length > 0)
     .map((key) => ({ key, label: GROUP_LABELS[key], entries: buckets[key] }));
 }
@@ -461,15 +458,12 @@ export function partitionPullRequestsWithPriority<Entry extends PullRequestListE
       authoredByKey.has(entry.url) ? [] : [[entry.url, entry] as const],
     ),
   );
-  const others: Entry[] = [];
   for (const entry of entries) {
     const key = entry.url;
     if (authoredByKey.has(key)) {
       authoredByKey.set(key, entry);
     } else if (reviewByKey.has(key)) {
       reviewByKey.set(key, entry);
-    } else {
-      others.push(entry);
     }
   }
   return (
@@ -482,7 +476,6 @@ export function partitionPullRequestsWithPriority<Entry extends PullRequestListE
         key: "reviewRequested",
         entries: [...reviewByKey.values()].toSorted(comparePullRequestsByRecency),
       },
-      { key: "others", entries: others },
     ] as const
   )
     .filter((group) => group.entries.length > 0)
@@ -758,7 +751,6 @@ export function sortPullRequestGroups<Entry extends PullRequestListEntry>(
   sort: PullRequestListSort,
   searchText: string,
   hasMeasuredSize: (entry: Entry) => boolean = (entry) => entry.additions + entry.deletions > 0,
-  involvement: PullRequestInvolvement = "all",
 ): ReadonlyArray<PullRequestGroup<Entry>> {
   const sortWithinGroups = (rank: (entries: ReadonlyArray<Entry>) => ReadonlyArray<Entry>) =>
     groups.map((group) => ({ ...group, entries: rank(group.entries) }));
@@ -770,17 +762,13 @@ export function sortPullRequestGroups<Entry extends PullRequestListEntry>(
   }
   if (sort === "blocked") {
     if (searchText.trim().length > 0) return groups;
-    const role = (key: PullRequestGroupKey) =>
-      key === "others" ? involvement : key === "authored" ? "authored" : "reviewing";
-    return groups.map((group) => {
-      const groupRole = role(group.key);
-      if (groupRole === "all") return group;
-      const rank =
-        groupRole === "authored"
-          ? rankPullRequestsBlockedOnAuthor
-          : rankPullRequestsBlockedOnReviewer;
-      return { ...group, entries: rank(group.entries) };
-    });
+    return groups.map((group) => ({
+      ...group,
+      entries:
+        group.key === "authored"
+          ? rankPullRequestsBlockedOnAuthor(group.entries)
+          : rankPullRequestsBlockedOnReviewer(group.entries),
+    }));
   }
   if (sort === "updated") return groups;
 

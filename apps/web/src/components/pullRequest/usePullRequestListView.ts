@@ -4,7 +4,6 @@ import { parsePullRequestQuery } from "@t3tools/client-runtime/pull-request-quer
 import {
   type EnvironmentId,
   type ProjectId,
-  type PullRequestInvolvement,
   type PullRequestListFilters,
   type PullRequestListResult,
   type PullRequestListState,
@@ -256,7 +255,6 @@ export function usePullRequestDisplayGroups({
   viewers,
   sort,
   text,
-  involvement,
 }: {
   answered: MergedPullRequestList | null;
   host: string | undefined;
@@ -269,7 +267,6 @@ export function usePullRequestDisplayGroups({
   viewers: PullRequestListResult["viewers"];
   sort: PullRequestListSort;
   text: string;
-  involvement: PullRequestInvolvement;
 }) {
   const [hostsState, setHostsState] = useState<{
     readonly source: MergedPullRequestList | null;
@@ -315,7 +312,6 @@ export function usePullRequestDisplayGroups({
       text,
       (entry) =>
         entry.additions + entry.deletions > 0 || statsByRow.has(pullRequestDiffStatKey(entry)),
-      involvement,
     );
   })();
   const shownCount = displayGroups.reduce((count, group) => count + group.entries.length, 0);
