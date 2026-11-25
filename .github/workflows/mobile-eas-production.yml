@@ -7,7 +7,7 @@ name: Mobile EAS Production
 # runner, with corepack pinning pnpm 10.24 in eas.json, local == build.
 #
 # Every merge reconciles native fingerprints and publishes matching OTAs.
-# Store builds run here with `eas build --local` on Blacksmith (the android and
+# Store builds run here with `eas build --local` on GitHub-hosted runners (the android and
 # ios jobs). Local builds never appear in `eas build:list`, so each finished build
 # pushes a mobile-android-build/<version>/<fingerprint> or
 # mobile-ios-build/<profile>/<version>/<fingerprint> tag that the reconcile reads.
@@ -77,7 +77,7 @@ jobs:
   production:
     name: EAS ${{ inputs.profile || 'production' }} ${{ github.event_name == 'push' && 'auto' || inputs.mode }}
     if: github.repository == 'pingdotgg/t3code'
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     # Serialize runs so OTAs publish in merge order. GitHub keeps at most one
     # queued job per group, so a burst of merges collapses into one run of the
     # newest commit — intermediate commits don't need their own OTA.
@@ -414,7 +414,7 @@ jobs:
     name: Commit version override
     needs: production
     if: ${{ !cancelled() && needs.production.result == 'success' && needs.production.outputs.version_override == 'true' }}
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       contents: read

@@ -31,7 +31,7 @@ jobs:
   fingerprint:
     name: Native fingerprint diff
     if: github.event.action != 'edited' || github.event.changes.base
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     env:

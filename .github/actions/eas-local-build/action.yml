@@ -18,7 +18,7 @@ inputs:
     description: Path the build artifact is written to
     required: true
   cache:
-    description: "false for untrusted code: no sticky disk and no EAS cache, so nothing it writes reaches trusted builds"
+    description: "false for untrusted code: no build cache and no EAS cache, so nothing it writes reaches trusted builds"
     default: "true"
   sourcemaps-r2:
     description: R2 credentials for the eas-build-on-success source map upload; EAS secrets don't reach local builds
@@ -50,12 +50,14 @@ runs:
           echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache"
         } >> "$GITHUB_ENV"
 
-    - name: Mount Android build cache
+    - name: Restore Android build cache
       if: inputs.platform == 'android' && inputs.cache == 'true'
-      uses: useblacksmith/stickydisk@3f6be1451e3cad893b778bc93495c80452a5da26 # v1.7.2
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
-        key: ${{ github.repository }}-android-${{ inputs.environment == 'production' && 'store' || 'preview' }}-build
         path: ~/.cache/t3-android-${{ inputs.environment == 'production' && 'store' || 'preview' }}
+        key: ${{ github.repository }}-android-${{ inputs.environment == 'production' && 'store' || 'preview' }}-build-${{ hashFiles('pnpm-lock.yaml', 'apps/mobile/**/package.json') }}
+        restore-keys: |
+          ${{ github.repository }}-android-${{ inputs.environment == 'production' && 'store' || 'preview' }}-build-
 
     - name: Configure Gradle and ccache
       if: inputs.platform == 'android' && inputs.cache == 'true'
@@ -63,9 +65,8 @@ runs:
       run: |
         mkdir -p "$GRADLE_USER_HOME" "$CCACHE_DIR"
         rm -rf "$EAS_LOCAL_BUILD_WORKINGDIR"
-        # No daemon: nothing should hold the sticky disk open when it is committed.
+        # No daemon: nothing should hold the cache directory open when it is saved.
         printf 'org.gradle.caching=true\norg.gradle.daemon=false\n' > "$GRADLE_USER_HOME/gradle.properties"
-        sudo sed -i 's|http://|https://|g' /etc/apt/blacksmith-ubuntu-mirrors.txt /etc/apt/sources.list.d/ubuntu.sources
         sudo apt-get update -qq && sudo apt-get install -y -qq ccache
         ccache --zero-stats
 

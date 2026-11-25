@@ -30,8 +30,8 @@ jobs:
   build:
     name: Build preview JS bundle
     if: github.event.label.name == 'preview:mac'
-    runs-on: blacksmith-32vcpu-ubuntu-2404
-    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       # This repository is public, so Git needs no credentials. A manual sparse
       # checkout also leaves the vendored .repos references out of the tree.
@@ -79,9 +79,6 @@ jobs:
           script="$(node -p "require('./package.json').scripts['build:desktop:bundle'] ? 'build:desktop:bundle' : 'build:desktop'")"
           echo "script=$script" >> "$GITHUB_OUTPUT"
 
-      - if: steps.bundle_build.outputs.script == 'build:desktop'
-        uses: ./.github/actions/setup-apt-mirrors
-
       - name: Install browser secret helper build libraries
         if: steps.bundle_build.outputs.script == 'build:desktop'
         run: sudo apt-get update && sudo apt-get install -y libsecret-1-dev pkg-config
@@ -89,7 +86,6 @@ jobs:
       # desktop-macos-preview-publish.yml packages this bundle as the preview
       # channel. The Linux browser secret helper is not part of a macOS app.
       - name: Build JS bundle
-        env:
         run: vp run ${{ steps.bundle_build.outputs.script }}
 
       # Same layout as release.yml's js-bundle so release-desktop.yml can

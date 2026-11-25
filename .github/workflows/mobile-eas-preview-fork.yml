@@ -2,8 +2,8 @@ name: Mobile EAS Preview (Fork)
 run-name: "${{ github.event.label.name == '🚀 Mobile Continuous Deployment' && github.event.pull_request.head.repo.full_name != github.repository && format('Mobile preview of #{0} at {1}', github.event.pull_request.number, github.event.pull_request.head.sha) || '' }}"
 
 # EAS previews for fork PRs. This runs the PR's code with an Expo token: the
-# app config and plugins run on a runner; both clients build on Blacksmith
-# with preview signing credentials. So every job that does waits for an
+# app config and plugins run on a runner; both clients build on GitHub-hosted
+# runners with preview signing credentials. So every job that does waits for an
 # approval in the `mobile-preview-fork` environment on every run.
 #
 # The label only requests a build, and counts only from someone with write
@@ -29,7 +29,7 @@ jobs:
     if: >-
       github.event.pull_request.head.repo.full_name != github.repository &&
       github.event.label.name == '🚀 Mobile Continuous Deployment'
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: write
@@ -123,7 +123,7 @@ jobs:
     name: EAS Preview
     needs: request
     if: needs.request.outputs.sha != ''
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     environment:
       name: mobile-preview-fork
     concurrency:
@@ -315,15 +315,16 @@ jobs:
           echo "group=$group" >> "$GITHUB_OUTPUT"
 
   # Each client job waits for its own approval in the environment, once the
-  # preview job has finished. The reviewed commit's Android client, built cold: no sticky disk, because PR
-  # code could leave Gradle or ccache state that trusted builds would restore, and
-  # no build record tag, so nobody else is served an APK a fork's code built.
+  # preview job has finished. The reviewed commit's Android client builds cold,
+  # with no build cache (PR code could leave Gradle or ccache state that trusted
+  # builds would restore) and no build record tag, so nobody else is served an APK
+  # a fork's code built.
   android-build:
     name: Android preview client
     needs: [request, preview]
     if: needs.preview.outputs.build == 'true'
-    runs-on: blacksmith-32vcpu-ubuntu-2404
-    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
     environment:
       name: mobile-preview-fork
     permissions:
@@ -370,7 +371,7 @@ jobs:
       - name: Drop checkout credentials
         uses: ./.trusted/.github/actions/drop-checkout-credentials
 
-      # Cold: no sticky disk or EAS cache that trusted builds would restore.
+      # Cold: no build cache or EAS cache that trusted builds would restore.
       - name: Build
         uses: ./.trusted/.github/actions/eas-local-build
         with:
@@ -400,8 +401,8 @@ jobs:
     name: iOS preview client
     needs: [request, preview]
     if: needs.preview.outputs.ios_build == 'true'
-    runs-on: blacksmith-12vcpu-macos-27
-    timeout-minutes: 60
+    runs-on: macos-latest
+    timeout-minutes: 120
     environment:
       name: mobile-preview-fork
     permissions:
@@ -446,7 +447,7 @@ jobs:
       - name: Drop checkout credentials
         uses: ./.trusted/.github/actions/drop-checkout-credentials
 
-      # Cold: no sticky disk or EAS cache that trusted builds would restore.
+      # Cold: no build cache or EAS cache that trusted builds would restore.
       - name: Build
         uses: ./.trusted/.github/actions/eas-local-build
         with:
@@ -476,7 +477,7 @@ jobs:
     name: Mobile preview comment
     needs: [request, preview, android-build, ios-build]
     if: always() && !cancelled() && needs.preview.result == 'success'
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     concurrency:
       group: mobile-preview-comment-${{ github.event.pull_request.number }}
       cancel-in-progress: false
