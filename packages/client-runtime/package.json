@@ -1,6 +1,7 @@
 {
   "name": "@t3tools/client-runtime",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "exports": {
     "./custom-model-providers": {
@@ -696,6 +697,5 @@
     "remark-parse": "catalog:",
     "unified": "catalog:",
     "vite-plus": "catalog:"
-  },
-  "license": "MIT"
+  }
 }

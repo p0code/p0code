@@ -1,6 +1,7 @@
 {
   "name": "@t3tools/p0deploy",
   "private": true,
+  "license": "MIT",
   "bin": {
     "p0deploy": "./src/cli.ts"
   },
@@ -23,6 +24,5 @@
     "@effect/vitest": "catalog:",
     "@types/node": "catalog:",
     "vite-plus": "catalog:"
-  },
-  "license": "MIT"
+  }
 }

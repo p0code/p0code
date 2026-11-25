@@ -1,6 +1,7 @@
 {
   "name": "@t3tools/relay-tunnel",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "exports": {
     "./codec": {
@@ -40,6 +41,5 @@
     "@types/node": "catalog:",
     "@types/ws": "catalog:",
     "vite-plus": "catalog:"
-  },
-  "license": "MIT"
+  }
 }

@@ -1,6 +1,7 @@
 {
   "name": "@t3tools/secret-provider-definitions",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "exports": {
     "./registry": {
@@ -14,6 +15,5 @@
   "dependencies": {
     "@t3tools/secret-provider-core": "workspace:*",
     "@t3tools/secret-provider-onepassword": "workspace:*"
-  },
-  "license": "MIT"
+  }
 }

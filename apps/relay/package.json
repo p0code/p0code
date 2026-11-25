@@ -1,6 +1,7 @@
 {
   "name": "@t3tools/relay",
   "private": true,
+  "license": "MIT",
   "bin": {
     "hhh-relay": "./src/cli.ts"
   },
@@ -18,6 +19,5 @@
     "@types/node": "catalog:",
     "@types/ws": "catalog:",
     "vite-plus": "catalog:"
-  },
-  "license": "MIT"
+  }
 }

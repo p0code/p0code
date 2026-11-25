@@ -1,6 +1,7 @@
 {
   "name": "@t3tools/source-control-definitions",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "exports": {
     "./registry": {
@@ -21,6 +22,5 @@
     "@t3tools/source-control-github": "workspace:*",
     "@t3tools/source-control-gitlab": "workspace:*",
     "@t3tools/source-control-tanstack-source": "workspace:*"
-  },
-  "license": "MIT"
+  }
 }

@@ -1,6 +1,7 @@
 {
   "name": "@t3tools/task-cache",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "test": "vp test run --config ../../vite.config.ts --dir .",
@@ -21,6 +22,5 @@
     "@effect/vitest": "catalog:",
     "@types/node": "catalog:",
     "vite-plus": "catalog:"
-  },
-  "license": "MIT"
+  }
 }

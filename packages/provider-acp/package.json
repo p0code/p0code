@@ -1,6 +1,7 @@
 {
   "name": "@t3tools/provider-acp",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "exports": {
     "./server/AcpSessionRuntime": {
@@ -57,6 +58,5 @@
     "@types/node": "catalog:",
     "effect-acp": "workspace:*",
     "vite-plus": "catalog:"
-  },
-  "license": "MIT"
+  }
 }

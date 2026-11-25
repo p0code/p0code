@@ -2,6 +2,7 @@
   "name": "@t3tools/mobile",
   "version": "0.0.0",
   "private": true,
+  "license": "MIT",
   "main": "index.ts",
   "scripts": {
     "dev": "expo start",
@@ -195,6 +196,5 @@
       "DISABLE_COMMIT_PAUSING_MECHANISM": true,
       "ENABLE_SHARED_ELEMENT_TRANSITIONS": false
     }
-  },
-  "license": "MIT"
+  }
 }

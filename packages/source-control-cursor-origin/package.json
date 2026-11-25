@@ -1,6 +1,7 @@
 {
   "name": "@t3tools/source-control-cursor-origin",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "exports": {
     "./shared/definition": {
@@ -28,6 +29,5 @@
     "@effect/vitest": "catalog:",
     "@types/node": "catalog:",
     "vite-plus": "catalog:"
-  },
-  "license": "MIT"
+  }
 }

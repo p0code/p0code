@@ -1,6 +1,7 @@
 {
   "name": "@t3tools/provider-acp-registry",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "exports": {
     "./client": {
@@ -47,6 +48,5 @@
     "@types/node": "catalog:",
     "effect-acp": "workspace:*",
     "vite-plus": "catalog:"
-  },
-  "license": "MIT"
+  }
 }

@@ -1,6 +1,7 @@
 {
   "name": "@t3tools/provider-core",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "exports": {
     "./client": {
@@ -210,6 +211,5 @@
     "@effect/vitest": "catalog:",
     "@types/node": "catalog:",
     "vite-plus": "catalog:"
-  },
-  "license": "MIT"
+  }
 }

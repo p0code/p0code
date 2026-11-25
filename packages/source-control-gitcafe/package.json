@@ -1,6 +1,7 @@
 {
   "name": "@t3tools/source-control-gitcafe",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "exports": {
     "./shared/definition": {
@@ -28,6 +29,5 @@
     "@t3tools/source-control-testing": "workspace:*",
     "@types/node": "catalog:",
     "vite-plus": "catalog:"
-  },
-  "license": "MIT"
+  }
 }

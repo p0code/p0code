@@ -1,6 +1,7 @@
 {
   "name": "@t3tools/provider-opencode",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "exports": {
     "./client": {
@@ -65,6 +66,5 @@
     "@t3tools/provider-testing": "workspace:*",
     "@types/node": "catalog:",
     "vite-plus": "catalog:"
-  },
-  "license": "MIT"
+  }
 }
