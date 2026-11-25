@@ -1,5 +1,6 @@
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeCrypto from "node:crypto";
+import type { ManagedPolicyDocument } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import * as ManagedPolicy from "../policy/ManagedPolicy.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -16,31 +17,39 @@ import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
 import * as ServerConfig from "../config.ts";
 import * as SelfRelay from "./SelfRelay.ts";
 
-const layerConfig = Layer.effect(
-  ServerConfig.ServerConfig,
-  Effect.gen(function* () {
-    const config = yield* ServerConfig.ServerConfig;
-    const fs = yield* FileSystem.FileSystem;
-    const keys = generateEnvironmentKeyPair();
-    yield* fs.makeDirectory(`${config.stateDir}/self-relay`, { recursive: true });
-    yield* fs.makeDirectory(`${config.stateDir}/self-relay/certificates`, { recursive: true });
-    yield* fs.writeFileString(
-      `${config.stateDir}/self-relay/certificates/account.json`,
-      JSON.stringify({ uri: "https://acme-v02.api.letsencrypt.org/acme/acct/123" }),
-    );
-    yield* fs.writeFileString(
-      `${config.stateDir}/self-relay/link.json`,
-      JSON.stringify({ relayUrl: "https://relay.example.com", slug: "abcdef", ...keys, ports: [] }),
-    );
-    return config;
-  }),
-).pipe(Layer.provide(ServerConfig.layerTest(process.cwd(), { prefix: "self-relay-test-" })));
-const makeLayer = () => {
+// A port left in link.json from before the policy applied, as the server would load it.
+type StoredPort = {
+  readonly port: number;
+  readonly access: "private" | "link";
+  readonly expiresAt: number;
+  readonly id: string;
+};
+const layerConfig = (ports: ReadonlyArray<StoredPort> = []) =>
+  Layer.effect(
+    ServerConfig.ServerConfig,
+    Effect.gen(function* () {
+      const config = yield* ServerConfig.ServerConfig;
+      const fs = yield* FileSystem.FileSystem;
+      const keys = generateEnvironmentKeyPair();
+      yield* fs.makeDirectory(`${config.stateDir}/self-relay`, { recursive: true });
+      yield* fs.makeDirectory(`${config.stateDir}/self-relay/certificates`, { recursive: true });
+      yield* fs.writeFileString(
+        `${config.stateDir}/self-relay/certificates/account.json`,
+        JSON.stringify({ uri: "https://acme-v02.api.letsencrypt.org/acme/acct/123" }),
+      );
+      yield* fs.writeFileString(
+        `${config.stateDir}/self-relay/link.json`,
+        JSON.stringify({ relayUrl: "https://relay.example.com", slug: "abcdef", ...keys, ports }),
+      );
+      return config;
+    }),
+  ).pipe(Layer.provide(ServerConfig.layerTest(process.cwd(), { prefix: "self-relay-test-" })));
+const makeLayer = (document?: ManagedPolicyDocument, ports: ReadonlyArray<StoredPort> = []) => {
   const keychain = memoryKeychainStore();
   return SelfRelay.layer.pipe(
     Layer.provideMerge(ServerSecretStore.layerWithKeychain(keychain)),
-    Layer.provide(ManagedPolicy.layerTest()),
-    Layer.provideMerge(layerConfig),
+    Layer.provide(ManagedPolicy.layerTest(document)),
+    Layer.provideMerge(layerConfig(ports)),
     Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodePlatformCrypto.layer)),
   );
 };
@@ -140,4 +149,37 @@ it.effect(
       expect((yield* relay.status).linked).toBe(false);
       expect(Option.isNone(yield* secrets.get("self-relay-tunnel-key"))).toBe(true);
     }).pipe(Effect.provide(makeLayer())),
+);
+
+const noPreviewTunnel: ManagedPolicyDocument = {
+  schemaVersion: 1,
+  organization: "Example Corp",
+  limits: { previewTunnel: false },
+};
+it.effect("refuses port forwarding when the managed policy denies preview tunnels", () =>
+  Effect.gen(function* () {
+    const relay = yield* SelfRelay.SelfRelay;
+    const exposed = yield* relay
+      .exposePort({ port: 3000, access: "link", expiresInSeconds: 3600 })
+      .pipe(Effect.result);
+    expect(exposed._tag).toBe("Failure");
+    if (exposed._tag === "Failure")
+      expect(String(exposed.failure.cause)).toContain("does not allow port forwarding");
+  }).pipe(Effect.provide(makeLayer(noPreviewTunnel))),
+);
+
+it.effect("refuses links to a port exposed before the policy denied preview tunnels", () =>
+  Effect.gen(function* () {
+    const relay = yield* SelfRelay.SelfRelay;
+    const opened = yield* relay.portLink(3000, "session-1").pipe(Effect.result);
+    expect(opened._tag).toBe("Failure");
+    if (opened._tag === "Failure")
+      expect(String(opened.failure.cause)).toContain("does not allow port forwarding");
+  }).pipe(
+    Effect.provide(
+      makeLayer(noPreviewTunnel, [
+        { port: 3000, access: "private", expiresAt: 4_102_444_800_000, id: "port-1" },
+      ]),
+    ),
+  ),
 );
