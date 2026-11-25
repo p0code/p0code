@@ -83,6 +83,7 @@ import {
   isWslSettingsRowVisible,
   missingTailscaleEndpointDescription,
   resolveLocalVersionStatusLabel,
+  resolvePublicOrigin,
   resolveTailscaleServeBaseUrl,
 } from "./ConnectionsSettings.logic";
 import { EnvironmentIconMenu } from "./EnvironmentIconPicker";
@@ -463,8 +464,11 @@ function ConnectionsSettingsContent({
       ? serverEnvironment.relayStatus({ environmentId: accessEnvironmentId, input: {} })
       : null,
   );
-  const publicOrigin =
-    relayStatus.data?.publicOrigin ?? accessEnvironment?.serverConfig?.environment.publicOrigin;
+  const publicOrigin = resolvePublicOrigin({
+    liveStatus: relayStatus.isSuccess ? relayStatus.data : null,
+    liveStatusLoaded: relayStatus.isSuccess,
+    cached: accessEnvironment?.serverConfig?.environment.publicOrigin,
+  });
   const hostedAppUrl = useT3ConnectBridgeHostedAppUrl(accessEnvironmentId);
   const publicEndpoint = publicOrigin
     ? publicOriginAdvertisedEndpoint(publicOrigin, resolveMessage, hostedAppUrl)
