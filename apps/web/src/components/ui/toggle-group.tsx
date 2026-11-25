@@ -16,9 +16,14 @@ function ToggleGroup({
   variant = "segmented",
   size: sizeProp,
   orientation = "horizontal",
+  fill = false,
   children,
   ...props
-}: ToggleGroupPrimitive.Props & VariantProps<typeof toggleVariants>) {
+}: ToggleGroupPrimitive.Props &
+  VariantProps<typeof toggleVariants> & {
+    /** Segmented only: the pressed segment reaches the track edges instead of sitting inset. */
+    readonly fill?: boolean;
+  }) {
   const size =
     sizeProp === undefined ? (variant === "segmented" ? "segmented" : "default") : sizeProp;
   const value = { size, variant };
@@ -30,7 +35,9 @@ function ToggleGroup({
           ? "*:pointer-coarse:after:min-w-auto"
           : "*:pointer-coarse:after:min-h-auto",
         variant === "segmented"
-          ? "gap-0.5 rounded-lg bg-input/40 p-0.5"
+          ? fill
+            ? "gap-0 rounded-lg bg-input/40 p-0 *:rounded-lg *:before:rounded-lg"
+            : "gap-0.5 rounded-lg bg-input/40 p-0.5"
           : variant === "default"
             ? "gap-0.5"
             : orientation === "horizontal"

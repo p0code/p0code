@@ -19,6 +19,7 @@ export function SidebarAccountProfileToggle() {
       <ToggleGroup
         aria-label={gt("Account profile")}
         variant="segmented"
+        fill
         size="sm"
         className="w-full"
         value={activeAccountProfileId ? [activeAccountProfileId] : []}
