@@ -12,24 +12,60 @@ From the repository root (Node 26 and Vite+ installed):
 vp install
 RELAY_HOST=relay.example.com RELAY_ACME_EMAIL=you@example.com \
   node apps/relay/src/cli.ts serve
+node apps/relay/src/cli.ts user add alice
 node apps/relay/src/cli.ts enroll
 node apps/relay/src/cli.ts ls
 node apps/relay/src/cli.ts revoke abcdef
 node apps/relay/src/cli.ts block docs-abcdef
 ```
 
-`enroll` prints a one-time token valid for one hour. Pass it privately to the environment. These admin commands access the same SQLite file as `serve`; use `--state` consistently. The relay observes revocations from another process within one second and closes live tunnels. Tokens are SHA-256 hashed at rest; the database contains public keys, never environment private keys.
+`user add` prompts twice for a hidden password (12 characters minimum); `P0_RELAY_USER_PASSWORD` supplies it for automation. `enroll` prints a one-time token valid for one hour. Pass it privately to the environment. These admin commands access the same SQLite file as `serve`; use `--state` consistently. The relay observes revocations from another process within one second and closes live tunnels. Passwords are stored as salted scrypt hashes and tokens are SHA-256 hashed at rest; the database contains public keys, never environment private keys.
 
 For Docker, from `apps/relay`:
 
 ```sh
 RELAY_HOST=relay.example.com RELAY_ACME_EMAIL=you@example.com docker compose up -d --build
+docker compose exec relay node apps/relay/src/cli.ts user add alice
 docker compose exec relay node apps/relay/src/cli.ts enroll
 docker compose exec relay node apps/relay/src/cli.ts ls
 docker compose exec relay node apps/relay/src/cli.ts revoke abcdef
 ```
 
 Compose environment variables must also be set when running `docker compose exec`.
+
+## Accounts
+
+Instead of pasting an enrollment token, an environment can link with a username and password. The
+relay only authenticates the account: it still routes raw TCP by SNI and never inspects traffic.
+
+Create accounts on the relay host. The password prompt is hidden, asks twice, and needs at least 12
+characters; set `P0_RELAY_USER_PASSWORD` to skip the prompt in scripts.
+
+```sh
+node apps/relay/src/cli.ts user add alice
+node apps/relay/src/cli.ts user passwd alice
+node apps/relay/src/cli.ts user list
+node apps/relay/src/cli.ts user rm alice
+```
+
+The app sends the password once to `POST /_hhh/auth/enroll` and keeps only the returned slug; the
+password is never stored client-side. Re-linking the same environment key with the same account
+returns the same slug. An environment key that belongs to another account, or a slug that is
+already taken, is refused with `409`.
+
+- `user rm <username>` deletes the account and revokes every environment it owns, closing their
+  live tunnels. Environments enrolled with a token have no account and are untouched.
+- `GET /_hhh/auth/config` answers `{ "signup": false, "password": true }` so the app knows whether
+  to offer account login. Until an account exists, the auth endpoints answer `404`, like an
+  unconfigured relay.
+- Signup is **off by default**. Start with `--allow-signup` (or `RELAY_ALLOW_SIGNUP=1`) to enable
+  `POST /_hhh/auth/register`; passwords still need 12+ characters. Registration is rate limited and
+  answers the same way for an existing name, so it cannot be used to list accounts.
+- Account and registration attempts are limited to 5 per minute per source IP (IPv6 shares a /64).
+  Posts are capped at 8 KiB, and passwords or hashes are never logged.
+
+The token path is unchanged: `enroll` plus `POST /_hhh/enroll` remains the advanced/automation
+route for agents and CI.
 
 | Flag                | Environment variable       | Default                     |
 | ------------------- | -------------------------- | --------------------------- |
@@ -46,6 +82,7 @@ Compose environment variables must also be set when running `docker compose exec
 | `--idle-timeout-ms` | `RELAY_IDLE_TIMEOUT_MS`    | `120000` per stream         |
 | `--public-hosts`    | `RELAY_PUBLIC_HOSTS=1`     | off                         |
 | `--public-domain`   | `RELAY_PUBLIC_DOMAIN`      | none (names use `--host`)   |
+| `--allow-signup`    | `RELAY_ALLOW_SIGNUP=1`     | off                         |
 
 BYO certificate/key paths are PEM files covering the relay's own hostname. Mount them in Docker and set `RELAY_CERT` and `RELAY_KEY`. For Let's Encrypt staging use `https://acme-staging-v02.api.letsencrypt.org/directory`. ACME certificates and private keys are saved atomically and renewed at two thirds of their lifetime. Preserve the data volume across restarts. Run only one `serve` process per state file.
 
@@ -130,7 +167,7 @@ After authentication each binary WebSocket message is one frame: **u8 type, u32 
 
 Each direction starts with 256 KiB credit per stream. A full reader stops returning credit; writers honor Node stream backpressure and WebSocket send completion. A stalled stream leaves other streams usable. PING/PONG detects dead tunnels. Streams have caps and idle timeouts; ClientHello parsing and authentication have separate size/deadline bounds.
 
-On 443 the relay peeks and replays the full ClientHello, including fragmented TLS records. Its own SNI host goes to `/healthz`, `/_hhh/enroll`, and `/_hhh/tunnel`. `<slug>.<relay>` and `<port>-<slug>.<relay>` go untouched to the owning environment, and with public hosts on, `<name>-<slug>` under the public domain (or the relay host without one). `port` and `name` restate the label; the receiver refuses a stream when they disagree. Unknown SNI closes the connection. Port 80 forwards only HTTP-01 GET paths to environments (including names under the public domain) and serves the relay's own challenges locally; other requests get a 308 HTTPS redirect.
+On 443 the relay peeks and replays the full ClientHello, including fragmented TLS records. Its own SNI host serves `/healthz`, `/_hhh/enroll`, `/_hhh/auth/config`, `/_hhh/auth/enroll`, `/_hhh/auth/register`, and `/_hhh/tunnel`. `<slug>.<relay>` and `<port>-<slug>.<relay>` go untouched to the owning environment, and with public hosts on, `<name>-<slug>` under the public domain (or the relay host without one). `port` and `name` restate the label; the receiver refuses a stream when they disagree. Unknown SNI closes the connection. Port 80 forwards only HTTP-01 GET paths to environments (including names under the public domain) and serves the relay's own challenges locally; other requests get a 308 HTTPS redirect.
 
 ## Verify
 
@@ -141,4 +178,4 @@ vp run --filter @t3tools/relay typecheck
 vp lint packages/relay-tunnel apps/relay
 ```
 
-Tests generate ephemeral self-signed certificates with `openssl`. The localhost integration test checks the environment certificate fingerprint, HTTP response, WebSocket upgrade, forwarded port, public names under a public domain, visitor caps, owner headroom, `block`, ACME routing, enrollment token reuse, tunnel replacement, and live revocation. TLS verification is relaxed only in that test.
+Tests generate ephemeral self-signed certificates with `openssl`. The localhost integration test checks the environment certificate fingerprint, HTTP response, WebSocket upgrade, forwarded port, public names under a public domain, visitor caps, owner headroom, `block`, ACME routing, enrollment token reuse, tunnel replacement, and live revocation. TLS verification is relaxed only in that test. Account tests cover password linking, slug and key conflicts, hiding unconfigured endpoints, auth rate limits, signup, account removal, and migrating a pre-account state file.

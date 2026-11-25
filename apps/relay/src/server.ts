@@ -15,7 +15,12 @@ import {
 } from "@t3tools/relay-tunnel/mux";
 import { readClientHello } from "@t3tools/relay-tunnel/sni";
 import { HttpChallengeStore } from "@t3tools/relay-tunnel/certificates";
-import { RelayState } from "./state.ts";
+import {
+  InvalidCredentialsError,
+  LinkConflictError,
+  RelayState,
+  UserExistsError,
+} from "./state.ts";
 
 export interface RelayServerOptions {
   relayHost: string;
@@ -35,6 +40,8 @@ export interface RelayServerOptions {
   publicDomain?: string;
   /** Per visitor IP, for every label except an environment's own `<slug>`. */
   visitorLimits?: Partial<VisitorLimits>;
+  /** Allow POST /_hhh/auth/register so anyone can create an account. Off by default. */
+  allowSignup?: boolean;
 }
 export interface VisitorLimits {
   /** New connections a visitor IP may open at once. */
@@ -52,6 +59,12 @@ const VISITOR_IDLE_TIMEOUT_MS = 15_000;
 /** Source-address buckets kept before the least recently used one is evicted. */
 const BUCKET_LIMIT = 10_000;
 const HOSTNAME = /^[a-z0-9][a-z0-9.-]*[a-z0-9]$/;
+/** Auth attempts are capped harder than enrollment: five a minute per source IP. */
+const AUTH_BURST = 5;
+const AUTH_REFILL_MS = 12_000;
+/** JSON bodies on the auth endpoints are tiny: username, password, key and optional slug. */
+const AUTH_BODY_LIMIT = 8192;
+class BodyTooLarge extends Error {}
 
 /** Eight 16-bit groups of an IPv6 address, or undefined when it is not one. */
 function ipv6Words(address: string): number[] | undefined {
@@ -182,6 +195,15 @@ export class RelayServer {
     return tokens >= 1;
   }
   private readonly visitorBuckets = new Map<string, { tokens: number; at: number }>();
+  private readonly authBuckets = new Map<string, { tokens: number; at: number }>();
+  private allowAuthAttempt(address: string | undefined): boolean {
+    const key = sourceKey(address);
+    const now = Date.now();
+    const prior = this.authBuckets.get(key) ?? { tokens: AUTH_BURST, at: now };
+    const tokens = Math.min(AUTH_BURST, prior.tokens + (now - prior.at) / AUTH_REFILL_MS);
+    this.rememberBucket(this.authBuckets, key, { tokens: Math.max(0, tokens - 1), at: now });
+    return tokens >= 1;
+  }
   private readonly visitorConnections = new Map<string, number>();
   private admitVisitor(socket: NodeNet.Socket): boolean {
     const limits = { ...DEFAULT_VISITOR_LIMITS, ...this.options.visitorLimits };
@@ -282,6 +304,8 @@ export class RelayServer {
       if (Date.now() - bucket.at > 60_000) this.buckets.delete(ip);
     for (const [ip, bucket] of this.visitorBuckets)
       if (Date.now() - bucket.at > 60_000) this.visitorBuckets.delete(ip);
+    for (const [ip, bucket] of this.authBuckets)
+      if (Date.now() - bucket.at > 60_000) this.authBuckets.delete(ip);
     this.closeBlocked();
     for (const [slug, tunnel] of this.tunnels) {
       if (this.options.state.get(slug)?.publicKey !== tunnel.publicKey) tunnel.mux.close();
@@ -315,6 +339,44 @@ export class RelayServer {
       response.writeHead(200, { "content-type": "text/plain" }).end("ok\n");
       return;
     }
+    const path = request.url?.split("?")[0] ?? "";
+    // An unconfigured relay has no accounts (and no signup): its auth endpoints read as absent.
+    const signup = this.options.allowSignup === true;
+    const authConfigured = signup || this.options.state.userCount() > 0;
+    if (path === "/_hhh/auth/config") {
+      if (request.method !== "GET" || !authConfigured) response.writeHead(404).end();
+      else this.json(response, 200, { signup, password: true });
+      return;
+    }
+    if (path === "/_hhh/auth/enroll" || path === "/_hhh/auth/register") {
+      if (request.method !== "POST" || !authConfigured) {
+        response.writeHead(404).end();
+        return;
+      }
+      if (path === "/_hhh/auth/register" && !signup) {
+        response.writeHead(404).end();
+        return;
+      }
+      if (!this.allowAuthAttempt(request.socket.remoteAddress)) {
+        response.writeHead(429).end();
+        return;
+      }
+      let body: unknown;
+      try {
+        body = await this.readJsonBody(request);
+      } catch (error) {
+        if (!response.headersSent) {
+          if (error instanceof BodyTooLarge) {
+            response.writeHead(413, { connection: "close" }).end();
+            request.destroy();
+          } else response.writeHead(400).end();
+        }
+        return;
+      }
+      if (path === "/_hhh/auth/register") this.register(response, body);
+      else this.enrollForUser(response, body);
+      return;
+    }
     if (request.method !== "POST" || request.url !== "/_hhh/enroll") {
       response.writeHead(404).end();
       return;
@@ -324,19 +386,7 @@ export class RelayServer {
       return;
     }
     try {
-      const chunks: Buffer[] = [];
-      let size = 0;
-      for await (const part of request) {
-        const chunk = Buffer.isBuffer(part) ? part : Buffer.from(part as Uint8Array);
-        size += chunk.length;
-        if (size > 8192) {
-          response.writeHead(413).end();
-          request.destroy();
-          return;
-        }
-        chunks.push(chunk);
-      }
-      const body: unknown = JSON.parse(Buffer.concat(chunks).toString());
+      const body = await this.readJsonBody(request);
       if (
         !body ||
         typeof body !== "object" ||
@@ -352,12 +402,88 @@ export class RelayServer {
         body.publicKey,
         "desiredSlug" in body ? (body.desiredSlug as string) : undefined,
       );
-      response
-        .writeHead(201, { "content-type": "application/json", "cache-control": "no-store" })
-        .end(JSON.stringify({ slug: env.slug, relayHost: this.options.relayHost }));
-    } catch {
-      if (!response.headersSent) response.writeHead(400).end("Enrollment rejected");
+      this.json(response, 201, { slug: env.slug, relayHost: this.options.relayHost });
+    } catch (error) {
+      if (!response.headersSent) {
+        if (error instanceof BodyTooLarge) {
+          response.writeHead(413, { connection: "close" }).end("Enrollment rejected");
+          request.destroy();
+        } else response.writeHead(400).end("Enrollment rejected");
+      }
     }
+  }
+  private json(response: NodeHttp.ServerResponse, status: number, value: unknown): void {
+    response
+      .writeHead(status, { "content-type": "application/json", "cache-control": "no-store" })
+      .end(JSON.stringify(value));
+  }
+  /** Reads one small JSON body; passwords and hashes never reach a log line here. */
+  private async readJsonBody(request: NodeHttp.IncomingMessage): Promise<unknown> {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    for await (const part of request) {
+      const chunk = Buffer.isBuffer(part) ? part : Buffer.from(part as Uint8Array);
+      size += chunk.length;
+      if (size > AUTH_BODY_LIMIT) throw new BodyTooLarge();
+      chunks.push(chunk);
+    }
+    return JSON.parse(Buffer.concat(chunks).toString());
+  }
+  private enrollForUser(response: NodeHttp.ServerResponse, body: unknown): void {
+    if (
+      !body ||
+      typeof body !== "object" ||
+      !("username" in body) ||
+      typeof body.username !== "string" ||
+      !("password" in body) ||
+      typeof body.password !== "string" ||
+      !("publicKey" in body) ||
+      typeof body.publicKey !== "string" ||
+      ("desiredSlug" in body && typeof body.desiredSlug !== "string")
+    ) {
+      response.writeHead(400).end("Invalid request");
+      return;
+    }
+    try {
+      const env = this.options.state.enrollForUser({
+        username: body.username,
+        password: body.password,
+        publicKey: body.publicKey,
+        ...("desiredSlug" in body ? { desiredSlug: body.desiredSlug as string } : {}),
+      });
+      this.json(response, 201, { slug: env.slug, relayHost: this.options.relayHost });
+    } catch (error) {
+      if (error instanceof InvalidCredentialsError)
+        response.writeHead(401).end("Invalid credentials");
+      else if (error instanceof LinkConflictError) response.writeHead(409).end(error.message);
+      else response.writeHead(400).end("Invalid request");
+    }
+  }
+  /**
+   * Creates an account when signup is on. A name that already exists answers like a new one and is
+   * left untouched, so signup cannot be used to list accounts.
+   */
+  private register(response: NodeHttp.ServerResponse, body: unknown): void {
+    if (
+      !body ||
+      typeof body !== "object" ||
+      !("username" in body) ||
+      typeof body.username !== "string" ||
+      !("password" in body) ||
+      typeof body.password !== "string"
+    ) {
+      response.writeHead(400).end("Registration failed");
+      return;
+    }
+    try {
+      this.options.state.addUser(body.username, body.password);
+    } catch (error) {
+      if (!(error instanceof UserExistsError)) {
+        response.writeHead(400).end("Registration failed");
+        return;
+      }
+    }
+    this.json(response, 201, { username: body.username.trim().toLowerCase() });
   }
   private authenticate(ws: WebSocket): void {
     const challenge = new HandshakeChallenge(this.options.relayHost);

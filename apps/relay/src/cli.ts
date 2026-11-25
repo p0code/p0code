@@ -22,12 +22,57 @@ const { values, positionals } = NodeUtil.parseArgs({
     "idle-timeout-ms": { type: "string" },
     "public-hosts": { type: "boolean" },
     "public-domain": { type: "string" },
+    "allow-signup": { type: "boolean" },
   },
 });
 const statePath = NodePath.resolve(
   values.state ?? process.env.RELAY_STATE ?? "./relay-data/state.sqlite",
 );
 const state = new RelayState(statePath);
+
+/** Hidden TTY password entry, with backspace and Ctrl-C; automation uses P0_RELAY_USER_PASSWORD. */
+function readPassword(prompt: string): Promise<string> {
+  if (!process.stdin.isTTY || !process.stdin.setRawMode)
+    throw new Error("Password prompts need a TTY; set P0_RELAY_USER_PASSWORD for automation");
+  process.stdout.write(prompt);
+  return new Promise((resolve, reject) => {
+    process.stdin.setEncoding("utf8");
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+    let value = "";
+    const finish = (error?: Error): void => {
+      process.stdin.off("data", onData);
+      process.stdin.setRawMode(false);
+      process.stdin.pause();
+      process.stdout.write("\n");
+      if (error) reject(error);
+      else resolve(value);
+    };
+    const onData = (chunk: string): void => {
+      for (const character of chunk) {
+        if (character === "\u0003" || character === "\u0004") {
+          finish(new Error("Cancelled"));
+          return;
+        }
+        if (character === "\r" || character === "\n") {
+          finish();
+          return;
+        }
+        if (character === "\u007f" || character === "\b") value = value.slice(0, -1);
+        else value += character;
+      }
+    };
+    process.stdin.on("data", onData);
+  });
+}
+async function passwordFor(username: string): Promise<string> {
+  const fromEnv = process.env.P0_RELAY_USER_PASSWORD;
+  if (fromEnv !== undefined) return fromEnv;
+  const first = await readPassword(`Password for ${username}: `);
+  const second = await readPassword("Confirm password: ");
+  if (first !== second) throw new Error("Passwords do not match");
+  return first;
+}
 const command = positionals[0];
 if (command === "enroll") {
   console.log(state.issueToken());
@@ -53,6 +98,36 @@ if (command === "enroll") {
 } else if (command === "blocked") {
   console.log(JSON.stringify(state.blockedLabels(), null, 2));
   state.close();
+} else if (command === "user") {
+  const action = positionals[1];
+  const username = positionals[2];
+  try {
+    if (action === "list") {
+      console.log(JSON.stringify(state.listUsers(), null, 2));
+    } else if (action === "add") {
+      if (!username) throw new Error("Usage: hhh-relay user add <username>");
+      const user = state.addUser(username, await passwordFor(username));
+      console.log(`Added ${user.username}`);
+    } else if (action === "passwd") {
+      if (!username) throw new Error("Usage: hhh-relay user passwd <username>");
+      console.log(
+        state.setPassword(username, await passwordFor(username))
+          ? `Password updated for ${username.toLowerCase()}`
+          : `Unknown user: ${username}`,
+      );
+    } else if (action === "rm") {
+      if (!username) throw new Error("Usage: hhh-relay user rm <username>");
+      const result = state.removeUser(username);
+      if (!result.removed) console.log(`Unknown user: ${username}`);
+      else if (result.revoked.length)
+        console.log(`Removed ${username} and revoked ${result.revoked.join(", ")}`);
+      else console.log(`Removed ${username}`);
+    } else {
+      throw new Error("Usage: hhh-relay user add|passwd|list|rm [username]");
+    }
+  } finally {
+    state.close();
+  }
 } else if (command === "serve") {
   const relayHost = values.host ?? process.env.RELAY_HOST;
   if (!relayHost) throw new Error("RELAY_HOST or --host is required");
@@ -82,11 +157,15 @@ if (command === "enroll") {
     values["public-hosts"] ??
     /^(1|true|yes|on)$/i.test((process.env.RELAY_PUBLIC_HOSTS ?? "").trim());
   const publicDomain = values["public-domain"] || process.env.RELAY_PUBLIC_DOMAIN || undefined;
+  const allowSignup =
+    values["allow-signup"] ??
+    /^(1|true|yes|on)$/i.test((process.env.RELAY_ALLOW_SIGNUP ?? "").trim());
   const relay = new RelayServer({
     relayHost,
     state,
     publicHosts,
     ...(publicDomain ? { publicDomain } : {}),
+    allowSignup,
     challenges,
     getSecureContext: (hostname) => certificates.getSecureContext(hostname),
     bindHost: values["bind-host"] ?? process.env.RELAY_BIND_HOST ?? "0.0.0.0",
@@ -121,5 +200,5 @@ if (command === "enroll") {
   );
 } else {
   state.close();
-  throw new Error("Usage: hhh-relay serve|enroll|ls|revoke|block|unblock|blocked [options]");
+  throw new Error("Usage: hhh-relay serve|enroll|ls|revoke|block|unblock|blocked|user [options]");
 }
