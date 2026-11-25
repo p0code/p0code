@@ -2,6 +2,7 @@
   "name": "@t3tools/web",
   "version": "0.2.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "build:ghostty-wasm": "bash scripts/build-libghostty-wasm.sh",
@@ -36,7 +37,6 @@
     "@t3tools/client-runtime": "workspace:*",
     "@t3tools/contracts": "workspace:*",
     "@t3tools/plugin-obsidian-shared-memory": "workspace:*",
-    "@t3tools/plugin-relayoo": "workspace:*",
     "@t3tools/plugin-t3-connect-bridge": "workspace:*",
     "@t3tools/plugin-tokscale-auto-publish": "workspace:*",
     "@t3tools/provider-core": "workspace:*",
@@ -112,6 +112,5 @@
     "tailwindcss": "^4.0.0",
     "vite": "catalog:",
     "vite-plus": "catalog:"
-  },
-  "license": "MIT"
+  }
 }

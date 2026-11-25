@@ -791,14 +791,6 @@ export const SETTINGS_SEARCH_ITEMS = [
     pluginsOnly: true,
   },
   {
-    id: "relay-tunnels",
-    title: msg("Relay tunnels"),
-    to: "/settings/plugins",
-    targetId: "plugin-relayoo",
-    searchTerms: [msg("Relay tunnel reach this machine share local port server")],
-    pluginsOnly: true,
-  },
-  {
     id: "tokscale-auto-publish",
     title: msg("Tokscale auto-publish"),
     to: "/settings/plugins",
