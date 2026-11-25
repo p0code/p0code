@@ -569,6 +569,7 @@ const resolvePrimaryStartConfig = Effect.fn("desktop.backendConfiguration.resolv
       executablePath: process.execPath,
       // Packaged builds have a separate cache; --require prevents cache settings leaking to provider subprocesses.
       args: [
+        "--title=p0code-backend",
         ...(environment.isPackaged ? ["--require", environment.compileCachePath] : []),
         environment.backendEntryPath,
         "--bootstrap-fd",

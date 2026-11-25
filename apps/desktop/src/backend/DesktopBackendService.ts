@@ -837,6 +837,7 @@ export function makeLegacyNodeServiceDriver(
               ChildProcess.make(
                 input.executablePath,
                 [
+                  "--title=p0code-backend",
                   input.entryPath,
                   // Web mode: a desktop-mode server exits when its launcher (this GUI) does.
                   "--mode",

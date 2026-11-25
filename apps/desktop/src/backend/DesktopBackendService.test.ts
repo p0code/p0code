@@ -577,7 +577,8 @@ describe("makeLegacyNodeServiceDriver", () => {
       assert.equal(unreffed, true);
       assert.equal(spawned.length, 1);
       const launch = spawned[0]!;
-      assert.deepEqual(launch.args.slice(1, 4), ["--mode", "web", "--no-browser"]);
+      assert.equal(launch.args[0], "--title=p0code-backend");
+      assert.deepEqual(launch.args.slice(2, 5), ["--mode", "web", "--no-browser"]);
       assert.includeMembers([...launch.args], ["--bootstrap-fd", "0", "--port", "51234"]);
       assert.equal(launch.bootstrap.desktopBootstrapSecret, SERVICE_SECRETS.bootstrapSecret);
       assert.equal(launch.bootstrap.desktopReadinessSecret, SERVICE_SECRETS.readinessSecret);

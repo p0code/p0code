@@ -42,3 +42,12 @@ backend.
 - Cap consecutive crash recoveries per unfinished turn so a crashing turn cannot loop forever.
 - Never auto-continue a turn that is archived, settled, snoozed, user-stopped, or waiting on a
   blocking user action (approval, question, or secret).
+
+## Desktop backend process identity
+
+Embedded and detached Node backends use the GUI's signed Electron executable with
+`ELECTRON_RUN_AS_NODE=1`. macOS therefore attributes these children to the app; the
+`--title=p0code-backend` process label helps identify them in process listings but does not
+change their bundle identity or LaunchServices routing. URL delivery to a child is a suspected
+consequence, not a verified behavior. A distinct helper would need separate validation of TCC
+permissions, keychain access, signing, and backend recovery before replacing this executable.
