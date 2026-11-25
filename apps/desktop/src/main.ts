@@ -1,3 +1,4 @@
+import { claimDesktopInstance } from "./app/DesktopSingleInstance.ts";
 import { handleStdioError } from "./app/stdioErrors.ts";
 import * as MacPermissions from "./permissions/MacPermissions.ts";
 
@@ -90,6 +91,11 @@ if (process.argv.includes("--version")) {
     if (!(error instanceof Error) || !("code" in error) || error.code !== "EPIPE") throw error;
   }
   Electron.app.exit(0);
+}
+
+// exit() terminates Electron synchronously, before the runtime acquires any services.
+if (!claimDesktopInstance(Electron.app)) {
+  throw new Error("A desktop instance is already running.");
 }
 
 DesktopRenameMigration.moveDesktopFoldersFromPreviousName({

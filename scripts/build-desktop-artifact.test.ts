@@ -26,6 +26,7 @@ import {
   copyDesktopBuildArtifacts,
   DesktopBuildManifestRestoreError,
   BundleNotSelfContainedError,
+  PackagedEmbeddedServerMissingError,
   BuildCommandFailedError,
   parseWslRuntimeArchiveMembers,
   readWorkspaceConfig,
@@ -230,6 +231,7 @@ const makeWindowsPayloadFixture = Effect.fn("test.makeWindowsPayloadFixture")(fu
 
 const makePackagedAppFixture = Effect.fn("test.makePackagedAppFixture")(function* (input: {
   readonly serverEntrySource?: string;
+  readonly omitServerEntry?: boolean;
   readonly resourcesPath?: string;
 }) {
   const fs = yield* FileSystem.FileSystem;
@@ -238,7 +240,13 @@ const makePackagedAppFixture = Effect.fn("test.makePackagedAppFixture")(function
   const sourceDir = path.join(tempDir, "app-source");
   const serverEntryPath = path.join(sourceDir, "apps/server/dist/bin.mjs");
   yield* fs.makeDirectory(path.dirname(serverEntryPath), { recursive: true });
-  yield* fs.writeFileString(serverEntryPath, input.serverEntrySource ?? "console.log('server');\n");
+  if (!input.omitServerEntry) {
+    yield* fs.writeFileString(
+      serverEntryPath,
+      input.serverEntrySource ?? "console.log('server');\n",
+    );
+  }
+  yield* fs.writeFileString(path.join(sourceDir, "package.json"), "{}");
 
   const stageDistDir = path.join(tempDir, "dist");
   const resourcesDir = path.join(
@@ -1461,6 +1469,96 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     ),
   );
 
+  it.effect.each([
+    ["macOS", "mac-arm64/T3 Code.app/Contents/Resources"],
+    ["Linux", "linux-arm64-unpacked/resources"],
+  ] as const)(
+    "rejects a GUI-only %s app even when the runtime probe is disabled",
+    ([platform, resourcesPath]) =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const fixture = yield* makePackagedAppFixture({ resourcesPath, omitServerEntry: true });
+          const input = {
+            stageDistDir: fixture.stageDistDir,
+            verifyRuntime: false,
+          };
+          const error = yield* platform === "macOS"
+            ? validateMacPackagedPayload(input).pipe(Effect.flip)
+            : validateLinuxPackagedPayload(input).pipe(Effect.flip);
+          assert.instanceOf(error, PackagedEmbeddedServerMissingError);
+          assert.include(error.message, "Packaged app is missing the required embedded server");
+          assert.include(error.message, "T3CODE_DESKTOP_BUNDLE_SERVER=true");
+        }),
+      ).pipe(
+        Effect.provide(
+          ConfigProvider.layer(
+            ConfigProvider.fromEnv({ env: { T3CODE_DESKTOP_UNTRUSTED_BUNDLE: "true" } }),
+          ),
+        ),
+      ),
+  );
+
+  it.effect.each([
+    ["macOS", "mac-arm64/T3 Code.app/Contents/Resources"],
+    ["Linux", "linux-arm64-unpacked/resources"],
+  ] as const)("validates only the requested %s target architecture", ([platform, resourcesPath]) =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fixture = yield* makePackagedAppFixture({ resourcesPath });
+        const validate = Effect.fn(function* (
+          input: Parameters<typeof validateMacPackagedPayload>[0],
+        ) {
+          if (platform === "macOS") yield* validateMacPackagedPayload(input);
+          else yield* validateLinuxPackagedPayload(input);
+        });
+        yield* validate({
+          stageDistDir: fixture.stageDistDir,
+          arch: "arm64",
+          verifyRuntime: false,
+        });
+        const error = yield* validate({
+          stageDistDir: fixture.stageDistDir,
+          arch: "x64",
+          verifyRuntime: false,
+        }).pipe(Effect.flip);
+        assert.include(error.message, "Expected electron-builder");
+      }),
+    ),
+  );
+
+  it.effect.each([
+    ["macOS", "x64", "mac/Test.app/Contents/Resources", "mac/Test.app/Contents/MacOS/Test"],
+    [
+      "macOS",
+      "arm64",
+      "mac-arm64/Test.app/Contents/Resources",
+      "mac-arm64/Test.app/Contents/MacOS/Test",
+    ],
+    ["Linux", "x64", "linux-unpacked/resources", "linux-unpacked/p0code"],
+    ["Linux", "arm64", "linux-arm64-unpacked/resources", "linux-arm64-unpacked/p0code"],
+  ] as const)(
+    "probes the packaged %s %s executable",
+    ([platform, arch, resourcesPath, executable]) => {
+      const commands: string[] = [];
+      const spawner = Layer.succeed(
+        ChildProcessSpawner.ChildProcessSpawner,
+        ChildProcessSpawner.make((command) => {
+          commands.push((command as unknown as { readonly command: string }).command);
+          return Effect.succeed(mockProcess(0));
+        }),
+      );
+      return Effect.scoped(
+        Effect.gen(function* () {
+          const fixture = yield* makePackagedAppFixture({ resourcesPath });
+          const input = { stageDistDir: fixture.stageDistDir, arch };
+          if (platform === "macOS") yield* validateMacPackagedPayload(input);
+          else yield* validateLinuxPackagedPayload(input);
+          assert.deepEqual(commands, [NodePath.join(fixture.stageDistDir, executable)]);
+        }),
+      ).pipe(Effect.provide(spawner));
+    },
+  );
+
   it.effect("accepts a macOS app whose packaged server bundle resolves", () =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -1543,7 +1641,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         });
         const error = yield* validateMacPackagedPayload({ stageDistDir }).pipe(Effect.flip);
 
-        assert.instanceOf(error, BundleNotSelfContainedError);
+        assert.instanceOf(error, PackagedEmbeddedServerMissingError);
       }),
     ),
   );
@@ -2147,7 +2245,7 @@ it.effect(
     }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
 );
 
-it.effect("omits Windows server.asar and server compile-cache hook in GUI-only build config", () =>
+it.effect("always includes Windows server.asar and the server compile-cache hook", () =>
   Effect.gen(function* () {
     const winGuiOnly = yield* createBuildConfig(
       "win",
@@ -2159,13 +2257,12 @@ it.effect("omits Windows server.asar and server compile-cache hook in GUI-only b
       undefined,
       false,
       "x64",
-      false,
     );
     const extraResources = winGuiOnly.extraResources as ReadonlyArray<{
       readonly from?: string;
     }>;
-    assert.isUndefined(winGuiOnly.afterPack);
-    assert.isFalse(
+    assert.isString(winGuiOnly.afterPack);
+    assert.isTrue(
       extraResources.some((entry) => entry.from === "apps/desktop/prod-resources/windows-server"),
     );
   }).pipe(Effect.provide(NodeServices.layer)),

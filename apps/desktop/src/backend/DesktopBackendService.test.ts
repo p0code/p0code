@@ -173,7 +173,7 @@ describe("DesktopBackendService helpers", () => {
     );
   });
 
-  it("only trusts an explicit override or a bundled p0d, not PATH", () => {
+  it("only considers the explicit override and the packaged p0d", () => {
     const posixPath = { join: (...parts: string[]) => parts.join("/") };
     const candidates = DesktopBackendService.p0dBinaryCandidates({
       path: posixPath,
@@ -188,12 +188,11 @@ describe("DesktopBackendService helpers", () => {
       configuredBinaryPath: "/custom/bin/p0d",
     });
 
-    assert.equal(candidates[0], "/custom/bin/p0d");
-    assert.equal(candidates[1], "/App/Contents/Resources/p0d/p0d");
-    assert.include(candidates, "/repo/apps/p0d/dist/darwin-arm64/p0d");
+    assert.deepEqual(candidates, ["/custom/bin/p0d", "/App/Contents/Resources/p0d/p0d"]);
     assert.notInclude(candidates, "/Users/test/.p0code/bin/p0d");
     assert.notInclude(candidates, "/opt/homebrew/bin/p0d");
     assert.notInclude(candidates, "/usr/local/bin/p0d");
+    assert.notInclude(candidates, "/repo/apps/p0d/dist/darwin-arm64/p0d");
   });
 
   it("ignores a p0d installed outside the app when packaged", () => {
@@ -211,10 +210,7 @@ describe("DesktopBackendService helpers", () => {
       configuredBinaryPath: null,
     });
 
-    assert.deepEqual(candidates, [
-      "/App/Contents/Resources/p0d/p0d",
-      "/App/Contents/Resources/bin/p0d",
-    ]);
+    assert.deepEqual(candidates, ["/App/Contents/Resources/p0d/p0d"]);
   });
 
   it("uses p0d.exe on Windows", () => {
@@ -233,7 +229,7 @@ describe("DesktopBackendService helpers", () => {
     });
 
     assert.include(candidates, "C:\\App\\resources\\p0d\\p0d.exe");
-    assert.include(candidates, "C:\\repo\\apps\\p0d\\dist\\windows-amd64\\p0d.exe");
+    assert.equal(candidates.length, 1);
   });
 
   it("parses ready-file JSON and p0d service status in JSON or text formats", () => {
@@ -601,7 +597,8 @@ describe("makeLegacyNodeServiceDriver", () => {
       assert.equal(unreffed, true);
       assert.equal(spawned.length, 1);
       const launch = spawned[0]!;
-      assert.deepEqual(launch.args.slice(1, 4), ["--mode", "web", "--no-browser"]);
+      assert.equal(launch.args[0], "--title=p0code-backend");
+      assert.deepEqual(launch.args.slice(2, 5), ["--mode", "web", "--no-browser"]);
       assert.includeMembers([...launch.args], ["--bootstrap-fd", "0", "--port", "51234"]);
       assert.equal(launch.bootstrap.desktopBootstrapSecret, SERVICE_SECRETS.bootstrapSecret);
       assert.equal(launch.bootstrap.desktopReadinessSecret, SERVICE_SECRETS.readinessSecret);
@@ -699,7 +696,33 @@ describe("DesktopBackendService.layer", () => {
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
 
-  it.effect("ignores a p0d installed outside the app and stays on the in-app backend", () =>
+  it.effect("re-resolves a p0d override that disappeared before starting the backend", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const baseDir = yield* fileSystem.makeTempDirectoryScoped();
+      yield* fileSystem.makeDirectory(`${baseDir}/bin`, { recursive: true });
+      yield* fileSystem.writeFileString(`${baseDir}/bin/p0d`, "#!/bin/sh\nexit 0\n");
+      yield* fileSystem.chmod(`${baseDir}/bin/p0d`, 0o700);
+      const service = yield* DesktopBackendService.DesktopBackendService.pipe(
+        Effect.provide(
+          layerService(baseDir, {
+            ...DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS,
+            backendMode: "local-service",
+            backendModeConfiguredByUser: true,
+            backendBinaryPath: `${baseDir}/bin/p0d`,
+          }),
+        ),
+      );
+      assert.deepEqual(runLikeSyncIpc(service.resolveEffectiveMode), Exit.succeed("local-service"));
+      yield* fileSystem.remove(`${baseDir}/bin/p0d`);
+      const result = yield* service.prepareSelectedBackend;
+      assert.equal(result.mode, "embedded");
+      assert.equal(result.requestedMode, "local-service");
+      assert.include(result.fallbackReason ?? "", "Legacy server bundle not found");
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("ignores an unrelated home/bin p0d", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const baseDir = yield* fileSystem.makeTempDirectoryScoped();

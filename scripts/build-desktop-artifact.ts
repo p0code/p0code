@@ -2146,7 +2146,11 @@ export const copyDirectoryPreservingSymlinks = Effect.fn("copyDirectoryPreservin
 );
 
 export const verifyPackagedBundleIsSelfContained = Effect.fn("verifyPackagedBundleIsSelfContained")(
-  function* (input: { readonly asarPath: string; readonly verbose: boolean }) {
+  function* (input: {
+    readonly asarPath: string;
+    readonly verbose: boolean;
+    readonly executablePath?: string;
+  }) {
     // A PR preview's bundle is untrusted and this job may hold signing secrets, so never run it.
     if (yield* Config.Boolean("T3CODE_DESKTOP_UNTRUSTED_BUNDLE").pipe(Config.withDefault(false))) {
       yield* Effect.log(
@@ -2192,14 +2196,14 @@ export const verifyPackagedBundleIsSelfContained = Effect.fn("verifyPackagedBund
 
     yield* runCommand(
       ChildProcess.make(
-        process.execPath,
+        input.executablePath ?? process.execPath,
         // Clearing NODE_PATH leaves CommonJS global fallbacks; disable them so host packages cannot satisfy missing dependencies.
         ["--no-global-search-paths", entryPoint, "--version"],
         {
           cwd: probeApp,
           stdout: "pipe",
           stderr: "pipe",
-          env: { ...process.env, NODE_PATH: "" },
+          env: { ...process.env, NODE_PATH: "", ELECTRON_RUN_AS_NODE: "1" },
         },
       ),
       {
@@ -2220,7 +2224,8 @@ export const verifyPackagedBundleIsSelfContained = Effect.fn("verifyPackagedBund
           Effect.fail(
             new BundleNotSelfContainedError({
               exitCode: error.exitCode,
-              output: `${error.stderrTail ?? ""}${error.stdoutTail ?? ""}`.trim(),
+              output:
+                `Target backend runtime ${input.executablePath ?? process.execPath} failed: ${error.stderrTail ?? ""}${error.stdoutTail ?? ""}`.trim(),
             }),
           ),
       }),
@@ -2746,17 +2751,9 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     | undefined,
   wslRuntimeBundled = false,
   arch?: typeof BuildArch.Type,
-  bundleEmbeddedServer = true,
 ) {
   const buildConfig: Record<string, unknown> = {
-    ...(bundleEmbeddedServer
-      ? {
-          afterPack: (yield* Path.Path).join(
-            yield* RepoRoot,
-            "scripts/prepare-server-compile-cache.cjs",
-          ),
-        }
-      : {}),
+    afterPack: (yield* Path.Path).join(yield* RepoRoot, "scripts/prepare-server-compile-cache.cjs"),
     appId: DESKTOP_APP_ID,
     productName: resolveDesktopProductName(version),
     artifactName: "p0code-${version}-${arch}.${ext}",
@@ -2781,7 +2778,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       ...(platform === "linux" ? LINUX_CAPTURE_EXTRA_RESOURCES : []),
       ...(platform === "linux" ? LINUX_BROWSER_SECRET_EXTRA_RESOURCES : []),
       ...(platform === "mac" ? MAC_APPLE_SPEECH_EXTRA_RESOURCES : []),
-      ...(platform === "win" && bundleEmbeddedServer ? WINDOWS_SERVER_EXTRA_RESOURCES : []),
+      ...(platform === "win" ? WINDOWS_SERVER_EXTRA_RESOURCES : []),
       ...(platform === "win" && wslRuntimeBundled ? WSL_RUNTIME_EXTRA_RESOURCES : []),
     ],
   };
@@ -3553,6 +3550,25 @@ export const validateWindowsPackagedPayload = Effect.fn(
   return { packagedAppDir, fileCount, unpackedFiles } as const;
 });
 
+export class PackagedEmbeddedServerMissingError extends Schema.TaggedError<PackagedEmbeddedServerMissingError>()(
+  "PackagedEmbeddedServerMissingError",
+  { asarPath: Schema.String, cause: Schema.Unknown },
+) {
+  override get message(): string {
+    return `Packaged app is missing the required embedded server; rebuild with T3CODE_DESKTOP_BUNDLE_SERVER=true (${this.asarPath}: apps/server/dist/bin.mjs).`;
+  }
+}
+
+const validatePackagedEmbeddedServer = Effect.fn("desktopArtifact.validatePackagedEmbeddedServer")(
+  function* (asarPath: string) {
+    const path = yield* Path.Path;
+    yield* Effect.try({
+      try: () => statFile(asarPath, path.join("apps", "server", "dist", "bin.mjs")),
+      catch: (cause) => new PackagedEmbeddedServerMissingError({ asarPath, cause }),
+    });
+  },
+);
+
 export class MacPackagedAppMissingError extends Schema.TaggedError<MacPackagedAppMissingError>()(
   "MacPackagedAppMissingError",
   { stageDistDir: Schema.String },
@@ -3563,12 +3579,22 @@ export class MacPackagedAppMissingError extends Schema.TaggedError<MacPackagedAp
 }
 
 export const validateMacPackagedPayload = Effect.fn("desktopArtifact.validateMacPackagedPayload")(
-  function* (input: { readonly stageDistDir: string; readonly verbose?: boolean }) {
+  function* (input: {
+    readonly stageDistDir: string;
+    readonly verbose?: boolean;
+    readonly verifyRuntime?: boolean;
+    readonly arch?: typeof BuildArch.Type;
+  }) {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const asarPaths: string[] = [];
     for (const entry of yield* fs.readDirectory(input.stageDistDir)) {
-      if (!entry.startsWith("mac")) continue;
+      if (
+        input.arch
+          ? entry !== (input.arch === "x64" ? "mac" : `mac-${input.arch}`)
+          : !entry.startsWith("mac")
+      )
+        continue;
       const outputDir = path.join(input.stageDistDir, entry);
       const apps = yield* fs.readDirectory(outputDir).pipe(Effect.orElseSucceed(() => []));
       for (const app of apps) {
@@ -3581,7 +3607,23 @@ export const validateMacPackagedPayload = Effect.fn("desktopArtifact.validateMac
       return yield* new MacPackagedAppMissingError({ stageDistDir: input.stageDistDir });
     }
     for (const asarPath of asarPaths) {
-      yield* verifyPackagedBundleIsSelfContained({ asarPath, verbose: input.verbose ?? false });
+      yield* validatePackagedEmbeddedServer(asarPath);
+      if (input.verifyRuntime !== false) {
+        yield* verifyPackagedBundleIsSelfContained({
+          asarPath,
+          verbose: input.verbose ?? false,
+          ...(input.arch
+            ? {
+                executablePath: path.join(
+                  path.dirname(asarPath),
+                  "..",
+                  "MacOS",
+                  path.basename(path.dirname(path.dirname(path.dirname(asarPath))), ".app"),
+                ),
+              }
+            : {}),
+        });
+      }
     }
     yield* Effect.log(
       `[desktop-artifact] Validated macOS payload (${String(asarPaths.length)} app bundle(s)).`,
@@ -3600,17 +3642,35 @@ export class LinuxPackagedAppMissingError extends Schema.TaggedError<LinuxPackag
 
 export const validateLinuxPackagedPayload = Effect.fn(
   "desktopArtifact.validateLinuxPackagedPayload",
-)(function* (input: { readonly stageDistDir: string; readonly verbose?: boolean }) {
+)(function* (input: {
+  readonly stageDistDir: string;
+  readonly verbose?: boolean;
+  readonly verifyRuntime?: boolean;
+  readonly arch?: typeof BuildArch.Type;
+}) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const asarPaths = (yield* fs.readDirectory(input.stageDistDir))
-    .filter((entry) => entry.startsWith("linux") && entry.endsWith("-unpacked"))
+    .filter((entry) =>
+      input.arch
+        ? entry === (input.arch === "x64" ? "linux-unpacked" : `linux-${input.arch}-unpacked`)
+        : entry.startsWith("linux") && entry.endsWith("-unpacked"),
+    )
     .map((entry) => path.join(input.stageDistDir, entry, "resources/app.asar"));
   if (asarPaths.length === 0) {
     return yield* new LinuxPackagedAppMissingError({ stageDistDir: input.stageDistDir });
   }
   for (const asarPath of asarPaths) {
-    yield* verifyPackagedBundleIsSelfContained({ asarPath, verbose: input.verbose ?? false });
+    yield* validatePackagedEmbeddedServer(asarPath);
+    if (input.verifyRuntime !== false) {
+      yield* verifyPackagedBundleIsSelfContained({
+        asarPath,
+        verbose: input.verbose ?? false,
+        ...(input.arch
+          ? { executablePath: path.join(path.dirname(asarPath), "..", "p0code") }
+          : {}),
+      });
+    }
   }
   yield* Effect.log(
     `[desktop-artifact] Validated Linux payload (${String(asarPaths.length)} app bundle(s)).`,
@@ -4207,16 +4267,11 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
   yield* Effect.log(`[desktop-artifact] Applied ${webAssetBrand} web client branding.`);
   yield* validateBundledClientAssets(path.dirname(bundledClientEntry));
 
-  const p0dBinary = yield* findP0dBinary(repoRoot, options.platform, options.arch);
-  const bundleEmbeddedServer = options.bundleServer ?? Option.isNone(p0dBinary);
-  yield* Effect.log(
-    bundleEmbeddedServer
-      ? "[desktop-artifact] GUI artifact will bundle the embedded legacy Node server."
-      : `[desktop-artifact] GUI-only artifact: omitting embedded Node server (p0d binary at ${Option.getOrElse(p0dBinary, () => "external")}).`,
-  );
+  // A separately built p0d is a backend archive input, never a reason to omit the GUI's server.
+  yield* Effect.log("[desktop-artifact] GUI artifact always bundles the embedded Node server.");
 
   yield* fs.makeDirectory(path.join(stageAppDir, "apps/desktop"), { recursive: true });
-  if (options.platform !== "win" || !bundleEmbeddedServer) {
+  if (options.platform !== "win") {
     yield* fs.makeDirectory(path.join(stageAppDir, "apps/server/dist"), { recursive: true });
   }
 
@@ -4240,16 +4295,8 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
       options.verbose,
     );
   }
-  if (bundleEmbeddedServer) {
-    if (options.platform !== "win") {
-      yield* fs.copy(distDirs.serverDist, path.join(stageAppDir, "apps/server/dist"));
-    }
-  } else {
-    // GUI-only builds still need the compiled web client assets served over desktop://.
-    yield* fs.copy(
-      path.join(distDirs.serverDist, "client"),
-      path.join(stageAppDir, "apps/server/dist/client"),
-    );
+  if (options.platform !== "win") {
+    yield* fs.copy(distDirs.serverDist, path.join(stageAppDir, "apps/server/dist"));
   }
   yield* stageResourceMonitor({
     repoRoot,
@@ -4338,7 +4385,7 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
   }
 
   const stageDependencies =
-    options.platform === "win" || !bundleEmbeddedServer
+    options.platform === "win"
       ? { ...resolvedDesktopRuntimeDependencies }
       : resolveMergedStageDependencies({
           platform: options.platform,
@@ -4352,7 +4399,7 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
     stageDependencies,
   );
   const windowsServerAsarPath =
-    options.platform === "win" && bundleEmbeddedServer
+    options.platform === "win"
       ? path.join(stageAppDir, WINDOWS_SERVER_RESOURCE_SOURCE_DIR, WINDOWS_SERVER_ASAR_RESOURCE)
       : undefined;
   const stagePackageJson: StagePackageJson = {
@@ -4385,7 +4432,6 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
         : undefined,
       bundlesWslRuntime({ platform: options.platform, runtimeArchivePath: options.wslRuntime }),
       options.arch,
-      bundleEmbeddedServer,
     ),
     dependencies: stageDependencies,
     devDependencies: {
@@ -4439,17 +4485,13 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
       verbose: options.verbose,
     });
   }
-  if (bundleEmbeddedServer) {
-    yield* stageCursorSdkPlatformPackages(
-      path.join(
-        options.platform === "win" ? path.join(stageRoot, "server") : stageAppDir,
-        "node_modules",
-      ),
-      path.join(stageProdResourcesDir, "cursor-sdk"),
-    );
-  } else {
-    yield* fs.makeDirectory(path.join(stageProdResourcesDir, "cursor-sdk"), { recursive: true });
-  }
+  yield* stageCursorSdkPlatformPackages(
+    path.join(
+      options.platform === "win" ? path.join(stageRoot, "server") : stageAppDir,
+      "node_modules",
+    ),
+    path.join(stageProdResourcesDir, "cursor-sdk"),
+  );
   if (
     options.wslRuntime !== undefined &&
     bundlesWslRuntime({ platform: options.platform, runtimeArchivePath: options.wslRuntime })
@@ -4547,7 +4589,7 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
     });
   }
 
-  if (bundleEmbeddedServer && options.platform === "win") {
+  if (options.platform === "win") {
     yield* validateWindowsPackagedPayload({
       stageDistDir,
       appExecutableName: `${resolveDesktopProductName(appVersion)}.exe`,
@@ -4560,23 +4602,22 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
       verbose: options.verbose,
     });
   }
-  // The probe runs on the host Node, so a cross-arch build skips it.
-  if (
-    bundleEmbeddedServer &&
-    options.platform === "linux" &&
-    hostPlatform === "linux" &&
-    options.arch === (yield* HostProcess.Architecture)
-  ) {
-    yield* validateLinuxPackagedPayload({ stageDistDir, verbose: options.verbose });
+  // Probe the target Electron runtime, including x64 macOS under Rosetta.
+  // An unsupported target must fail validation rather than silently skipping it.
+  if (options.platform === "linux") {
+    yield* validateLinuxPackagedPayload({
+      stageDistDir,
+      verbose: options.verbose,
+      arch: options.arch,
+    });
   }
-  // x64 builds on arm64 runners; the arm64 check covers the shared JS bundle.
-  if (
-    bundleEmbeddedServer &&
-    options.platform === "mac" &&
-    options.arch === "arm64" &&
-    hostPlatform === "darwin"
-  ) {
-    yield* validateMacPackagedPayload({ stageDistDir, verbose: options.verbose });
+  // Validate the actual macOS architecture produced, not the host Node runtime.
+  if (options.platform === "mac") {
+    yield* validateMacPackagedPayload({
+      stageDistDir,
+      verbose: options.verbose,
+      arch: options.arch,
+    });
   }
 
   const copiedArtifacts = yield* copyDesktopBuildArtifacts(
@@ -4604,7 +4645,7 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
     arch: options.arch,
     appVersion,
     outputDir: options.outputDir,
-    p0dBinaryPath: p0dBinary,
+    p0dBinaryPath: yield* findP0dBinary(repoRoot, options.platform, options.arch),
     verbose: options.verbose,
   });
 
@@ -4719,7 +4760,7 @@ const buildDesktopArtifactCli = Command.make("build-desktop-artifact", {
   ),
   bundleServer: Flag.Boolean("bundle-server").pipe(
     Flag.withDescription(
-      "Bundle the embedded legacy Node server inside the GUI app; defaults to false when an p0d binary is present (env: T3CODE_DESKTOP_BUNDLE_SERVER).",
+      "Deprecated: desktop artifacts always bundle the embedded Node server (T3CODE_DESKTOP_BUNDLE_SERVER is retained for compatibility).",
     ),
     Flag.optional,
   ),
