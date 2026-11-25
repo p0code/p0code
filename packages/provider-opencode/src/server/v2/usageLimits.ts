@@ -4,9 +4,11 @@ import {
   makeUnavailableUsageLimits,
   makeUsageLimits,
 } from "@t3tools/provider-core/server/usageLimits";
+import * as Digest from "effect/crypto/Digest";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
+import * as Hex from "effect/encoding/Hex";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientResponse from "effect/http/HttpClientResponse";
 
@@ -109,6 +111,13 @@ export const readServerUsageLimits = Effect.fn("OpenCode2Client.usageLimits")(fu
         ...makeUnavailableUsageLimits({ checkedAt, reason: "unsupported" }),
         ...externalUsage,
       };
+    // The workspace names the account, so its hash holds across polls unlike the read time or
+    // the usage figures. The credential itself never leaves the OpenCode server, so the
+    // workspace stands in for the key the v1 reader hashes.
+    const digest = yield* Digest.Digest;
+    const credentialFingerprint = yield* digest
+      .digest(Digest.sha256, new TextEncoder().encode(`opencode\0workspace\0${workspace.id}`))
+      .pipe(Effect.map(Hex.encode), Effect.orDie);
     const consoleProviders = budgets.some(
       (budget) => budget.coverage === "all" && budget.per === "set",
     )
@@ -186,7 +195,7 @@ export const readServerUsageLimits = Effect.fn("OpenCode2Client.usageLimits")(fu
         });
       }
     }
-    return { ...makeUsageLimits({ checkedAt, windows }), ...externalUsage };
+    return { ...makeUsageLimits({ checkedAt, windows }), ...externalUsage, credentialFingerprint };
   }).pipe(
     Effect.timeout("5 seconds"),
     Effect.orElseSucceed(() =>

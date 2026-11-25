@@ -1,5 +1,6 @@
 import { assert, it } from "@effect/vitest";
 import { Session } from "@opencode/client/effect";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as Cause from "effect/Cause";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -409,11 +410,12 @@ describe("OpenCode2Client usage limits", () => {
       assert.deepStrictEqual(first?.windows[3]?.providerIds, ["opencode", "console-custom"]);
       assert.deepStrictEqual(first?.windows[7]?.modelIds, []);
       assert.include(first?.windows[7]?.label ?? "", "Most used model");
-      assert.strictEqual(first?.credentialFingerprint, undefined);
+      assert.match(first?.credentialFingerprint ?? "", /^[0-9a-f]{64}$/);
       workspace = "wrk_switched";
       const next = yield* api.usageLimits("/remote/project");
       assert.strictEqual(next?.externalUsage?.label, "wrk_switched");
       assert.strictEqual(next?.externalUsage?.url, "https://opencode.ai/console/wrk_switched");
+      assert.notStrictEqual(next?.credentialFingerprint, first?.credentialFingerprint);
       for (const url of [
         "not a URL",
         "javascript:alert(1)",
@@ -427,7 +429,56 @@ describe("OpenCode2Client usage limits", () => {
       }
       usageURL = "http://console.example/workspace/usage";
       assert.strictEqual((yield* api.usageLimits("/remote/project"))?.externalUsage?.url, usageURL);
-    }),
+    }).pipe(Effect.provide(NodeCrypto.layerDigest)),
+  );
+
+  it.effect("fingerprints the account the read used, not the read time or usage", () =>
+    Effect.gen(function* () {
+      let workspace = "wrk_one";
+      let rollingResetsAt = 1793491200000;
+      const transport = HttpClient.make((request) =>
+        Effect.sync(() =>
+          HttpClientResponse.fromWeb(
+            request,
+            Response.json({
+              location: { directory: "/remote" },
+              data: {
+                workspace: {
+                  id: workspace,
+                  usageURL: `https://opencode.ai/console/${workspace}`,
+                },
+                go: {
+                  rolling: { percent: 10, limited: false, resetsAt: rollingResetsAt },
+                  weekly: { percent: 20, limited: false, resetsAt: 1793491200000 },
+                  monthly: { percent: 30, limited: false, resetsAt: 1793491200000 },
+                },
+                budgets: [],
+              },
+            }),
+          ),
+        ),
+      );
+      const opencode = yield* OpenCode2Client.make.pipe(
+        Effect.provideService(HttpClient.HttpClient, transport),
+      );
+      const api = yield* opencode.connect({
+        baseUrl: "https://remote.example",
+        password: "secret",
+      });
+      const first = yield* api.usageLimits("/remote");
+      // The rolling window and the read time move on every poll; the account does not.
+      rollingResetsAt += 5 * 60 * 1000;
+      yield* TestClock.adjust("10 minutes");
+      const second = yield* api.usageLimits("/remote");
+      assert.isDefined(first?.credentialFingerprint);
+      assert.strictEqual(second?.credentialFingerprint, first?.credentialFingerprint);
+      assert.notStrictEqual(second?.checkedAt, first?.checkedAt);
+      assert.notStrictEqual(second?.windows[0]?.resetsAt, first?.windows[0]?.resetsAt);
+      workspace = "wrk_two";
+      const other = yield* api.usageLimits("/remote");
+      assert.isDefined(other?.credentialFingerprint);
+      assert.notStrictEqual(other?.credentialFingerprint, first?.credentialFingerprint);
+    }).pipe(Effect.provide(NodeCrypto.layerDigest)),
   );
 
   it.effect("recognizes an older server's SPA fallback", () =>
@@ -449,7 +500,7 @@ describe("OpenCode2Client usage limits", () => {
       );
       const api = yield* opencode.connect({ baseUrl: "https://old.example", password: "secret" });
       assert.strictEqual(yield* api.usageLimits("/remote"), undefined);
-    }),
+    }).pipe(Effect.provide(NodeCrypto.layerDigest)),
   );
 
   it.effect("distinguishes missing endpoints, signed out, and failed remote probes", () =>
@@ -499,6 +550,6 @@ describe("OpenCode2Client usage limits", () => {
         if ("message" in body)
           assert.include(result?.unavailable?.message ?? "", "OpenCode Console budgets");
       }
-    }),
+    }).pipe(Effect.provide(NodeCrypto.layerDigest)),
   );
 });

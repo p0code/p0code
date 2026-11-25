@@ -3,6 +3,7 @@ import { PROVIDER_SEND_TURN_MAX_IMAGE_BYTES } from "@t3tools/contracts";
 import { OpenCode, type OpenCodeClient } from "@opencode/client/effect";
 import { OpenCodeEvent } from "@opencode/protocol/groups/event";
 import * as Context from "effect/Context";
+import * as Digest from "effect/crypto/Digest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -98,7 +99,11 @@ export interface OpenCode2Api {
   readonly client: OpenCodeClient;
   readonly usageLimits: (
     directory: string,
-  ) => Effect.Effect<import("@t3tools/contracts").ServerProviderUsageLimits | undefined>;
+  ) => Effect.Effect<
+    import("@t3tools/contracts").ServerProviderUsageLimits | undefined,
+    never,
+    Digest.Digest
+  >;
   readonly shellJobs?: (
     sessionID: string,
   ) => Effect.Effect<typeof ShellJobs.Type, HttpClientError.HttpClientError | Schema.SchemaError>;

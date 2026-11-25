@@ -556,6 +556,7 @@ export const OpenCodeDriver: ProviderDriver<
           },
         })),
       ),
+      Effect.provideService(Digest.Digest, digest),
     );
     const checkProvider = Effect.all(
       {
