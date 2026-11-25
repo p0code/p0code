@@ -26,5 +26,6 @@
   "devDependencies": {
     "@effect/vitest": "catalog:",
     "vite-plus": "catalog:"
-  }
+  },
+  "license": "MIT"
 }

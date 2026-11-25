@@ -696,5 +696,6 @@
     "remark-parse": "catalog:",
     "unified": "catalog:",
     "vite-plus": "catalog:"
-  }
+  },
+  "license": "MIT"
 }

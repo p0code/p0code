@@ -195,5 +195,6 @@
       "DISABLE_COMMIT_PAUSING_MECHANISM": true,
       "ENABLE_SHARED_ELEMENT_TRANSITIONS": false
     }
-  }
+  },
+  "license": "MIT"
 }

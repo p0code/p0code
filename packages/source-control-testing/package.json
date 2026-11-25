@@ -24,5 +24,6 @@
   },
   "devDependencies": {
     "@types/node": "catalog:"
-  }
+  },
+  "license": "MIT"
 }

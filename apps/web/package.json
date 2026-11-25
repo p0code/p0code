@@ -111,5 +111,6 @@
     "tailwindcss": "^4.0.0",
     "vite": "catalog:",
     "vite-plus": "catalog:"
-  }
+  },
+  "license": "MIT"
 }
