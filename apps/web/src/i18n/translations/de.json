@@ -3032,6 +3032,9 @@
       "t": "span"
     }
   ],
+  "b4f0207b94368993": "Asked for",
+  "666bd1d1a0d89fcb": "Read and operate",
+  "4e3d361728cb9b37": "Nur lesen",
   "47d3ba1a39016131": "Zugriff erhält",
   "d121a97a3e275036": [
     {
@@ -7304,7 +7307,6 @@
   "b40e476b23c85e10": "Einen Einmal-Link erzeugen, mit dem sich ein anderes Gerät als autorisierter Client mit diesem Backend koppeln kann.",
   "f9688fef8cc2ff10": "Client-Bezeichnung (optional)",
   "f65d50129cd76fd7": "Einschränken, was der gekoppelte Client tun darf.",
-  "4e3d361728cb9b37": "Nur lesen",
   "e9b142be5c4b1e9a": "Wähle mindestens eine Berechtigung.",
   "3ac47fc45cfe7327": "Dieser Client kann Zugriff für andere Geräte erstellen oder widerrufen.",
   "d7b3a54919b1e460": "Keine Kopplungslinks oder Client-Sitzungen.",
@@ -7356,6 +7358,73 @@
   "3943d8479dc44551": "Energiestatus des Hosts abfragen, wenn kein Client im Vordergrund aktiv ist.",
   "d13f97c11d2f322b": "Alle zurücksetzen",
   "cc310b2ec0179edf": "Hintergrundaktivität konfigurieren",
+  "dce817c6cdc36ccc": "Sicherungsziel",
+  "248ca177febdc99a": "Passphrase",
+  "17b0f8cfef292e04": "Passphrase gespeichert",
+  "dc7fed3f4aeb6bc6": "Endpunkt",
+  "17380af69e65d14c": "Bucket",
+  "9440f5a5a9b8d8f9": "Region",
+  "1971a6feb62352ca": "Präfix",
+  "a11d81f18f479675": "Zugriffsschlüssel-ID",
+  "bb874d242ea3cee3": "Geheimer Zugriffsschlüssel",
+  "b3494ee57f9579c3": "Geheimnis gespeichert",
+  "a1324f42d1a8b568": "Google-Client-ID",
+  "0b657dc2e6c9cdc7": "Google-Client-Geheimnis",
+  "9e5c4c7e90b85372": "Zeitplan",
+  "74f0da015272a200": "Kann eine Kopie aller Chats, Anhänge und Einstellungen lesen und vorschlagen, sie durch eine Sicherung zu ersetzen.",
+  "01d31ccbd1b7e0da": "Vor dem Hochladen auf diesem Computer mit deiner Passphrase verschlüsselt. Ohne die Passphrase kann niemand die Sicherungen öffnen, auch du nicht.",
+  "8e73b883d41d4102": "Aus",
+  "c5be0e02a2553ae9": "Google Drive",
+  "4cdffada0a3924c2": "S3",
+  "5ecbb44fcdc5d707": "Bewahre eine Kopie außerhalb dieses Computers auf. Eine verlorene Passphrase bedeutet verlorene Sicherungen.",
+  "5610591a19ec3429": "URLs im Pfadstil",
+  "471d757510bf78b6": "Im Browser bestätigen",
+  "745a1ee8a05b9d99": "Von Google Drive abmelden",
+  "bd6f151bf37f83bb": "Bei Google Drive anmelden",
+  "503855211a14e0ae": "Manuell",
+  "1a003df41668ecb0": "Stündlich",
+  "ecb11363a4182898": "Täglich",
+  "72e9658f41c00064": "Wöchentlich",
+  "1fb801edc39cc9a9": "Aufzubewahrende Sicherungen",
+  "7ff4bdd3991b990d": [
+    "Letzte ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " · ",
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    }
+  ],
+  "de6894d665f2729c": [
+    "Nächste ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    }
+  ],
+  "269d656fd0878f29": "Sicherungen anzeigen",
+  "3301e9ed963c317e": "Sicherung läuft…",
+  "d930737a4feb1967": "Jetzt sichern",
+  "04ccf193a9d6c2cb": [
+    "Wiederherstellung vom ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " wartet auf Bestätigung"
+  ],
+  "476a854d3780ab63": "Wiederherstellung abbrechen",
+  "0d4ab5ba1df1eff7": "Noch keine Sicherungen",
+  "ae9758f6f27a0696": "Überprüfen",
+  "b17f0f517beb9fde": "Vorbereitung…",
+  "4fc630d6b2bf647f": "Wiederherstellen",
   "e116ed85458b6613": "Statisches Präfix",
   "575ae567e3b6ca3d": "Semantisches Präfix",
   "6675de66f9b3f71d": "Eigene Anweisungen",
@@ -7928,6 +7997,39 @@
   "ac7708c9c4d37972": "Ein $/1M",
   "fa49dc5a535b813f": "Aus $/1M",
   "d76f635ed9a84ba4": "Modell hinzufügen",
+  "d4c73392f2f63826": [
+    "Eine Sicherung vom ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " aus Umgebung",
+    " ",
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    },
+    " ist bereit zur Wiederherstellung (",
+    {
+      "i": 3,
+      "k": "_gt_value_3",
+      "v": "v"
+    },
+    " ",
+    "Dateien, ",
+    {
+      "i": 4,
+      "k": "_gt_value_4",
+      "v": "v"
+    },
+    " Bytes)."
+  ],
+  "2d530a1eb99bed29": "Die Wiederherstellung ersetzt Chats, Anhänge, Einstellungen und Tastenkürzel dieser Umgebung und startet den Server neu. Die aktuellen Daten bleiben in einem restore-replaced-Ordner auf diesem Computer erhalten. Anbieteranmeldung und Gerätekopplung können erneut erforderlich sein.",
+  "94f6871d32d0d771": "Bestätige, dass du die Daten dieser Umgebung durch diese Sicherung ersetzen möchtest.",
+  "e7b361b71d70f03c": "Daten ersetzen und neu starten",
+  "9cbfecb5b58c5075": "Wiederherstellung prüfen",
   "3e90738d0ff19a29": "Datenbank",
   "9e28cb72cb075933": "Freigegebenen Datenbankspeicher zurückgewinnen",
   "881b21a84162fe36": "Diese Datenbanken belegen noch Speicher, der durch die Verlaufsbereinigung frei wurde.",
@@ -9058,7 +9160,6 @@
     },
     " dieses Projekts richtet Worktree-Threads mit eigenen Befehlen ein. Sie laufen auf dem Rechner dieser Umgebung mit deinen Berechtigungen und nur so, wie sie hier genehmigt wurden: Ändert sich der Text eines Befehls, muss er erneut genehmigt werden."
   ],
-  "8e73b883d41d4102": "Aus",
   "f6a91589456cca50": "Genehmigt",
   "c92657bb7f2293ff": "Genehmigung nötig",
   "f1e5c1be1ac92361": "Genehmigen",
@@ -9646,7 +9747,6 @@
   "32a5b25b5d73f1f0": "Zusammenfassungsfenster",
   "e08bc42fb0454a83": "Sekunden, 10–3600",
   "d2eb8c8788659b41": "Kopfzeile",
-  "1971a6feb62352ca": "Präfix",
   "e9a3c5489591db26": "Kodierung",
   "743a7f2b5a9630e5": "Geheimnis",
   "8b023484be3a3b1c": "Unverändert",
@@ -10957,7 +11057,6 @@
   "a26482eefa357092": "Anmelde-Client-ID",
   "88d561facf243588": "URL der gehosteten App",
   "66e9ad0e3e79eb39": "Inoffiziell. T3-Code-Apps, die mit deinem T3-Konto angemeldet sind, erreichen diese Umgebung, und die mobile App aus dem Store erhält Push-Benachrichtigungen. Nicht Ende-zu-Ende-verschlüsselt: Cloudflare beendet TLS für den Tunnel, und T3s Relay sieht deine Geräte, Verbindungsmetadaten und Thread-Titel in Benachrichtigungen.",
-  "471d757510bf78b6": "Im Browser bestätigen",
   "6fa695d3a822bb9e": "Bei T3 Connect anmelden",
   "0873c92c97f73f56": "Trennen",
   "23a899df3d776ed6": "Verknüpfen",
@@ -11288,8 +11387,6 @@
   "42d843f45e1de53b": "Wird an den Prompt für neue und neu generierte Thread-Titel angehängt.",
   "169d0ed4364b4644": "Anweisungen für Thread-Titel auf Standard zurücksetzen",
   "f307391eb1c5c9d7": "Titel auf wenige Wörter beschränken. Mit dem Hauptthema beginnen.",
-  "5e2236ccf9b5ffba": "Tag",
-  "1c9d860be42b1c02": "Ausgabe",
   "ea6f97bad03faf84": "System-Monospace",
   "afa0ba3d124d9b8a": "Schrift der Oberfläche auf Standard zurücksetzen",
   "eb19ce0364bb9a6e": "Alles außerhalb von Codeblöcken und dem Terminal.",
@@ -11704,6 +11801,8 @@
   "f1122dcb3209f91b": "thread zeitlimit aktivität seitenleiste",
   "22193585ddef91f8": "Geteilter Speicher",
   "7f9a3ccd6314310f": "Obsidian-Sync geteilte Agentenidentität Speicher Tresor Notizen",
+  "54534b64fb00d262": "Verschlüsselte Sicherungen",
+  "636ca84d25d3ab29": "Sicherung Wiederherstellung S3 Google Drive verschlüsselt",
   "c62e6427de46783e": "benachrichtigung ton hinweis abschluss eingabe genehmigung desktop",
   "39267ba6064b8fac": "benachrichtigung toast popup abschluss eingabe genehmigung fehler",
   "c32fde5fa4e76709": "locale translation english deutsch german español spanish français french português portuguese brasil brazilian chinese 中文 japanese 日本語 korean 한국어 russian русский schwedisch swedish svenska sprache idioma langue 语言 言語 언어 язык",
@@ -12151,6 +12250,7 @@
   "a8bfe0a7539829e8": "Cache-Ersparnis",
   "0886cdaa4f5357cf": "Nutzungsaufschlüsselung",
   "d89ad31bf0aebe92": "Stunde",
+  "5e2236ccf9b5ffba": "Tag",
   "c400ae5f6f27b81d": "Nutzungsaufschlüsselung nach Zeit",
   "8d2a69e65d453cce": "Einmal gezählt über Umgebungen mit gemeinsamem Transkriptverzeichnis: {sources}",
   "0f3b14055f7bba6f": "{count, plural, one {{count} Umgebung} other {{count} Umgebungen}}",
@@ -12236,6 +12336,7 @@
   "5c3c0e3a9f3e4717": "Kosten pro Tag nach Anbieter",
   "0bd41ff995d36a66": "Cache-Lesen",
   "3f0dfe0cb15a3272": "Cache-Schreiben",
+  "1c9d860be42b1c02": "Ausgabe",
   "78344b60f407928e": "Sonstiges",
   "684e516076de81fe": "Standard",
   "3bbcc1b826fef537": "Schnell",

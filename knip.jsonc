@@ -175,5 +175,9 @@
       "entry": ["graphql.config.ts", "scripts/measure-pr-preview.ts"],
       "ignoreIssues": { "**/*.graphql.ts": ["exports", "types", "namespaceMembers"] },
     },
+    "plugins/backup": {
+      "ignore": ["standalone/**", "web/**"],
+      "ignoreDependencies": ["@effect/platform-node"],
+    },
   },
 }

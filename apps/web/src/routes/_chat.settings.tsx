@@ -1,3 +1,4 @@
+import { DataRestoreBanner } from "../components/settings/DataRestoreBanner";
 import { createFileRoute, Outlet, redirect, useLocation } from "@tanstack/react-router";
 import { T, useGT, useMessages, Var } from "gt-react";
 import { RotateCcwIcon } from "lucide-react";
@@ -148,6 +149,7 @@ function SettingsContentLayout() {
               <AppRouteModalClose />
             </div>
           </header>
+          <DataRestoreBanner />
           <div key={`${contentScopeKey}:${restoreSignal}`} className="min-h-0 flex flex-1 flex-col">
             <SettingsScopeBoundary pathname={location.pathname}>
               <Outlet />

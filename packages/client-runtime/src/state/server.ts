@@ -1553,6 +1553,18 @@ export function createServerEnvironmentAtoms<R, E>(
       label: "environment-data:plugins",
       tag: WS_METHODS.pluginsSubscribe,
     }),
+    dataRestorePending: createEnvironmentRpcSubscriptionAtomFamily(runtime, {
+      label: "environment-data:restore:pending",
+      tag: WS_METHODS.dataRestorePending,
+    }),
+    dataRestoreApprove: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:restore:approve",
+      tag: WS_METHODS.dataRestoreApprove,
+    }),
+    dataRestoreCancel: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:restore:cancel",
+      tag: WS_METHODS.dataRestoreCancel,
+    }),
     pluginsSetEnabled: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:plugins:set-enabled",
       tag: WS_METHODS.pluginsSetEnabled,

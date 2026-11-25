@@ -1,4 +1,6 @@
 import type {
+  DataSnapshotManifest,
+  PendingRestore,
   EnvironmentId,
   ExecutionEnvironmentDescriptor,
   PluginManifest,
@@ -26,6 +28,8 @@ export class PluginError extends Schema.TaggedError<PluginError>()("PluginError"
   message: Schema.String,
   cause: Schema.optional(Schema.Defect()),
 }) {}
+
+export { DataSnapshotManifest, PendingRestore } from "@t3tools/contracts";
 
 export type ActivityState = AgentAwarenessState;
 
@@ -96,6 +100,17 @@ export class PluginContext extends Context.Service<
       readonly read: (threadId: ThreadId) => Effect.Effect<ActivityState | null, PluginError>;
       /** Listed threads that are working or waiting now. */
       readonly activeThreadIds: Effect.Effect<ReadonlyArray<ThreadId>, PluginError>;
+    };
+    /** Requires the `data:backup` capability. */
+    readonly dataBackup: {
+      readonly snapshot: Effect.Effect<
+        { readonly directory: string; readonly manifest: DataSnapshotManifest },
+        PluginError,
+        Scope.Scope
+      >;
+      readonly stageRestore: (directory: string) => Effect.Effect<PendingRestore, PluginError>;
+      readonly pendingRestore: Effect.Effect<PendingRestore | null, PluginError>;
+      readonly cancelRestore: Effect.Effect<void, PluginError>;
     };
     /** Requires the `usage:read` capability. */
     readonly usage: {

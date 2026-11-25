@@ -73,3 +73,11 @@ Sign-in is the RFC 8628 device flow run by the server, so it works when the brow
 machine; clients never load Clerk. Upstream releases the provisioned tunnel when the environment
 stops (Cloudflare bills per tunnel), so the bridge releases it on stop and links again on start;
 a tunnel Cloudflare keeps rejecting is also recovered by linking again, with a growing cooldown.
+
+## Backup and restore ownership
+
+`data:backup` lends plugins scoped snapshots and staging, never permission to apply a restore.
+Only the host's administrative RPC can approve a particular pending restore id. Startup applies
+that approval under the server-owner lock before opening SQLite; a journal rolls back interrupted
+replacement, and the old files remain in a `restore-replaced-*` directory. Snapshot manifests may
+carry `sourceBaseDir` so settings paths can follow the same home rewrite as the T3 import.

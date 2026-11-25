@@ -3031,6 +3031,9 @@
       "t": "span"
     }
   ],
+  "b4f0207b94368993": "Asked for",
+  "666bd1d1a0d89fcb": "Read and operate",
+  "4e3d361728cb9b37": "Lecture seule",
   "47d3ba1a39016131": "L’accès est accordé à",
   "d121a97a3e275036": [
     {
@@ -7305,7 +7308,6 @@
   "b40e476b23c85e10": "Générez un lien à usage unique qu’un autre appareil peut utiliser pour s’appairer avec ce backend en tant que client autorisé.",
   "f9688fef8cc2ff10": "Libellé du client (facultatif)",
   "f65d50129cd76fd7": "Limitez ce que le client appairé peut faire.",
-  "4e3d361728cb9b37": "Lecture seule",
   "e9b142be5c4b1e9a": "Sélectionnez au moins une autorisation.",
   "3ac47fc45cfe7327": "Ce client peut créer ou révoquer l’accès d’autres appareils.",
   "d7b3a54919b1e460": "Aucun lien d’appairage ni aucune session client.",
@@ -7357,6 +7359,73 @@
   "3943d8479dc44551": "Interroger l’état d’alimentation de l’hôte quand aucun client n’est au premier plan.",
   "d13f97c11d2f322b": "Tout réinitialiser",
   "cc310b2ec0179edf": "Configurer l’activité en arrière-plan",
+  "dce817c6cdc36ccc": "Destination de sauvegarde",
+  "248ca177febdc99a": "Phrase secrète",
+  "17b0f8cfef292e04": "Phrase secrète enregistrée",
+  "dc7fed3f4aeb6bc6": "Point de terminaison",
+  "17380af69e65d14c": "Bucket",
+  "9440f5a5a9b8d8f9": "Région",
+  "1971a6feb62352ca": "Préfixe",
+  "a11d81f18f479675": "ID de clé d’accès",
+  "bb874d242ea3cee3": "Clé d’accès secrète",
+  "b3494ee57f9579c3": "Secret enregistré",
+  "a1324f42d1a8b568": "ID client Google",
+  "0b657dc2e6c9cdc7": "Secret client Google",
+  "9e5c4c7e90b85372": "Planification",
+  "74f0da015272a200": "Peut lire une copie de tous vos chats, pièces jointes et paramètres, et proposer de les remplacer par une sauvegarde.",
+  "01d31ccbd1b7e0da": "Chiffré sur cet ordinateur avec votre phrase secrète avant l’envoi. Sans elle, personne ne peut ouvrir les sauvegardes, pas même vous.",
+  "8e73b883d41d4102": "Désactivé",
+  "c5be0e02a2553ae9": "Google Drive",
+  "4cdffada0a3924c2": "S3",
+  "5ecbb44fcdc5d707": "Conservez une copie ailleurs que sur cet ordinateur. Une phrase secrète perdue signifie des sauvegardes perdues.",
+  "5610591a19ec3429": "URL de type chemin",
+  "471d757510bf78b6": "Approuver dans le navigateur",
+  "745a1ee8a05b9d99": "Se déconnecter de Google Drive",
+  "bd6f151bf37f83bb": "Se connecter à Google Drive",
+  "503855211a14e0ae": "Manuel",
+  "1a003df41668ecb0": "Toutes les heures",
+  "ecb11363a4182898": "Quotidien",
+  "72e9658f41c00064": "Chaque semaine",
+  "1fb801edc39cc9a9": "Sauvegardes à conserver",
+  "7ff4bdd3991b990d": [
+    "Dernière ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " · ",
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    }
+  ],
+  "de6894d665f2729c": [
+    "Prochaine ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    }
+  ],
+  "269d656fd0878f29": "Afficher les sauvegardes",
+  "3301e9ed963c317e": "Sauvegarde en cours…",
+  "d930737a4feb1967": "Sauvegarder maintenant",
+  "04ccf193a9d6c2cb": [
+    "La restauration du ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " attend une confirmation"
+  ],
+  "476a854d3780ab63": "Annuler la restauration",
+  "0d4ab5ba1df1eff7": "Aucune sauvegarde pour le moment",
+  "ae9758f6f27a0696": "Vérifier",
+  "b17f0f517beb9fde": "Préparation…",
+  "4fc630d6b2bf647f": "Restaurer",
   "e116ed85458b6613": "Préfixe fixe",
   "575ae567e3b6ca3d": "Préfixe sémantique",
   "6675de66f9b3f71d": "Instructions personnalisées",
@@ -7928,6 +7997,39 @@
   "ac7708c9c4d37972": "Entrée $/1M",
   "fa49dc5a535b813f": "Sortie $/1M",
   "d76f635ed9a84ba4": "Ajouter un modèle",
+  "d4c73392f2f63826": [
+    "Une sauvegarde du ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " de l’environnement",
+    " ",
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    },
+    " est prête à être restaurée (",
+    {
+      "i": 3,
+      "k": "_gt_value_3",
+      "v": "v"
+    },
+    " ",
+    "fichiers, ",
+    {
+      "i": 4,
+      "k": "_gt_value_4",
+      "v": "v"
+    },
+    " octets)."
+  ],
+  "2d530a1eb99bed29": "La restauration remplace les chats, pièces jointes, paramètres et raccourcis de cet environnement, puis redémarre le serveur. Les données actuelles sont conservées dans un dossier restore-replaced sur cet ordinateur. Une nouvelle connexion aux fournisseurs et un nouvel appairage des appareils peuvent être nécessaires.",
+  "94f6871d32d0d771": "Confirmez que vous souhaitez remplacer les données de cet environnement par cette sauvegarde.",
+  "e7b361b71d70f03c": "Remplacer les données et redémarrer",
+  "9cbfecb5b58c5075": "Examiner la restauration",
   "3e90738d0ff19a29": "Base de données",
   "9e28cb72cb075933": "Récupérer l’espace libéré de la base de données",
   "881b21a84162fe36": "Ces bases de données occupent encore l’espace libéré par le nettoyage de l’historique.",
@@ -9058,7 +9160,6 @@
     },
     " de ce projet prépare les fils en worktree avec ses propres commandes. Elles s’exécutent sur la machine de cet environnement avec vos autorisations, et uniquement telles qu’approuvées ici : une commande dont le texte change doit être approuvée de nouveau."
   ],
-  "8e73b883d41d4102": "Désactivé",
   "f6a91589456cca50": "Approuvée",
   "c92657bb7f2293ff": "Approbation requise",
   "f1e5c1be1ac92361": "Approuver",
@@ -9644,7 +9745,6 @@
   "32a5b25b5d73f1f0": "Fenêtre de regroupement",
   "e08bc42fb0454a83": "secondes, 10–3600",
   "d2eb8c8788659b41": "En-tête",
-  "1971a6feb62352ca": "Préfixe",
   "e9a3c5489591db26": "Encodage",
   "743a7f2b5a9630e5": "Secret",
   "8b023484be3a3b1c": "Inchangé",
@@ -10955,7 +11055,6 @@
   "a26482eefa357092": "ID client de connexion",
   "88d561facf243588": "URL de l'app hébergée",
   "66e9ad0e3e79eb39": "Non officiel. Permet aux apps T3 Code connectées à votre compte T3 d'atteindre cet environnement et envoie des notifications push à l'app mobile du store. Pas de chiffrement de bout en bout : Cloudflare termine le TLS du tunnel, et le relais de T3 voit vos appareils, les métadonnées de connexion et les titres des fils dans les notifications.",
-  "471d757510bf78b6": "Approuver dans le navigateur",
   "6fa695d3a822bb9e": "Se connecter à T3 Connect",
   "0873c92c97f73f56": "Dissocier",
   "23a899df3d776ed6": "Associer",
@@ -11287,8 +11386,6 @@
   "42d843f45e1de53b": "Ajouté au prompt pour les titres de fil nouveaux ou régénérés.",
   "169d0ed4364b4644": "Réinitialiser les instructions de titre des fils à la valeur par défaut",
   "f307391eb1c5c9d7": "Limiter les titres à quelques mots. Commencer par le sujet principal.",
-  "5e2236ccf9b5ffba": "Jour",
-  "1c9d860be42b1c02": "Sortie",
   "ea6f97bad03faf84": "Monospace du système",
   "afa0ba3d124d9b8a": "Réinitialiser la police de l’interface à la valeur par défaut",
   "eb19ce0364bb9a6e": "Tout ce qui est hors des blocs de code et du terminal.",
@@ -11701,6 +11798,8 @@
   "f1122dcb3209f91b": "fil délai activité barre latérale",
   "22193585ddef91f8": "Mémoire partagée",
   "7f9a3ccd6314310f": "Obsidian Sync identité d'agent partagée mémoire coffre notes",
+  "54534b64fb00d262": "Sauvegardes chiffrées",
+  "636ca84d25d3ab29": "Sauvegarde restauration S3 Google Drive chiffrée",
   "c62e6427de46783e": "notification son alerte fin saisie approbation bureau",
   "39267ba6064b8fac": "notification toast popup fin saisie approbation échec",
   "c32fde5fa4e76709": "langue traduction locale english anglais deutsch allemand español espagnol français french português portugais brasil brésilien chinois 中文 japonais 日本語 coréen 한국어 russe русский suédois swedish svenska sprache idioma langue 语言 言語 언어 язык",
@@ -12148,6 +12247,7 @@
   "a8bfe0a7539829e8": "Économies de cache",
   "0886cdaa4f5357cf": "Répartition de l’utilisation",
   "d89ad31bf0aebe92": "Heure",
+  "5e2236ccf9b5ffba": "Jour",
   "c400ae5f6f27b81d": "Répartition de l’utilisation dans le temps",
   "8d2a69e65d453cce": "Compté une seule fois pour les environnements qui partagent un répertoire de transcriptions : {sources}",
   "0f3b14055f7bba6f": "{count, plural, one {{count} environnement} other {{count} environnements}}",
@@ -12233,6 +12333,7 @@
   "5c3c0e3a9f3e4717": "Coût par jour et par fournisseur",
   "0bd41ff995d36a66": "Lecture du cache",
   "3f0dfe0cb15a3272": "Écriture du cache",
+  "1c9d860be42b1c02": "Sortie",
   "78344b60f407928e": "Autre",
   "684e516076de81fe": "Standard",
   "3bbcc1b826fef537": "Rapide",

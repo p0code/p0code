@@ -146,6 +146,12 @@ const layerBindings = Layer.effect(
               read: () => Effect.succeed(null),
               activeThreadIds: Effect.succeed([]),
             },
+            dataBackup: {
+              snapshot: unusedContext,
+              stageRestore: () => unusedContext,
+              pendingRestore: unusedContext,
+              cancelRestore: unusedContext,
+            },
             usage: {
               dailyTotals: () => unusedContext,
             },

@@ -1,3 +1,5 @@
+import { BACKUP_PLUGIN_ID } from "@t3tools/plugin-backup/actions";
+import { BackupDisclosure, BackupPanel } from "./BackupPanel";
 import { useAtomValue } from "@effect/atom-react";
 import type { EnvironmentId, PluginInfo } from "@t3tools/contracts";
 import { OBSIDIAN_SHARED_MEMORY_ID } from "@t3tools/plugin-obsidian-shared-memory/actions";
@@ -25,6 +27,7 @@ interface PluginPanel {
 
 /** Settings panels for bundled plugins, by plugin id. */
 const PLUGIN_PANELS: Readonly<Record<string, PluginPanel>> = {
+  [BACKUP_PLUGIN_ID]: { Disclosure: BackupDisclosure, Panel: BackupPanel },
   [T3_CONNECT_BRIDGE_ID]: { Disclosure: T3ConnectBridgeDisclosure, Panel: T3ConnectBridgePanel },
   [OBSIDIAN_SHARED_MEMORY_ID]: {
     Disclosure: ObsidianSharedMemoryDisclosure,

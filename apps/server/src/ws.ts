@@ -1,3 +1,4 @@
+import { DataBackup } from "./persistence/DataBackup.ts";
 import { PublicOrigin } from "./selfRelay/PublicOrigin.ts";
 import { ServerSettingsError } from "@t3tools/contracts";
 import * as SelfRelay from "./selfRelay/SelfRelay.ts";
@@ -1550,6 +1551,7 @@ export const layerWsRpc = (
       const resourceTelemetry = yield* ResourceTelemetry.ResourceTelemetry;
       const relay = yield* SelfRelay.SelfRelay;
       const pluginHost = yield* PluginHost;
+      const dataBackup = yield* DataBackup;
       const readPublicOrigin = yield* PublicOrigin;
       const relayError = (cause: SelfRelay.SelfRelayError) =>
         new SelfRelayOperationError({ message: cause.message });
@@ -2853,6 +2855,9 @@ export const layerWsRpc = (
         [WS_METHODS.serverPortLink]: (input) =>
           relay.portLink(input.port, currentSessionId).pipe(Effect.mapError(relayError)),
         [WS_METHODS.pluginsSubscribe]: () => pluginHost.changes,
+        [WS_METHODS.dataRestorePending]: () => dataBackup.changes,
+        [WS_METHODS.dataRestoreApprove]: ({ id }) => dataBackup.approve(id),
+        [WS_METHODS.dataRestoreCancel]: () => dataBackup.cancel,
         [WS_METHODS.pluginsSetEnabled]: (input) => pluginHost.setEnabled(input),
         [WS_METHODS.pluginsInvoke]: (input) => pluginHost.invoke(input),
         [WS_METHODS.pullRequestsList]: (input) => pullRequests.list(input),

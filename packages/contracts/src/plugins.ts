@@ -16,6 +16,7 @@ export const PluginCapability = Schema.Literals([
   "auth:issue-device-credentials",
   "orchestration:read-activity",
   "usage:read",
+  "data:backup",
   "agent:instructions",
 ]);
 export type PluginCapability = typeof PluginCapability.Type;
@@ -71,3 +72,30 @@ export const PluginSettings = Schema.Record(
   Schema.Struct({ enabled: Schema.Boolean }),
 );
 export type PluginSettings = typeof PluginSettings.Type;
+
+export const DataSnapshotManifest = Schema.Struct({
+  format: Schema.Literal(1),
+  createdAt: Schema.String,
+  environmentId: Schema.String,
+  appVersion: Schema.String,
+  migrationHead: Schema.Number,
+  sourceBaseDir: Schema.optionalKey(Schema.String),
+  files: Schema.Array(
+    Schema.Struct({ path: Schema.String, bytes: Schema.Number, sha256: Schema.String }),
+  ),
+});
+export type DataSnapshotManifest = typeof DataSnapshotManifest.Type;
+
+export const PendingRestore = Schema.Struct({
+  id: Schema.String,
+  stagedAt: Schema.String,
+  snapshotCreatedAt: Schema.String,
+  sourceEnvironmentId: Schema.String,
+  files: Schema.Number,
+  bytes: Schema.Number,
+});
+export type PendingRestore = typeof PendingRestore.Type;
+
+export class DataRestoreError extends Schema.TaggedError<DataRestoreError>()("DataRestoreError", {
+  message: Schema.String,
+}) {}

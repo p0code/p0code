@@ -3031,6 +3031,9 @@
       "c": "· name set by the app"
     }
   ],
+  "b4f0207b94368993": "Asked for",
+  "666bd1d1a0d89fcb": "Read and operate",
+  "4e3d361728cb9b37": "Read only",
   "47d3ba1a39016131": "Access goes to",
   "d121a97a3e275036": [
     {
@@ -7311,7 +7314,6 @@
   "b40e476b23c85e10": "Generate a one-time link that another device can use to pair with this backend as an authorized client.",
   "f9688fef8cc2ff10": "Client label (optional)",
   "f65d50129cd76fd7": "Limit what the paired client can do.",
-  "4e3d361728cb9b37": "Read only",
   "e9b142be5c4b1e9a": "Select at least one permission.",
   "3ac47fc45cfe7327": "This client can create or revoke access for other devices.",
   "d7b3a54919b1e460": "No pairing links or client sessions.",
@@ -7363,6 +7365,74 @@
   "3943d8479dc44551": "Poll host power state when no foreground client is active.",
   "d13f97c11d2f322b": "Reset all",
   "cc310b2ec0179edf": "Configure background activity",
+  "dce817c6cdc36ccc": "Backup target",
+  "248ca177febdc99a": "Passphrase",
+  "17b0f8cfef292e04": "Passphrase saved",
+  "dc7fed3f4aeb6bc6": "Endpoint",
+  "17380af69e65d14c": "Bucket",
+  "9440f5a5a9b8d8f9": "Region",
+  "1971a6feb62352ca": "Prefix",
+  "a11d81f18f479675": "Access key ID",
+  "bb874d242ea3cee3": "Secret access key",
+  "b3494ee57f9579c3": "Secret saved",
+  "a1324f42d1a8b568": "Google client ID",
+  "0b657dc2e6c9cdc7": "Google client secret",
+  "9e5c4c7e90b85372": "Schedule",
+  "74f0da015272a200": "Can read a copy of all your chats, attachments and settings, and can propose replacing them with a backup.",
+  "01d31ccbd1b7e0da": "Encrypted on this machine with your passphrase before upload. Without the passphrase, backups cannot be opened by anyone, including you.",
+  "8e73b883d41d4102": "Off",
+  "c5be0e02a2553ae9": "Google Drive",
+  "4cdffada0a3924c2": "S3",
+  "5ecbb44fcdc5d707": "Keep a copy somewhere other than this machine. A lost passphrase means lost backups.",
+  "5610591a19ec3429": "Path-style URLs",
+  "471d757510bf78b6": "Approve in browser",
+  "745a1ee8a05b9d99": "Sign out of Google Drive",
+  "bd6f151bf37f83bb": "Sign in to Google Drive",
+  "503855211a14e0ae": "Manual",
+  "1a003df41668ecb0": "Hourly",
+  "ecb11363a4182898": "Daily",
+  "72e9658f41c00064": "Weekly",
+  "1fb801edc39cc9a9": "Backups to keep",
+  "7ff4bdd3991b990d": [
+    "Last ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " ·",
+    " ",
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    }
+  ],
+  "de6894d665f2729c": [
+    "Next ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    }
+  ],
+  "269d656fd0878f29": "Show backups",
+  "3301e9ed963c317e": "Backing up…",
+  "d930737a4feb1967": "Back up now",
+  "04ccf193a9d6c2cb": [
+    "Restore from ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " is waiting for confirmation"
+  ],
+  "476a854d3780ab63": "Cancel restore",
+  "0d4ab5ba1df1eff7": "No backups yet",
+  "ae9758f6f27a0696": "Verify",
+  "b17f0f517beb9fde": "Preparing…",
+  "4fc630d6b2bf647f": "Restore",
   "e116ed85458b6613": "Static prefix",
   "575ae567e3b6ca3d": "Semantic prefix",
   "6675de66f9b3f71d": "Custom instructions",
@@ -7935,6 +8005,39 @@
   "ac7708c9c4d37972": "In $/1M",
   "fa49dc5a535b813f": "Out $/1M",
   "d76f635ed9a84ba4": "Add model",
+  "d4c73392f2f63826": [
+    "A backup from ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " on environment",
+    " ",
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    },
+    " is ready to restore (",
+    {
+      "i": 3,
+      "k": "_gt_value_3",
+      "v": "v"
+    },
+    " ",
+    "files, ",
+    {
+      "i": 4,
+      "k": "_gt_value_4",
+      "v": "v"
+    },
+    " bytes)."
+  ],
+  "2d530a1eb99bed29": "Restoring replaces this environment’s chats, attachments, settings and keybindings, then restarts the server. The current data is kept in a restore-replaced folder on this machine. Provider sign-in and device pairing may be needed again.",
+  "94f6871d32d0d771": "Confirm that you want to replace this environment’s data with this backup.",
+  "e7b361b71d70f03c": "Replace data and restart",
+  "9cbfecb5b58c5075": "Review restore",
   "3e90738d0ff19a29": "Database",
   "9e28cb72cb075933": "Reclaim freed database space",
   "881b21a84162fe36": "These databases still hold space freed by history cleanup.",
@@ -9066,7 +9169,6 @@
     },
     " sets up worktree threads with its own commands. They run on this environment's machine with your permissions, and only as approved here: a command whose text changes needs approval again."
   ],
-  "8e73b883d41d4102": "Off",
   "f6a91589456cca50": "Approved",
   "c92657bb7f2293ff": "Needs approval",
   "f1e5c1be1ac92361": "Approve",
@@ -9654,7 +9756,6 @@
   "32a5b25b5d73f1f0": "Coalesce window",
   "e08bc42fb0454a83": "seconds, 10–3600",
   "d2eb8c8788659b41": "Header",
-  "1971a6feb62352ca": "Prefix",
   "e9a3c5489591db26": "Encoding",
   "743a7f2b5a9630e5": "Secret",
   "8b023484be3a3b1c": "Unchanged",
@@ -10965,7 +11066,6 @@
   "a26482eefa357092": "Sign-in client ID",
   "88d561facf243588": "Hosted app URL",
   "66e9ad0e3e79eb39": "Unofficial. Lets T3 Code apps signed in to your T3 account reach this environment and sends push notifications to the store mobile app. Not end-to-end encrypted: Cloudflare ends TLS for the tunnel, and T3's relay sees your devices, connection metadata, and thread titles in notifications.",
-  "471d757510bf78b6": "Approve in browser",
   "6fa695d3a822bb9e": "Sign in to T3 Connect",
   "0873c92c97f73f56": "Unlink",
   "23a899df3d776ed6": "Link",
@@ -11297,8 +11397,6 @@
   "42d843f45e1de53b": "Appended to the prompt for new and regenerated thread titles.",
   "169d0ed4364b4644": "Reset thread title instructions to default",
   "f307391eb1c5c9d7": "Keep titles to a few words. Lead with the main subject.",
-  "5e2236ccf9b5ffba": "Day",
-  "1c9d860be42b1c02": "Output",
   "ea6f97bad03faf84": "System monospace",
   "afa0ba3d124d9b8a": "Reset interface font to default",
   "eb19ce0364bb9a6e": "Everything outside code blocks and the terminal.",
@@ -11711,6 +11809,8 @@
   "f1122dcb3209f91b": "thread timeout activity sidebar",
   "22193585ddef91f8": "Shared memory",
   "7f9a3ccd6314310f": "Obsidian Sync shared agent identity memory vault notes",
+  "54534b64fb00d262": "Encrypted backups",
+  "636ca84d25d3ab29": "Backup restore S3 Google Drive encrypted",
   "c62e6427de46783e": "notification sound alert completion input approval desktop",
   "39267ba6064b8fac": "notification toast popup completion input approval failure",
   "c32fde5fa4e76709": "locale translation english deutsch german español spanish français french português portuguese brasil brazilian chinese 中文 japanese 日本語 korean 한국어 russian русский swedish svenska sprache idioma langue 语言 言語 언어 язык",
@@ -12158,6 +12258,7 @@
   "a8bfe0a7539829e8": "Cache savings",
   "0886cdaa4f5357cf": "Usage breakdown",
   "d89ad31bf0aebe92": "Hour",
+  "5e2236ccf9b5ffba": "Day",
   "c400ae5f6f27b81d": "Usage breakdown by time",
   "8d2a69e65d453cce": "Counted once across environments sharing a transcript directory: {sources}",
   "0f3b14055f7bba6f": "{count, plural, one {{count} environments} other {{count} environments}}",
@@ -12243,6 +12344,7 @@
   "5c3c0e3a9f3e4717": "Daily cost by provider",
   "0bd41ff995d36a66": "Cache read",
   "3f0dfe0cb15a3272": "Cache write",
+  "1c9d860be42b1c02": "Output",
   "78344b60f407928e": "Other",
   "684e516076de81fe": "Standard",
   "3bbcc1b826fef537": "Fast",

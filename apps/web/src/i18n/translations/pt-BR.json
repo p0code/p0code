@@ -3031,6 +3031,9 @@
       "t": "span"
     }
   ],
+  "b4f0207b94368993": "Asked for",
+  "666bd1d1a0d89fcb": "Read and operate",
+  "4e3d361728cb9b37": "Somente leitura",
   "47d3ba1a39016131": "O acesso vai para",
   "d121a97a3e275036": [
     {
@@ -7304,7 +7307,6 @@
   "b40e476b23c85e10": "Gera um link de uso único que outro dispositivo pode usar para parear com este backend como cliente autorizado.",
   "f9688fef8cc2ff10": "Rótulo do cliente (opcional)",
   "f65d50129cd76fd7": "Limite o que o cliente pareado pode fazer.",
-  "4e3d361728cb9b37": "Somente leitura",
   "e9b142be5c4b1e9a": "Selecione pelo menos uma permissão.",
   "3ac47fc45cfe7327": "Este cliente pode criar ou revogar o acesso de outros dispositivos.",
   "d7b3a54919b1e460": "Nenhum link de pareamento ou sessão de cliente.",
@@ -7356,6 +7358,73 @@
   "3943d8479dc44551": "Consulta o estado de energia do host quando nenhum cliente em primeiro plano está ativo.",
   "d13f97c11d2f322b": "Redefinir tudo",
   "cc310b2ec0179edf": "Configurar a atividade em segundo plano",
+  "dce817c6cdc36ccc": "Destino do backup",
+  "248ca177febdc99a": "Frase secreta",
+  "17b0f8cfef292e04": "Frase secreta salva",
+  "dc7fed3f4aeb6bc6": "Endpoint",
+  "17380af69e65d14c": "Bucket",
+  "9440f5a5a9b8d8f9": "Região",
+  "1971a6feb62352ca": "Prefixo",
+  "a11d81f18f479675": "ID da chave de acesso",
+  "bb874d242ea3cee3": "Chave de acesso secreta",
+  "b3494ee57f9579c3": "Segredo salvo",
+  "a1324f42d1a8b568": "ID do cliente Google",
+  "0b657dc2e6c9cdc7": "Segredo do cliente Google",
+  "9e5c4c7e90b85372": "Agendamento",
+  "74f0da015272a200": "Pode ler uma cópia de todas as suas conversas, anexos e configurações e propor substituí-los por um backup.",
+  "01d31ccbd1b7e0da": "Criptografado neste computador com sua frase secreta antes do envio. Sem ela, ninguém pode abrir os backups, nem você.",
+  "8e73b883d41d4102": "Desativado",
+  "c5be0e02a2553ae9": "Google Drive",
+  "4cdffada0a3924c2": "S3",
+  "5ecbb44fcdc5d707": "Guarde uma cópia fora deste computador. Perder a frase secreta significa perder os backups.",
+  "5610591a19ec3429": "URLs no estilo de caminho",
+  "471d757510bf78b6": "Aprovar no navegador",
+  "745a1ee8a05b9d99": "Sair do Google Drive",
+  "bd6f151bf37f83bb": "Entrar no Google Drive",
+  "503855211a14e0ae": "Manual",
+  "1a003df41668ecb0": "A cada hora",
+  "ecb11363a4182898": "Diariamente",
+  "72e9658f41c00064": "Semanal",
+  "1fb801edc39cc9a9": "Backups a manter",
+  "7ff4bdd3991b990d": [
+    "Último ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " · ",
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    }
+  ],
+  "de6894d665f2729c": [
+    "Próximo ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    }
+  ],
+  "269d656fd0878f29": "Mostrar backups",
+  "3301e9ed963c317e": "Fazendo backup…",
+  "d930737a4feb1967": "Fazer backup agora",
+  "04ccf193a9d6c2cb": [
+    "A restauração de ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " aguarda confirmação"
+  ],
+  "476a854d3780ab63": "Cancelar restauração",
+  "0d4ab5ba1df1eff7": "Ainda não há backups",
+  "ae9758f6f27a0696": "Verificar",
+  "b17f0f517beb9fde": "Preparando…",
+  "4fc630d6b2bf647f": "Restaurar",
   "e116ed85458b6613": "Prefixo fixo",
   "575ae567e3b6ca3d": "Prefixo semântico",
   "6675de66f9b3f71d": "Instruções personalizadas",
@@ -7927,6 +7996,39 @@
   "ac7708c9c4d37972": "Entrada $/1M",
   "fa49dc5a535b813f": "Saída $/1M",
   "d76f635ed9a84ba4": "Adicionar modelo",
+  "d4c73392f2f63826": [
+    "Um backup de ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " do ambiente",
+    " ",
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    },
+    " está pronto para restaurar (",
+    {
+      "i": 3,
+      "k": "_gt_value_3",
+      "v": "v"
+    },
+    " ",
+    "arquivos, ",
+    {
+      "i": 4,
+      "k": "_gt_value_4",
+      "v": "v"
+    },
+    " bytes)."
+  ],
+  "2d530a1eb99bed29": "A restauração substitui as conversas, anexos, configurações e atalhos deste ambiente e reinicia o servidor. Os dados atuais são mantidos em uma pasta restore-replaced neste computador. Pode ser necessário entrar novamente nos provedores e parear os dispositivos.",
+  "94f6871d32d0d771": "Confirme que deseja substituir os dados deste ambiente por este backup.",
+  "e7b361b71d70f03c": "Substituir dados e reiniciar",
+  "9cbfecb5b58c5075": "Revisar restauração",
   "3e90738d0ff19a29": "Banco de dados",
   "9e28cb72cb075933": "Recuperar espaço liberado do banco de dados",
   "881b21a84162fe36": "Estes bancos de dados ainda retêm o espaço liberado pela limpeza do histórico.",
@@ -9058,7 +9160,6 @@
     },
     " deste projeto prepara as threads em worktree com comandos próprios. Eles são executados na máquina deste ambiente com as suas permissões e somente como aprovados aqui: um comando cujo texto muda precisa de aprovação de novo."
   ],
-  "8e73b883d41d4102": "Desativado",
   "f6a91589456cca50": "Aprovado",
   "c92657bb7f2293ff": "Precisa de aprovação",
   "f1e5c1be1ac92361": "Aprovar",
@@ -9644,7 +9745,6 @@
   "32a5b25b5d73f1f0": "Janela de agrupamento",
   "e08bc42fb0454a83": "segundos, 10–3600",
   "d2eb8c8788659b41": "Cabeçalho",
-  "1971a6feb62352ca": "Prefixo",
   "e9a3c5489591db26": "Codificação",
   "743a7f2b5a9630e5": "Segredo",
   "8b023484be3a3b1c": "Inalterado",
@@ -10955,7 +11055,6 @@
   "a26482eefa357092": "ID do cliente de login",
   "88d561facf243588": "URL do app hospedado",
   "66e9ad0e3e79eb39": "Não oficial. Permite que apps do T3 Code conectados à sua conta T3 alcancem este ambiente e envia notificações push para o app móvel da loja. Sem criptografia de ponta a ponta: a Cloudflare encerra o TLS do túnel, e o relay da T3 vê seus dispositivos, os metadados de conexão e os títulos das threads nas notificações.",
-  "471d757510bf78b6": "Aprovar no navegador",
   "6fa695d3a822bb9e": "Entrar no T3 Connect",
   "0873c92c97f73f56": "Desvincular",
   "23a899df3d776ed6": "Vincular",
@@ -11287,8 +11386,6 @@
   "42d843f45e1de53b": "Acrescentado ao prompt de títulos de threads novos e regenerados.",
   "169d0ed4364b4644": "Redefinir as instruções de título da thread para o padrão",
   "f307391eb1c5c9d7": "Mantenha os títulos com poucas palavras. Comece pelo assunto principal.",
-  "5e2236ccf9b5ffba": "Dia",
-  "1c9d860be42b1c02": "Saída",
   "ea6f97bad03faf84": "Monoespaçada do sistema",
   "afa0ba3d124d9b8a": "Redefinir a fonte da interface para o padrão",
   "eb19ce0364bb9a6e": "Tudo fora dos blocos de código e do terminal.",
@@ -11701,6 +11798,8 @@
   "f1122dcb3209f91b": "thread tempo limite atividade barra lateral",
   "22193585ddef91f8": "Memória compartilhada",
   "7f9a3ccd6314310f": "Obsidian Sync identidade de agente compartilhada memória cofre notas",
+  "54534b64fb00d262": "Backups criptografados",
+  "636ca84d25d3ab29": "Backup restauração S3 Google Drive criptografado",
   "c62e6427de46783e": "notificação som alerta conclusão resposta aprovação desktop",
   "39267ba6064b8fac": "notificação aviso pop-up conclusão resposta aprovação falha",
   "c32fde5fa4e76709": "idioma localidade tradução inglês english deutsch alemão español espanhol français francês português portuguese brasil brasileiro chinês 中文 japonês 日本語 coreano 한국어 russo русский sueco swedish svenska sprache idioma langue 语言 言語 언어 язык",
@@ -12148,6 +12247,7 @@
   "a8bfe0a7539829e8": "Economia com cache",
   "0886cdaa4f5357cf": "Detalhamento do uso",
   "d89ad31bf0aebe92": "Hora",
+  "5e2236ccf9b5ffba": "Dia",
   "c400ae5f6f27b81d": "Detalhamento do uso por tempo",
   "8d2a69e65d453cce": "Contado uma vez entre ambientes que compartilham um diretório de transcrições: {sources}",
   "0f3b14055f7bba6f": "{count, plural, one {{count} ambiente} other {{count} ambientes}}",
@@ -12233,6 +12333,7 @@
   "5c3c0e3a9f3e4717": "Custo por dia, por provedor",
   "0bd41ff995d36a66": "Leitura de cache",
   "3f0dfe0cb15a3272": "Gravação de cache",
+  "1c9d860be42b1c02": "Saída",
   "78344b60f407928e": "Outros",
   "684e516076de81fe": "Padrão",
   "3bbcc1b826fef537": "Rápido",

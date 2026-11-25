@@ -1,3 +1,6 @@
+import * as DataBackup from "./persistence/DataBackup.ts";
+import { DataRestoreError } from "@t3tools/contracts";
+import { applyApprovedRestore } from "./persistence/dataBackupFiles.ts";
 import * as SelfRelay from "./selfRelay/SelfRelay.ts";
 import * as SelfRelayHttp from "./selfRelay/http.ts";
 import * as PluginHost from "./plugins/PluginHost.ts";
@@ -937,6 +940,14 @@ const layerMakeServer = Layer.unwrap(
     });
     // Before anything opens the database: one server per T3 home.
     const ownership = yield* ServerOwnership.acquireServerOwnership(config.serverRuntimeStatePath);
+    yield* Effect.tryPromise({
+      try: () => applyApprovedRestore(config),
+      catch: () =>
+        new DataRestoreError({
+          message:
+            "Could not apply the approved restore. The pending backup and replaced data have been kept for recovery.",
+        }),
+    });
     const activation = yield* Deferred.make<void>();
     const awaitActivation = Deferred.await(activation);
     const layerActivation = Layer.succeed(ServerActivation.ServerActivation, awaitActivation);
@@ -1170,6 +1181,9 @@ const layerMakeServer = Layer.unwrap(
 
     return layerServerApplication.pipe(
       Layer.provideMerge(layerPluginHost),
+      Layer.provideMerge(
+        DataBackup.layer.pipe(Layer.provide(layerServerRestart), Layer.provide(layerLauncher)),
+      ),
       Layer.provideMerge(layerRuntimeServices),
       Layer.provideMerge(
         McpSessionRegistry.layer.pipe(

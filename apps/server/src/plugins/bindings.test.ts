@@ -1,3 +1,4 @@
+import { DataBackup } from "../persistence/DataBackup.ts";
 import {
   type PluginManifest,
   USAGE_CONTRACT_VERSION,
@@ -5,7 +6,7 @@ import {
   type UsageSummary,
   type UsageSummaryInput,
 } from "@t3tools/contracts";
-import { definePlugin, PluginContext } from "@t3tools/plugin-api";
+import { definePlugin, PluginContext, type PluginError } from "@t3tools/plugin-api";
 import * as PtyAdapter from "@t3tools/shared/PtyAdapter";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -15,6 +16,7 @@ import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as HttpServer from "effect/http/HttpServer";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
+import type * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 
 import * as EnvironmentAuth from "../auth/EnvironmentAuth.ts";
@@ -172,6 +174,7 @@ const configLayer = ServerConfig.layerTest(process.cwd(), {
 const stubDependencies = Layer.mergeAll(
   FetchHttpClient.layer,
   stubUsageLayer,
+  Layer.mock(DataBackup)({}),
   Layer.succeed(
     PtyAdapter.PtyAdapter,
     PtyAdapter.PtyAdapter.of({ spawn: () => Effect.die("unused") }),
@@ -232,6 +235,27 @@ const EXPECTED_KEYS = [
 
 describe("PluginHostBindings usage:read", () => {
   it.layer(layerHostWithBindings)((it) => {
+    it.effect("refuses every backup operation without data:backup", () =>
+      Effect.gen(function* () {
+        const bindings = yield* PluginHostBindings;
+        const ctx = yield* bindings.contextFor(manifest("no-backup", []), () => Effect.void);
+        const operations: ReadonlyArray<Effect.Effect<unknown, PluginError, Scope.Scope>> = [
+          ctx.dataBackup.snapshot,
+          ctx.dataBackup.stageRestore("/outside"),
+          ctx.dataBackup.pendingRestore,
+          ctx.dataBackup.cancelRestore,
+        ];
+        for (const operation of operations) {
+          const message = yield* operation.pipe(
+            Effect.match({
+              onFailure: (error) => error.message,
+              onSuccess: () => "unexpected success",
+            }),
+          );
+          assert.strictEqual(message, "The plugin did not declare this capability.");
+        }
+      }),
+    );
     it.effect("refuses plugins that did not declare usage:read", () =>
       Effect.gen(function* () {
         readSummaryCalls.length = 0;

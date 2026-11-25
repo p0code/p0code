@@ -366,7 +366,7 @@ export const runRequestedReclaim = Effect.fn("DatabaseMaintenance.runRequestedRe
 );
 
 // SQLite's search order for its temporary files (unixTempFileDir in os_unix.c).
-const sqliteTempDirectory = Effect.gen(function* () {
+export const sqliteTempDirectory = Effect.gen(function* () {
   if ((yield* HostProcess.Platform) === "win32") return NodeOS.tmpdir();
   const fs = yield* FileSystem.FileSystem;
   const env = yield* HostProcess.Environment;

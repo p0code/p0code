@@ -1,3 +1,4 @@
+import { DataBackup } from "../persistence/DataBackup.ts";
 import {
   AuthStandardClientScopes,
   type OrchestrationV2DomainEvent,
@@ -124,6 +125,7 @@ export const layer = Layer.effect(
     const threads = yield* ThreadManagement.ThreadManagementService;
     const projects = yield* ProjectService.ProjectService;
     const usage = yield* UsageService.UsageService;
+    const dataBackup = yield* DataBackup;
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const platform = yield* Effect.context<Exclude<PluginServices, PluginContext>>();
@@ -187,6 +189,9 @@ export const layer = Layer.effect(
       const secretName = (key: string) => `plugin-${manifest.id}-${key}`;
       const dataDir = path.join(config.stateDir, "plugins", manifest.id);
       yield* fileSystem.makeDirectory(dataDir, { recursive: true }).pipe(Effect.ignore);
+
+      if (declared("data:backup"))
+        yield* dataBackup.cleanup(dataDir).pipe(Effect.ignore({ log: true }));
 
       return PluginContext.of({
         pluginId: manifest.id,
@@ -265,6 +270,32 @@ export const layer = Layer.effect(
               ),
             }
           : { changes: Stream.empty, read: () => refused, activeThreadIds: refused },
+        dataBackup: declared("data:backup")
+          ? {
+              snapshot: dataBackup
+                .snapshot(dataDir)
+                .pipe(
+                  Effect.mapError((cause) => new PluginError({ message: cause.message, cause })),
+                ),
+              stageRestore: (directory) =>
+                dataBackup
+                  .stage(directory, dataDir)
+                  .pipe(
+                    Effect.mapError((cause) => new PluginError({ message: cause.message, cause })),
+                  ),
+              pendingRestore: dataBackup.pending.pipe(
+                Effect.mapError(hostError("Could not read the restore.")),
+              ),
+              cancelRestore: dataBackup.cancel.pipe(
+                Effect.mapError(hostError("Could not cancel the restore.")),
+              ),
+            }
+          : {
+              snapshot: refused,
+              stageRestore: () => refused,
+              pendingRestore: refused,
+              cancelRestore: refused,
+            },
         usage: declared("usage:read")
           ? {
               dailyTotals: (input) =>

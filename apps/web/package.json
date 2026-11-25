@@ -36,6 +36,7 @@
     "@pierre/words": "file:deps/pierre-words-0.2.2-t3.4-7c04b7f1.tgz",
     "@t3tools/client-runtime": "workspace:*",
     "@t3tools/contracts": "workspace:*",
+    "@t3tools/plugin-backup": "workspace:*",
     "@t3tools/plugin-obsidian-shared-memory": "workspace:*",
     "@t3tools/plugin-t3-connect-bridge": "workspace:*",
     "@t3tools/provider-core": "workspace:*",

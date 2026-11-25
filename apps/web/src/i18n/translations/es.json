@@ -3031,6 +3031,9 @@
       "t": "span"
     }
   ],
+  "b4f0207b94368993": "Asked for",
+  "666bd1d1a0d89fcb": "Read and operate",
+  "4e3d361728cb9b37": "Solo lectura",
   "47d3ba1a39016131": "El acceso se concede a",
   "d121a97a3e275036": [
     {
@@ -7304,7 +7307,6 @@
   "b40e476b23c85e10": "Genera un enlace de un solo uso que otro dispositivo puede usar para emparejarse con este backend como cliente autorizado.",
   "f9688fef8cc2ff10": "Etiqueta del cliente (opcional)",
   "f65d50129cd76fd7": "Limita lo que puede hacer el cliente emparejado.",
-  "4e3d361728cb9b37": "Solo lectura",
   "e9b142be5c4b1e9a": "Selecciona al menos un permiso.",
   "3ac47fc45cfe7327": "Este cliente puede crear o revocar el acceso de otros dispositivos.",
   "d7b3a54919b1e460": "No hay enlaces de emparejamiento ni sesiones de clientes.",
@@ -7356,6 +7358,73 @@
   "3943d8479dc44551": "Consulta el estado de energía del host cuando no hay ningún cliente activo en primer plano.",
   "d13f97c11d2f322b": "Restablecer todo",
   "cc310b2ec0179edf": "Configurar la actividad en segundo plano",
+  "dce817c6cdc36ccc": "Destino de la copia",
+  "248ca177febdc99a": "Frase de contraseña",
+  "17b0f8cfef292e04": "Frase de contraseña guardada",
+  "dc7fed3f4aeb6bc6": "Punto de conexión",
+  "17380af69e65d14c": "Bucket",
+  "9440f5a5a9b8d8f9": "Región",
+  "1971a6feb62352ca": "Prefijo",
+  "a11d81f18f479675": "ID de clave de acceso",
+  "bb874d242ea3cee3": "Clave de acceso secreta",
+  "b3494ee57f9579c3": "Secreto guardado",
+  "a1324f42d1a8b568": "ID de cliente de Google",
+  "0b657dc2e6c9cdc7": "Secreto de cliente de Google",
+  "9e5c4c7e90b85372": "Programación",
+  "74f0da015272a200": "Puede leer una copia de todos tus chats, archivos adjuntos y ajustes, y proponer reemplazarlos por una copia de seguridad.",
+  "01d31ccbd1b7e0da": "Se cifra en este equipo con tu frase de contraseña antes de subirla. Sin ella, nadie puede abrir las copias, ni siquiera tú.",
+  "8e73b883d41d4102": "Desactivado",
+  "c5be0e02a2553ae9": "Google Drive",
+  "4cdffada0a3924c2": "S3",
+  "5ecbb44fcdc5d707": "Guarda una copia fuera de este equipo. Perder la frase de contraseña significa perder las copias.",
+  "5610591a19ec3429": "URL con estilo de ruta",
+  "471d757510bf78b6": "Aprobar en el navegador",
+  "745a1ee8a05b9d99": "Cerrar sesión en Google Drive",
+  "bd6f151bf37f83bb": "Iniciar sesión en Google Drive",
+  "503855211a14e0ae": "Manual",
+  "1a003df41668ecb0": "Cada hora",
+  "ecb11363a4182898": "Diariamente",
+  "72e9658f41c00064": "Semanal",
+  "1fb801edc39cc9a9": "Copias que conservar",
+  "7ff4bdd3991b990d": [
+    "Última ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " · ",
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    }
+  ],
+  "de6894d665f2729c": [
+    "Siguiente ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    }
+  ],
+  "269d656fd0878f29": "Mostrar copias",
+  "3301e9ed963c317e": "Creando copia…",
+  "d930737a4feb1967": "Crear copia ahora",
+  "04ccf193a9d6c2cb": [
+    "La restauración del ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " espera confirmación"
+  ],
+  "476a854d3780ab63": "Cancelar restauración",
+  "0d4ab5ba1df1eff7": "Aún no hay copias",
+  "ae9758f6f27a0696": "Verificar",
+  "b17f0f517beb9fde": "Preparando…",
+  "4fc630d6b2bf647f": "Restaurar",
   "e116ed85458b6613": "Prefijo fijo",
   "575ae567e3b6ca3d": "Prefijo semántico",
   "6675de66f9b3f71d": "Instrucciones personalizadas",
@@ -7927,6 +7996,39 @@
   "ac7708c9c4d37972": "Entrada $/1M",
   "fa49dc5a535b813f": "Salida $/1M",
   "d76f635ed9a84ba4": "Añadir modelo",
+  "d4c73392f2f63826": [
+    "Una copia del ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " del entorno",
+    " ",
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    },
+    " está lista para restaurar (",
+    {
+      "i": 3,
+      "k": "_gt_value_3",
+      "v": "v"
+    },
+    " ",
+    "archivos, ",
+    {
+      "i": 4,
+      "k": "_gt_value_4",
+      "v": "v"
+    },
+    " bytes)."
+  ],
+  "2d530a1eb99bed29": "La restauración reemplaza los chats, archivos adjuntos, ajustes y atajos de esta instancia y reinicia el servidor. Los datos actuales se conservan en una carpeta restore-replaced de este equipo. Puede ser necesario volver a iniciar sesión en los proveedores y vincular los dispositivos.",
+  "94f6871d32d0d771": "Confirma que quieres reemplazar los datos de esta instancia por esta copia.",
+  "e7b361b71d70f03c": "Reemplazar datos y reiniciar",
+  "9cbfecb5b58c5075": "Revisar restauración",
   "3e90738d0ff19a29": "Base de datos",
   "9e28cb72cb075933": "Recuperar espacio liberado de la base de datos",
   "881b21a84162fe36": "Estas bases de datos aún ocupan el espacio liberado al limpiar el historial.",
@@ -9056,7 +9158,6 @@
     },
     " de este proyecto prepara los hilos en worktrees con sus propios comandos. Se ejecutan en la máquina de este entorno con tus permisos y solo tal como se aprobaron aquí: un comando cuyo texto cambia necesita aprobación de nuevo."
   ],
-  "8e73b883d41d4102": "Desactivado",
   "f6a91589456cca50": "Aprobado",
   "c92657bb7f2293ff": "Necesita aprobación",
   "f1e5c1be1ac92361": "Aprobar",
@@ -9642,7 +9743,6 @@
   "32a5b25b5d73f1f0": "Ventana de agrupación",
   "e08bc42fb0454a83": "segundos, 10–3600",
   "d2eb8c8788659b41": "Encabezado",
-  "1971a6feb62352ca": "Prefijo",
   "e9a3c5489591db26": "Codificación",
   "743a7f2b5a9630e5": "Secreto",
   "8b023484be3a3b1c": "Sin cambios",
@@ -10950,7 +11050,6 @@
   "a26482eefa357092": "ID de cliente de inicio de sesión",
   "88d561facf243588": "URL de la app alojada",
   "66e9ad0e3e79eb39": "No oficial. Permite que las apps de T3 Code con tu cuenta de T3 lleguen a este entorno y envía notificaciones push a la app móvil de la tienda. Sin cifrado de extremo a extremo: Cloudflare termina el TLS del túnel y el relay de T3 ve tus dispositivos, los metadatos de conexión y los títulos de los hilos en las notificaciones.",
-  "471d757510bf78b6": "Aprobar en el navegador",
   "6fa695d3a822bb9e": "Iniciar sesión en T3 Connect",
   "0873c92c97f73f56": "Desvincular",
   "23a899df3d776ed6": "Vincular",
@@ -11282,8 +11381,6 @@
   "42d843f45e1de53b": "Se añade al prompt de los títulos de hilos nuevos y regenerados.",
   "169d0ed4364b4644": "Restablecer las instrucciones de títulos de hilos al valor predeterminado",
   "f307391eb1c5c9d7": "Limita los títulos a unas pocas palabras. Empieza por el tema principal.",
-  "5e2236ccf9b5ffba": "Día",
-  "1c9d860be42b1c02": "Salida",
   "ea6f97bad03faf84": "Monoespaciada del sistema",
   "afa0ba3d124d9b8a": "Restablecer la fuente de la interfaz al valor predeterminado",
   "eb19ce0364bb9a6e": "Todo lo que está fuera de los bloques de código y la terminal.",
@@ -11696,6 +11793,8 @@
   "f1122dcb3209f91b": "hilo tiempo de espera actividad barra lateral",
   "22193585ddef91f8": "Memoria compartida",
   "7f9a3ccd6314310f": "Obsidian Sync identidad de agente compartida memoria arcón notas",
+  "54534b64fb00d262": "Copias cifradas",
+  "636ca84d25d3ab29": "Copia restauración S3 Google Drive cifrada",
   "c62e6427de46783e": "notificación sonido alerta finalización respuesta aprobación escritorio",
   "39267ba6064b8fac": "notificación aviso emergente finalización respuesta aprobación error",
   "c32fde5fa4e76709": "locale traducción english inglés deutsch alemán español spanish français francés português portugués brasil brasileño chino 中文 japonés 日本語 coreano 한국어 ruso русский sueco swedish svenska sprache idioma langue 语言 言語 언어 язык",
@@ -12143,6 +12242,7 @@
   "a8bfe0a7539829e8": "Ahorro por caché",
   "0886cdaa4f5357cf": "Desglose de uso",
   "d89ad31bf0aebe92": "Hora",
+  "5e2236ccf9b5ffba": "Día",
   "c400ae5f6f27b81d": "Desglose de uso por tiempo",
   "8d2a69e65d453cce": "Contado una sola vez entre los entornos que comparten un directorio de transcripciones: {sources}",
   "0f3b14055f7bba6f": "{count, plural, one {{count} entorno} other {{count} entornos}}",
@@ -12228,6 +12328,7 @@
   "5c3c0e3a9f3e4717": "Coste por día y proveedor",
   "0bd41ff995d36a66": "Lectura de caché",
   "3f0dfe0cb15a3272": "Escritura de caché",
+  "1c9d860be42b1c02": "Salida",
   "78344b60f407928e": "Otros",
   "684e516076de81fe": "Estándar",
   "3bbcc1b826fef537": "Rápida",

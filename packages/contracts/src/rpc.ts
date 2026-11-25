@@ -12,6 +12,8 @@ import {
   SelfRelayOperationError,
 } from "./selfRelay.ts";
 import {
+  DataRestoreError,
+  PendingRestore,
   PluginInvokeInput,
   PluginOperationError,
   PluginSetEnabledInput,
@@ -697,6 +699,9 @@ export const WS_METHODS = {
   serverUnexposePort: "relay.unexposePort",
   serverPortLink: "relay.portLink",
 
+  dataRestorePending: "dataRestore.pending",
+  dataRestoreApprove: "dataRestore.approve",
+  dataRestoreCancel: "dataRestore.cancel",
   pluginsSubscribe: "plugins.subscribe",
   pluginsSetEnabled: "plugins.setEnabled",
   pluginsInvoke: "plugins.invoke",
@@ -1300,6 +1305,22 @@ const WsserverPortLinkRpc = Rpc.make(WS_METHODS.serverPortLink, {
   error: Schema.Union([SelfRelayOperationError, EnvironmentAuthorizationError]),
 });
 
+const WsDataRestorePendingRpc = Rpc.make(WS_METHODS.dataRestorePending, {
+  payload: Schema.Struct({}),
+  success: Schema.NullOr(PendingRestore),
+  error: EnvironmentAuthorizationError,
+  stream: true,
+});
+const WsDataRestoreApproveRpc = Rpc.make(WS_METHODS.dataRestoreApprove, {
+  payload: Schema.Struct({ id: Schema.String }),
+  success: Schema.Void,
+  error: Schema.Union([DataRestoreError, EnvironmentAuthorizationError]),
+});
+const WsDataRestoreCancelRpc = Rpc.make(WS_METHODS.dataRestoreCancel, {
+  payload: Schema.Struct({}),
+  success: Schema.Void,
+  error: Schema.Union([DataRestoreError, EnvironmentAuthorizationError]),
+});
 const WsPluginsSubscribeRpc = Rpc.make(WS_METHODS.pluginsSubscribe, {
   payload: Schema.Struct({}),
   success: PluginsSnapshot,
@@ -2694,6 +2715,9 @@ export const WsRpcGroup = RpcGroup.make(
   WsserverExposePortRpc,
   WsserverUnexposePortRpc,
   WsserverPortLinkRpc,
+  WsDataRestorePendingRpc,
+  WsDataRestoreApproveRpc,
+  WsDataRestoreCancelRpc,
   WsPluginsSubscribeRpc,
   WsPluginsSetEnabledRpc,
   WsPluginsInvokeRpc,

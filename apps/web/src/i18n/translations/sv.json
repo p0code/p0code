@@ -3031,6 +3031,9 @@
       "t": "span"
     }
   ],
+  "b4f0207b94368993": "Asked for",
+  "666bd1d1a0d89fcb": "Read and operate",
+  "4e3d361728cb9b37": "Endast läsning",
   "47d3ba1a39016131": "Åtkomsten går till",
   "d121a97a3e275036": [
     {
@@ -7309,7 +7312,6 @@
   "b40e476b23c85e10": "Generera en engångslänk som en annan enhet kan använda för att parkoppla med den här backenden som auktoriserad klient.",
   "f9688fef8cc2ff10": "Klientetikett (valfritt)",
   "f65d50129cd76fd7": "Begränsa vad den parkopplade klienten kan göra.",
-  "4e3d361728cb9b37": "Endast läsning",
   "e9b142be5c4b1e9a": "Välj minst en behörighet.",
   "3ac47fc45cfe7327": "Den här klienten kan skapa eller återkalla åtkomst för andra enheter.",
   "d7b3a54919b1e460": "Inga parkopplingslänkar eller klientsessioner.",
@@ -7361,6 +7363,73 @@
   "3943d8479dc44551": "Kontrollera värdens strömstatus när ingen klient i förgrunden är aktiv.",
   "d13f97c11d2f322b": "Återställ alla",
   "cc310b2ec0179edf": "Konfigurera bakgrundsaktivitet",
+  "dce817c6cdc36ccc": "Säkerhetskopians mål",
+  "248ca177febdc99a": "Lösenfras",
+  "17b0f8cfef292e04": "Lösenfras sparad",
+  "dc7fed3f4aeb6bc6": "Slutpunkt",
+  "17380af69e65d14c": "Bucket",
+  "9440f5a5a9b8d8f9": "Region",
+  "1971a6feb62352ca": "Prefix",
+  "a11d81f18f479675": "Åtkomstnyckel-ID",
+  "bb874d242ea3cee3": "Hemlig åtkomstnyckel",
+  "b3494ee57f9579c3": "Hemlighet sparad",
+  "a1324f42d1a8b568": "Google-klient-ID",
+  "0b657dc2e6c9cdc7": "Google-klienthemlighet",
+  "9e5c4c7e90b85372": "Schema",
+  "74f0da015272a200": "Kan läsa en kopia av alla dina chattar, bilagor och inställningar och föreslå att ersätta dem med en säkerhetskopia.",
+  "01d31ccbd1b7e0da": "Krypteras på den här datorn med din lösenfras före uppladdning. Utan lösenfrasen kan ingen öppna säkerhetskopiorna, inte ens du.",
+  "8e73b883d41d4102": "Av",
+  "c5be0e02a2553ae9": "Google Drive",
+  "4cdffada0a3924c2": "S3",
+  "5ecbb44fcdc5d707": "Förvara en kopia någon annanstans än på den här datorn. Förlorad lösenfras innebär förlorade säkerhetskopior.",
+  "5610591a19ec3429": "URL:er med sökvägsstil",
+  "471d757510bf78b6": "Godkänn i webbläsaren",
+  "745a1ee8a05b9d99": "Logga ut från Google Drive",
+  "bd6f151bf37f83bb": "Logga in på Google Drive",
+  "503855211a14e0ae": "Manuell",
+  "1a003df41668ecb0": "Varje timme",
+  "ecb11363a4182898": "Dagligen",
+  "72e9658f41c00064": "Varje vecka",
+  "1fb801edc39cc9a9": "Säkerhetskopior att behålla",
+  "7ff4bdd3991b990d": [
+    "Senaste ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " · ",
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    }
+  ],
+  "de6894d665f2729c": [
+    "Nästa ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    }
+  ],
+  "269d656fd0878f29": "Visa säkerhetskopior",
+  "3301e9ed963c317e": "Säkerhetskopierar…",
+  "d930737a4feb1967": "Säkerhetskopiera nu",
+  "04ccf193a9d6c2cb": [
+    "Återställning från ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " väntar på bekräftelse"
+  ],
+  "476a854d3780ab63": "Avbryt återställning",
+  "0d4ab5ba1df1eff7": "Inga säkerhetskopior ännu",
+  "ae9758f6f27a0696": "Verifiera",
+  "b17f0f517beb9fde": "Förbereder…",
+  "4fc630d6b2bf647f": "Återställ",
   "e116ed85458b6613": "Statiskt prefix",
   "575ae567e3b6ca3d": "Semantiskt prefix",
   "6675de66f9b3f71d": "Anpassade instruktioner",
@@ -7932,6 +8001,39 @@
   "ac7708c9c4d37972": "In $/1M",
   "fa49dc5a535b813f": "Ut $/1M",
   "d76f635ed9a84ba4": "Lägg till modell",
+  "d4c73392f2f63826": [
+    "En säkerhetskopia från ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " i miljön",
+    " ",
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    },
+    " är redo att återställas (",
+    {
+      "i": 3,
+      "k": "_gt_value_3",
+      "v": "v"
+    },
+    " ",
+    "filer, ",
+    {
+      "i": 4,
+      "k": "_gt_value_4",
+      "v": "v"
+    },
+    " byte)."
+  ],
+  "2d530a1eb99bed29": "Återställning ersätter den här miljöns chattar, bilagor, inställningar och tangentbindningar och startar om servern. Nuvarande data behålls i en restore-replaced-mapp på den här datorn. Ny inloggning hos leverantörer och parkoppling av enheter kan behövas.",
+  "94f6871d32d0d771": "Bekräfta att du vill ersätta den här miljöns data med säkerhetskopian.",
+  "e7b361b71d70f03c": "Ersätt data och starta om",
+  "9cbfecb5b58c5075": "Granska återställning",
   "3e90738d0ff19a29": "Databas",
   "9e28cb72cb075933": "Återta frigjort databasutrymme",
   "881b21a84162fe36": "Databaserna håller fortfarande utrymme som frigjorts av historikrensning.",
@@ -9063,7 +9165,6 @@
     },
     " förbereder worktree-trådar med egna kommandon. De körs på den här miljöns dator med dina behörigheter, och bara så som de godkänts här: ett kommando vars text ändras behöver godkännas igen."
   ],
-  "8e73b883d41d4102": "Av",
   "f6a91589456cca50": "Godkänt",
   "c92657bb7f2293ff": "Behöver godkännande",
   "f1e5c1be1ac92361": "Godkänn",
@@ -9651,7 +9752,6 @@
   "32a5b25b5d73f1f0": "Sammanslagningsfönster",
   "e08bc42fb0454a83": "sekunder, 10–3600",
   "d2eb8c8788659b41": "Rubrik",
-  "1971a6feb62352ca": "Prefix",
   "e9a3c5489591db26": "Kodning",
   "743a7f2b5a9630e5": "Hemlighet",
   "8b023484be3a3b1c": "Oförändrad",
@@ -10962,7 +11062,6 @@
   "a26482eefa357092": "Klient-ID för inloggning",
   "88d561facf243588": "URL till webbappen",
   "66e9ad0e3e79eb39": "Inofficiell. Låter T3 Code-appar inloggade med ditt T3-konto nå den här miljön och skickar pushnotiser till mobilappen från butiken. Inte end-to-end-krypterad: Cloudflare avslutar TLS för tunneln, och T3:s relä ser dina enheter, anslutningsmetadata och trådrubriker i notiser.",
-  "471d757510bf78b6": "Godkänn i webbläsaren",
   "6fa695d3a822bb9e": "Logga in på T3 Connect",
   "0873c92c97f73f56": "Koppla från",
   "23a899df3d776ed6": "Länka",
@@ -11294,8 +11393,6 @@
   "42d843f45e1de53b": "Läggs till i prompten för nya och omgenererade trådtitlar.",
   "169d0ed4364b4644": "Återställ instruktioner för trådtitlar till standard",
   "f307391eb1c5c9d7": "Håll titlarna till några ord. Börja med huvudämnet.",
-  "5e2236ccf9b5ffba": "Dag",
-  "1c9d860be42b1c02": "Utdata",
   "ea6f97bad03faf84": "Systemets teckensnitt med fast bredd",
   "afa0ba3d124d9b8a": "Återställ gränssnittets typsnitt till standard",
   "eb19ce0364bb9a6e": "Allt utanför kodblock och terminalen.",
@@ -11708,6 +11805,8 @@
   "f1122dcb3209f91b": "tråd tidsgräns aktivitet sidofält",
   "22193585ddef91f8": "Delat minne",
   "7f9a3ccd6314310f": "Obsidian Sync delad agentidentitet minne valv anteckningar",
+  "54534b64fb00d262": "Krypterade säkerhetskopior",
+  "636ca84d25d3ab29": "Säkerhetskopia återställning S3 Google Drive krypterad",
   "c62e6427de46783e": "avisering ljud varning slutförd indata godkännande skrivbord",
   "39267ba6064b8fac": "avisering toast popup slutförd indata godkännande fel",
   "c32fde5fa4e76709": "språk lokal översättning svenska swedish english engelska deutsch tyska español spanska français franska português portugisiska brasil brasiliansk kinesiska 中文 japanska 日本語 koreanska 한국어 ryska русский sprache idioma langue 语言 言語 언어 язык",
@@ -12155,6 +12254,7 @@
   "a8bfe0a7539829e8": "Cachebesparingar",
   "0886cdaa4f5357cf": "Användningsfördelning",
   "d89ad31bf0aebe92": "Timme",
+  "5e2236ccf9b5ffba": "Dag",
   "c400ae5f6f27b81d": "Användningsfördelning över tid",
   "8d2a69e65d453cce": "Räknas en gång för miljöer som delar en transkriptkatalog: {sources}",
   "0f3b14055f7bba6f": "{count, plural, one {{count} miljö} other {{count} miljöer}}",
@@ -12240,6 +12340,7 @@
   "5c3c0e3a9f3e4717": "Kostnad per dag per leverantör",
   "0bd41ff995d36a66": "Cacheläsning",
   "3f0dfe0cb15a3272": "Cacheskrivning",
+  "1c9d860be42b1c02": "Utdata",
   "78344b60f407928e": "Övrigt",
   "684e516076de81fe": "Standard",
   "3bbcc1b826fef537": "Snabb",

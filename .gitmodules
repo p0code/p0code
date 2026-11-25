@@ -4,3 +4,6 @@
 [submodule "plugins/obsidian-shared-memory"]
 	path = plugins/obsidian-shared-memory
 	url = https://github.com/p0code/obsidian-sync
+[submodule "plugins/backup"]
+	path = plugins/backup
+	url = https://github.com/p0code/backup

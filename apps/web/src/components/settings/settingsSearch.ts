@@ -791,6 +791,14 @@ export const SETTINGS_SEARCH_ITEMS = [
     pluginsOnly: true,
   },
   {
+    id: "backup",
+    to: "/settings/plugins",
+    title: msg("Encrypted backups"),
+    targetId: "plugin-backup",
+    searchTerms: [msg("Backup restore S3 Google Drive encrypted")],
+    pluginsOnly: true,
+  },
+  {
     id: "thread-notifications",
     title: msg("Thread notifications"),
     to: "/settings/general",
