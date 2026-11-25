@@ -12,6 +12,7 @@ services:
       RELAY_ACME_EMAIL: ${RELAY_ACME_EMAIL:?Set RELAY_ACME_EMAIL}
       RELAY_PUBLIC_HOSTS: ${RELAY_PUBLIC_HOSTS:-}
       RELAY_PUBLIC_DOMAIN: ${RELAY_PUBLIC_DOMAIN:-}
+      RELAY_ALLOW_SIGNUP: ${RELAY_ALLOW_SIGNUP:-}
     volumes:
       - relay-data:/data
 volumes:

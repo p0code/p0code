@@ -7,8 +7,8 @@ key. Confidentiality against a hostile relay without DNS control requires CAA ac
 A DNS operator can remove the pin and obtain another certificate (visible in Certificate
 Transparency). Self-operation avoids a third party. Trust boundaries are in
 [Self-hosted relay](../internals/06_relay.md).
-There are no cloud accounts: enrollment tokens plus the environment's own pairing and session auth
-are the only authority.
+There are no cloud accounts: local relay accounts (username and password) and enrollment tokens plus
+the environment's own pairing and session auth are the only authority.
 
 ## DNS and ports
 
@@ -30,6 +30,7 @@ From `apps/relay`:
 
 ```sh
 RELAY_HOST=relay.example.com RELAY_ACME_EMAIL=you@example.com docker compose up -d --build
+docker compose exec relay node apps/relay/src/cli.ts user add alice
 docker compose exec relay node apps/relay/src/cli.ts enroll
 docker compose exec relay node apps/relay/src/cli.ts ls
 docker compose exec relay node apps/relay/src/cli.ts revoke abcdef
@@ -53,13 +54,16 @@ RELAY_HOST=relay.example.com RELAY_ACME_EMAIL=you@example.com \
 
 ## Admin commands
 
-`hhh-relay [serve|enroll|ls|revoke|block|unblock|blocked] [options]`. Every command opens the same SQLite state file as
+`hhh-relay [serve|enroll|ls|revoke|block|unblock|blocked|user] [options]`. Every command opens the same SQLite state file as
 `serve` (default `./relay-data/state.sqlite`; pass `--state` or set `RELAY_STATE` consistently).
 Run only one `serve` per state file. A running server observes revocations from another process
 within about one second and closes the live tunnel; a newer authenticated tunnel for a slug
 replaces the old one.
 
 - `serve` — run the relay. Requires `--host` / `RELAY_HOST`.
+- `user add <username>` — create a password account (hidden prompt twice, 12 characters minimum).
+- `user passwd <username>` — change the account's password. `user list` lists accounts as JSON;
+  `user rm <username>` deletes the account and revokes every environment it owns.
 - `enroll` — print a one-time enrollment token valid for one hour. Pass it privately to the
   environment owner, who links with `t3 relay link https://relay.example.com --token <token>`.
   Tokens are SHA-256 hashed at rest.
@@ -73,6 +77,40 @@ replaces the old one.
 
 Slugs are 6–32 lowercase letters/digits starting with a letter. The database stores public keys
 only, never environment private keys, and an enrollment cannot overwrite an enrolled slug.
+Passwords are salted scrypt hashes (`N=2^15, r=8, p=1`); plaintext passwords and hashes are never
+logged.
+
+## Accounts
+
+An environment can link with a username and password instead of a pasted token. This is
+authentication only: the relay still routes raw TCP by TLS SNI and never inspects traffic.
+
+1. Create the account on the relay host: `hhh-relay user add alice`. The prompt is hidden, asks
+   twice, and needs at least 12 characters. For scripts, set `P0_RELAY_USER_PASSWORD` instead of
+   answering the prompt.
+2. In the app's relay settings, choose account sign-in, enter the relay URL, username and password.
+   The app sends the password once to `POST /_hhh/auth/enroll` and stores only the returned slug; the
+   password is never stored client-side.
+3. Re-linking the same environment key with the same account returns the same slug. An environment
+   key owned by another account, or a slug that is already taken, is refused with `409`.
+
+`GET /_hhh/auth/config` returns `{ "signup": false, "password": true }` so the app can offer account
+login. Until at least one account exists, the auth endpoints answer `404`, like an unconfigured
+relay.
+
+**Signup** is off by default. Start with `--allow-signup` (or `RELAY_ALLOW_SIGNUP=1`) to enable
+`POST /_hhh/auth/register`; passwords still need 12+ characters. Registering a name that already
+exists answers like a new signup and leaves the account unchanged, so signup cannot be used to list
+accounts. Both signup and login are limited to 5 attempts per minute per source IP (IPv6 clients
+share a /64) and bodies are capped at 8 KiB.
+
+**Removing an account** with `user rm` deletes the account and revokes every environment it owns:
+their live tunnels close within about a second and they can no longer authenticate. Environments
+enrolled with a token have no owner account and are untouched. Use `revoke <slug>` to remove one
+environment without touching the account.
+
+The token path is unchanged: `enroll` plus `POST /_hhh/enroll` remains the advanced/automation
+route for agents and CI.
 
 ## Flags
 
@@ -91,6 +129,7 @@ only, never environment private keys, and an enrollment cannot overwrite an enro
 | `--idle-timeout-ms` | `RELAY_IDLE_TIMEOUT_MS`    | `120000` per stream         |
 | `--public-hosts`    | `RELAY_PUBLIC_HOSTS=1`     | off                         |
 | `--public-domain`   | `RELAY_PUBLIC_DOMAIN`      | none (names use `--host`)   |
+| `--allow-signup`    | `RELAY_ALLOW_SIGNUP=1`     | off                         |
 
 ## Public hosts
 
@@ -177,8 +216,10 @@ Environment variables on the environment side:
   and the environment's tunnel must be connected, because the challenge is forwarded through it.
   For a first try, point both sides at the Let's Encrypt staging directory and enroll a test
   environment.
-- **Environment cannot link** — the enrollment token expires after one hour; mint a fresh one.
-  The environment can also verify the relay control channel with `T3CODE_RELAY_CA_CERT` when the
+- **Environment cannot link** — the enrollment token expires after one hour; mint a fresh one, or
+  create an account with `hhh-relay user add` and sign in with its password. Account and signup
+  attempts are limited to 5 per minute per IP, so a locked-out burst waits a few seconds. The
+  environment can also verify the relay control channel with `T3CODE_RELAY_CA_CERT` when the
   relay uses a private CA.
 - **Tunnel keeps dropping** — check `--max-streams`, `--idle-timeout-ms`, and the environment's
   log. A relay behind a NAT that lacks 80/443 passthrough, or in front of a TLS-terminating proxy,

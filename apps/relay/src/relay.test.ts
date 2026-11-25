@@ -14,7 +14,7 @@ import { generateEnvironmentKeyPair } from "@t3tools/relay-tunnel/auth";
 import { RelayTunnelClient } from "@t3tools/relay-tunnel/client";
 import { HttpChallengeStore } from "@t3tools/relay-tunnel/certificates";
 import { testCertificate } from "../../../packages/relay-tunnel/src/testing/certificate.ts";
-import { RelayState } from "./state.ts";
+import { LinkConflictError, RelayState } from "./state.ts";
 import { RelayServer, sourceKey } from "./server.ts";
 
 const lookup: NodeNet.LookupFunction = (_hostname, options, callback) => {
@@ -70,6 +70,24 @@ function plainRequest(
     req.on("error", reject);
     req.end();
   });
+}
+const ACCOUNT_PASSWORD = "correct horse battery";
+/** GET without a body, POST with JSON; auth endpoints live on the relay's own host. */
+function authRequest(
+  port: number,
+  path: string,
+  body?: unknown,
+): Promise<{ status: number; body: string; fingerprint: string }> {
+  return httpsRequest(
+    {
+      hostname: "relay.test",
+      port,
+      path,
+      method: body === undefined ? "GET" : "POST",
+      ...(body === undefined ? {} : { headers: { "content-type": "application/json" } }),
+    },
+    body === undefined ? undefined : JSON.stringify(body),
+  );
 }
 
 it("enrolls over HTTPS, passes environment TLS/HTTP/WS and port hosts end to end, and revokes live tunnels", async () => {
@@ -588,6 +606,266 @@ it("reaps quiet visitor streams at the visitor idle timeout and frees their slot
     app.closeAllConnections();
     app.close();
     await relay.close();
+    state.close();
+    await NodeFSP.rm(directory, { recursive: true, force: true });
+  }
+});
+
+it("links with an account, keeps one slug per key, and refuses another user's slug or key", async () => {
+  const directory = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "hhh-relay-account-"));
+  const fixture = testCertificate(directory, "relay.test");
+  const dbPath = NodePath.join(directory, "state.sqlite");
+  const state = new RelayState(dbPath);
+  const relay = new RelayServer({
+    relayHost: "relay.test",
+    state,
+    bindHost: "127.0.0.1",
+    tlsPort: 0,
+    httpPort: 0,
+    getSecureContext: async () => NodeTls.createSecureContext(fixture),
+  });
+  try {
+    state.addUser("alice", ACCOUNT_PASSWORD);
+    const ports = await relay.start();
+    const aliceKey = generateEnvironmentKeyPair();
+    const aliceSecondKey = generateEnvironmentKeyPair();
+    const bobKey = generateEnvironmentKeyPair();
+    const credentials = (username: string, password = ACCOUNT_PASSWORD) => ({
+      username,
+      password,
+      publicKey: aliceKey.publicKey,
+    });
+    const first = await authRequest(ports.tlsPort, "/_hhh/auth/enroll", {
+      ...credentials("alice"),
+      desiredSlug: "abcdef",
+    });
+    expect(first.status).toBe(201);
+    expect(JSON.parse(first.body)).toEqual({ slug: "abcdef", relayHost: "relay.test" });
+    expect(state.get("abcdef")?.userId).toBe("alice");
+    // Re-linking the same key keeps the slug even when another one is asked for.
+    const relink = await authRequest(ports.tlsPort, "/_hhh/auth/enroll", {
+      ...credentials("alice"),
+      desiredSlug: "ghijkl",
+    });
+    expect(relink.status).toBe(201);
+    expect(JSON.parse(relink.body).slug).toBe("abcdef");
+    const config = await authRequest(ports.tlsPort, "/_hhh/auth/config");
+    expect(config.status).toBe(200);
+    expect(JSON.parse(config.body)).toEqual({ signup: false, password: true });
+    // A wrong password and an unknown user are indistinguishable.
+    const wrongPassword = await authRequest(ports.tlsPort, "/_hhh/auth/enroll", {
+      ...credentials("alice", "wrong horse battery"),
+    });
+    const unknownUser = await authRequest(ports.tlsPort, "/_hhh/auth/enroll", {
+      ...credentials("mallory"),
+    });
+    expect(wrongPassword.status).toBe(401);
+    expect(unknownUser.status).toBe(401);
+    expect(unknownUser.body).toBe(wrongPassword.body);
+    state.addUser("bob", ACCOUNT_PASSWORD);
+    const stolenSlug = await authRequest(ports.tlsPort, "/_hhh/auth/enroll", {
+      username: "bob",
+      password: ACCOUNT_PASSWORD,
+      publicKey: bobKey.publicKey,
+      desiredSlug: "abcdef",
+    });
+    expect(stolenSlug.status).toBe(409);
+    // Refusals past the per-IP auth budget are checked at the state layer; HTTP auth is capped.
+    expect(() =>
+      state.enrollForUser({
+        username: "bob",
+        password: ACCOUNT_PASSWORD,
+        publicKey: aliceKey.publicKey,
+        desiredSlug: "bobbob",
+      }),
+    ).toThrow(LinkConflictError);
+    expect(() =>
+      state.enrollForUser({
+        username: "alice",
+        password: ACCOUNT_PASSWORD,
+        publicKey: aliceSecondKey.publicKey,
+        desiredSlug: "abcdef",
+      }),
+    ).toThrow(LinkConflictError);
+    // The token path is untouched for agents and CI.
+    const tokenEnrollment = await httpsRequest(
+      { hostname: "relay.test", port: ports.tlsPort, path: "/_hhh/enroll", method: "POST" },
+      JSON.stringify({
+        token: state.issueToken(),
+        publicKey: generateEnvironmentKeyPair().publicKey,
+        desiredSlug: "tokent",
+      }),
+    );
+    expect(tokenEnrollment.status).toBe(201);
+    expect((await NodeFSP.readFile(dbPath)).includes(Buffer.from(ACCOUNT_PASSWORD))).toBe(false);
+  } finally {
+    await relay.close();
+    state.close();
+    await NodeFSP.rm(directory, { recursive: true, force: true });
+  }
+});
+
+it("hides auth endpoints until configured and rate limits account attempts per IP", async () => {
+  const directory = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "hhh-relay-auth-"));
+  const fixture = testCertificate(directory, "relay.test");
+  const state = new RelayState(NodePath.join(directory, "state.sqlite"));
+  const relay = new RelayServer({
+    relayHost: "relay.test",
+    state,
+    bindHost: "127.0.0.1",
+    tlsPort: 0,
+    httpPort: 0,
+    getSecureContext: async () => NodeTls.createSecureContext(fixture),
+  });
+  try {
+    const ports = await relay.start();
+    const keys = generateEnvironmentKeyPair();
+    const attempt = (password: string) =>
+      authRequest(ports.tlsPort, "/_hhh/auth/enroll", {
+        username: "alice",
+        password,
+        publicKey: keys.publicKey,
+      });
+    expect((await authRequest(ports.tlsPort, "/_hhh/auth/config")).status).toBe(404);
+    expect((await attempt("whatever password")).status).toBe(404);
+    expect(
+      (
+        await authRequest(ports.tlsPort, "/_hhh/auth/register", {
+          username: "alice",
+          password: ACCOUNT_PASSWORD,
+        })
+      ).status,
+    ).toBe(404);
+    state.addUser("alice", ACCOUNT_PASSWORD);
+    const config = await authRequest(ports.tlsPort, "/_hhh/auth/config");
+    expect(config.status).toBe(200);
+    expect(JSON.parse(config.body)).toEqual({ signup: false, password: true });
+    for (let tries = 0; tries < 5; tries++)
+      expect((await attempt("wrong horse battery")).status).toBe(401);
+    expect((await attempt("wrong horse battery")).status).toBe(429);
+  } finally {
+    await relay.close();
+    state.close();
+    await NodeFSP.rm(directory, { recursive: true, force: true });
+  }
+});
+
+it("registers accounts only with signup on, enforces a 12 character password, and does not reveal names", async () => {
+  const directory = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "hhh-relay-signup-"));
+  const fixture = testCertificate(directory, "relay.test");
+  const state = new RelayState(NodePath.join(directory, "state.sqlite"));
+  const relay = new RelayServer({
+    relayHost: "relay.test",
+    state,
+    allowSignup: true,
+    bindHost: "127.0.0.1",
+    tlsPort: 0,
+    httpPort: 0,
+    getSecureContext: async () => NodeTls.createSecureContext(fixture),
+  });
+  try {
+    const ports = await relay.start();
+    const config = await authRequest(ports.tlsPort, "/_hhh/auth/config");
+    expect(JSON.parse(config.body)).toEqual({ signup: true, password: true });
+    const register = (username: string, password: string) =>
+      authRequest(ports.tlsPort, "/_hhh/auth/register", { username, password });
+    expect((await register("carol", "short pass1")).status).toBe(400);
+    expect((await register("carol", "twelve chars")).status).toBe(201);
+    expect(state.listUsers().map((user) => user.username)).toEqual(["carol"]);
+    // Re-registering an existing name answers like a new one and leaves the account alone.
+    expect((await register("carol", "other pass 12+")).status).toBe(201);
+    expect((await register("dave", "twelve chars")).status).toBe(201);
+    const keys = generateEnvironmentKeyPair();
+    const enrolled = await authRequest(ports.tlsPort, "/_hhh/auth/enroll", {
+      username: "carol",
+      password: "twelve chars",
+      publicKey: keys.publicKey,
+    });
+    expect(enrolled.status).toBe(201);
+    // The fifth attempt above used the last auth token; the next is capped.
+    expect((await register("erin", "twelve chars")).status).toBe(429);
+  } finally {
+    await relay.close();
+    state.close();
+    await NodeFSP.rm(directory, { recursive: true, force: true });
+  }
+});
+
+it("removes an account's environments so their live tunnels close", async () => {
+  const directory = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "hhh-relay-remove-"));
+  const fixture = testCertificate(directory, "relay.test");
+  const state = new RelayState(NodePath.join(directory, "state.sqlite"));
+  const relay = new RelayServer({
+    relayHost: "relay.test",
+    state,
+    bindHost: "127.0.0.1",
+    tlsPort: 0,
+    httpPort: 0,
+    getSecureContext: async () => NodeTls.createSecureContext(fixture),
+  });
+  const app = NodeHttp.createServer((_req, res) => res.end("environment"));
+  let client: RelayTunnelClient | undefined;
+  try {
+    state.addUser("alice", ACCOUNT_PASSWORD);
+    const keys = generateEnvironmentKeyPair();
+    const env = state.enrollForUser({
+      username: "alice",
+      password: ACCOUNT_PASSWORD,
+      publicKey: keys.publicKey,
+      desiredSlug: "abcdef",
+    });
+    expect(env.slug).toBe("abcdef");
+    const ports = await relay.start();
+    client = new RelayTunnelClient({
+      relayUrl: `https://relay.test:${ports.tlsPort}`,
+      slug: "abcdef",
+      privateKey: keys.privateKey,
+      challenges: new HttpChallengeStore(),
+      webSocketOptions: { rejectUnauthorized: false, lookup },
+      allowLabel: () => false,
+      getSecureContext: async () => NodeTls.createSecureContext(fixture),
+      onSecureConnection: (socket) => app.emit("connection", socket),
+    });
+    const connected = NodeEvents.EventEmitter.once(client, "connected");
+    client.start();
+    await connected;
+    const disconnected = NodeEvents.EventEmitter.once(client, "disconnected");
+    expect(state.removeUser("alice")).toEqual({ removed: true, revoked: ["abcdef"] });
+    await disconnected;
+    expect(state.get("abcdef")).toBeUndefined();
+    expect(state.listUsers()).toEqual([]);
+  } finally {
+    client?.stop();
+    app.closeAllConnections();
+    app.close();
+    await relay.close();
+    state.close();
+    await NodeFSP.rm(directory, { recursive: true, force: true });
+  }
+});
+
+it("migrates a pre-account state file and keeps its token-enrolled environments", async () => {
+  const directory = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "hhh-relay-migrate-"));
+  const path = NodePath.join(directory, "state.sqlite");
+  const old = new NodeSqlite.DatabaseSync(path);
+  try {
+    old.exec(`CREATE TABLE environments (slug TEXT PRIMARY KEY, publicKey TEXT NOT NULL, createdAt INTEGER NOT NULL);
+      CREATE TABLE tokens (hash TEXT PRIMARY KEY, expiresAt INTEGER NOT NULL);
+      CREATE TABLE blocked_labels (label TEXT PRIMARY KEY, createdAt INTEGER NOT NULL);`);
+    old.prepare("INSERT INTO environments VALUES (?, ?, ?)").run("abcdef", "old-key", 1);
+  } finally {
+    old.close();
+  }
+  const state = new RelayState(path);
+  try {
+    expect(state.get("abcdef")).toMatchObject({
+      slug: "abcdef",
+      publicKey: "old-key",
+      userId: null,
+    });
+    state.addUser("alice", ACCOUNT_PASSWORD);
+    expect(state.listUsers()).toHaveLength(1);
+  } finally {
     state.close();
     await NodeFSP.rm(directory, { recursive: true, force: true });
   }
