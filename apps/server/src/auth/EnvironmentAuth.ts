@@ -28,6 +28,7 @@ import { isLocalLoopbackHost } from "@t3tools/shared/hostClassification";
 import { encodeOAuthScope } from "@t3tools/shared/oauthScope";
 import * as Context from "effect/Context";
 import * as Digest from "effect/crypto/Digest";
+import * as Mac from "effect/crypto/Mac";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -754,9 +755,70 @@ export const make = Effect.gen(function* () {
     ...config.devAllowedOrigins,
   ]);
 
+  // hhhd (apps/hhhd) authenticates its clients itself and reaches this server over
+  // loopback as their session. Unset keeps today's behavior. Removed from the
+  // environment so agent processes started later never inherit it.
+  // @effect-diagnostics-next-line processEnvInEffect:off -- read once, then removed below.
+  const hhhdToken = process.env.HHHD_INTERNAL_TOKEN;
+  // @effect-diagnostics-next-line processEnvInEffect:off -- Config cannot unset a variable.
+  delete process.env.HHHD_INTERNAL_TOKEN;
+  const authenticateHhhdUpstream = (
+    request: HttpServerRequest.HttpServerRequest,
+  ):
+    | Effect.Effect<
+        AuthenticatedSession,
+        ServerAuthInvalidCredentialError | ServerAuthInternalError
+      >
+    | undefined => {
+    const token = request.headers["x-hhhd-internal-token"];
+    if (token === undefined) return undefined;
+    const sessionId = request.headers["x-hhhd-session-id"];
+    const encoder = new TextEncoder();
+    if (
+      !hhhdToken ||
+      !sessionId ||
+      !Mac.timingSafeEqual(encoder.encode(token), encoder.encode(hhhdToken))
+    ) {
+      return Effect.fail(
+        new ServerAuthInvalidCredentialError({ diagnostic: "Invalid hhhd upstream credential." }),
+      );
+    }
+    return sessions.listActive().pipe(
+      Effect.mapError((cause) => new ServerAuthSessionCredentialValidationError({ cause })),
+      Effect.flatMap((active) => {
+        const session = active.find((candidate) => candidate.sessionId === sessionId);
+        return session
+          ? Effect.succeed(session)
+          : Effect.fail(
+              new ServerAuthInvalidCredentialError({
+                diagnostic: "hhhd forwarded an inactive session.",
+              }),
+            );
+      }),
+      Effect.flatMap(rejectMcpClientAudience),
+      Effect.flatMap((session) =>
+        sessions.proofKeyThumbprintOf(session.sessionId).pipe(
+          Effect.mapError((cause) => new ServerAuthSessionCredentialValidationError({ cause })),
+          Effect.map((proofKeyThumbprint) => ({
+            sessionId: session.sessionId,
+            subject: session.subject,
+            method: session.method,
+            scopes: session.scopes,
+            ...(Option.isSome(proofKeyThumbprint)
+              ? { proofKeyThumbprint: proofKeyThumbprint.value }
+              : {}),
+            expiresAt: session.expiresAt,
+          })),
+        ),
+      ),
+    );
+  };
+
   const authenticateRequest = (
     request: HttpServerRequest.HttpServerRequest,
   ): Effect.Effect<AuthenticatedSession, ServerAuthCredentialError | ServerAuthInternalError> => {
+    const upstream = authenticateHhhdUpstream(request);
+    if (upstream !== undefined) return upstream;
     const dpopToken = parseDpopToken(request);
     const credential = resolveRequestCredential(request);
     if (!credential?.token) {
@@ -1383,6 +1445,8 @@ export const make = Effect.gen(function* () {
 
   const authenticateWebSocketUpgrade: EnvironmentAuth["Service"]["authenticateWebSocketUpgrade"] =
     Effect.fn("EnvironmentAuth.authenticateWebSocketUpgrade")(function* (request, use) {
+      const upstream = authenticateHhhdUpstream(request);
+      if (upstream !== undefined) return yield* upstream;
       const url = requestUrl(request);
       if (Option.isSome(url)) {
         const query = yield* decodeWebSocketUpgradeQuery(

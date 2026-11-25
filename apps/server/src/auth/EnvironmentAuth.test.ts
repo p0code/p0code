@@ -1015,5 +1015,50 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodePlatformCrypto.layer))(
         Effect.provide(layerEnvironmentAuth({ desktopBootstrapToken: "desktop-bootstrap-token" })),
       ),
     );
+
+    it.effect("trusts sessions hhhd forwards only with its internal token", () =>
+      Effect.gen(function* () {
+        const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
+        const sessions = yield* SessionStore.SessionStore;
+        // @effect-diagnostics-next-line processEnvInEffect:off -- the layer removes it at startup.
+        expect(process.env.HHHD_INTERNAL_TOKEN).toBeUndefined();
+        const issued = yield* sessions.issue({
+          subject: "hhhd-client",
+          scopes: ["orchestration:read"],
+        });
+        const forwarded = (token: string, sessionId: string) =>
+          ({
+            cookies: {},
+            headers: { "x-hhhd-internal-token": token, "x-hhhd-session-id": sessionId },
+          }) as unknown as Parameters<
+            EnvironmentAuth.EnvironmentAuth["Service"]["authenticateHttpRequest"]
+          >[0];
+
+        const session = yield* serverAuth.authenticateHttpRequest(
+          forwarded("hhhd-secret", issued.sessionId),
+        );
+        expect(session.sessionId).toBe(issued.sessionId);
+        expect(session.scopes).toEqual(["orchestration:read"]);
+        const wrongToken = yield* Effect.flip(
+          serverAuth.authenticateWebSocketUpgrade(forwarded("guess", issued.sessionId), "rpc"),
+        );
+        expect(wrongToken._tag).toBe("ServerAuthInvalidCredentialError");
+        yield* sessions.revoke(issued.sessionId);
+        const revoked = yield* Effect.flip(
+          serverAuth.authenticateHttpRequest(forwarded("hhhd-secret", issued.sessionId)),
+        );
+        expect(revoked._tag).toBe("ServerAuthInvalidCredentialError");
+      }).pipe(
+        Effect.provide(layerEnvironmentAuth()),
+        Effect.provide(
+          Layer.effectDiscard(
+            Effect.sync(() => {
+              // @effect-diagnostics-next-line processEnvInEffect:off -- hhhd passes the token this way.
+              process.env.HHHD_INTERNAL_TOKEN = "hhhd-secret";
+            }),
+          ),
+        ),
+      ),
+    );
   },
 );
