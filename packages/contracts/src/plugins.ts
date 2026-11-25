@@ -5,9 +5,9 @@ export const PluginId = Schema.String.check(Schema.isPattern(/^[a-z0-9][a-z0-9-]
 export type PluginId = typeof PluginId.Type;
 
 /**
- * What a plugin may do, shown before enabling it. Host APIs that let devices in, read agent
- * activity, or read usage refuse a plugin that did not declare them; outbound network and helper
- * processes are declarations only, since bundled plugins run in the server process.
+ * What a plugin may do, shown before enabling it. Host APIs that serve routes, let devices in, read
+ * agent activity, or read usage refuse a plugin that did not declare them; outbound network and
+ * helper processes are declarations only, since bundled plugins run in the server process.
  */
 export const PluginCapability = Schema.Literals([
   "network:outbound",

@@ -169,6 +169,14 @@ export function definePlugin<Actions extends PluginActionSchemas>(definition: {
     start: definition.start.pipe(
       Effect.flatMap((instance) => {
         const routes = new Map(Object.entries(instance.routes ?? {}));
+        if (
+          definition.manifest.httpRoutes.length > 0 &&
+          !definition.manifest.capabilities.includes("http:routes")
+        ) {
+          return Effect.fail(
+            new PluginError({ message: "Capability http:routes is not declared." }),
+          );
+        }
         for (const path of routes.keys()) {
           if (!definition.manifest.httpRoutes.includes(path)) {
             return Effect.fail(new PluginError({ message: `Route ${path} is not declared.` }));

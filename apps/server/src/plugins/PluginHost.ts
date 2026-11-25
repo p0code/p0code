@@ -93,6 +93,7 @@ const START_TIMEOUT = "30 seconds";
 const STOP_TIMEOUT = "15 seconds";
 
 interface Running {
+  readonly plugin: Plugin;
   readonly scope: Scope.Closeable;
   readonly started: StartedPlugin;
 }
@@ -138,6 +139,15 @@ const make = Effect.gen(function* () {
   const start = Effect.fn("PluginHost.start")(function* (plugin: Plugin) {
     const id = plugin.manifest.id;
     yield* updateInfo(id, { enabled: true, state: "starting", message: null });
+    if (
+      plugin.manifest.httpRoutes.length > 0 &&
+      !plugin.manifest.capabilities.includes("http:routes")
+    ) {
+      return yield* updateInfo(id, {
+        state: "failed",
+        message: "Plugin routes require the http:routes capability.",
+      });
+    }
     const scope = yield* Scope.make();
     const context = yield* bindings.contextFor(plugin.manifest, (message) =>
       Effect.suspend(() =>
@@ -162,7 +172,7 @@ const make = Effect.gen(function* () {
       yield* Effect.logWarning("Plugin failed to start", { plugin: id, cause: exit.cause });
       return yield* updateInfo(id, { state: "failed", message: failureMessage(exit.cause) });
     }
-    running.set(id, { scope, started: exit.value });
+    running.set(id, { plugin, scope, started: exit.value });
     yield* updateInfo(id, { state: "running" });
   });
 
@@ -247,7 +257,8 @@ const make = Effect.gen(function* () {
 
   const route: PluginHost["Service"]["route"] = (path) =>
     Effect.sync(() => {
-      for (const { started } of running.values()) {
+      for (const { plugin, started } of running.values()) {
+        if (!plugin.manifest.capabilities.includes("http:routes")) continue;
         const handler = started.routes.get(path);
         if (handler !== undefined) return handler;
       }
