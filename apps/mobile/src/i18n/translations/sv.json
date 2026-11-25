@@ -1167,6 +1167,20 @@
   "522713f306fbe418": "om {duration}",
   "391f43ef06ab0614": "↻ {duration}",
   "c47ebef856c52c5f": "återställs om {duration}",
+  "060b77448f13f63a": "{percent} % använt",
+  "df130193fd8be551": "{percent} % kvar",
+  "22b8a13abfe621b3": "{percent} % av fönstret har gått",
+  "5be59cbeb4303948": "{percent} % av fönstret kvar",
+  "0fb11606e028c4bb": "{percent} % använt hittills",
+  "a23059a594ce34d8": "{percent} % kvar vid det här laget",
+  "ae1ecc39cf087f78": "använt",
+  "ef3dba1a8c5ccbf7": "kvar",
+  "351f9a02c93fc616": "{left} kvar av {max}",
+  "47dd3a79477db74d": "{used} / {max} använt",
+  "f7bd708b6710047a": "{used} använt",
+  "b3a88de58850f36d": "Kontext {left} kvar av {max}",
+  "5a879586f6e062e0": "Kontext {used} / {max} använt",
+  "e045e018a6f69317": "Kontext {used} använt",
   "0a75e464d833bca8": "Inställningar",
   "b5adbf54cbefee38": "Miljöer",
   "6d9bf91f0d4b7ba3": "Trådar",
@@ -1591,16 +1605,19 @@
   "9a4907d3650b1250": "Öppna {app} för att uppdatera",
   "a0b256b49573c479": "Ingen sessionsgräns rapporterades",
   "bdb25fc7329e1ea7": "Ingen veckogräns rapporterades",
+  "4de5fcfb9d79a954": "Använt av prenumerationen",
   "2a868f5893b8a3d0": "Kvar av prenumerationen",
+  "a34c676b80bfa56e": "{remaining} % använt",
   "07f5912af296f9ea": "{remaining} % kvar",
+  "7d07d773ef7b25dc": "{window} · {remaining} % använt",
   "f60ed5fcf4fd471c": "{window} · {remaining} % kvar",
-  "30106fc3a8643199": "kvar",
   "bd8554c7671b01a1": "Saknas",
   "8963e62b7e4f94cf": "Öppna {app}",
   "b6ce773a43c1b2a9": "Inga prenumerationsgränser tillgängliga.",
   "6974bbcf31d9230a": "Per {time}",
   "29519653f14c6817": "Tryck för att ansluta i {app}",
   "0a3b9942c9a76f23": "{provider}. {detail}.",
+  "c86f27b5191cb017": "{provider}, {window}, {remaining} procent använt. {reset}. {detail}.",
   "5270189c209360dd": "{provider}, {window}, {remaining} procent kvar. {reset}. {detail}.",
   "f7288c2957dc484a": "{count, plural, one {{count} till i {app}} other {{count} till i {app}}}",
   "67651da8154563a1": "Inga gränser tillgängliga",
@@ -3278,6 +3295,11 @@
   "6c0baae0cb823c61": "Håll monorepo-sökvägar åtskilda.",
   "27b88cb89b5cb56d": "Håll åtskilda",
   "21e3a43e89b1cf74": "Visa varje arbetsyta som ett eget projekt.",
+  "c94200c47834c81e": "Kvar",
+  "0f7b199bbe545ca0": "Visa kvarvarande användningsgränser och kontext.",
+  "ab1b99ab3395dcea": "Använt",
+  "ff8245f14dba4296": "Visa användningsgränser och kontext som använts hittills.",
+  "a9bd3aba080887fa": "Visa användning som",
   "cd5452cc9e13c818": "Projektgruppering",
   "b88b9f277cd45075": "Kunde inte uppdatera projektet",
   "91decca53812ee0f": "Den här anslutningen kan inte längre ändra det.",
@@ -3776,6 +3798,11 @@
   "69d7f7a05be41dc6": "avsnittet arbetar",
   "8904cb0b34fca351": "nya trådar",
   "ec3e27b261ec1fdc": "senaste projekt",
+  "d040aabca7f00e55": "visa användning som",
+  "de6a1645307ae9f4": "användningsgränser",
+  "a76e2fff097f99d0": "kvar",
+  "dd021842b243f91a": "använt",
+  "a29c9a056921665c": "kontextfönster",
   "2b1b6a77ea4e48b2": "standardarbetsyta",
   "bc3f78610c8510ef": "standardbehörigheter",
   "d0f938923abcda05": "åtkomst",
@@ -3785,7 +3812,6 @@
   "c5c44c33381fd92b": "markera som klar automatiskt",
   "b8804bb452387717": "klar",
   "5c243705c81dcbf5": "snooza",
-  "de6a1645307ae9f4": "användningsgränser",
   "765476de2079311a": "återuppta automatiskt",
   "c53a7db7fa6e18b4": "trådbeteende",
   "dcc002d055e544b4": "uppföljningar",
@@ -4847,35 +4873,20 @@
   "b16fdf56b16d99c9": "I takt",
   "90f977e97ae8b6c6": "Under takten",
   "897aceb6c7196649": "Konto",
-  "811008ce95331531": "Segment {index}, {account}, {remaining} % kvar",
-  "bfb2d0ef476d295b": "Segment {index}, {account}, {remaining} % kvar, {timeLeft} % av fönstret kvar",
+  "c2257dce280d4be5": "Segment {index}, {account}, {usage}",
+  "4836a36132553c86": "Segment {index}, {account}, {usage}, {pace}",
   "e71c96e5114f7718": "Visa kontodetaljer",
-  "27cd137302298f71": "Segment {index}, {account}, {remaining} % kvar, {resetsIn}, {credits, plural, one {{credits} återställningskredit sparad} other {{credits} återställningskrediter sparade}}",
-  "288ade531cfcf90c": "Segment {index}, {account}, {remaining} % kvar, {resetsIn}",
-  "f78edbddd70ee41d": "Segment {index}, {account}, {remaining} % kvar, {credits, plural, one {{credits} återställningskredit sparad} other {{credits} återställningskrediter sparade}}",
+  "43ccb8b46daf0f06": "Segment {index}, {account}, {usage}, {resetsIn}, {credits, plural, one {{credits} återställningskredit sparad} other {{credits} återställningskrediter sparade}}",
+  "75b29afcaf4b1abe": "Segment {index}, {account}, {usage}, {resetsIn}",
+  "29d1e40ada6f47be": "Segment {index}, {account}, {usage}, {credits, plural, one {{credits} återställningskredit sparad} other {{credits} återställningskrediter sparade}}",
   "d2d071e45a2d6b89": "Välj en miljö för att se gränser.",
   "f411a8cef140a5ea": "Ingen leverantör i de valda miljöerna rapporterar abonnemangsgränser.",
   "b29a752dd8ee9aa7": "Konto",
   "55a38e69338c54ee": "Dölj kontots e-postadress",
   "0d3e9f1f27c0e780": "Visa kontots e-postadress",
+  "20a3e1f63941fcea": "Jämn takt: {pace}",
   "9217e0c91cee3cf8": "Inloggad",
   "5f12a194d158f9b1": "Källa",
-  "65a7507ffde6d3f8": [
-    {
-      "c": [
-        {
-          "i": 2,
-          "k": "_gt_value_2",
-          "v": "v"
-        },
-        " %"
-      ],
-      "i": 1,
-      "t": "Text"
-    },
-    " ",
-    "kvar"
-  ],
   "6af5e3cf03861f55": [
     {
       "i": 1,
@@ -4885,14 +4896,6 @@
     " kunde inte uppdatera gränserna. Visar de senast kända värdena."
   ],
   "726ece0c7139ce8a": "Kontot rapporterar inte längre gränser i de valda miljöerna.",
-  "412e3b93454812aa": [
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    " % kvar"
-  ],
   "82d204e1a9e7da17": [
     "Återställs",
     " ",
@@ -4901,15 +4904,6 @@
       "k": "_gt_value_1",
       "v": "v"
     }
-  ],
-  "23d0be01844d163c": [
-    "Jämn takt: ",
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    " % kvar vid det här laget"
   ],
   "a6ae2f414eb6349a": [
     "Återställer ",

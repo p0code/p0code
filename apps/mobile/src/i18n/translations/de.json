@@ -1167,6 +1167,20 @@
   "522713f306fbe418": "in {duration}",
   "391f43ef06ab0614": "↻ {duration}",
   "c47ebef856c52c5f": "wird in {duration} zurückgesetzt",
+  "060b77448f13f63a": "{percent} % verbraucht",
+  "df130193fd8be551": "{percent} % übrig",
+  "22b8a13abfe621b3": "{percent} % des Zeitfensters vergangen",
+  "5be59cbeb4303948": "{percent} % des Zeitfensters übrig",
+  "0fb11606e028c4bb": "Bisher {percent} % verbraucht",
+  "a23059a594ce34d8": "Jetzt noch {percent} % übrig",
+  "ae1ecc39cf087f78": "verbraucht",
+  "ef3dba1a8c5ccbf7": "übrig",
+  "351f9a02c93fc616": "{left} übrig von {max}",
+  "47dd3a79477db74d": "{used} / {max} verbraucht",
+  "f7bd708b6710047a": "{used} verbraucht",
+  "b3a88de58850f36d": "Kontext: {left} übrig von {max}",
+  "5a879586f6e062e0": "Kontext: {used} / {max} verbraucht",
+  "e045e018a6f69317": "Kontext: {used} verbraucht",
   "0a75e464d833bca8": "Einstellungen",
   "b5adbf54cbefee38": "Umgebungen",
   "6d9bf91f0d4b7ba3": "Threads",
@@ -1591,16 +1605,19 @@
   "9a4907d3650b1250": "Öffne {app} zum Aktualisieren",
   "a0b256b49573c479": "Kein Sitzungslimit gemeldet",
   "bdb25fc7329e1ea7": "Kein Wochenlimit gemeldet",
+  "4de5fcfb9d79a954": "Verbrauchtes Abonnement",
   "2a868f5893b8a3d0": "Verbleibendes Abonnement",
+  "a34c676b80bfa56e": "{remaining} % verbraucht",
   "07f5912af296f9ea": "{remaining} % übrig",
+  "7d07d773ef7b25dc": "{window} · {remaining} % verbraucht",
   "f60ed5fcf4fd471c": "{window} · noch {remaining} %",
-  "30106fc3a8643199": "übrig",
   "bd8554c7671b01a1": "k. A.",
   "8963e62b7e4f94cf": "{app} öffnen",
   "b6ce773a43c1b2a9": "Keine Abonnementlimits verfügbar.",
   "6974bbcf31d9230a": "Stand {time}",
   "29519653f14c6817": "Tippen, um in {app} zu verbinden",
   "0a3b9942c9a76f23": "{provider}. {detail}.",
+  "c86f27b5191cb017": "{provider}, {window}, {remaining} Prozent verbraucht. {reset}. {detail}.",
   "5270189c209360dd": "{provider}, {window}, noch {remaining} Prozent. {reset}. {detail}.",
   "f7288c2957dc484a": "{count, plural, one {{count} weiterer in {app}} other {{count} weitere in {app}}}",
   "67651da8154563a1": "Keine Limits verfügbar",
@@ -3277,6 +3294,11 @@
   "6c0baae0cb823c61": "Monorepo-Pfade getrennt halten.",
   "27b88cb89b5cb56d": "Getrennt halten",
   "21e3a43e89b1cf74": "Jeden Workspace als eigenes Projekt anzeigen.",
+  "c94200c47834c81e": "Übrig",
+  "0f7b199bbe545ca0": "Verbleibende Nutzungslimits und freien Kontext anzeigen.",
+  "ab1b99ab3395dcea": "Verbraucht",
+  "ff8245f14dba4296": "Bisher verbrauchte Nutzungslimits und Kontext anzeigen.",
+  "a9bd3aba080887fa": "Nutzung anzeigen als",
   "cd5452cc9e13c818": "Projektgruppierung",
   "b88b9f277cd45075": "Projekt konnte nicht aktualisiert werden",
   "91decca53812ee0f": "Diese Verbindung kann es nicht mehr ändern.",
@@ -3775,6 +3797,11 @@
   "69d7f7a05be41dc6": "bereich in arbeit",
   "8904cb0b34fca351": "neue threads",
   "ec3e27b261ec1fdc": "letztes projekt",
+  "d040aabca7f00e55": "nutzung anzeigen als",
+  "de6a1645307ae9f4": "nutzungslimits",
+  "a76e2fff097f99d0": "übrig",
+  "dd021842b243f91a": "verbraucht",
+  "a29c9a056921665c": "kontextfenster",
   "2b1b6a77ea4e48b2": "standard-arbeitsbereich",
   "bc3f78610c8510ef": "standardberechtigungen",
   "d0f938923abcda05": "zugriff",
@@ -3784,7 +3811,6 @@
   "c5c44c33381fd92b": "automatisch erledigen",
   "b8804bb452387717": "erledigen",
   "5c243705c81dcbf5": "zurückstellen",
-  "de6a1645307ae9f4": "nutzungslimits",
   "765476de2079311a": "automatisch fortsetzen",
   "c53a7db7fa6e18b4": "thread-verhalten",
   "dcc002d055e544b4": "folgenachrichten",
@@ -4847,35 +4873,20 @@
   "b16fdf56b16d99c9": "Im Tempo",
   "90f977e97ae8b6c6": "Unter dem Tempo",
   "897aceb6c7196649": "Konto",
-  "811008ce95331531": "Segment {index}, {account}, {remaining} % übrig",
-  "bfb2d0ef476d295b": "Segment {index}, {account}, {remaining} % übrig, {timeLeft} % des Zeitfensters übrig",
+  "c2257dce280d4be5": "Segment {index}, {account}, {usage}",
+  "4836a36132553c86": "Segment {index}, {account}, {usage}, {pace}",
   "e71c96e5114f7718": "Kontodetails anzeigen",
-  "27cd137302298f71": "Segment {index}, {account}, {remaining} % übrig, {resetsIn}, {credits, plural, one {{credits} Reset-Guthaben angespart} other {{credits} Reset-Guthaben angespart}}",
-  "288ade531cfcf90c": "Segment {index}, {account}, {remaining} % übrig, {resetsIn}",
-  "f78edbddd70ee41d": "Segment {index}, {account}, {remaining} % übrig, {credits, plural, one {{credits} Reset-Guthaben angespart} other {{credits} Reset-Guthaben angespart}}",
+  "43ccb8b46daf0f06": "Segment {index}, {account}, {usage}, {resetsIn}, {credits, plural, one {{credits} Zurücksetzungsguthaben gespeichert} other {{credits} Zurücksetzungsguthaben gespeichert}}",
+  "75b29afcaf4b1abe": "Segment {index}, {account}, {usage}, {resetsIn}",
+  "29d1e40ada6f47be": "Segment {index}, {account}, {usage}, {credits, plural, one {{credits} Zurücksetzungsguthaben gespeichert} other {{credits} Zurücksetzungsguthaben gespeichert}}",
   "d2d071e45a2d6b89": "Wähle eine Umgebung, um Limits zu sehen.",
   "f411a8cef140a5ea": "Kein Anbieter in den ausgewählten Umgebungen meldet Abo-Limits.",
   "b29a752dd8ee9aa7": "Konto",
   "55a38e69338c54ee": "Konto-E-Mail ausblenden",
   "0d3e9f1f27c0e780": "Konto-E-Mail anzeigen",
+  "20a3e1f63941fcea": "Gleichmäßiges Tempo: {pace}",
   "9217e0c91cee3cf8": "Angemeldet",
   "5f12a194d158f9b1": "Quelle",
-  "65a7507ffde6d3f8": [
-    "noch",
-    " ",
-    {
-      "c": [
-        {
-          "i": 2,
-          "k": "_gt_value_2",
-          "v": "v"
-        },
-        " %"
-      ],
-      "i": 1,
-      "t": "Text"
-    }
-  ],
   "6af5e3cf03861f55": [
     {
       "i": 1,
@@ -4885,14 +4896,6 @@
     " konnte die Limits nicht aktualisieren. Die zuletzt bekannten Werte werden angezeigt."
   ],
   "726ece0c7139ce8a": "Dieses Konto meldet in den ausgewählten Umgebungen keine Limits mehr.",
-  "412e3b93454812aa": [
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    " % übrig"
-  ],
   "82d204e1a9e7da17": [
     "Zurückgesetzt",
     " ",
@@ -4901,15 +4904,6 @@
       "k": "_gt_value_1",
       "v": "v"
     }
-  ],
-  "23d0be01844d163c": [
-    "Gleichmäßiges Tempo: ",
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    " % sollten jetzt übrig sein"
   ],
   "a6ae2f414eb6349a": [
     "Stellt ",

@@ -1167,6 +1167,20 @@
   "522713f306fbe418": "{duration} 후",
   "391f43ef06ab0614": "↻ {duration}",
   "c47ebef856c52c5f": "{duration} 후 초기화",
+  "060b77448f13f63a": "{percent}% 사용됨",
+  "df130193fd8be551": "{percent}% 남음",
+  "22b8a13abfe621b3": "기간의 {percent}% 경과",
+  "5be59cbeb4303948": "기간의 {percent}% 남음",
+  "0fb11606e028c4bb": "지금까지 {percent}% 사용됨",
+  "a23059a594ce34d8": "지금 시점 {percent}% 남음",
+  "ae1ecc39cf087f78": "사용됨",
+  "ef3dba1a8c5ccbf7": "남음",
+  "351f9a02c93fc616": "{max} 중 {left} 남음",
+  "47dd3a79477db74d": "{used} / {max} 사용됨",
+  "f7bd708b6710047a": "{used} 사용됨",
+  "b3a88de58850f36d": "컨텍스트 {max} 중 {left} 남음",
+  "5a879586f6e062e0": "컨텍스트 {used} / {max} 사용됨",
+  "e045e018a6f69317": "컨텍스트 {used} 사용됨",
   "0a75e464d833bca8": "설정",
   "b5adbf54cbefee38": "환경",
   "6d9bf91f0d4b7ba3": "스레드",
@@ -1591,16 +1605,19 @@
   "9a4907d3650b1250": "새로 고치려면 {app}을(를) 여세요",
   "a0b256b49573c479": "보고된 세션 한도 없음",
   "bdb25fc7329e1ea7": "보고된 주간 한도 없음",
+  "4de5fcfb9d79a954": "구독 사용량",
   "2a868f5893b8a3d0": "남은 구독량",
+  "a34c676b80bfa56e": "{remaining}% 사용됨",
   "07f5912af296f9ea": "{remaining}% 남음",
+  "7d07d773ef7b25dc": "{window} · {remaining}% 사용됨",
   "f60ed5fcf4fd471c": "{window} · {remaining}% 남음",
-  "30106fc3a8643199": "남음",
   "bd8554c7671b01a1": "해당 없음",
   "8963e62b7e4f94cf": "{app} 열기",
   "b6ce773a43c1b2a9": "사용 가능한 구독 한도가 없습니다.",
   "6974bbcf31d9230a": "{time} 기준",
   "29519653f14c6817": "{app}에서 탭하여 연결",
   "0a3b9942c9a76f23": "{provider}. {detail}.",
+  "c86f27b5191cb017": "{provider}, {window}, {remaining}퍼센트 사용됨. {reset}. {detail}.",
   "5270189c209360dd": "{provider}, {window}, {remaining}퍼센트 남음. {reset}. {detail}.",
   "f7288c2957dc484a": "{count, plural, other {{app}에 {count}개 더 있음}}",
   "67651da8154563a1": "사용 가능한 한도 정보 없음",
@@ -3272,6 +3289,11 @@
   "6c0baae0cb823c61": "모노레포 경로를 따로 유지합니다.",
   "27b88cb89b5cb56d": "따로 유지",
   "21e3a43e89b1cf74": "모든 작업 영역을 각각의 프로젝트로 표시합니다.",
+  "c94200c47834c81e": "남음",
+  "0f7b199bbe545ca0": "남은 사용량 한도와 컨텍스트를 표시합니다.",
+  "ab1b99ab3395dcea": "사용됨",
+  "ff8245f14dba4296": "지금까지 사용한 한도와 컨텍스트를 표시합니다.",
+  "a9bd3aba080887fa": "사용량 표시 방식",
   "cd5452cc9e13c818": "프로젝트 그룹화",
   "b88b9f277cd45075": "프로젝트를 업데이트하지 못했습니다",
   "91decca53812ee0f": "이 연결로는 더 이상 변경할 수 없습니다.",
@@ -3770,6 +3792,11 @@
   "69d7f7a05be41dc6": "작업 중 섹션",
   "8904cb0b34fca351": "새 스레드",
   "ec3e27b261ec1fdc": "마지막 프로젝트",
+  "d040aabca7f00e55": "사용량 표시 방식",
+  "de6a1645307ae9f4": "사용량 한도",
+  "a76e2fff097f99d0": "남음",
+  "dd021842b243f91a": "사용됨",
+  "a29c9a056921665c": "컨텍스트 창",
   "2b1b6a77ea4e48b2": "기본 작업 영역",
   "bc3f78610c8510ef": "기본 권한",
   "d0f938923abcda05": "액세스",
@@ -3779,7 +3806,6 @@
   "c5c44c33381fd92b": "자동 정리",
   "b8804bb452387717": "정리",
   "5c243705c81dcbf5": "다시 알림",
-  "de6a1645307ae9f4": "사용량 한도",
   "765476de2079311a": "자동 재개",
   "c53a7db7fa6e18b4": "스레드 동작",
   "dcc002d055e544b4": "후속 메시지",
@@ -4825,35 +4851,20 @@
   "b16fdf56b16d99c9": "예상대로",
   "90f977e97ae8b6c6": "예상보다 느림",
   "897aceb6c7196649": "계정",
-  "811008ce95331531": "구간 {index}, {account}, {remaining}% 남음",
-  "bfb2d0ef476d295b": "구간 {index}, {account}, {remaining}% 남음, 기간 {timeLeft}% 남음",
+  "c2257dce280d4be5": "구간 {index}, {account}, {usage}",
+  "4836a36132553c86": "구간 {index}, {account}, {usage}, {pace}",
   "e71c96e5114f7718": "계정 세부 정보 표시",
-  "27cd137302298f71": "구간 {index}, {account}, {remaining}% 남음, {resetsIn}, {credits, plural, other {적립된 초기화 크레딧 {credits}개}}",
-  "288ade531cfcf90c": "구간 {index}, {account}, {remaining}% 남음, {resetsIn}",
-  "f78edbddd70ee41d": "구간 {index}, {account}, {remaining}% 남음, {credits, plural, other {적립된 초기화 크레딧 {credits}개}}",
+  "43ccb8b46daf0f06": "구간 {index}, {account}, {usage}, {resetsIn}, {credits, plural, other {초기화 크레딧 {credits}개 보유}}",
+  "75b29afcaf4b1abe": "구간 {index}, {account}, {usage}, {resetsIn}",
+  "29d1e40ada6f47be": "구간 {index}, {account}, {usage}, {credits, plural, other {초기화 크레딧 {credits}개 보유}}",
   "d2d071e45a2d6b89": "한도를 보려면 환경을 선택하세요.",
   "f411a8cef140a5ea": "선택한 환경에 구독 한도를 보고하는 제공자가 없습니다.",
   "b29a752dd8ee9aa7": "계정",
   "55a38e69338c54ee": "계정 이메일 숨기기",
   "0d3e9f1f27c0e780": "계정 이메일 표시",
+  "20a3e1f63941fcea": "균등 속도: {pace}",
   "9217e0c91cee3cf8": "로그인됨",
   "5f12a194d158f9b1": "소스",
-  "65a7507ffde6d3f8": [
-    {
-      "c": [
-        {
-          "i": 2,
-          "k": "_gt_value_2",
-          "v": "v"
-        },
-        "%"
-      ],
-      "i": 1,
-      "t": "Text"
-    },
-    " ",
-    "남음"
-  ],
   "6af5e3cf03861f55": [
     {
       "i": 1,
@@ -4863,14 +4874,6 @@
     "에서 한도를 새로 고칠 수 없습니다. 마지막으로 확인된 값을 표시합니다."
   ],
   "726ece0c7139ce8a": "이 계정은 선택한 환경에서 더 이상 한도를 보고하지 않습니다.",
-  "412e3b93454812aa": [
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    "% 남음"
-  ],
   "82d204e1a9e7da17": [
     {
       "i": 1,
@@ -4879,15 +4882,6 @@
     },
     " ",
     "초기화"
-  ],
-  "23d0be01844d163c": [
-    "균등 속도: 지금까지 ",
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    "% 남음"
   ],
   "a6ae2f414eb6349a": [
     "풀의 ",
