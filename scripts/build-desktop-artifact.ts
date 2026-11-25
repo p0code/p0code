@@ -188,6 +188,7 @@ interface BuildCliInput {
   readonly mockUpdates: Option.Option<boolean>;
   readonly mockUpdateServerPort: Option.Option<number>;
   readonly wslRuntime: Option.Option<string>;
+  readonly bundleServer?: Option.Option<boolean>;
 }
 
 function detectHostBuildPlatform(hostPlatform: string): typeof BuildPlatform.Type | undefined {
@@ -943,6 +944,7 @@ interface ResolvedBuildOptions {
   readonly mockUpdates: boolean;
   readonly mockUpdateServerPort: number | undefined;
   readonly wslRuntime: string | undefined;
+  readonly bundleServer: boolean | undefined;
 }
 
 interface StagePackageJson {
@@ -1564,6 +1566,7 @@ const BuildEnvConfig = Config.all({
   mockUpdates: Config.Boolean("T3CODE_DESKTOP_MOCK_UPDATES").pipe(Config.withDefault(false)),
   mockUpdateServerPort: Config.String("T3CODE_DESKTOP_MOCK_UPDATE_SERVER_PORT").pipe(Config.option),
   wslRuntime: Config.String("T3CODE_DESKTOP_WSL_RUNTIME").pipe(Config.option),
+  bundleServer: Config.Boolean("T3CODE_DESKTOP_BUNDLE_SERVER").pipe(Config.option),
 });
 
 const MockUpdateServerPortSchema = Schema.NumberFromString.check(
@@ -1656,6 +1659,9 @@ export const resolveBuildOptions = Effect.fn("resolveBuildOptions")(function* (
 
   const wslRuntime =
     Option.getOrUndefined(input.wslRuntime) ?? Option.getOrUndefined(env.wslRuntime);
+  const bundleServer =
+    (input.bundleServer !== undefined ? Option.getOrUndefined(input.bundleServer) : undefined) ??
+    Option.getOrUndefined(env.bundleServer);
 
   return {
     platform,
@@ -1670,6 +1676,7 @@ export const resolveBuildOptions = Effect.fn("resolveBuildOptions")(function* (
     mockUpdates,
     mockUpdateServerPort,
     wslRuntime,
+    bundleServer,
   } satisfies ResolvedBuildOptions;
 });
 
@@ -2721,9 +2728,17 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     | undefined,
   wslRuntimeBundled = false,
   arch?: typeof BuildArch.Type,
+  bundleEmbeddedServer = true,
 ) {
   const buildConfig: Record<string, unknown> = {
-    afterPack: (yield* Path.Path).join(yield* RepoRoot, "scripts/prepare-server-compile-cache.cjs"),
+    ...(bundleEmbeddedServer
+      ? {
+          afterPack: (yield* Path.Path).join(
+            yield* RepoRoot,
+            "scripts/prepare-server-compile-cache.cjs",
+          ),
+        }
+      : {}),
     appId: DESKTOP_APP_ID,
     productName: resolveDesktopProductName(version),
     artifactName: "HHHCode-${version}-${arch}.${ext}",
@@ -2748,7 +2763,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       ...(platform === "linux" ? LINUX_CAPTURE_EXTRA_RESOURCES : []),
       ...(platform === "linux" ? LINUX_BROWSER_SECRET_EXTRA_RESOURCES : []),
       ...(platform === "mac" ? MAC_APPLE_SPEECH_EXTRA_RESOURCES : []),
-      ...(platform === "win" ? WINDOWS_SERVER_EXTRA_RESOURCES : []),
+      ...(platform === "win" && bundleEmbeddedServer ? WINDOWS_SERVER_EXTRA_RESOURCES : []),
       ...(platform === "win" && wslRuntimeBundled ? WSL_RUNTIME_EXTRA_RESOURCES : []),
     ],
   };
@@ -3558,6 +3573,426 @@ export const validateLinuxPackagedPayload = Effect.fn(
   );
 });
 
+export const HHHD_LAUNCHD_LABEL = "tw.yhw.hhhcode.hhhd";
+export const HHHD_SYSTEMD_UNIT_NAME = "hhhd.service";
+export const HHHD_WINDOWS_TASK_NAME = "HHHCodeBackend";
+
+export function hhhdArtifactExecutableName(platform: typeof BuildPlatform.Type): string {
+  return platform === "win" ? "hhhd.exe" : "hhhd";
+}
+
+export function resolveHhhdDistCandidates(
+  repoRoot: string,
+  platform: typeof BuildPlatform.Type,
+  arch: typeof BuildArch.Type,
+  joinPath: (...segments: string[]) => string = (...segments) => segments.join("/"),
+): ReadonlyArray<string> {
+  const executable = hhhdArtifactExecutableName(platform);
+  const osNames =
+    platform === "mac" ? ["darwin", "mac"] : platform === "win" ? ["windows", "win"] : ["linux"];
+  const archNames =
+    arch === "x64"
+      ? ["amd64", "x64"]
+      : arch === "universal"
+        ? ["universal", "arm64", "amd64", "x64"]
+        : ["arm64"];
+  const candidates: string[] = [];
+  for (const osName of osNames) {
+    for (const archName of archNames) {
+      candidates.push(
+        joinPath(repoRoot, "apps", "hhhd", "dist", `${osName}-${archName}`, executable),
+      );
+    }
+  }
+  return candidates;
+}
+
+export const findHhhdBinary = Effect.fn("findHhhdBinary")(function* (
+  repoRoot: string,
+  platform: typeof BuildPlatform.Type,
+  arch: typeof BuildArch.Type,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  for (const candidate of resolveHhhdDistCandidates(repoRoot, platform, arch, path.join)) {
+    if (yield* fs.exists(candidate).pipe(Effect.orElseSucceed(() => false))) {
+      return Option.some(candidate);
+    }
+  }
+  return Option.none<string>();
+});
+
+export function backendArchiveStem(
+  version: string,
+  platform: typeof BuildPlatform.Type,
+  arch: typeof BuildArch.Type,
+): string {
+  const osSlug = platform === "mac" ? "darwin" : platform === "win" ? "windows" : "linux";
+  return `hhhd-${version}-${osSlug}-${arch}`;
+}
+
+export function backendArchiveFileName(
+  version: string,
+  platform: typeof BuildPlatform.Type,
+  arch: typeof BuildArch.Type,
+): string {
+  const stem = backendArchiveStem(version, platform, arch);
+  return platform === "win" ? `${stem}.zip` : `${stem}.tar.gz`;
+}
+
+function escapeXmlText(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&apos;");
+}
+
+export function renderMacLaunchdPlist(input?: {
+  readonly binaryPath?: string;
+  readonly homeDir?: string;
+  readonly readyFilePath?: string;
+  readonly legacyServerCmd?: string;
+  readonly logDir?: string;
+}): string {
+  const binaryPath = input?.binaryPath ?? "__HHHD_BIN__";
+  const homeDir = input?.homeDir ?? "__HHHD_HOME__";
+  const readyFilePath = input?.readyFilePath ?? "__HHHD_READY_FILE__";
+  const legacyServerCmd = input?.legacyServerCmd ?? "__LEGACY_SERVER_CMD__";
+  const logDir = input?.logDir ?? "__HHHD_LOG_DIR__";
+  const args = [
+    binaryPath,
+    "serve",
+    "--home",
+    homeDir,
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "3773",
+    "--ready-file",
+    readyFilePath,
+    ...(legacyServerCmd ? ["--legacy-server", legacyServerCmd] : []),
+  ];
+  const programArgsXml = args.map((arg) => `    <string>${escapeXmlText(arg)}</string>`).join("\n");
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>${HHHD_LAUNCHD_LABEL}</string>
+  <key>ProgramArguments</key>
+  <array>
+${programArgsXml}
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>${escapeXmlText(logDir)}/hhhd.stdout.log</string>
+  <key>StandardErrorPath</key>
+  <string>${escapeXmlText(logDir)}/hhhd.stderr.log</string>
+</dict>
+</plist>
+`;
+}
+
+export function renderMacBackendInstallScript(): string {
+  return `#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
+INSTALL_DIR="\${HHHD_INSTALL_DIR:-$HOME/.hhh/hhhd}"
+HOME_DIR="\${HHH_HOME:-$HOME/.hhh/userdata}"
+READY_FILE="$HOME_DIR/hhhd-ready.json"
+LOG_DIR="$HOME_DIR/logs"
+LAUNCH_AGENTS_DIR="$HOME/Library/LaunchAgents"
+PLIST_PATH="$LAUNCH_AGENTS_DIR/${HHHD_LAUNCHD_LABEL}.plist"
+
+mkdir -p "$INSTALL_DIR" "$HOME/.hhh/bin" "$HOME_DIR" "$LOG_DIR" "$LAUNCH_AGENTS_DIR"
+cp -R "$SCRIPT_DIR/." "$INSTALL_DIR/"
+
+LEGACY_CMD="node $INSTALL_DIR/sidecar/apps/server/dist/bin.mjs"
+if [ -x "$INSTALL_DIR/bin/hhhd" ]; then
+  ln -sf "$INSTALL_DIR/bin/hhhd" "$HOME/.hhh/bin/hhhd"
+  "$INSTALL_DIR/bin/hhhd" service install --home "$HOME_DIR" --host 127.0.0.1 --port 3773 --ready-file "$READY_FILE" --legacy-server "$LEGACY_CMD" || true
+  if [ ! -f "$PLIST_PATH" ]; then
+    sed \\
+      -e "s|__HHHD_BIN__|$INSTALL_DIR/bin/hhhd|g" \\
+      -e "s|__HHHD_HOME__|$HOME_DIR|g" \\
+      -e "s|__HHHD_READY_FILE__|$READY_FILE|g" \\
+      -e "s|__LEGACY_SERVER_CMD__|$LEGACY_CMD|g" \\
+      -e "s|__HHHD_LOG_DIR__|$LOG_DIR|g" \\
+      "$INSTALL_DIR/service/${HHHD_LAUNCHD_LABEL}.plist" > "$PLIST_PATH"
+  fi
+  launchctl bootout "gui/$(id -u)/${HHHD_LAUNCHD_LABEL}" >/dev/null 2>&1 || true
+  launchctl bootstrap "gui/$(id -u)" "$PLIST_PATH"
+  launchctl kickstart -k "gui/$(id -u)/${HHHD_LAUNCHD_LABEL}"
+  echo "Installed and started hhhd launchd agent ($PLIST_PATH)."
+else
+  echo "hhhd binary not included in this package; legacy Node sidecar installed at $INSTALL_DIR/sidecar."
+fi
+`;
+}
+
+export function renderMacBackendUninstallScript(): string {
+  return `#!/usr/bin/env bash
+set -euo pipefail
+
+PLIST_PATH="$HOME/Library/LaunchAgents/${HHHD_LAUNCHD_LABEL}.plist"
+launchctl bootout "gui/$(id -u)/${HHHD_LAUNCHD_LABEL}" >/dev/null 2>&1 || true
+rm -f "$PLIST_PATH" "$HOME/.hhh/bin/hhhd"
+echo "Uninstalled ${HHHD_LAUNCHD_LABEL}."
+`;
+}
+
+export function renderLinuxSystemdUnit(input?: {
+  readonly binaryPath?: string;
+  readonly homeDir?: string;
+  readonly readyFilePath?: string;
+  readonly legacyServerCmd?: string;
+}): string {
+  const binaryPath = input?.binaryPath ?? "__HHHD_BIN__";
+  const homeDir = input?.homeDir ?? "__HHHD_HOME__";
+  const readyFilePath = input?.readyFilePath ?? "__HHHD_READY_FILE__";
+  const legacyServerCmd = input?.legacyServerCmd ?? "__LEGACY_SERVER_CMD__";
+  const legacyArg = legacyServerCmd ? ` --legacy-server "${legacyServerCmd}"` : "";
+  return `[Unit]
+Description=HHHCode Backend Daemon (hhhd)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=${binaryPath} serve --home ${homeDir} --host 127.0.0.1 --port 3773 --ready-file ${readyFilePath}${legacyArg}
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target
+`;
+}
+
+export function renderLinuxBackendInstallScript(): string {
+  return `#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
+INSTALL_DIR="\${HHHD_INSTALL_DIR:-\${XDG_DATA_HOME:-$HOME/.local/share}/hhhcode/hhhd}"
+HOME_DIR="\${HHH_HOME:-$HOME/.hhh/userdata}"
+READY_FILE="$HOME_DIR/hhhd-ready.json"
+SYSTEMD_USER_DIR="\${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+UNIT_PATH="$SYSTEMD_USER_DIR/${HHHD_SYSTEMD_UNIT_NAME}"
+
+mkdir -p "$INSTALL_DIR" "$HOME/.hhh/bin" "$HOME_DIR" "$SYSTEMD_USER_DIR"
+cp -R "$SCRIPT_DIR/." "$INSTALL_DIR/"
+
+LEGACY_CMD="node $INSTALL_DIR/sidecar/apps/server/dist/bin.mjs"
+if [ -x "$INSTALL_DIR/bin/hhhd" ]; then
+  ln -sf "$INSTALL_DIR/bin/hhhd" "$HOME/.hhh/bin/hhhd"
+  sed \\
+    -e "s|__HHHD_BIN__|$INSTALL_DIR/bin/hhhd|g" \\
+    -e "s|__HHHD_HOME__|$HOME_DIR|g" \\
+    -e "s|__HHHD_READY_FILE__|$READY_FILE|g" \\
+    -e "s|__LEGACY_SERVER_CMD__|$LEGACY_CMD|g" \\
+    "$INSTALL_DIR/service/${HHHD_SYSTEMD_UNIT_NAME}" > "$UNIT_PATH"
+  systemctl --user daemon-reload
+  systemctl --user enable --now "${HHHD_SYSTEMD_UNIT_NAME}"
+  echo "Installed and started systemd user service ($UNIT_PATH)."
+else
+  echo "hhhd binary not included in this package; legacy Node sidecar installed at $INSTALL_DIR/sidecar."
+fi
+`;
+}
+
+export function renderLinuxBackendUninstallScript(): string {
+  return `#!/usr/bin/env bash
+set -euo pipefail
+
+UNIT_PATH="\${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/${HHHD_SYSTEMD_UNIT_NAME}"
+systemctl --user disable --now "${HHHD_SYSTEMD_UNIT_NAME}" >/dev/null 2>&1 || true
+rm -f "$UNIT_PATH" "$HOME/.hhh/bin/hhhd"
+systemctl --user daemon-reload >/dev/null 2>&1 || true
+echo "Uninstalled ${HHHD_SYSTEMD_UNIT_NAME}."
+`;
+}
+
+export function renderWindowsBackendInstallScript(): string {
+  return `$ErrorActionPreference = "Stop"
+
+$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$PackageRoot = Split-Path -Parent $ScriptDir
+$InstallDir = if ($env:HHHD_INSTALL_DIR) { $env:HHHD_INSTALL_DIR } else { Join-Path $env:LOCALAPPDATA "HHHCode\\hhhd" }
+$HomeDir = if ($env:HHH_HOME) { $env:HHH_HOME } else { Join-Path $env:USERPROFILE ".hhh\\userdata" }
+$BinDir = Join-Path $env:USERPROFILE ".hhh\\bin"
+$ReadyFile = Join-Path $HomeDir "hhhd-ready.json"
+$TaskName = "${HHHD_WINDOWS_TASK_NAME}"
+
+New-Item -ItemType Directory -Force -Path $InstallDir, $HomeDir, $BinDir | Out-Null
+Copy-Item -Recurse -Force (Join-Path $PackageRoot "*") $InstallDir
+
+$HhhdExe = Join-Path $InstallDir "bin\\hhhd.exe"
+$SidecarEntry = Join-Path $InstallDir "sidecar\\apps\\server\\dist\\bin.mjs"
+$LegacyCmd = "node \`"$SidecarEntry\`""
+
+if (Test-Path $HhhdExe) {
+  Copy-Item -Force $HhhdExe (Join-Path $BinDir "hhhd.exe")
+  $Action = New-ScheduledTaskAction -Execute $HhhdExe -Argument "serve --home \`"$HomeDir\`" --host 127.0.0.1 --port 3773 --ready-file \`"$ReadyFile\`" --legacy-server \`"$LegacyCmd\`""
+} else {
+  $Action = New-ScheduledTaskAction -Execute "node.exe" -Argument "\`"$SidecarEntry\`" --no-browser --host 127.0.0.1 --port 3773"
+}
+
+$Trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
+$Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
+
+Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Settings $Settings -Force | Out-Null
+Start-ScheduledTask -TaskName $TaskName
+Write-Host "Installed and started Windows Task Scheduler job '$TaskName'."
+`;
+}
+
+export function renderWindowsBackendUninstallScript(): string {
+  return `$ErrorActionPreference = "Stop"
+
+$TaskName = "${HHHD_WINDOWS_TASK_NAME}"
+if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {
+  Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+  Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
+}
+Remove-Item -Force -ErrorAction SilentlyContinue (Join-Path $env:USERPROFILE ".hhh\\bin\\hhhd.exe")
+Write-Host "Uninstalled Windows Task Scheduler job '$TaskName'."
+`;
+}
+
+export const buildBackendArtifact = Effect.fn("buildBackendArtifact")(function* (input: {
+  readonly repoRoot: string;
+  readonly serverDistDir: string;
+  readonly serverRuntimeExternalDependencies: Record<string, string>;
+  readonly platform: typeof BuildPlatform.Type;
+  readonly arch: typeof BuildArch.Type;
+  readonly appVersion: string;
+  readonly outputDir: string;
+  readonly hhhdBinaryPath?: Option.Option<string>;
+  readonly verbose: boolean;
+}) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const hostPlatform = yield* HostProcess.Platform;
+
+  const stem = backendArchiveStem(input.appVersion, input.platform, input.arch);
+  const archiveFileName = backendArchiveFileName(input.appVersion, input.platform, input.arch);
+  const stageRoot = yield* fs.makeTempDirectoryScoped({
+    prefix: `hhhcode-backend-${input.platform}-stage-`,
+  });
+  const packageRoot = path.join(stageRoot, stem);
+  const binDir = path.join(packageRoot, "bin");
+  const sidecarDir = path.join(packageRoot, "sidecar");
+  const serviceDir = path.join(packageRoot, "service");
+
+  yield* fs.makeDirectory(binDir, { recursive: true });
+  yield* fs.makeDirectory(path.join(sidecarDir, "apps/server"), { recursive: true });
+  yield* fs.makeDirectory(serviceDir, { recursive: true });
+
+  const hhhdBinary =
+    input.hhhdBinaryPath ?? (yield* findHhhdBinary(input.repoRoot, input.platform, input.arch));
+  const executableName = hhhdArtifactExecutableName(input.platform);
+  if (Option.isSome(hhhdBinary)) {
+    const destBinary = path.join(binDir, executableName);
+    yield* fs.copyFile(hhhdBinary.value, destBinary);
+    if (input.platform !== "win") {
+      yield* fs.chmod(destBinary, 0o755).pipe(Effect.ignore);
+    }
+  }
+
+  yield* fs.copy(input.serverDistDir, path.join(sidecarDir, "apps/server/dist"));
+  const sidecarManifest = yield* encodeJsonString({
+    name: "hhhcode-backend-sidecar",
+    version: input.appVersion,
+    private: true,
+    type: "module",
+    dependencies: input.serverRuntimeExternalDependencies,
+  });
+  yield* fs.writeFileString(path.join(sidecarDir, "package.json"), `${sidecarManifest}\n`);
+
+  if (input.platform === "mac") {
+    yield* fs.writeFileString(
+      path.join(serviceDir, `${HHHD_LAUNCHD_LABEL}.plist`),
+      renderMacLaunchdPlist(),
+    );
+    const installPath = path.join(packageRoot, "install.sh");
+    const uninstallPath = path.join(packageRoot, "uninstall.sh");
+    yield* fs.writeFileString(installPath, renderMacBackendInstallScript());
+    yield* fs.writeFileString(uninstallPath, renderMacBackendUninstallScript());
+    yield* fs.chmod(installPath, 0o755).pipe(Effect.ignore);
+    yield* fs.chmod(uninstallPath, 0o755).pipe(Effect.ignore);
+  } else if (input.platform === "linux") {
+    yield* fs.writeFileString(
+      path.join(serviceDir, HHHD_SYSTEMD_UNIT_NAME),
+      renderLinuxSystemdUnit(),
+    );
+    const installPath = path.join(packageRoot, "install.sh");
+    const uninstallPath = path.join(packageRoot, "uninstall.sh");
+    yield* fs.writeFileString(installPath, renderLinuxBackendInstallScript());
+    yield* fs.writeFileString(uninstallPath, renderLinuxBackendUninstallScript());
+    yield* fs.chmod(installPath, 0o755).pipe(Effect.ignore);
+    yield* fs.chmod(uninstallPath, 0o755).pipe(Effect.ignore);
+  } else {
+    yield* fs.writeFileString(
+      path.join(serviceDir, "install-service.ps1"),
+      renderWindowsBackendInstallScript(),
+    );
+    yield* fs.writeFileString(
+      path.join(serviceDir, "uninstall-service.ps1"),
+      renderWindowsBackendUninstallScript(),
+    );
+  }
+
+  yield* fs.writeFileString(
+    path.join(packageRoot, "README.txt"),
+    [
+      `HHHCode Backend Package (${stem})`,
+      "",
+      Option.isSome(hhhdBinary)
+        ? `Includes native hhhd binary (bin/${executableName}) and the legacy Node server sidecar (sidecar/).`
+        : "Includes the legacy Node server sidecar (sidecar/). Place the native hhhd binary in bin/ once built.",
+      "",
+      input.platform === "win"
+        ? "Install as a user background task: powershell -ExecutionPolicy Bypass -File service\\install-service.ps1"
+        : "Install as a user service: ./install.sh",
+      "",
+    ].join("\n"),
+  );
+
+  yield* fs.makeDirectory(input.outputDir, { recursive: true });
+  const archivePath = path.join(input.outputDir, archiveFileName);
+  yield* fs.remove(archivePath, { force: true }).pipe(Effect.ignore);
+
+  if (input.platform === "win") {
+    if (hostPlatform === "win32") {
+      yield* runCommand(
+        ChildProcess.make("powershell", [
+          "-NoProfile",
+          "-Command",
+          `Compress-Archive -Path '${packageRoot}' -DestinationPath '${archivePath}' -Force`,
+        ]),
+        { label: `Compress-Archive ${archiveFileName}`, verbose: input.verbose },
+      );
+    } else {
+      yield* runCommand(ChildProcess.make("zip", ["-rq", archivePath, stem], { cwd: stageRoot }), {
+        label: `zip -rq ${archiveFileName} ${stem}`,
+        verbose: input.verbose,
+      });
+    }
+  } else {
+    yield* runCommand(ChildProcess.make("tar", ["-czf", archivePath, "-C", stageRoot, stem]), {
+      label: `tar -czf ${archiveFileName}`,
+      verbose: input.verbose,
+    });
+  }
+
+  return archivePath;
+});
+
 const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(function* (
   options: ResolvedBuildOptions,
 ) {
@@ -3728,9 +4163,17 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
   yield* Effect.log(`[desktop-artifact] Applied ${webAssetBrand} web client branding.`);
   yield* validateBundledClientAssets(path.dirname(bundledClientEntry));
 
+  const hhhdBinary = yield* findHhhdBinary(repoRoot, options.platform, options.arch);
+  const bundleEmbeddedServer = options.bundleServer ?? Option.isNone(hhhdBinary);
+  yield* Effect.log(
+    bundleEmbeddedServer
+      ? "[desktop-artifact] GUI artifact will bundle the embedded legacy Node server."
+      : `[desktop-artifact] GUI-only artifact: omitting embedded Node server (hhhd binary at ${Option.getOrElse(hhhdBinary, () => "external")}).`,
+  );
+
   yield* fs.makeDirectory(path.join(stageAppDir, "apps/desktop"), { recursive: true });
-  if (options.platform !== "win") {
-    yield* fs.makeDirectory(path.join(stageAppDir, "apps/server"), { recursive: true });
+  if (options.platform !== "win" || !bundleEmbeddedServer) {
+    yield* fs.makeDirectory(path.join(stageAppDir, "apps/server/dist"), { recursive: true });
   }
 
   yield* Effect.log("[desktop-artifact] Staging release app...");
@@ -3753,8 +4196,16 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
       options.verbose,
     );
   }
-  if (options.platform !== "win") {
-    yield* fs.copy(distDirs.serverDist, path.join(stageAppDir, "apps/server/dist"));
+  if (bundleEmbeddedServer) {
+    if (options.platform !== "win") {
+      yield* fs.copy(distDirs.serverDist, path.join(stageAppDir, "apps/server/dist"));
+    }
+  } else {
+    // GUI-only builds still need the compiled web client assets served over desktop://.
+    yield* fs.copy(
+      path.join(distDirs.serverDist, "client"),
+      path.join(stageAppDir, "apps/server/dist/client"),
+    );
   }
   yield* stageResourceMonitor({
     repoRoot,
@@ -3843,7 +4294,7 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
   }
 
   const stageDependencies =
-    options.platform === "win"
+    options.platform === "win" || !bundleEmbeddedServer
       ? { ...resolvedDesktopRuntimeDependencies }
       : resolveMergedStageDependencies({
           platform: options.platform,
@@ -3857,7 +4308,7 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
     stageDependencies,
   );
   const windowsServerAsarPath =
-    options.platform === "win"
+    options.platform === "win" && bundleEmbeddedServer
       ? path.join(stageAppDir, WINDOWS_SERVER_RESOURCE_SOURCE_DIR, WINDOWS_SERVER_ASAR_RESOURCE)
       : undefined;
   const stagePackageJson: StagePackageJson = {
@@ -3890,6 +4341,7 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
         : undefined,
       bundlesWslRuntime({ platform: options.platform, runtimeArchivePath: options.wslRuntime }),
       options.arch,
+      bundleEmbeddedServer,
     ),
     dependencies: stageDependencies,
     devDependencies: {
@@ -3943,13 +4395,17 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
       verbose: options.verbose,
     });
   }
-  yield* stageCursorSdkPlatformPackages(
-    path.join(
-      options.platform === "win" ? path.join(stageRoot, "server") : stageAppDir,
-      "node_modules",
-    ),
-    path.join(stageProdResourcesDir, "cursor-sdk"),
-  );
+  if (bundleEmbeddedServer) {
+    yield* stageCursorSdkPlatformPackages(
+      path.join(
+        options.platform === "win" ? path.join(stageRoot, "server") : stageAppDir,
+        "node_modules",
+      ),
+      path.join(stageProdResourcesDir, "cursor-sdk"),
+    );
+  } else {
+    yield* fs.makeDirectory(path.join(stageProdResourcesDir, "cursor-sdk"), { recursive: true });
+  }
   if (
     options.wslRuntime !== undefined &&
     bundlesWslRuntime({ platform: options.platform, runtimeArchivePath: options.wslRuntime })
@@ -4047,7 +4503,7 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
     });
   }
 
-  if (options.platform === "win") {
+  if (bundleEmbeddedServer && options.platform === "win") {
     yield* validateWindowsPackagedPayload({
       stageDistDir,
       appExecutableName: `${resolveDesktopProductName(appVersion)}.exe`,
@@ -4062,6 +4518,7 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
   }
   // The probe runs on the host Node, so a cross-arch build skips it.
   if (
+    bundleEmbeddedServer &&
     options.platform === "linux" &&
     hostPlatform === "linux" &&
     options.arch === (yield* HostProcess.Architecture)
@@ -4069,7 +4526,12 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
     yield* validateLinuxPackagedPayload({ stageDistDir, verbose: options.verbose });
   }
   // x64 builds on arm64 runners; the arm64 check covers the shared JS bundle.
-  if (options.platform === "mac" && options.arch === "arm64" && hostPlatform === "darwin") {
+  if (
+    bundleEmbeddedServer &&
+    options.platform === "mac" &&
+    options.arch === "arm64" &&
+    hostPlatform === "darwin"
+  ) {
     yield* validateMacPackagedPayload({ stageDistDir, verbose: options.verbose });
   }
 
@@ -4087,8 +4549,23 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
     });
   }
 
+  yield* Effect.log(
+    `[desktop-artifact] Packaging separate hhhd backend artifact for ${options.platform}/${options.arch}...`,
+  );
+  const backendArchivePath = yield* buildBackendArtifact({
+    repoRoot,
+    serverDistDir: distDirs.serverDist,
+    serverRuntimeExternalDependencies: resolvedServerRuntimeExternalDependencies,
+    platform: options.platform,
+    arch: options.arch,
+    appVersion,
+    outputDir: options.outputDir,
+    hhhdBinaryPath: hhhdBinary,
+    verbose: options.verbose,
+  });
+
   yield* Effect.log("[desktop-artifact] Done. Artifacts:").pipe(
-    Effect.annotateLogs({ artifacts: copiedArtifacts }),
+    Effect.annotateLogs({ artifacts: [...copiedArtifacts, backendArchivePath] }),
   );
 });
 
@@ -4193,6 +4670,12 @@ const buildDesktopArtifactCli = Command.make("build-desktop-artifact", {
   wslRuntime: Flag.String("wsl-runtime").pipe(
     Flag.withDescription(
       "Path to the Linux CLI release archive (t3-<version>-linux-x64.tar.gz) to embed as the WSL runtime of a Windows build (env: T3CODE_DESKTOP_WSL_RUNTIME).",
+    ),
+    Flag.optional,
+  ),
+  bundleServer: Flag.Boolean("bundle-server").pipe(
+    Flag.withDescription(
+      "Bundle the embedded legacy Node server inside the GUI app; defaults to false when an hhhd binary is present (env: T3CODE_DESKTOP_BUNDLE_SERVER).",
     ),
     Flag.optional,
   ),

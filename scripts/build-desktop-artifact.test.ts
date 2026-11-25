@@ -66,6 +66,17 @@ import {
   WSL_RUNTIME_ARCHIVE_HASH_NAME,
   WSL_RUNTIME_ARCHIVE_NAME,
   wslRuntimeArchiveStem,
+  HHHD_LAUNCHD_LABEL,
+  HHHD_SYSTEMD_UNIT_NAME,
+  HHHD_WINDOWS_TASK_NAME,
+  backendArchiveFileName,
+  buildBackendArtifact,
+  renderLinuxBackendInstallScript,
+  renderLinuxSystemdUnit,
+  renderMacBackendInstallScript,
+  renderMacLaunchdPlist,
+  renderWindowsBackendInstallScript,
+  resolveHhhdDistCandidates,
 } from "./build-desktop-artifact.ts";
 import {
   ReleasePackageManifestError,
@@ -1966,4 +1977,168 @@ it.effect.skipIf(!symlinksSupported)("preserves relative links when replacing di
     assert.equal(yield* fs.readLink(path.join(output, app, "Current")), "New.plist");
     assert.equal(yield* fs.readFileString(path.join(output, app, "Current")), "rebuilt-app");
   }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
+);
+
+it.effect("renders OS service manifests and install scripts for hhhd backend packages", () =>
+  Effect.sync(() => {
+    const plist = renderMacLaunchdPlist({
+      binaryPath: "/Users/test/.hhh/bin/hhhd",
+      homeDir: "/Users/test/.hhh/userdata",
+      readyFilePath: "/Users/test/.hhh/userdata/hhhd-ready.json",
+      legacyServerCmd: "node /Users/test/.hhh/hhhd/sidecar/apps/server/dist/bin.mjs",
+      logDir: "/Users/test/.hhh/userdata/logs",
+    });
+    assert.include(plist, `<string>${HHHD_LAUNCHD_LABEL}</string>`);
+    assert.include(plist, "<string>serve</string>");
+    assert.include(plist, "<string>--ready-file</string>");
+    assert.include(plist, "<string>--legacy-server</string>");
+
+    const macInstall = renderMacBackendInstallScript();
+    assert.include(macInstall, "launchctl bootstrap");
+    assert.include(macInstall, HHHD_LAUNCHD_LABEL);
+
+    const systemd = renderLinuxSystemdUnit({
+      binaryPath: "/home/test/.hhh/bin/hhhd",
+      homeDir: "/home/test/.hhh/userdata",
+      readyFilePath: "/home/test/.hhh/userdata/hhhd-ready.json",
+      legacyServerCmd: "node /home/test/sidecar/bin.mjs",
+    });
+    assert.include(systemd, "ExecStart=/home/test/.hhh/bin/hhhd serve");
+    assert.include(systemd, "WantedBy=default.target");
+
+    const linuxInstall = renderLinuxBackendInstallScript();
+    assert.include(linuxInstall, "systemctl --user enable --now");
+    assert.include(linuxInstall, HHHD_SYSTEMD_UNIT_NAME);
+
+    const winInstall = renderWindowsBackendInstallScript();
+    assert.include(winInstall, "Register-ScheduledTask");
+    assert.include(winInstall, HHHD_WINDOWS_TASK_NAME);
+
+    assert.equal(backendArchiveFileName("0.2.0", "mac", "arm64"), "hhhd-0.2.0-darwin-arm64.tar.gz");
+    assert.equal(backendArchiveFileName("0.2.0", "linux", "x64"), "hhhd-0.2.0-linux-x64.tar.gz");
+    assert.equal(backendArchiveFileName("0.2.0", "win", "x64"), "hhhd-0.2.0-windows-x64.zip");
+
+    const macCandidates = resolveHhhdDistCandidates("/repo", "mac", "arm64");
+    assert.include(macCandidates, "/repo/apps/hhhd/dist/darwin-arm64/hhhd");
+    const winCandidates = resolveHhhdDistCandidates("/repo", "win", "x64");
+    assert.include(winCandidates, "/repo/apps/hhhd/dist/windows-amd64/hhhd.exe");
+  }),
+);
+
+it.effect(
+  "packages separate mac, linux, and windows backend archives with sidecar and optional hhhd binary",
+  () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "hhhcode-backend-pkg-test-" });
+      const serverDistDir = path.join(root, "server-dist");
+      const outputDir = path.join(root, "release");
+      const hhhdBin = path.join(root, "apps/hhhd/dist/darwin-arm64/hhhd");
+      yield* fs.makeDirectory(path.join(serverDistDir, "client"), { recursive: true });
+      yield* fs.makeDirectory(path.dirname(hhhdBin), { recursive: true });
+      yield* fs.writeFileString(path.join(serverDistDir, "bin.mjs"), "console.log('sidecar');\n");
+      yield* fs.writeFileString(path.join(serverDistDir, "client/index.html"), "<html></html>\n");
+      yield* fs.writeFileString(hhhdBin, "#!/bin/sh\necho hhhd\n");
+
+      const macArchive = yield* buildBackendArtifact({
+        repoRoot: root,
+        serverDistDir,
+        serverRuntimeExternalDependencies: { "node-pty": "1.0.0" },
+        platform: "mac",
+        arch: "arm64",
+        appVersion: "0.2.0",
+        outputDir,
+        verbose: false,
+      });
+      assert.equal(path.basename(macArchive), "hhhd-0.2.0-darwin-arm64.tar.gz");
+      assert.isTrue(yield* fs.exists(macArchive));
+
+      const tarList = yield* spawner.spawn(
+        ChildProcess.make("tar", ["-tzf", macArchive], {
+          stdin: "ignore",
+          stdout: "pipe",
+          stderr: "pipe",
+        }),
+      );
+      const macEntries = yield* tarList.stdout.pipe(
+        Stream.decodeText(),
+        Stream.runFold(
+          () => "",
+          (acc, chunk) => acc + chunk,
+        ),
+      );
+      assert.equal(Number(yield* tarList.exitCode), 0);
+      assert.include(macEntries, "hhhd-0.2.0-darwin-arm64/bin/hhhd");
+      assert.include(macEntries, "hhhd-0.2.0-darwin-arm64/sidecar/apps/server/dist/bin.mjs");
+      assert.include(macEntries, `hhhd-0.2.0-darwin-arm64/service/${HHHD_LAUNCHD_LABEL}.plist`);
+      assert.include(macEntries, "hhhd-0.2.0-darwin-arm64/install.sh");
+
+      const linuxArchive = yield* buildBackendArtifact({
+        repoRoot: root,
+        serverDistDir,
+        serverRuntimeExternalDependencies: { "node-pty": "1.0.0" },
+        platform: "linux",
+        arch: "x64",
+        appVersion: "0.2.0",
+        outputDir,
+        verbose: false,
+      });
+      assert.equal(path.basename(linuxArchive), "hhhd-0.2.0-linux-x64.tar.gz");
+      const linuxList = yield* spawner.spawn(
+        ChildProcess.make("tar", ["-tzf", linuxArchive], {
+          stdin: "ignore",
+          stdout: "pipe",
+          stderr: "pipe",
+        }),
+      );
+      const linuxEntries = yield* linuxList.stdout.pipe(
+        Stream.decodeText(),
+        Stream.runFold(
+          () => "",
+          (acc, chunk) => acc + chunk,
+        ),
+      );
+      assert.equal(Number(yield* linuxList.exitCode), 0);
+      assert.include(linuxEntries, `hhhd-0.2.0-linux-x64/service/${HHHD_SYSTEMD_UNIT_NAME}`);
+      assert.include(linuxEntries, "hhhd-0.2.0-linux-x64/install.sh");
+
+      const winArchive = yield* buildBackendArtifact({
+        repoRoot: root,
+        serverDistDir,
+        serverRuntimeExternalDependencies: { "node-pty": "1.0.0" },
+        platform: "win",
+        arch: "x64",
+        appVersion: "0.2.0",
+        outputDir,
+        verbose: false,
+      });
+      assert.equal(path.basename(winArchive), "hhhd-0.2.0-windows-x64.zip");
+      assert.isTrue(yield* fs.exists(winArchive));
+    }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
+);
+
+it.effect("omits Windows server.asar and server compile-cache hook in GUI-only build config", () =>
+  Effect.gen(function* () {
+    const winGuiOnly = yield* createBuildConfig(
+      "win",
+      "nsis",
+      "0.2.0",
+      false,
+      false,
+      undefined,
+      undefined,
+      false,
+      "x64",
+      false,
+    );
+    const extraResources = winGuiOnly.extraResources as ReadonlyArray<{
+      readonly from?: string;
+    }>;
+    assert.isUndefined(winGuiOnly.afterPack);
+    assert.isFalse(
+      extraResources.some((entry) => entry.from === "apps/desktop/prod-resources/windows-server"),
+    );
+  }).pipe(Effect.provide(NodeServices.layer)),
 );

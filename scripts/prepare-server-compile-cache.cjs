@@ -47,6 +47,14 @@ module.exports = async ({ appOutDir, electronPlatformName, arch, packager }) => 
     "app.asar",
     "apps/desktop/dist-electron/serverCompileCache.cjs",
   );
+  const bundledServerEntry =
+    electronPlatformName === "win32"
+      ? path.join(resources, "server.asar")
+      : path.join(resources, "app.asar", "apps/server/dist/bin.mjs");
+  if (!fs.existsSync(bundledServerEntry)) {
+    console.log("[server-compile-cache] Skipping GUI-only build without bundled server");
+    return;
+  }
   const env = { ...process.env, ELECTRON_RUN_AS_NODE: "1" };
   for (const name of Object.keys(env)) {
     if (name.startsWith("NODE_") || name.startsWith("T3CODE_")) delete env[name];
