@@ -459,28 +459,26 @@ const resolveKeychain = Effect.fn("ServerSecretStore.resolveKeychain")(function*
         new SecretStoreBackendError({ detail: "Could not read P0CODE_SECRET_BACKEND.", cause }),
     ),
   );
-  const requested = Option.getOrElse(setting, () => "auto");
+  const requested = Option.getOrElse(setting, () => "file");
   if (requested !== "auto" && requested !== "keychain" && requested !== "file") {
     return yield* new SecretStoreBackendError({
       detail: `P0CODE_SECRET_BACKEND must be "keychain" or "file", got "${requested}".`,
       cause: undefined,
     });
   }
-  const markerPath = path.join(secretsDir, KEYCHAIN_MARKER_FILE);
-  const marked = yield* fileSystem.exists(markerPath).pipe(Effect.orElseSucceed(() => false));
-  if (requested === "file") {
-    if (marked) {
-      yield* Effect.logWarning(
-        "P0CODE_SECRET_BACKEND=file: credentials this home keeps in the OS keychain are not used.",
-      );
-    }
+  // Stock T3 Code has no keychain: every secret is a `<name>.bin` file and a missing file means
+  // signed out. Our old default resolution probed the OS keychain, marked the home and imported
+  // the files; that is upstream-incompatible and is disabled for now. The keychain backend below
+  // runs only when P0CODE_SECRET_BACKEND=keychain is set explicitly.
+  if (requested !== "keychain") {
     return {
       keychain: undefined,
-      storage: { backend: "file", label: "files (P0CODE_SECRET_BACKEND=file)" },
+      storage: { backend: "file", label: "files" },
       importLegacyKeychain: undefined,
     } as const;
   }
 
+  const markerPath = path.join(secretsDir, KEYCHAIN_MARKER_FILE);
   const opened = yield* Effect.tryPromise({
     try: async () => {
       const store = loadKeychain(platform);
@@ -490,27 +488,12 @@ const resolveKeychain = Effect.fn("ServerSecretStore.resolveKeychain")(function*
     },
     catch: (cause) =>
       new SecretStoreBackendError({
-        detail:
-          requested === "keychain"
-            ? "P0CODE_SECRET_BACKEND=keychain, but the OS keychain is not available."
-            : "This home keeps its credentials in the OS keychain, which is not available. Unlock it (or start the Secret Service on Linux) and start again.",
+        detail: "P0CODE_SECRET_BACKEND=keychain, but the OS keychain is not available.",
         cause,
       }),
-  }).pipe(Effect.result);
-  if (opened._tag === "Failure") {
-    if (requested === "keychain" || marked) return yield* opened.failure;
-    yield* Effect.logWarning(
-      "No OS keychain is available, so credentials are stored as owner-only files. Set P0CODE_SECRET_BACKEND=file to silence this.",
-      { cause: opened.failure.cause },
-    );
-    return {
-      keychain: undefined,
-      storage: { backend: "file", label: "files (no keychain available)" },
-      importLegacyKeychain: undefined,
-    } as const;
-  }
+  });
 
-  const { secrets: keychain, store: keychainBackingStore } = opened.success;
+  const { secrets: keychain, store: keychainBackingStore } = opened;
   yield* fileSystem
     .writeFileString(markerPath, `${keychain.label}\n`, { mode: 0o600 })
     .pipe(

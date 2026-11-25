@@ -37,7 +37,7 @@ describe("p0 secrets migrate-keychain", () => {
       );
       const store = memoryKeychainStore({ legacy });
 
-      yield* runMigrate(() => store);
+      yield* runMigrate(() => store, { P0CODE_SECRET_BACKEND: "keychain" });
 
       assert.deepEqual([...store.entries.keys()], ["ns:server-signing-key"]);
       assert.deepEqual([...legacy.entries.keys()], []);
@@ -56,6 +56,17 @@ describe("p0 secrets migrate-keychain", () => {
 
       assert.instanceOf(error, CliError.UserError);
       assert.include(error.message, "nothing to move");
+    }),
+  );
+
+  it.effect("refuses to run unless the keychain backend is opted into", () =>
+    Effect.gen(function* () {
+      const store = memoryKeychainStore();
+
+      const error = yield* runMigrate(() => store).pipe(Effect.flip);
+
+      assert.instanceOf(error, CliError.UserError);
+      assert.include(error.message, "P0CODE_SECRET_BACKEND=keychain");
     }),
   );
 });
