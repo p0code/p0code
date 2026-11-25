@@ -772,6 +772,28 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     }
   });
 
+  it("drops runtime-dead package builds but keeps the CommonJS Cursor SDK", () => {
+    const excludes = (file: string) =>
+      DESKTOP_FILE_EXCLUSIONS.some((glob) => NodePath.matchesGlob(file, glob.slice(1)));
+    for (const file of [
+      "patches/@cursor__sdk@1.4.2.patch",
+      "node_modules/@cursor/sdk/dist/esm/index.js",
+      "node_modules/@cursor/sdk/dist/bundled/index.js",
+      "node_modules/zod/src/index.ts",
+      "apps/desktop/prod-resources/dmg/dmg-background-latest.png",
+    ]) {
+      assert.isTrue(excludes(file), file);
+    }
+    for (const file of [
+      "node_modules/@cursor/sdk/package.json",
+      "node_modules/@cursor/sdk/dist/cjs/index.js",
+      "node_modules/zod/index.js",
+      "apps/desktop/prod-resources/icon.png",
+    ]) {
+      assert.isFalse(excludes(file), file);
+    }
+  });
+
   it.effect("unpacks target Windows natives while excluding the other architecture", () =>
     Effect.scoped(
       Effect.gen(function* () {

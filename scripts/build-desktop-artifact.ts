@@ -969,6 +969,12 @@ interface StagePackageJson {
 
 export const STAGE_INSTALL_ARGS = ["install", "--prod"] as const;
 export const DESKTOP_ELECTRON_LANGUAGES = ["en-US"] as const;
+// The server loads @cursor/sdk through createRequire (CJS); its ESM and Bun builds and zod's TS sources never load.
+const UNUSED_PACKAGE_SOURCE_EXCLUSIONS = [
+  "**/node_modules/@cursor/sdk/dist/esm/**/*",
+  "**/node_modules/@cursor/sdk/dist/bundled/**/*",
+  "**/node_modules/zod/src/**/*",
+] as const;
 export const DESKTOP_FILE_EXCLUSIONS = [
   // Cursor walks from argv[1] to platform assets; helpers and native addons need real paths outside ASAR.
   "!**/node_modules/@cursor/sdk-*/**/*",
@@ -990,6 +996,15 @@ export const DESKTOP_FILE_EXCLUSIONS = [
   "!apps/desktop/prod-resources/wsl-runtime.tar.gz.sha256",
   "!apps/desktop/gnome-extension",
   "!apps/desktop/gnome-extension/**/*",
+  // Install-time inputs and build-only resources; resource-monitor ships via extraResources.
+  "!patches",
+  "!patches/**/*",
+  "!pnpm-workspace.yaml",
+  "!apps/desktop/prod-resources/dmg",
+  "!apps/desktop/prod-resources/dmg/**/*",
+  "!apps/desktop/prod-resources/resource-monitor",
+  "!apps/desktop/prod-resources/resource-monitor/**/*",
+  ...UNUSED_PACKAGE_SOURCE_EXCLUSIONS.map((glob) => `!${glob}`),
 ] as const;
 // Windows terminal helpers cannot run on macOS and slow signing and notarization.
 export const MAC_FILE_EXCLUSIONS = [
@@ -1033,6 +1048,9 @@ export const WINDOWS_SERVER_ASAR_IGNORE_GLOBS = [
   "**/node_modules/.bin",
   "**/node_modules/.bin/**",
   "**/*.map",
+  "patches/**",
+  "pnpm-workspace.yaml",
+  ...UNUSED_PACKAGE_SOURCE_EXCLUSIONS,
 ] as const;
 
 export function resolveWindowsServerAsarIgnoreGlobs(arch: typeof BuildArch.Type) {
