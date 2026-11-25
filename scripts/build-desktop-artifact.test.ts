@@ -564,7 +564,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     ),
   );
 
-  it.effect("names the Electron window class in the Linux desktop entry", () =>
+  it.effect("names the Electron window class and Linux package identifiers", () =>
     Effect.gen(function* () {
       const linux = yield* createBuildConfig(
         "linux",
@@ -576,7 +576,13 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         undefined,
       );
 
+      assert.equal(linux.appId, "tw.yhw.p0code");
+      assert.nestedPropertyVal(linux, "linux.executableName", "p0code");
       assert.nestedPropertyVal(linux, "linux.desktop.entry.StartupWMClass", "tw.yhw.p0code");
+      assert.nestedPropertyVal(linux, "deb.packageName", "p0code");
+      assert.nestedPropertyVal(linux, "rpm.packageName", "p0code");
+      const debFpm = (linux.deb as { fpm: ReadonlyArray<string> }).fpm;
+      assert.isTrue(debFpm.some((entry) => entry.endsWith("=/usr/share/doc/p0code/copyright")));
     }),
   );
 

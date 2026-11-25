@@ -2915,10 +2915,11 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       };
     }
     buildConfig.deb = {
+      packageName: "p0code",
       // FPM runs outside the staged app directory, so source paths must be absolute.
       fpm: [
         `${path.join(repoRoot, "apps/desktop/resources/linux/com.t3tools.t3code.metainfo.xml")}=/usr/share/metainfo/com.t3tools.t3code.metainfo.xml`,
-        `${path.join(repoRoot, "LICENSE")}=/usr/share/doc/t3code/copyright`,
+        `${path.join(repoRoot, "LICENSE")}=/usr/share/doc/p0code/copyright`,
       ],
       // Debian 13 and Ubuntu 24.04 use 64-bit-time names; retain old-name fallbacks.
       depends: [
@@ -2936,6 +2937,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       ],
     };
     buildConfig.rpm = {
+      packageName: "p0code",
       fpm: [
         `${path.join(repoRoot, "apps/desktop/resources/linux/com.t3tools.t3code.metainfo.xml")}=/usr/share/metainfo/com.t3tools.t3code.metainfo.xml`,
         `${path.join(repoRoot, "LICENSE")}=/usr/share/licenses/p0code/LICENSE`,
@@ -4350,7 +4352,7 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
       ? path.join(stageAppDir, WINDOWS_SERVER_RESOURCE_SOURCE_DIR, WINDOWS_SERVER_ASAR_RESOURCE)
       : undefined;
   const stagePackageJson: StagePackageJson = {
-    name: "t3code",
+    name: "p0code",
     version: appVersion,
     buildVersion: appVersion,
     t3codeCommitHash: commitHash,
