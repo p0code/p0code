@@ -7844,6 +7844,56 @@
   "b1137657751dd7f0": "Copy from…",
   "5bcce79726ce6ad8": "No custom options. The composer uses the provider's default options.",
   "b584f8e39d1179c7": "Custom option",
+  "bb1fccbc06e5d83d": "Custom providers",
+  "3ceca2155cf4d14d": "No custom providers yet",
+  "719b93b3af2b1a25": "Connect an OpenAI- or Anthropic-compatible API and its models join the model picker.",
+  "06890476636a8436": "{count, plural, one {{host} · {count} model} other {{host} · {count} models}}",
+  "1ece6e9c15a13601": "More actions for {name}",
+  "583a2409d07309b4": "{count, plural, one {In {file} · {count} model} other {In {file} · {count} models}}",
+  "129d0fb206d1ee5f": "Add a custom provider",
+  "c1514274babbebf6": "Anthropic-compatible",
+  "49bb3f715cfdb96a": "OpenAI-compatible",
+  "c6dff0cf3f17769e": "Saved. Type to replace it.",
+  "d8fb763eb069ba1d": "Optional",
+  "9251780434eabeda": "Model ID",
+  "8a308f4da227214b": "Context window for {model}",
+  "ffb05db855586429": "Input price for {model}",
+  "0fd92681500bb56a": "Output price for {model}",
+  "651cb409bda342a8": "Remove {model}",
+  "1a0c999db1e9896a": "Add provider",
+  "f5b66c481aa3e4df": "Edit",
+  "111a44209dc6e701": "Remove",
+  "a3538ba5ca802bd7": [
+    "Remove ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    "?"
+  ],
+  "2fc8fa3dfaa885e8": "Its models leave the model picker and its stored API key is deleted.",
+  "7dafd7b4181e6d7f": "Provider ID",
+  "d883637c874eed52": "API style",
+  "23783b23feb80f9a": "OpenAI-compatible",
+  "d98677b10030a98a": "Anthropic-compatible",
+  "c732b08a5fa8c3d7": "Base URL",
+  "b0900f4938210634": "API key",
+  "6af3b30604820829": "Models",
+  "779b001d96825ed1": "Load models",
+  "f7c3ae7a79ede728": "Test",
+  "304d6712ac5d3a89": [
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " answered. It works."
+  ],
+  "8fd4f32208fe09a7": "Context",
+  "ac7708c9c4d37972": "In $/1M",
+  "fa49dc5a535b813f": "Out $/1M",
+  "d76f635ed9a84ba4": "Add model",
   "3e90738d0ff19a29": "Database",
   "9e28cb72cb075933": "Reclaim freed database space",
   "881b21a84162fe36": "These databases still hold space freed by history cleanup.",
@@ -7983,7 +8033,6 @@
   "0c99fa183ed512e8": "{platform} available on some",
   "e6886a7f77b73a8e": "{platform} not available",
   "b0b7610d9860d18d": "Not set up on this machine.",
-  "f5b66c481aa3e4df": "Edit",
   "3b20ef0670ae4b0b": "Machine over SSH",
   "121ccffacb6b8c6d": "Expo Simulators",
   "130b55a1410a8030": "Simlock pool (alpha)",
@@ -8110,7 +8159,6 @@
   "c2839b56a6559626": "Add Expo host",
   "1811151659ca00cd": "Edit Expo host",
   "90608ad3c92d9374": "Expo access token",
-  "d8fb763eb069ba1d": "Optional",
   "fd9fd1bdd6e1c4c4": "Clear access token",
   "0e600459b655584a": "Checking the Expo account…",
   "b8ff40ed1ab41abb": "Check the Expo account before choosing a project.",
@@ -8406,7 +8454,6 @@
   "0c2c53ada3f0e93c": "Select an environment to edit its judges.",
   "05766f1d708a32a9": "Move up",
   "f3208165e06efd92": "Move down",
-  "111a44209dc6e701": "Remove",
   "f2cce1ba02bccda3": "Add judge",
   "13ef526271b0f5d4": "Clear all conditions",
   "d1938a629f039515": "Remove condition",
@@ -9252,7 +9299,6 @@
   "8188ba79577edefb": "Cursor account",
   "bf587581b2a3d24d": "Using CURSOR_API_KEY. Remove it from this provider's environment to use browser sign-in.",
   "b0481e41f335f1d2": "Reset {provider} provider settings to default",
-  "1a0c999db1e9896a": "Add provider",
   "5f4280344b1853ea": "Refresh provider status",
   "b298eb788d3443ee": "Antigravity setup",
   "21668b75015a6d1d": "Device that runs this provider.",
@@ -9677,15 +9723,6 @@
   ],
   "13d4f258e93f1dc1": "Connect an environment to manage the secret providers its provider variables read from.",
   "88466f5a03be2419": "Environment-wide setting. Select an environment to change it.",
-  "a3538ba5ca802bd7": [
-    "Remove ",
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    "?"
-  ],
   "0d5b3b39f92c04e4": "Remove provider",
   "c52bdbe39649742c": [
     "Nothing reads from ",
@@ -10897,7 +10934,6 @@
   "5b928a84a624e831": "Running: {url}",
   "b07718fe86a16cc6": "Running: Disabled",
   "6d0831556a517821": "Send traces, metrics, and logs to an OTLP HTTP receiver. Restart the server to apply. Environment variables override these settings.",
-  "f7c3ae7a79ede728": "Test",
   "b93d2ec53e944576": [
     "Running: ",
     {
@@ -10939,7 +10975,6 @@
   "2d411bb0736c0643": "No text generators yet",
   "85eb2d15da7d016f": "Add a model API to write thread titles, commit messages, and other short text without starting a coding agent.",
   "1d32dad13ca765db": "Off · ",
-  "1ece6e9c15a13601": "More actions for {name}",
   "ebffe4dabf52835f": "Enable {name}",
   "b663e2e129c61493": "Add a text generator",
   "149ffa363168a419": "Writes thread titles, commit messages, and other short text without starting a coding agent. Your API key is stored on this environment.",
@@ -10975,16 +11010,7 @@
     },
     ". Anything set to use this generator falls back to the text generation model."
   ],
-  "c732b08a5fa8c3d7": "Base URL",
   "3953d1cccd71ab7e": "Name (optional)",
-  "304d6712ac5d3a89": [
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    " answered. It works."
-  ],
   "74718b8533319acb": "Follows the text generation model",
   "b2ae5ae37b088f1b": "No models match.",
   "84853da6b47fd3ab": "Background",
@@ -12121,7 +12147,6 @@
   "68bc1b236beb479c": "Some environment prices are unavailable.",
   "1d7c1c825867201a": "No custom prices or mappings. Add a row to set one.",
   "9807b3b1b7737f7b": "New model ID",
-  "9251780434eabeda": "Model ID",
   "a8caf39f800ebfb2": "Map {model} to model",
   "df3ed6ae1631af26": "new model",
   "bed70a4f95b2f17f": "{field} price for {model}",

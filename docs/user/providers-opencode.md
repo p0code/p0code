@@ -60,6 +60,20 @@ You can stop the turn while it reconnects. If the server exits or an external
 connection cannot be restored, send another prompt to resume the same OpenCode
 session.
 
+## Custom providers
+
+To use any OpenAI- or Anthropic-compatible API, open OpenCode's provider settings and choose
+**Add provider** under **Custom providers**. Enter the base URL with its version path (for example
+`https://api.example.com/v1`), then use **Load models** or type model IDs yourself. A context window
+and per-million-token prices are optional; OpenCode uses the prices for the costs p0code shows.
+**Test** sends one short request.
+
+The models appear in the model picker under the provider's name. The API key stays in this
+environment's secret storage and reaches OpenCode as an environment variable. p0code keeps these
+providers in its own config file and never edits `opencode.json`; providers you configured there
+are listed read-only. Custom providers apply to servers p0code starts, not to an external
+**Server URL**.
+
 ## Approvals
 
 OpenCode follows the shared [permission modes](./permission-modes.md). **Auto** has

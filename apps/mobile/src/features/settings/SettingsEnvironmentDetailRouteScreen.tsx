@@ -12,6 +12,7 @@ import {
 } from "@t3tools/contracts";
 import { settlePromise, squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { managedUpdatesDenial } from "@t3tools/client-runtime/contract-labels";
+import { readCustomModelProviders } from "@t3tools/client-runtime/custom-model-providers";
 import { sessionPermissionsUnavailableMessage } from "@t3tools/shared/authScopeOptions";
 import * as Cause from "effect/Cause";
 import * as Exit from "effect/Exit";
@@ -169,6 +170,12 @@ function EnvironmentDetail({ environmentId }: { readonly environmentId: Environm
         },
       ],
     );
+  }
+
+  function customProviderNames(instanceId: ServerProvider["instanceId"]) {
+    return readCustomModelProviders(config?.settings.providerInstances[instanceId]?.config)
+      .providers.map((entry) => entry.name)
+      .join(", ");
   }
 
   function requestProviderUpdate(provider: ServerProvider) {
@@ -388,6 +395,13 @@ function EnvironmentDetail({ environmentId }: { readonly environmentId: Environm
                                 ? (provider.version ?? gt("Version unknown"))
                                 : gt("Not installed")}
                           </Text>
+                          {customProviderNames(provider.instanceId) ? (
+                            <Text className="text-sm text-foreground-muted">
+                              {gt("Custom providers: {names}", {
+                                names: customProviderNames(provider.instanceId),
+                              })}
+                            </Text>
+                          ) : null}
                           {provider.updateState && provider.updateState.status !== "idle" ? (
                             <Text
                               selectable

@@ -33,6 +33,19 @@ Update installer-managed Pi with `pi update`. If another package manager owns th
 update it through that manager instead. For example, a Nix profile installation uses
 `nix profile upgrade pi`.
 
+## Custom providers
+
+To use any OpenAI- or Anthropic-compatible API, open Pi's provider settings and choose
+**Add provider** under **Custom providers**. Enter the base URL with its version path (for example
+`https://api.example.com/v1`), then use **Load models** or type model IDs yourself. A context window
+and per-million-token prices are optional; Pi uses the prices for the costs p0code shows.
+**Test** sends one short request.
+
+The models appear in the model picker under the provider's name. The API key stays in this
+environment's secret storage and reaches Pi as an environment variable. p0code registers these
+providers through its own extension and never edits `models.json`; providers you configured there
+are listed read-only.
+
 ## What Carries Over
 
 p0code discovers the models reported by Pi and exposes their supported thinking levels. The

@@ -7836,6 +7836,56 @@
   "b1137657751dd7f0": "Copiar de…",
   "5bcce79726ce6ad8": "No hay opciones personalizadas. El cuadro de mensaje usa las opciones predeterminadas del proveedor.",
   "b584f8e39d1179c7": "Opción personalizada",
+  "bb1fccbc06e5d83d": "Proveedores personalizados",
+  "3ceca2155cf4d14d": "Aún no hay proveedores personalizados",
+  "719b93b3af2b1a25": "Conecta una API compatible con OpenAI o Anthropic y sus modelos aparecerán en el selector de modelos.",
+  "06890476636a8436": "{count, plural, one {{host} · {count} modelo} other {{host} · {count} modelos}}",
+  "1ece6e9c15a13601": "Más acciones para {name}",
+  "583a2409d07309b4": "{count, plural, one {En {file} · {count} modelo} other {En {file} · {count} modelos}}",
+  "129d0fb206d1ee5f": "Añadir un proveedor personalizado",
+  "c1514274babbebf6": "Compatible con Anthropic",
+  "49bb3f715cfdb96a": "Compatible con OpenAI",
+  "c6dff0cf3f17769e": "Guardada. Escribe para reemplazarla.",
+  "d8fb763eb069ba1d": "Opcional",
+  "9251780434eabeda": "ID de modelo",
+  "8a308f4da227214b": "Ventana de contexto de {model}",
+  "ffb05db855586429": "Precio de entrada de {model}",
+  "0fd92681500bb56a": "Precio de salida de {model}",
+  "651cb409bda342a8": "Quitar {model}",
+  "1a0c999db1e9896a": "Añadir proveedor",
+  "f5b66c481aa3e4df": "Editar",
+  "111a44209dc6e701": "Quitar",
+  "a3538ba5ca802bd7": [
+    "¿Quitar ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    "?"
+  ],
+  "2fc8fa3dfaa885e8": "Sus modelos salen del selector de modelos y se elimina su clave de API guardada.",
+  "7dafd7b4181e6d7f": "ID del proveedor",
+  "d883637c874eed52": "Estilo de API",
+  "23783b23feb80f9a": "Compatible con OpenAI",
+  "d98677b10030a98a": "Compatible con Anthropic",
+  "c732b08a5fa8c3d7": "URL base",
+  "b0900f4938210634": "Clave de API",
+  "6af3b30604820829": "Modelos",
+  "779b001d96825ed1": "Cargar modelos",
+  "f7c3ae7a79ede728": "Probar",
+  "304d6712ac5d3a89": [
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " respondió. Funciona."
+  ],
+  "8fd4f32208fe09a7": "Contexto",
+  "ac7708c9c4d37972": "Entrada $/1M",
+  "fa49dc5a535b813f": "Salida $/1M",
+  "d76f635ed9a84ba4": "Añadir modelo",
   "3e90738d0ff19a29": "Base de datos",
   "9e28cb72cb075933": "Recuperar espacio liberado de la base de datos",
   "881b21a84162fe36": "Estas bases de datos aún ocupan el espacio liberado al limpiar el historial.",
@@ -7975,7 +8025,6 @@
   "0c99fa183ed512e8": "{platform} disponible en algunos",
   "e6886a7f77b73a8e": "{platform} no disponible",
   "b0b7610d9860d18d": "No configurado en esta máquina.",
-  "f5b66c481aa3e4df": "Editar",
   "3b20ef0670ae4b0b": "Máquina por SSH",
   "121ccffacb6b8c6d": "Simuladores de Expo",
   "130b55a1410a8030": "Pool de Simlock (alfa)",
@@ -8100,7 +8149,6 @@
   "c2839b56a6559626": "Añadir host de Expo",
   "1811151659ca00cd": "Editar host de Expo",
   "90608ad3c92d9374": "Token de acceso de Expo",
-  "d8fb763eb069ba1d": "Opcional",
   "fd9fd1bdd6e1c4c4": "Borrar token de acceso",
   "0e600459b655584a": "Comprobando la cuenta de Expo…",
   "b8ff40ed1ab41abb": "Comprueba la cuenta de Expo antes de elegir un proyecto.",
@@ -8396,7 +8444,6 @@
   "0c2c53ada3f0e93c": "Selecciona un entorno para editar sus verificadores.",
   "05766f1d708a32a9": "Subir",
   "f3208165e06efd92": "Bajar",
-  "111a44209dc6e701": "Quitar",
   "f2cce1ba02bccda3": "Añadir verificador",
   "13ef526271b0f5d4": "Borrar todas las condiciones",
   "d1938a629f039515": "Quitar condición",
@@ -9242,7 +9289,6 @@
   "8188ba79577edefb": "Cuenta de Cursor",
   "bf587581b2a3d24d": "Usando CURSOR_API_KEY. Quítala del entorno de este proveedor para iniciar sesión en el navegador.",
   "b0481e41f335f1d2": "Restablecer los ajustes del proveedor {provider} al valor predeterminado",
-  "1a0c999db1e9896a": "Añadir proveedor",
   "5f4280344b1853ea": "Actualizar estado del proveedor",
   "b298eb788d3443ee": "Configuración de Antigravity",
   "21668b75015a6d1d": "Dispositivo que ejecuta este proveedor.",
@@ -9665,15 +9711,6 @@
   ],
   "13d4f258e93f1dc1": "Conecta un entorno para gestionar los proveedores de secretos de los que leen sus variables de proveedor.",
   "88466f5a03be2419": "Ajuste de todo el entorno. Selecciona un entorno para cambiarlo.",
-  "a3538ba5ca802bd7": [
-    "¿Quitar ",
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    "?"
-  ],
   "0d5b3b39f92c04e4": "Quitar proveedor",
   "c52bdbe39649742c": [
     "Nada lee de ",
@@ -10882,7 +10919,6 @@
   "5b928a84a624e831": "En ejecución: {url}",
   "b07718fe86a16cc6": "En ejecución: desactivado",
   "6d0831556a517821": "Envía trazas, métricas y registros a un receptor OTLP HTTP. Reinicia el servidor para aplicarlo. Las variables de entorno anulan estos ajustes.",
-  "f7c3ae7a79ede728": "Probar",
   "b93d2ec53e944576": [
     "En ejecución: ",
     {
@@ -10924,7 +10960,6 @@
   "2d411bb0736c0643": "Aún no hay generadores de texto",
   "85eb2d15da7d016f": "Añade una API de modelos para escribir títulos de hilos, mensajes de commit y otros textos breves sin iniciar un agente de código.",
   "1d32dad13ca765db": "Desactivado · ",
-  "1ece6e9c15a13601": "Más acciones para {name}",
   "ebffe4dabf52835f": "Activar {name}",
   "b663e2e129c61493": "Añadir un generador de texto",
   "149ffa363168a419": "Escribe títulos de hilos, mensajes de commit y otros textos breves sin iniciar un agente de código. Tu clave de API se guarda en este entorno.",
@@ -10960,16 +10995,7 @@
     },
     ". Todo lo configurado para usar este generador vuelve al modelo de generación de texto."
   ],
-  "c732b08a5fa8c3d7": "URL base",
   "3953d1cccd71ab7e": "Nombre (opcional)",
-  "304d6712ac5d3a89": [
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    " respondió. Funciona."
-  ],
   "74718b8533319acb": "Sigue al modelo de generación de texto",
   "b2ae5ae37b088f1b": "Ningún modelo coincide.",
   "84853da6b47fd3ab": "Fondo",
@@ -12106,7 +12132,6 @@
   "68bc1b236beb479c": "Algunos precios de entornos no están disponibles.",
   "1d7c1c825867201a": "No hay precios ni asignaciones personalizados. Añade una fila para definir uno.",
   "9807b3b1b7737f7b": "Nuevo ID de modelo",
-  "9251780434eabeda": "ID de modelo",
   "a8caf39f800ebfb2": "Asignar {model} a un modelo",
   "df3ed6ae1631af26": "nuevo modelo",
   "bed70a4f95b2f17f": "Precio de {field} para {model}",

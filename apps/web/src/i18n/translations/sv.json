@@ -7842,6 +7842,56 @@
   "b1137657751dd7f0": "Kopiera från…",
   "5bcce79726ce6ad8": "Inga anpassade alternativ. Inmatningsfältet använder leverantörens standardalternativ.",
   "b584f8e39d1179c7": "Anpassat alternativ",
+  "bb1fccbc06e5d83d": "Egna leverantörer",
+  "3ceca2155cf4d14d": "Inga egna leverantörer än",
+  "719b93b3af2b1a25": "Anslut ett OpenAI- eller Anthropic-kompatibelt API så hamnar dess modeller i modellväljaren.",
+  "06890476636a8436": "{count, plural, one {{host} · {count} modell} other {{host} · {count} modeller}}",
+  "1ece6e9c15a13601": "Fler åtgärder för {name}",
+  "583a2409d07309b4": "{count, plural, one {I {file} · {count} modell} other {I {file} · {count} modeller}}",
+  "129d0fb206d1ee5f": "Lägg till en egen leverantör",
+  "c1514274babbebf6": "Anthropic-kompatibel",
+  "49bb3f715cfdb96a": "OpenAI-kompatibel",
+  "c6dff0cf3f17769e": "Sparad. Skriv för att ersätta den.",
+  "d8fb763eb069ba1d": "Valfritt",
+  "9251780434eabeda": "Modell-id",
+  "8a308f4da227214b": "Kontextfönster för {model}",
+  "ffb05db855586429": "Inmatningspris för {model}",
+  "0fd92681500bb56a": "Utmatningspris för {model}",
+  "651cb409bda342a8": "Ta bort {model}",
+  "1a0c999db1e9896a": "Lägg till leverantör",
+  "f5b66c481aa3e4df": "Redigera",
+  "111a44209dc6e701": "Ta bort",
+  "a3538ba5ca802bd7": [
+    "Ta bort ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    "?"
+  ],
+  "2fc8fa3dfaa885e8": "Dess modeller försvinner från modellväljaren och den sparade API-nyckeln raderas.",
+  "7dafd7b4181e6d7f": "Leverantörs-ID",
+  "d883637c874eed52": "API-typ",
+  "23783b23feb80f9a": "OpenAI-kompatibel",
+  "d98677b10030a98a": "Anthropic-kompatibel",
+  "c732b08a5fa8c3d7": "Bas-URL",
+  "b0900f4938210634": "API-nyckel",
+  "6af3b30604820829": "Modeller",
+  "779b001d96825ed1": "Hämta modeller",
+  "f7c3ae7a79ede728": "Testa",
+  "304d6712ac5d3a89": [
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " svarade. Det fungerar."
+  ],
+  "8fd4f32208fe09a7": "Kontext",
+  "ac7708c9c4d37972": "In $/1M",
+  "fa49dc5a535b813f": "Ut $/1M",
+  "d76f635ed9a84ba4": "Lägg till modell",
   "3e90738d0ff19a29": "Databas",
   "9e28cb72cb075933": "Återta frigjort databasutrymme",
   "881b21a84162fe36": "Databaserna håller fortfarande utrymme som frigjorts av historikrensning.",
@@ -7981,7 +8031,6 @@
   "0c99fa183ed512e8": "{platform} tillgänglig på vissa",
   "e6886a7f77b73a8e": "{platform} inte tillgänglig",
   "b0b7610d9860d18d": "Inte konfigurerad på den här datorn.",
-  "f5b66c481aa3e4df": "Redigera",
   "3b20ef0670ae4b0b": "Dator via SSH",
   "121ccffacb6b8c6d": "Expo-simulatorer",
   "130b55a1410a8030": "Simlock-pool (alfa)",
@@ -8108,7 +8157,6 @@
   "c2839b56a6559626": "Lägg till Expo-värd",
   "1811151659ca00cd": "Redigera Expo-värd",
   "90608ad3c92d9374": "Expo-åtkomsttoken",
-  "d8fb763eb069ba1d": "Valfritt",
   "fd9fd1bdd6e1c4c4": "Rensa åtkomsttoken",
   "0e600459b655584a": "Kontrollerar Expo-kontot…",
   "b8ff40ed1ab41abb": "Kontrollera Expo-kontot innan du väljer ett projekt.",
@@ -8404,7 +8452,6 @@
   "0c2c53ada3f0e93c": "Välj en miljö för att redigera dess granskare.",
   "05766f1d708a32a9": "Flytta upp",
   "f3208165e06efd92": "Flytta ned",
-  "111a44209dc6e701": "Ta bort",
   "f2cce1ba02bccda3": "Lägg till granskare",
   "13ef526271b0f5d4": "Rensa alla villkor",
   "d1938a629f039515": "Ta bort villkor",
@@ -9250,7 +9297,6 @@
   "8188ba79577edefb": "Cursor-konto",
   "bf587581b2a3d24d": "Använder CURSOR_API_KEY. Ta bort den från leverantörens miljö för att logga in via webbläsaren.",
   "b0481e41f335f1d2": "Återställ leverantörsinställningar för {provider} till standard",
-  "1a0c999db1e9896a": "Lägg till leverantör",
   "5f4280344b1853ea": "Uppdatera leverantörsstatus",
   "b298eb788d3443ee": "Konfiguration av Antigravity",
   "21668b75015a6d1d": "Enheten som kör den här leverantören.",
@@ -9675,15 +9721,6 @@
   ],
   "13d4f258e93f1dc1": "Anslut en miljö för att hantera de hemlighetsleverantörer som dess leverantörsvariabler läser från.",
   "88466f5a03be2419": "Inställning för hela miljön. Välj en miljö för att ändra den.",
-  "a3538ba5ca802bd7": [
-    "Ta bort ",
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    "?"
-  ],
   "0d5b3b39f92c04e4": "Ta bort leverantör",
   "c52bdbe39649742c": [
     "Inget läser från ",
@@ -10895,7 +10932,6 @@
   "5b928a84a624e831": "Körs: {url}",
   "b07718fe86a16cc6": "Körning: inaktiverad",
   "6d0831556a517821": "Skicka spårningar, mätvärden och loggar till en OTLP HTTP-mottagare. Starta om servern för att tillämpa. Miljövariabler åsidosätter de här inställningarna.",
-  "f7c3ae7a79ede728": "Testa",
   "b93d2ec53e944576": [
     "Körs: ",
     {
@@ -10937,7 +10973,6 @@
   "2d411bb0736c0643": "Inga textgeneratorer än",
   "85eb2d15da7d016f": "Lägg till ett modell-API för att skriva trådtitlar, commit-meddelanden och annan kort text utan att starta en kodagent.",
   "1d32dad13ca765db": "Av · ",
-  "1ece6e9c15a13601": "Fler åtgärder för {name}",
   "ebffe4dabf52835f": "Aktivera {name}",
   "b663e2e129c61493": "Lägg till en textgenerator",
   "149ffa363168a419": "Skriver trådtitlar, commit-meddelanden och annan kort text utan att starta en kodagent. Din API-nyckel lagras i den här miljön.",
@@ -10973,16 +11008,7 @@
     },
     ". Allt som är inställt på att använda den här generatorn faller tillbaka på modellen för textgenerering."
   ],
-  "c732b08a5fa8c3d7": "Bas-URL",
   "3953d1cccd71ab7e": "Namn (valfritt)",
-  "304d6712ac5d3a89": [
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    " svarade. Det fungerar."
-  ],
   "74718b8533319acb": "Följer modellen för textgenerering",
   "b2ae5ae37b088f1b": "Inga modeller matchar.",
   "84853da6b47fd3ab": "Bakgrund",
@@ -12119,7 +12145,6 @@
   "68bc1b236beb479c": "Vissa miljöpriser är inte tillgängliga.",
   "1d7c1c825867201a": "Inga anpassade priser eller mappningar. Lägg till en rad för att ange en.",
   "9807b3b1b7737f7b": "Nytt modell-id",
-  "9251780434eabeda": "Modell-id",
   "a8caf39f800ebfb2": "Mappa {model} till modell",
   "df3ed6ae1631af26": "ny modell",
   "bed70a4f95b2f17f": "Pris för {field} för {model}",
