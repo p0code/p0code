@@ -2807,6 +2807,9 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     const repoRoot = yield* RepoRoot;
     buildConfig.mac = {
       target: target === "dmg" ? [target, "zip"] : [target],
+      // Without a certificate, seal the whole bundle ad hoc; Electron's linker-only signature makes
+      // Gatekeeper call a downloaded app "damaged" instead of from an unidentified developer.
+      ...(signed ? {} : { identity: "-" }),
       icon: "icon.icns",
       category: "public.app-category.developer-tools",
       extendInfo: {
