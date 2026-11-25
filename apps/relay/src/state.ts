@@ -1,5 +1,5 @@
 // Node-native relay adapter has no Effect runtime; timers and clocks follow socket/token lifetimes.
-// @effect-diagnostics nodeBuiltinImport:off globalTimers:off globalDate:off
+// @effect-diagnostics nodeBuiltinImport:off globalTimers:off globalDate:off extendsNativeError:off
 import * as NodeSqlite from "node:sqlite";
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
