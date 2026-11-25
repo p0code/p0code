@@ -28,6 +28,9 @@ import {
 } from "@t3tools/provider-core/server/driver";
 import type { ServerProviderDraft } from "@t3tools/provider-core/server/snapshotProbe";
 import { mergeProviderInstanceEnvironment } from "@t3tools/provider-core/server/instanceEnvironment";
+import { customModelProviderKeyEnvironment } from "@t3tools/provider-core/server/customModelProviders";
+import * as HostProcess from "@t3tools/shared/HostProcess";
+import { piCustomProvidersEnvironment, readPiUserModelProviders } from "./customProviders.ts";
 import {
   makeCachedProviderMaintenanceResolution,
   makePackageManagedProviderMaintenanceResolver,
@@ -64,9 +67,15 @@ const withInstanceIdentity =
     readonly displayName: string | undefined;
     readonly accentColor: string | undefined;
     readonly continuationGroupKey: string;
+    readonly customProviders: PiSettings["customProviders"];
   }) =>
   (snapshot: ServerProviderDraft): ServerProvider => ({
     ...snapshot,
+    // Pi groups models by provider id; the picker shows the name the user gave a custom one.
+    models: snapshot.models.map((model) => {
+      const custom = input.customProviders.find((provider) => provider.id === model.subProvider);
+      return custom ? { ...model, subProvider: custom.name } : model;
+    }),
     instanceId: input.instanceId,
     driver: DRIVER_KIND,
     ...(input.displayName ? { displayName: input.displayName } : {}),
@@ -87,7 +96,7 @@ export const PiDriver: ProviderDriver<PiSettings, PiDriverEnv, Path.Path> = {
     instanceId,
     displayName,
     accentColor,
-    environment,
+    environment: userEnvironment,
     enabled,
     config,
   }) {
@@ -99,7 +108,32 @@ export const PiDriver: ProviderDriver<PiSettings, PiDriverEnv, Path.Path> = {
     const host = yield* ProviderHost.ProviderHost;
     // Pi runs extensions' session_start in its cwd; the server's cwd is $HOME on packaged desktop.
     const probeCwd = pathService.join(host.paths.providerStatusCacheDir, "pi-status-probe");
+    const home = yield* HostProcess.HomeDirectory;
+    const keyEnvironment = customModelProviderKeyEnvironment(config);
+    const environment = [
+      ...userEnvironment,
+      ...keyEnvironment,
+      ...(yield* piCustomProvidersEnvironment({
+        providers: config.customProviders,
+        keyEnvironment,
+        stateDir: host.paths.stateDir,
+        instanceId,
+      }).pipe(
+        Effect.provideService(FileSystem.FileSystem, fileSystem),
+        Effect.provideService(Path.Path, pathService),
+        Effect.mapError(
+          (cause) =>
+            new ProviderDriverError({
+              driver: DRIVER_KIND,
+              instanceId,
+              detail: "Failed to write the Pi custom provider extension.",
+              cause,
+            }),
+        ),
+      )),
+    ];
     const processEnv = yield* mergeProviderInstanceEnvironment(environment);
+    const userProcessEnv = yield* mergeProviderInstanceEnvironment(userEnvironment);
     const continuationIdentity = defaultProviderContinuationIdentity({
       driverKind: DRIVER_KIND,
       instanceId,
@@ -109,6 +143,7 @@ export const PiDriver: ProviderDriver<PiSettings, PiDriverEnv, Path.Path> = {
       displayName,
       accentColor,
       continuationGroupKey: continuationIdentity.continuationKey,
+      customProviders: config.customProviders,
     });
     const effectiveConfig = { ...config, enabled } satisfies PiSettings;
     const resolveMaintenance = yield* makeCachedProviderMaintenanceResolution(
@@ -224,6 +259,10 @@ export const PiDriver: ProviderDriver<PiSettings, PiDriverEnv, Path.Path> = {
                 slashCommandsPending: false,
               })),
             ),
+      listUserModelProviders: readPiUserModelProviders(userProcessEnv, home).pipe(
+        Effect.provideService(FileSystem.FileSystem, fileSystem),
+        Effect.provideService(Path.Path, pathService),
+      ),
       orchestrationAdapter,
       textGeneration,
     } satisfies ProviderInstance;

@@ -1,4 +1,9 @@
 import {
+  ListCustomProviderModelsInput,
+  ListUserModelProvidersInput,
+  ListUserModelProvidersResult,
+} from "./customModelProvider.ts";
+import {
   SelfRelayStatus,
   SelfRelayLink,
   RelayExposePort,
@@ -650,6 +655,8 @@ export const WS_METHODS = {
   serverRetryResourceTelemetry: "server.retryResourceTelemetry",
   serverCheckOtlpEndpoint: "server.checkOtlpEndpoint",
   serverListTextGeneratorModels: "server.listTextGeneratorModels",
+  serverListCustomProviderModels: "server.listCustomProviderModels",
+  serverListUserModelProviders: "server.listUserModelProviders",
   serverPrepareTriage: "server.prepareTriage",
   serverSignalProcess: "server.signalProcess",
   serverReportClientActivity: "server.reportClientActivity",
@@ -1202,6 +1209,18 @@ const WsServerListTextGeneratorModelsRpc = Rpc.make(WS_METHODS.serverListTextGen
   payload: ListTextGeneratorModelsInput,
   success: ListTextGeneratorModelsResult,
   error: Schema.Union([TextGeneratorError, EnvironmentAuthorizationError]),
+});
+
+const WsServerListCustomProviderModelsRpc = Rpc.make(WS_METHODS.serverListCustomProviderModels, {
+  payload: ListCustomProviderModelsInput,
+  success: ListTextGeneratorModelsResult,
+  error: Schema.Union([TextGeneratorError, EnvironmentAuthorizationError]),
+});
+
+const WsServerListUserModelProvidersRpc = Rpc.make(WS_METHODS.serverListUserModelProviders, {
+  payload: ListUserModelProvidersInput,
+  success: ListUserModelProvidersResult,
+  error: EnvironmentAuthorizationError,
 });
 
 const WsServerPrepareTriageRpc = Rpc.make(WS_METHODS.serverPrepareTriage, {
@@ -2624,6 +2643,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerRetryResourceTelemetryRpc,
   WsServerCheckOtlpEndpointRpc,
   WsServerListTextGeneratorModelsRpc,
+  WsServerListCustomProviderModelsRpc,
+  WsServerListUserModelProvidersRpc,
   WsServerPrepareTriageRpc,
   WsServerGetUsageSummaryRpc,
   WsServerGetProjectCostRpc,

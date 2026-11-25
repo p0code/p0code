@@ -1,6 +1,7 @@
 // Shared with the client settings form; keep schema code browser-safe.
 import {
   CustomModelSetting,
+  customModelProviderSettingsFields,
   makeBinaryPathSetting,
   makeProviderSettingsSchema,
   secretSetting,
@@ -54,6 +55,7 @@ export const OpenCodeSettings = makeProviderSettingsSchema(
       Schema.withDecodingDefault(Effect.succeed([])),
       Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
     ),
+    ...customModelProviderSettingsFields,
   },
   {
     order: ["binaryPath", "serverUrl", "serverPassword"],

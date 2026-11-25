@@ -9,6 +9,7 @@ import type {
   ResolvedProviderInstanceEnvironment,
   ProviderInstanceId,
   ServerProvider,
+  UserModelProvider,
   ServerProviderWorkspaceSnapshot,
 } from "@t3tools/contracts";
 import type * as Effect from "effect/Effect";
@@ -57,6 +58,8 @@ export interface ProviderInstance {
    */
   readonly workspaceRescans?: Stream.Stream<string>;
   readonly refreshModels?: () => Effect.Effect<void, ProviderDriverError>;
+  /** Model providers configured in the agent's own files, which p0code lists but never edits. */
+  readonly listUserModelProviders?: Effect.Effect<ReadonlyArray<UserModelProvider>>;
   readonly invalidateCaches?: Effect.Effect<void>;
   /** Moves a long-lived service onto a newly updated binary before its version is read back. */
   readonly afterUpdate?: Effect.Effect<void, ProviderDriverError>;

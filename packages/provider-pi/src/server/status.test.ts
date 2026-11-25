@@ -172,6 +172,8 @@ const settings = {
   binaryPath: "pi",
   launchArgs: "",
   customModels: [],
+  customProviders: [],
+  customProviderApiKeys: {},
 } as const;
 
 const BROKEN_ADVISORY = {

@@ -46,6 +46,8 @@ export interface ProviderClientDefinition {
   readonly featured?: boolean;
   /** ACP Registry entries for this same agent, left out of Add provider's Registry list. */
   readonly acpRegistryAgentIds?: ReadonlyArray<string>;
+  /** The settings carry `customModelProviderSettingsFields`, which Settings edits on its own. */
+  readonly customModelProviders?: boolean;
 }
 
 export function defineProviderClient<const Definition extends ProviderClientDefinition>(

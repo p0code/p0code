@@ -1,4 +1,5 @@
 import { assert, describe, expect, it } from "@effect/vitest";
+import { PI_CUSTOM_PROVIDERS_EXTENSION_ENV } from "./customProviders.ts";
 import { EnvironmentId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
 
 import {
@@ -126,6 +127,20 @@ describe("pi T3 MCP injection", () => {
       "--offline",
       "--no-extensions",
       "--no-tools",
+    ]);
+    // p0code's custom providers stay reachable, so text generation can use their models.
+    const withCustomProviders = buildPiRpcLaunch({
+      launchArgs: [],
+      environment: { [PI_CUSTOM_PROVIDERS_EXTENSION_ENV]: "/state/custom-providers/pi-pi.js" },
+      mcpSession: undefined,
+      extensionPath: undefined,
+      ephemeral: true,
+      disableExtensions: true,
+    });
+    assert.deepEqual(withCustomProviders.args.slice(-3), [
+      "--no-extensions",
+      "--extension",
+      "/state/custom-providers/pi-pi.js",
     ]);
     const alreadyOffline = buildPiRpcLaunch({
       launchArgs: ["--offline"],

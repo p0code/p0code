@@ -1,4 +1,5 @@
 import { tokenizeCliArgs } from "@t3tools/shared/cliArgs";
+import { PI_CUSTOM_PROVIDERS_EXTENSION_ENV } from "./customProviders.ts";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 
@@ -291,6 +292,11 @@ export function buildPiRpcLaunch(input: {
     !hasExplicitExtension(args, input.extensionPath)
   ) {
     args.push("--extension", input.extensionPath);
+  }
+  // Explicit extensions still load under --no-extensions, so text generation reaches these models.
+  const providersExtension = input.environment[PI_CUSTOM_PROVIDERS_EXTENSION_ENV];
+  if (providersExtension && !hasExplicitExtension(args, providersExtension)) {
+    args.push("--extension", providersExtension);
   }
   const environment = { ...input.environment };
   // MCP credentials belong to this T3 session; discard inherited server/parent credentials.

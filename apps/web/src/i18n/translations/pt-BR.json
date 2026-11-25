@@ -7836,6 +7836,56 @@
   "b1137657751dd7f0": "Copiar de…",
   "5bcce79726ce6ad8": "Nenhuma opção personalizada. O editor de mensagens usa as opções padrão do provedor.",
   "b584f8e39d1179c7": "Opção personalizada",
+  "bb1fccbc06e5d83d": "Provedores personalizados",
+  "3ceca2155cf4d14d": "Nenhum provedor personalizado ainda",
+  "719b93b3af2b1a25": "Conecte uma API compatível com OpenAI ou Anthropic e os modelos dela entram no seletor de modelos.",
+  "06890476636a8436": "{count, plural, one {{host} · {count} modelo} other {{host} · {count} modelos}}",
+  "1ece6e9c15a13601": "Mais ações para {name}",
+  "583a2409d07309b4": "{count, plural, one {Em {file} · {count} modelo} other {Em {file} · {count} modelos}}",
+  "129d0fb206d1ee5f": "Adicionar um provedor personalizado",
+  "c1514274babbebf6": "Compatível com Anthropic",
+  "49bb3f715cfdb96a": "Compatível com OpenAI",
+  "c6dff0cf3f17769e": "Salva. Digite para substituí-la.",
+  "d8fb763eb069ba1d": "Opcional",
+  "9251780434eabeda": "ID do modelo",
+  "8a308f4da227214b": "Janela de contexto de {model}",
+  "ffb05db855586429": "Preço de entrada de {model}",
+  "0fd92681500bb56a": "Preço de saída de {model}",
+  "651cb409bda342a8": "Remover {model}",
+  "1a0c999db1e9896a": "Adicionar provedor",
+  "f5b66c481aa3e4df": "Editar",
+  "111a44209dc6e701": "Remover",
+  "a3538ba5ca802bd7": [
+    "Remover ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    "?"
+  ],
+  "2fc8fa3dfaa885e8": "Os modelos dele saem do seletor de modelos e a chave de API salva é excluída.",
+  "7dafd7b4181e6d7f": "ID do provedor",
+  "d883637c874eed52": "Estilo da API",
+  "23783b23feb80f9a": "Compatível com OpenAI",
+  "d98677b10030a98a": "Compatível com Anthropic",
+  "c732b08a5fa8c3d7": "URL base",
+  "b0900f4938210634": "Chave de API",
+  "6af3b30604820829": "Modelos",
+  "779b001d96825ed1": "Carregar modelos",
+  "f7c3ae7a79ede728": "Testar",
+  "304d6712ac5d3a89": [
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " respondeu. Funciona."
+  ],
+  "8fd4f32208fe09a7": "Contexto",
+  "ac7708c9c4d37972": "Entrada $/1M",
+  "fa49dc5a535b813f": "Saída $/1M",
+  "d76f635ed9a84ba4": "Adicionar modelo",
   "3e90738d0ff19a29": "Banco de dados",
   "9e28cb72cb075933": "Recuperar espaço liberado do banco de dados",
   "881b21a84162fe36": "Estes bancos de dados ainda retêm o espaço liberado pela limpeza do histórico.",
@@ -7975,7 +8025,6 @@
   "0c99fa183ed512e8": "{platform} disponível em alguns",
   "e6886a7f77b73a8e": "{platform} indisponível",
   "b0b7610d9860d18d": "Não configurado nesta máquina.",
-  "f5b66c481aa3e4df": "Editar",
   "3b20ef0670ae4b0b": "Máquina via SSH",
   "121ccffacb6b8c6d": "Simuladores do Expo",
   "130b55a1410a8030": "Pool do Simlock (alfa)",
@@ -8100,7 +8149,6 @@
   "c2839b56a6559626": "Adicionar host Expo",
   "1811151659ca00cd": "Editar host Expo",
   "90608ad3c92d9374": "Token de acesso do Expo",
-  "d8fb763eb069ba1d": "Opcional",
   "fd9fd1bdd6e1c4c4": "Limpar token de acesso",
   "0e600459b655584a": "Verificando a conta Expo…",
   "b8ff40ed1ab41abb": "Verifique a conta Expo antes de escolher um projeto.",
@@ -8396,7 +8444,6 @@
   "0c2c53ada3f0e93c": "Selecione um ambiente para editar seus avaliadores.",
   "05766f1d708a32a9": "Mover para cima",
   "f3208165e06efd92": "Mover para baixo",
-  "111a44209dc6e701": "Remover",
   "f2cce1ba02bccda3": "Adicionar avaliador",
   "13ef526271b0f5d4": "Limpar todas as condições",
   "d1938a629f039515": "Remover condição",
@@ -9245,7 +9292,6 @@
   "8188ba79577edefb": "Conta do Cursor",
   "bf587581b2a3d24d": "Usando CURSOR_API_KEY. Remova-a do ambiente deste provedor para entrar pelo navegador.",
   "b0481e41f335f1d2": "Redefinir as configurações do provedor {provider} para o padrão",
-  "1a0c999db1e9896a": "Adicionar provedor",
   "5f4280344b1853ea": "Atualizar status do provedor",
   "b298eb788d3443ee": "Configuração do Antigravity",
   "21668b75015a6d1d": "Dispositivo que executa este provedor.",
@@ -9668,15 +9714,6 @@
   ],
   "13d4f258e93f1dc1": "Conecte um ambiente para gerenciar os provedores de segredos de onde as variáveis de provedor dele leem.",
   "88466f5a03be2419": "Configuração do ambiente inteiro. Selecione um ambiente para alterá-la.",
-  "a3538ba5ca802bd7": [
-    "Remover ",
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    "?"
-  ],
   "0d5b3b39f92c04e4": "Remover provedor",
   "c52bdbe39649742c": [
     "Nada lê de ",
@@ -10888,7 +10925,6 @@
   "5b928a84a624e831": "Em execução: {url}",
   "b07718fe86a16cc6": "Em execução: desativado",
   "6d0831556a517821": "Envia traces, métricas e logs a um receptor OTLP HTTP. Reinicie o servidor para aplicar. Variáveis de ambiente substituem estas configurações.",
-  "f7c3ae7a79ede728": "Testar",
   "b93d2ec53e944576": [
     "Em execução: ",
     {
@@ -10930,7 +10966,6 @@
   "2d411bb0736c0643": "Nenhum gerador de texto ainda",
   "85eb2d15da7d016f": "Adicione uma API de modelo para escrever títulos de threads, mensagens de commit e outros textos curtos sem iniciar um agente de código.",
   "1d32dad13ca765db": "Desativado · ",
-  "1ece6e9c15a13601": "Mais ações para {name}",
   "ebffe4dabf52835f": "Ativar {name}",
   "b663e2e129c61493": "Adicionar um gerador de texto",
   "149ffa363168a419": "Escreve títulos de threads, mensagens de commit e outros textos curtos sem iniciar um agente de código. Sua chave de API é armazenada neste ambiente.",
@@ -10966,16 +11001,7 @@
     },
     ". Tudo o que estiver configurado para usar este gerador volta para o modelo de geração de texto."
   ],
-  "c732b08a5fa8c3d7": "URL base",
   "3953d1cccd71ab7e": "Nome (opcional)",
-  "304d6712ac5d3a89": [
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    " respondeu. Funciona."
-  ],
   "74718b8533319acb": "Segue o modelo de geração de texto",
   "b2ae5ae37b088f1b": "Nenhum modelo corresponde.",
   "84853da6b47fd3ab": "Fundo",
@@ -12112,7 +12138,6 @@
   "68bc1b236beb479c": "Alguns preços de ambientes não estão disponíveis.",
   "1d7c1c825867201a": "Nenhum preço ou mapeamento personalizado. Adicione uma linha para definir um.",
   "9807b3b1b7737f7b": "ID do novo modelo",
-  "9251780434eabeda": "ID do modelo",
   "a8caf39f800ebfb2": "Mapear {model} para o modelo",
   "df3ed6ae1631af26": "novo modelo",
   "bed70a4f95b2f17f": "Preço de {field} para {model}",

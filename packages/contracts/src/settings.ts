@@ -19,6 +19,7 @@ import {
   ForwardCompatibleNullable,
   ForwardCompatibleOptional,
   OmittedWhenNull,
+  PositiveInt,
   ProjectId,
   ThreadId,
   TrimmedNonEmptyString,
@@ -990,7 +991,7 @@ export type UsageLimitSourceConfig = typeof UsageLimitSourceConfig.Type;
 export const TextGeneratorKind = Schema.Literals(["openaiCompatible", "anthropic"]);
 export type TextGeneratorKind = typeof TextGeneratorKind.Type;
 
-const TextGeneratorBaseUrl = TrimmedNonEmptyString.check(
+export const TextGeneratorBaseUrl = TrimmedNonEmptyString.check(
   Schema.isMaxLength(2048),
   Schema.makeFilter((value) => {
     try {
@@ -1021,6 +1022,8 @@ export type TextGeneratorConfig = typeof TextGeneratorConfig.Type;
 export const TextGeneratorModel = Schema.Struct({
   id: TrimmedNonEmptyString,
   name: TrimmedNonEmptyString,
+  /** Tokens, when the API's model list says. */
+  contextWindow: Schema.optional(PositiveInt),
 });
 export type TextGeneratorModel = typeof TextGeneratorModel.Type;
 
