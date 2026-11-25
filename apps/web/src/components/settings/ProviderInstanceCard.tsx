@@ -64,6 +64,7 @@ import {
   seedRowsDraft,
 } from "./ProviderSettingsForm";
 import { ProviderModelsSection } from "./ProviderModelsSection";
+import { CustomModelProvidersSection } from "./CustomModelProvidersSection";
 import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
 import { ProviderAccentColorPicker } from "./ProviderAccentColorPicker";
 import { RedactedSensitiveText } from "./RedactedSensitiveText";
@@ -938,9 +939,9 @@ export function ProviderInstanceCard({
     );
   };
 
-  const updateConfig = (nextConfig: Record<string, unknown> | undefined) => {
+  const updateConfig = (nextConfig: Readonly<Record<string, unknown>> | undefined) => {
     const { config: _omit, ...rest } = instance;
-    onUpdate(
+    return onUpdate(
       nextConfig !== undefined
         ? ({ ...rest, config: nextConfig } as ProviderInstanceConfig)
         : (rest as ProviderInstanceConfig),
@@ -1481,6 +1482,16 @@ export function ProviderInstanceCard({
           provider={liveProvider}
           projects={acpProjects}
           readOnly={readOnly}
+        />
+      ) : null}
+
+      {environmentId !== undefined && driverOption?.customModelProviders ? (
+        <CustomModelProvidersSection
+          environmentId={environmentId}
+          instanceId={instanceId}
+          config={instance.config}
+          readOnly={readOnly}
+          onConfigChange={updateConfig}
         />
       ) : null}
 
