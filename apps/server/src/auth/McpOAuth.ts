@@ -11,6 +11,7 @@ import {
   type AuthMcpTokenResult,
   type AuthMcpClientAccess,
   type AuthEnvironmentScope,
+  type AuthGrantScope,
   AuthOrchestrationOperateScope,
   AuthOrchestrationReadScope,
   MCP_PEER_LINK_SOFTWARE_ID,
@@ -19,7 +20,7 @@ import {
   type RuntimeMode,
 } from "@t3tools/contracts";
 import { DEFAULT_HOSTED_APP_URL } from "@t3tools/shared/hostedAppUrl";
-import { encodeOAuthScope } from "@t3tools/shared/oauthScope";
+import { encodeOAuthScope, parseOAuthScope } from "@t3tools/shared/oauthScope";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Digest from "effect/crypto/Digest";
@@ -65,6 +66,42 @@ const CODE_CHALLENGE_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 const CODE_VERIFIER_PATTERN = /^[A-Za-z0-9\-._~]{43,128}$/;
 
 const MCP_OAUTH_SCOPES = [AuthOrchestrationReadScope, AuthOrchestrationOperateScope];
+const MCP_OAUTH_SCOPE_SET = new Set<string>(MCP_OAUTH_SCOPES);
+/** A client that names no scope gets the narrowest grant, as if it asked for read only. */
+const DEFAULT_MCP_SCOPES: ReadonlyArray<AuthGrantScope> = [AuthOrchestrationReadScope];
+
+/**
+ * The scopes a client asked for, or undefined when it named something this server does not
+ * issue. Operate implies read: the two travel together in every access level.
+ */
+const requestedMcpScopes = (
+  request: AuthMcpAuthorizationRequest,
+): ReadonlyArray<AuthGrantScope> | undefined => {
+  if (request.scope === undefined) return DEFAULT_MCP_SCOPES;
+  const parsed = parseOAuthScope(request.scope);
+  if (parsed === null || !parsed.every((scope) => MCP_OAUTH_SCOPE_SET.has(scope))) return undefined;
+  return parsed.includes(AuthOrchestrationOperateScope)
+    ? [AuthOrchestrationReadScope, AuthOrchestrationOperateScope]
+    : [AuthOrchestrationReadScope];
+};
+
+/**
+ * The least access level that grants exactly these scopes. `full-access` also carries settings
+ * and source-control scopes, so a request that only named MCP scopes never keeps it.
+ */
+const accessForScopes = (
+  granted: ReadonlyArray<AuthGrantScope>,
+  decided: AuthMcpClientAccess,
+): AuthMcpClientAccess => {
+  if (!granted.includes(AuthOrchestrationOperateScope)) return "read-only";
+  return decided === "full-access" ? "auto" : decided;
+};
+
+const intersectScopes = (
+  requested: ReadonlyArray<AuthGrantScope>,
+  ...sets: ReadonlyArray<ReadonlyArray<string>>
+): ReadonlyArray<AuthGrantScope> =>
+  requested.filter((scope) => sets.every((set) => set.includes(scope)));
 
 export interface McpOAuthUrls {
   readonly issuer: string;
@@ -172,7 +209,12 @@ export class McpOAuthPageError extends Schema.TaggedError<McpOAuthPageError>()(
 export class McpOAuthRedirectError extends Schema.TaggedError<McpOAuthRedirectError>()(
   "McpOAuthRedirectError",
   {
-    error: Schema.Literals(["invalid_request", "unsupported_response_type", "invalid_target"]),
+    error: Schema.Literals([
+      "invalid_request",
+      "unsupported_response_type",
+      "invalid_target",
+      "invalid_scope",
+    ]),
     description: Schema.String,
     redirectUri: Schema.String,
     state: Schema.optional(Schema.RedactedFromValue(Schema.String)),
@@ -186,6 +228,8 @@ export interface AuthorizationRequest {
   readonly state: Redacted.Redacted<string> | undefined;
   readonly resource: string;
   readonly issuer: string;
+  /** What the client asked for; a grant never exceeds it. */
+  readonly scopes: ReadonlyArray<AuthGrantScope>;
 }
 
 interface PendingCode {
@@ -414,6 +458,13 @@ const make = Effect.gen(function* () {
     if (!sameResource(urls, request.resource)) {
       return yield* fail("invalid_target", `This server only issues tokens for ${urls.resource}.`);
     }
+    const scopes = requestedMcpScopes(request);
+    if (scopes === undefined) {
+      return yield* fail(
+        "invalid_scope",
+        `Only ${MCP_OAUTH_SCOPES.join(" and ")} can be requested.`,
+      );
+    }
     return {
       client,
       redirectUri,
@@ -421,6 +472,7 @@ const make = Effect.gen(function* () {
       state,
       resource: urls.resource,
       issuer: urls.issuer,
+      scopes,
     } satisfies AuthorizationRequest;
   });
 
@@ -472,40 +524,66 @@ const make = Effect.gen(function* () {
     // Read before the approver is checked: "revoke all others" then ends this sign-in whether
     // it lands before the check or after the code is handed out.
     const approvedAtRevocationCount = yield* environmentAuth.otherSessionRevocationCount;
-    let access = decision.access;
+    const requested = input.authorization.scopes;
+    let access: AuthMcpClientAccess;
     if (decision._tag === "pairing-code") {
       // An approval code is for one app's sign-in, never for linking another environment.
-      if (input.authorization.client.peerLink && parseMcpApprovalCode(decision.code)) {
+      const codeLevel = parseMcpApprovalCode(decision.code)?.access;
+      if (input.authorization.client.peerLink && codeLevel !== undefined) {
         return yield* new McpOAuthPageError({
           description: "Linking needs a plain pairing code, not an app approval code.",
         });
       }
-      access = yield* environmentAuth
-        .consumeMcpApprovalCode(decision.code, decision.access, input.authorization.client.peerLink)
-        .pipe(
-          Effect.catchIf(EnvironmentAuth.isServerAuthInternalError, (cause) =>
-            Effect.logError("MCP approval code check failed.", { cause }).pipe(
-              Effect.andThen(
-                Effect.fail(
-                  new McpOAuthPageError({
-                    description: "The code could not be checked. Try again.",
-                  }),
+      // An app code names its level; approving it as another would spend a grant it does not carry.
+      if (codeLevel !== undefined && codeLevel !== decision.access) {
+        return yield* new McpOAuthPageError({
+          description: "That code approves a different access level. Enter the code's own level.",
+        });
+      }
+      const consume = (level: AuthMcpClientAccess) =>
+        environmentAuth
+          .consumeMcpApprovalCode(decision.code, level, input.authorization.client.peerLink)
+          .pipe(
+            Effect.catchIf(EnvironmentAuth.isServerAuthInternalError, (cause) =>
+              Effect.logError("MCP approval code check failed.", { cause }).pipe(
+                Effect.andThen(
+                  Effect.fail(
+                    new McpOAuthPageError({
+                      description: "The code could not be checked. Try again.",
+                    }),
+                  ),
                 ),
               ),
             ),
-          ),
-        );
+          );
+      // An app code names its own level; a plain code is bounded by the decision. When only a
+      // narrower grant is asked for, try that bound so a wider code is clamped, never widened.
+      const candidate = codeLevel ?? decision.access;
+      const consumed = yield* consume(candidate).pipe(
+        Effect.catchIf(
+          (error) =>
+            codeLevel === undefined &&
+            candidate !== "read-only" &&
+            error._tag === "ServerAuthMcpApprovalCodeError" &&
+            error.reason === "insufficient_scope",
+          () => consume("read-only"),
+        ),
+      );
+      const granted = intersectScopes(requested, mcpClientScopes(consumed));
+      access = accessForScopes(granted, consumed);
     } else {
       const session = yield* approvingSession(input.request, input.authorization);
       if (
         session === undefined ||
-        !timingSafeEqualBase64Url(decision.csrfToken, session.csrfToken) ||
-        !mcpClientScopes(decision.access).every((scope) => session.scopes.includes(scope))
+        !timingSafeEqualBase64Url(decision.csrfToken, session.csrfToken)
       ) {
         return yield* new McpOAuthPageError({
           description: "Your session cannot approve this request. Enter a pairing code instead.",
         });
       }
+      // Clamp to what this session holds: a narrower ask or a narrower holder wins.
+      const granted = intersectScopes(requested, mcpClientScopes(decision.access), session.scopes);
+      access = accessForScopes(granted, decision.access);
     }
     const code = yield* mintCode(input.authorization, access, approvedAtRevocationCount);
     yield* Effect.logInfo("Approved an MCP client sign-in.", {

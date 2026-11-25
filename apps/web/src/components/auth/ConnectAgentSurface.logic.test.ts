@@ -21,8 +21,13 @@ it("checks a typed code even in a signed-in browser, and approves without one at
     clientName: "Poke",
     redirectHost: "poke.com",
     environmentHost: "prod-a1.t3coderelay.com",
+    requestedScopes: ["orchestration:read" as const],
   };
-  const details = { ...signedOut, csrfToken: "csrf", oneClickAccess: AuthMcpClientAccess.literals };
+  const details = {
+    ...signedOut,
+    csrfToken: "csrf",
+    oneClickAccess: AuthMcpClientAccess.literals,
+  };
   const access = resolveMcpAccess(null, undefined, false);
 
   // A typed code starts at Auto, and an expired one must fail rather than fall back to this session.

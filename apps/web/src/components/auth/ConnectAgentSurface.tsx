@@ -4,6 +4,7 @@ import {
   AuthMcpApprovalError,
   AuthMcpClientAccess,
   AuthMcpAuthorizationRequest,
+  AuthOrchestrationOperateScope,
   isRuntimeModeAbove,
   parseMcpApprovalCode,
 } from "@t3tools/contracts";
@@ -297,6 +298,16 @@ function McpConsent({
             <Var>{details.clientName}</Var>{" "}
             <span className="text-muted-foreground">· name set by the app</span>
           </T>
+        </dd>
+        <dt className="text-muted-foreground">
+          <T context="scopes the app asked for">Asked for</T>
+        </dt>
+        <dd className="min-w-0 break-words">
+          {details.requestedScopes.includes(AuthOrchestrationOperateScope) ? (
+            <T>Read and operate</T>
+          ) : (
+            <T>Read only</T>
+          )}
         </dd>
         <dt className="text-muted-foreground">
           <T>Access goes to</T>
