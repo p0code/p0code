@@ -17,7 +17,6 @@ import { stopChildProcessesBeforeExit, stopZygotesBeforeExit } from "./DesktopEx
 import { makeComponentLogger } from "./DesktopObservability.ts";
 import * as DesktopShutdown from "./DesktopShutdown.ts";
 import * as ElectronApp from "../electron/ElectronApp.ts";
-import * as ElectronProtocol from "../electron/ElectronProtocol.ts";
 import * as ElectronTheme from "../electron/ElectronTheme.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import * as DesktopState from "./DesktopState.ts";
@@ -232,11 +231,15 @@ export const make = DesktopLifecycle.of({
         return;
       }
       // Startup already acted on the app link that launched it; passing it on replays it.
-      const appLinkPrefix = `${ElectronProtocol.getDesktopScheme(environment.isDevelopment)}:`;
+      const appLinkPrefixes = environment.isDevelopment
+        ? ["hhhcode-dev:", "t3code-dev:"]
+        : ["hhhcode:", "t3code:"];
       const args = yield* HostProcess.Arguments;
       yield* electronApp.relaunch({
         execPath: yield* HostProcess.ExecutablePath,
-        args: args.slice(1).filter((arg) => !arg.toLowerCase().startsWith(appLinkPrefix)),
+        args: args
+          .slice(1)
+          .filter((arg) => !appLinkPrefixes.some((prefix) => arg.toLowerCase().startsWith(prefix))),
       });
       yield* electronApp.exit(0);
     }).pipe(
