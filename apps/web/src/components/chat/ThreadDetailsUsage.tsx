@@ -11,19 +11,28 @@ import type {
   UsageLimitSourceSnapshots,
 } from "@t3tools/contracts";
 import {
+  contextWindowDisplay,
+  displayPoolUsagePercent,
+  displayUsagePercent,
   type LimitPace,
   type LimitPoolWindow,
+  paceDisplayPercent,
   paceOf,
-  paceRemainingPercent,
   remainingPercent,
 } from "@t3tools/shared/usageLimits";
 import { formatUsd } from "@t3tools/shared/usageFormat";
-import { formatDuration, limitsNotice } from "@t3tools/shared/usageLimitsCopy";
+import {
+  formatContextWindowValue,
+  formatDuration,
+  formatPaceWindowPercent,
+  formatUsagePercent,
+  limitsNotice,
+} from "@t3tools/shared/usageLimitsCopy";
 import { Link } from "@tanstack/react-router";
 import { msg, useGT, useLocale, useMessages } from "gt-react";
 import type { ReactNode } from "react";
 
-import { usePrimarySettings } from "../../hooks/useSettings";
+import { useClientSettings, usePrimarySettings } from "../../hooks/useSettings";
 import { useNowMinute } from "../../hooks/useNowMinute";
 import type { ContextWindowSnapshot } from "@t3tools/client-runtime/state/context-window";
 import { formatContextWindowTokens } from "../../lib/contextWindow";
@@ -133,7 +142,7 @@ function InstanceRows({
   return limits.windows.map((window) => <LimitRow key={window.id} window={window} now={now} />);
 }
 
-/** The thread's context window. The bar fills as context is used; the tick marks auto-compaction. */
+/** The thread's context window. Bar fill, auto-compaction tick, and value follow usage display mode. */
 export function ThreadDetailsContext({
   usage,
   compact = false,
@@ -141,20 +150,19 @@ export function ThreadDetailsContext({
   readonly usage: ContextWindowSnapshot;
   readonly compact?: boolean;
 }) {
-  const maxTokens = usage.maxTokens != null && usage.maxTokens > 0 ? usage.maxTokens : null;
-  const used =
-    maxTokens !== null && usage.usedPercentage !== null
-      ? Math.round(Math.max(0, Math.min(100, usage.usedPercentage)))
-      : null;
+  const usageDisplayMode = useClientSettings((settings) => settings.usageDisplayMode);
+  const metrics = contextWindowDisplay(usage, usageDisplayMode);
+  const maxTokens = metrics.maxTokens;
+  const used = metrics.usedPercent;
   const threshold = usage.autoCompactThreshold ?? null;
-  const tick =
-    maxTokens !== null && threshold !== null && threshold > 0 && threshold < maxTokens
-      ? (threshold / maxTokens) * 100
-      : null;
   const gt = useGT();
   const m = useMessages();
   const locale = useLocale();
   const usedTokens = formatContextWindowTokens(usage.usedTokens);
+  const usagePercentLabel =
+    metrics.fillPercent !== null
+      ? formatUsagePercent(metrics.fillPercent, usageDisplayMode, m)
+      : null;
   return (
     <ThreadDetailsSection
       headingId="thread-details-context-heading"
@@ -165,33 +173,30 @@ export function ThreadDetailsContext({
       <div className="grid grid-cols-[auto_minmax(3rem,1fr)_auto] gap-x-3 text-xs">
         <UsageRow
           label={gt("Context", { $context: "context window row label" })}
-          fill={used}
+          fill={metrics.fillPercent}
           tone={used === null ? null : used >= 90 ? "error" : used >= 80 ? "warning" : null}
-          tick={tick}
+          tick={metrics.tickPercent}
           muted
-          value={
-            maxTokens !== null
-              ? `${usedTokens} / ${formatContextWindowTokens(maxTokens)}`
-              : usedTokens
-          }
-          ariaValue={
-            used !== null
-              ? gt("{used}% used", { used })
-              : gt("{usedTokens} tokens used", { usedTokens })
-          }
+          value={formatContextWindowValue(usage, usageDisplayMode, m)}
+          ariaValue={usagePercentLabel ?? gt("{usedTokens} tokens used", { usedTokens })}
           tooltip={
             <>
               <span className="text-foreground">
-                {used !== null
-                  ? gt("Context: {used}% used", { used })
+                {usagePercentLabel !== null
+                  ? gt("Context: {usage}", { usage: usagePercentLabel })
                   : gt("Context: {usedTokens} tokens used", { usedTokens })}
               </span>
               {maxTokens !== null ? (
                 <span className="text-muted-foreground">
-                  {gt("{used} of {max} tokens", {
-                    used: usage.usedTokens.toLocaleString(locale),
-                    max: maxTokens.toLocaleString(locale),
-                  })}
+                  {usageDisplayMode === "used"
+                    ? gt("{used} of {max} tokens used", {
+                        used: usage.usedTokens.toLocaleString(locale),
+                        max: maxTokens.toLocaleString(locale),
+                      })
+                    : gt("{remaining} of {max} tokens left", {
+                        remaining: (metrics.remainingTokens ?? 0).toLocaleString(locale),
+                        max: maxTokens.toLocaleString(locale),
+                      })}
                 </span>
               ) : null}
               {threshold !== null && threshold > 0 ? (
@@ -296,28 +301,33 @@ function LimitRow({
   const gt = useGT();
   const m = useMessages();
   const timestampFormat = usePrimarySettings((settings) => settings.timestampFormat);
+  const usageDisplayMode = useClientSettings((settings) => settings.usageDisplayMode);
   const left = remainingPercent(window);
+  const displayed = displayUsagePercent(window, usageDisplayMode);
   const pace = paceOf(window, now);
-  const timeLeft = paceRemainingPercent(window, now);
+  const pacePosition = paceDisplayPercent(window, now, usageDisplayMode);
+  const usageText = formatUsagePercent(displayed, usageDisplayMode, m);
+  const paceText =
+    pacePosition === null ? null : formatPaceWindowPercent(pacePosition, usageDisplayMode, m);
   const resetsAt = window.resetsAt ? Date.parse(window.resetsAt) : Number.NaN;
   return (
     <UsageRow
       label={window.label}
-      fill={left}
+      fill={displayed}
       tone={limitTone(left)}
-      tick={timeLeft}
-      value={`${left}%`}
-      ariaValue={gt("{left}% left", { left })}
+      tick={pacePosition}
+      value={usageText}
+      ariaValue={usageText}
       opensUsage
       tooltip={
         <>
           <span className="text-foreground">
-            {gt("{label}: {left}% left", { label: window.label, left })}
+            {gt("{label}: {usage}", { label: window.label, usage: usageText })}
           </span>
           {accountLabel ? <span className="text-muted-foreground">{accountLabel}</span> : null}
-          {pace && timeLeft !== null ? (
+          {pace && paceText !== null ? (
             <span className="text-muted-foreground">
-              {m(PACE_LABEL[pace])} · {gt("{timeLeft}% of the window left", { timeLeft })}
+              {m(PACE_LABEL[pace])} · {paceText}
             </span>
           ) : null}
           {window.resetsAt && resetsAt > now ? (
@@ -338,7 +348,10 @@ function PoolRow({ window, now }: { readonly window: LimitPoolWindow; readonly n
   const gt = useGT();
   const m = useMessages();
   const timestampFormat = usePrimarySettings((settings) => settings.timestampFormat);
+  const usageDisplayMode = useClientSettings((settings) => settings.usageDisplayMode);
   const left = window.remainingPercent;
+  const displayed = displayPoolUsagePercent(window, usageDisplayMode);
+  const usageText = formatUsagePercent(displayed, usageDisplayMode, m);
   const accounts = window.members.length;
   const from = poolSources(window);
   const sourceLabels = [...from.hubs, ...(from.signedIn ? [gt("Signed-in accounts")] : [])];
@@ -354,21 +367,21 @@ function PoolRow({ window, now }: { readonly window: LimitPoolWindow; readonly n
   return (
     <UsageRow
       label={window.label}
-      fill={left}
+      fill={displayed}
       tone={limitTone(left)}
-      value={`${left}%`}
-      ariaValue={gt("{left}% left", { left })}
+      value={usageText}
+      ariaValue={usageText}
       opensUsage
       tooltip={
         <>
           <span className="text-foreground">
             {accounts > 1
-              ? gt("{label}: {left}% left across {accounts} accounts", {
+              ? gt("{label}: {usage} across {accounts} accounts", {
                   label: window.label,
-                  left,
+                  usage: usageText,
                   accounts,
                 })
-              : gt("{label}: {left}% left", { label: window.label, left })}
+              : gt("{label}: {usage}", { label: window.label, usage: usageText })}
           </span>
           {window.pace ? (
             <span className="text-muted-foreground">{m(PACE_LABEL[window.pace])}</span>

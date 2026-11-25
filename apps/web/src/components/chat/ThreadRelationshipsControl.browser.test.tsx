@@ -1,6 +1,6 @@
 import "~/index.css";
 import * as DateTime from "effect/DateTime";
-import { EnvironmentId, NodeId, ThreadId } from "@t3tools/contracts";
+import { DEFAULT_CLIENT_SETTINGS, EnvironmentId, NodeId, ThreadId } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/reactivity";
 import { expect, it, vi } from "vite-plus/test";
@@ -67,6 +67,7 @@ vi.mock(import("../../state/use-atom-command"), () => ({
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 
 import { fakeTimers, render } from "../../../test/render";
+import { __setClientSettingsForTests } from "../../hooks/useSettings";
 import { isMacPlatform } from "../../lib/utils";
 import { selectThreadRightPanelState, useRightPanelStore } from "../../rightPanelStore";
 import { makeThreadProjectionFixture } from "../../test-fixtures";
@@ -598,4 +599,145 @@ it.each([1, 18])("continues scrolling the panel past a list of %i subagents", as
   viewport.scrollTop = 0;
   await userEvent.wheel(list, { delta: { y: 300 } });
   await vi.waitFor(() => expect(viewport.scrollTop).toBeGreaterThan(0));
+});
+
+it("shows context rings on running and finished subagent rows, hides unknown ones, and respects usageDisplayMode", async () => {
+  setup();
+  const projection = makeThreadProjectionFixture();
+  const runningChildId = ThreadId.make("subagent-running");
+  const finishedChildId = ThreadId.make("subagent-finished");
+  const unknownChildId = ThreadId.make("subagent-unknown");
+  const startedAt = DateTime.makeUnsafe("2026-04-12T10:00:00.000Z");
+  const completedAt = DateTime.makeUnsafe("2026-04-12T10:01:30.000Z");
+
+  state.relatedShells = [
+    {
+      id: runningChildId,
+      title: "Running researcher",
+      forkedFrom: null,
+      lineage: { parentThreadId: projection.thread.id, relationshipToParent: "subagent" },
+      activityRunStatus: "running",
+      status: "running",
+      contextUsage: { usedTokens: 553_000, maxTokens: 1_000_000 },
+    },
+    {
+      id: unknownChildId,
+      title: "Fresh runner",
+      forkedFrom: null,
+      lineage: { parentThreadId: projection.thread.id, relationshipToParent: "subagent" },
+      activityRunStatus: "running",
+      status: "running",
+    },
+  ];
+  state.projection = {
+    ...projection,
+    subagents: [
+      {
+        id: NodeId.make("agent-running"),
+        threadId: projection.thread.id,
+        runId: null,
+        parentNodeId: NodeId.make("root"),
+        origin: "app_owned",
+        createdBy: "agent",
+        driver: "codex",
+        providerInstanceId: "codex",
+        providerThreadId: null,
+        childThreadId: runningChildId,
+        nativeTaskRef: null,
+        prompt: "Inspect files",
+        title: "Running researcher",
+        model: "gpt-5.4",
+        status: "running",
+        result: null,
+        startedAt,
+        completedAt: null,
+        updatedAt: startedAt,
+      },
+      {
+        id: NodeId.make("agent-unknown"),
+        threadId: projection.thread.id,
+        runId: null,
+        parentNodeId: NodeId.make("root"),
+        origin: "app_owned",
+        createdBy: "agent",
+        driver: "codex",
+        providerInstanceId: "codex",
+        providerThreadId: null,
+        childThreadId: unknownChildId,
+        nativeTaskRef: null,
+        prompt: "Starting up",
+        title: "Fresh runner",
+        model: "gpt-5.4",
+        status: "running",
+        result: null,
+        startedAt,
+        completedAt: null,
+        updatedAt: startedAt,
+      },
+      {
+        id: NodeId.make("agent-finished"),
+        threadId: projection.thread.id,
+        runId: null,
+        parentNodeId: NodeId.make("root"),
+        origin: "app_owned",
+        createdBy: "agent",
+        driver: "codex",
+        providerInstanceId: "codex",
+        providerThreadId: null,
+        childThreadId: finishedChildId,
+        nativeTaskRef: null,
+        prompt: "Audit",
+        title: "Finished auditor",
+        model: "gpt-5.4",
+        status: "completed",
+        // Finished subagent omitted from live shells still shows its ring from subagent.contextUsage.
+        contextUsage: { usedTokens: 250_000, maxTokens: 1_000_000 },
+        result: "Done",
+        startedAt,
+        completedAt,
+        updatedAt: completedAt,
+      },
+    ],
+  };
+
+  try {
+    __setClientSettingsForTests({ ...DEFAULT_CLIENT_SETTINGS, usageDisplayMode: "left" });
+    await using screen = await render(
+      <ThreadRelationshipsPanel
+        environmentId={environmentId}
+        threadId={projection.thread.id}
+        showLineage
+        showSideChats
+      />,
+    );
+
+    const runningRing = screen.getByRole("img", { name: "Context 447k left of 1m" });
+    await expect.element(runningRing).toHaveAttribute("data-subagent-context-ring", "55");
+    // Only the running subagent with contextUsage renders a ring (Fresh runner has no usage).
+    expect(screen.container.querySelectorAll("[data-subagent-context-ring]")).toHaveLength(1);
+
+    // Expand Previous agents to check finished subagent ring from subagent.contextUsage.
+    await screen.getByRole("button", { name: /Previous agents/ }).click();
+    const finishedRing = screen.getByRole("img", { name: "Context 750k left of 1m" });
+    await expect.element(finishedRing).toHaveAttribute("data-subagent-context-ring", "25");
+
+    // Switching to Used mode flips the tooltip/label wording while keeping context fill.
+    __setClientSettingsForTests({ ...DEFAULT_CLIENT_SETTINGS, usageDisplayMode: "used" });
+    await screen.rerender(
+      <ThreadRelationshipsPanel
+        environmentId={environmentId}
+        threadId={projection.thread.id}
+        showLineage
+        showSideChats
+      />,
+    );
+    await expect
+      .element(screen.getByRole("img", { name: "Context 553k / 1m used" }))
+      .toHaveAttribute("data-subagent-context-ring", "55");
+    await expect
+      .element(screen.getByRole("img", { name: "Context 250k / 1m used" }))
+      .toHaveAttribute("data-subagent-context-ring", "25");
+  } finally {
+    __setClientSettingsForTests(DEFAULT_CLIENT_SETTINGS);
+  }
 });

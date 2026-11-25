@@ -3,8 +3,13 @@ import { type ProviderInstanceId } from "@t3tools/contracts";
 import { memo, useLayoutEffect, useRef, useState } from "react";
 import { msg, T, useMessages } from "gt-react";
 import { StarIcon } from "lucide-react";
-import { remainingPercent, tightestSubscriptionWindow } from "@t3tools/shared/usageLimits";
-import { formatResetsIn } from "@t3tools/shared/usageLimitsCopy";
+import {
+  displayUsagePercent,
+  remainingPercent,
+  tightestSubscriptionWindow,
+} from "@t3tools/shared/usageLimits";
+import { formatResetsIn, formatUsagePercent } from "@t3tools/shared/usageLimitsCopy";
+import { useClientSettings } from "../../hooks/useSettings";
 import { useNowMinute } from "../../hooks/useNowMinute";
 import { ProviderInstanceIcon } from "./ProviderInstanceIcon";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
@@ -47,15 +52,17 @@ function describeUnavailableInstance(
   );
 }
 
-function describeUsageLeft(
+function describeUsage(
   windowLabel: string,
-  left: number,
+  usageText: string,
   resetsIn: string | null,
   resolve: MessageResolver,
 ): string {
   return resetsIn === null
-    ? resolve(msg("{window}: {left}% left", { window: windowLabel, left }))
-    : resolve(msg("{window}: {left}% left, {resetsIn}", { window: windowLabel, left, resetsIn }));
+    ? resolve(msg("{window}: {usage}", { window: windowLabel, usage: usageText }))
+    : resolve(
+        msg("{window}: {usage}, {resetsIn}", { window: windowLabel, usage: usageText, resetsIn }),
+      );
 }
 
 const PICKER_TOOLTIP_SIDE = "left" as const;
@@ -72,6 +79,7 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
   getDisabledInstanceTooltip?: (entry: ProviderInstanceEntry) => string;
 }) {
   const m = useMessages();
+  const usageDisplayMode = useClientSettings((settings) => settings.usageDisplayMode);
   const nowMinute = useNowMinute();
   const now = Date.parse(`${nowMinute}:00Z`);
   const handleSelect = (instanceId: ProviderInstanceId | "favorites") => {
@@ -171,12 +179,14 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
 
             const usageWindow = isUnavailable ? null : tightestSubscriptionWindow(entry.snapshot);
             const usageLeft = usageWindow === null ? null : remainingPercent(usageWindow);
+            const usageDisplayed =
+              usageWindow === null ? null : displayUsagePercent(usageWindow, usageDisplayMode);
             const usageSummary =
-              usageWindow === null || usageLeft === null
+              usageWindow === null || usageDisplayed === null
                 ? null
-                : describeUsageLeft(
+                : describeUsage(
                     usageWindow.label,
-                    usageLeft,
+                    formatUsagePercent(usageDisplayed, usageDisplayMode, m),
                     formatResetsIn(usageWindow, now, m),
                     m,
                   );
@@ -232,10 +242,11 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
                   }
                   {...(entry.accentColor ? { badgeClassName: "h-3 min-w-3 px-0.5 text-5xs" } : {})}
                 />
-                {usageLeft !== null ? (
+                {usageLeft !== null && usageDisplayed !== null ? (
                   <span
                     aria-hidden
                     data-model-picker-usage-left={usageLeft}
+                    data-model-picker-usage-displayed={usageDisplayed}
                     className="pointer-events-none absolute inset-x-1.5 bottom-0.5 h-0.5 overflow-hidden rounded-full bg-foreground/15"
                   >
                     <span
@@ -247,7 +258,7 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
                             ? "bg-warning"
                             : "bg-success",
                       )}
-                      style={{ width: `${usageLeft}%` }}
+                      style={{ width: `${usageDisplayed}%` }}
                     />
                   </span>
                 ) : null}

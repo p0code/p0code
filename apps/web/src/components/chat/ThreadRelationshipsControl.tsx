@@ -36,6 +36,7 @@ import {
   type OrchestrationV2DelegatedFrom,
   type OrchestrationV2RemoteTaskChild,
   type OrchestrationV2Subagent,
+  type OrchestrationV2ThreadContextUsage,
   type OrchestrationV2ThreadShell,
   type ScopedThreadRef,
   type ServerProvider,
@@ -57,7 +58,7 @@ import {
   UnplugIcon,
 } from "lucide-react";
 import { msg, T, useGT, useMessages, Var } from "gt-react";
-import { useRef, useState, type ReactNode } from "react";
+import { useRef, useState, type ReactElement, type ReactNode } from "react";
 import type { MessageResolver } from "~/i18n/messages";
 
 import { useArchivedThreadSnapshots } from "../../lib/archivedThreadsState";
@@ -85,6 +86,7 @@ import { orchestrationEnvironment, threadTitlesRead } from "../../state/orchestr
 import { useAtomCommand } from "../../state/use-atom-command";
 import { useEnvironmentQuery } from "../../state/query";
 import { AgentElapsed } from "./AgentElapsed";
+import { SubagentContextRing } from "./ContextUsageRing";
 import { ThreadRelationshipIcon, threadRelationshipStatusLabel } from "./ThreadRelationshipIcon";
 import { ThreadLineageWorkflowRow } from "./ThreadLineageWorkflowRow";
 import { useSideThreadTrigger } from "../../hooks/useSideThreadTrigger";
@@ -258,6 +260,26 @@ function LineageTooltipContent(props: { readonly title: string; readonly hint: s
       <span className="block font-medium">{props.title}</span>
       <span className="block text-muted-foreground">{props.hint}</span>
     </>
+  );
+}
+
+/** Suppresses the row's hover card while the nested context ring tooltip is open. */
+function LineageRowTooltip(props: {
+  readonly trigger: ReactElement;
+  readonly popup: ReactNode;
+  readonly popupComponent: typeof TooltipPopup | typeof ThreadHoverCardPopup;
+  readonly children: (onRingTooltipOpenChange: (open: boolean) => void) => ReactNode;
+}) {
+  const [rowTooltipOpen, setRowTooltipOpen] = useState(false);
+  const [ringTooltipOpen, setRingTooltipOpen] = useState(false);
+  const PopupComponent = props.popupComponent;
+  return (
+    <Tooltip open={rowTooltipOpen && !ringTooltipOpen} onOpenChange={setRowTooltipOpen}>
+      <TooltipTrigger delay={200} render={props.trigger}>
+        {props.children(setRingTooltipOpen)}
+      </TooltipTrigger>
+      <PopupComponent side="left">{props.popup}</PopupComponent>
+    </Tooltip>
   );
 }
 
@@ -578,6 +600,12 @@ export function ThreadRelationshipsPanel(props: {
     ...relationshipShells,
     ...(archivedShells ?? []),
   ];
+  const contextUsageByThreadId = new Map<string, OrchestrationV2ThreadContextUsage>();
+  for (const shell of shells) {
+    if (shell.contextUsage !== undefined) {
+      contextUsageByThreadId.set(shell.id, shell.contextUsage);
+    }
+  }
   const graph = deriveThreadRelationshipGraph({ threads: shells, projection });
   const isHiddenRelation = (threadId: ThreadId) =>
     hiddenKeys.has(threadKey({ environmentId: props.environmentId, threadId }));
@@ -892,7 +920,8 @@ export function ThreadRelationshipsPanel(props: {
     ) : (
       <LineageTooltipContent title={threadTitle} hint={hint} />
     );
-    const relationshipContent = (
+    const childContextUsage = node?.thread?.contextUsage ?? agent?.contextUsage;
+    const renderRelationshipContent = (onRingTooltipOpenChange: (open: boolean) => void) => (
       <>
         <ThreadRelationshipIcon
           driver={isSubagent && !isParent ? providerDriver : undefined}
@@ -906,7 +935,12 @@ export function ThreadRelationshipsPanel(props: {
             {threadTitle}
           </span>
         </span>
-        {agent ? null : (
+        {agent ? (
+          <SubagentContextRing
+            usage={childContextUsage}
+            onTooltipOpenChange={onRingTooltipOpenChange}
+          />
+        ) : (
           <ArrowRightIcon className="size-3 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
         )}
         {agent && !failed && (deriveSubagentElapsedMs(agent, 0) !== null || canStopWorkflow) ? (
@@ -929,22 +963,20 @@ export function ThreadRelationshipsPanel(props: {
       </>
     );
     const relationshipLink = (
-      <Tooltip>
-        <TooltipTrigger
-          delay={200}
-          render={
-            <ThreadDetailsControl
-              size="sm"
-              variant="ghost"
-              part={workflowGroup ? "primary" : "row"}
-              {...openProps}
-            />
-          }
-        >
-          {relationshipContent}
-        </TooltipTrigger>
-        <RelationshipPopup side="left">{relationshipTooltip}</RelationshipPopup>
-      </Tooltip>
+      <LineageRowTooltip
+        popup={relationshipTooltip}
+        popupComponent={RelationshipPopup}
+        trigger={
+          <ThreadDetailsControl
+            size="sm"
+            variant="ghost"
+            part={workflowGroup ? "primary" : "row"}
+            {...openProps}
+          />
+        }
+      >
+        {renderRelationshipContent}
+      </LineageRowTooltip>
     );
     if (workflowGroup && agent) {
       return (
@@ -956,6 +988,7 @@ export function ThreadRelationshipsPanel(props: {
           providers={providers}
           providerEntries={providerEntries}
           driver={providerDriver}
+          contextUsageByThreadId={contextUsageByThreadId}
           onOpenThread={(memberThreadId, intent) =>
             openSideThreadRow(memberThreadId as ThreadId, intent)
           }
@@ -970,23 +1003,21 @@ export function ThreadRelationshipsPanel(props: {
       <li key={threadId} className="group relative flex h-8 items-center rounded-lg">
         {isMergeTarget ? (
           <div className={THREAD_DETAILS_PANEL_SPLIT_GROUP_CLASS}>
-            <Tooltip>
-              <TooltipTrigger
-                delay={200}
-                render={
-                  <ThreadDetailsControl
-                    size="sm"
-                    variant="ghost"
-                    part="primary"
-                    aria-label={`${threadTitle} ${threadRelationshipStatusLabel(rowStatus, m)}`}
-                    onClick={() => openThread(threadId)}
-                  />
-                }
-              >
-                {relationshipContent}
-              </TooltipTrigger>
-              <RelationshipPopup side="left">{relationshipTooltip}</RelationshipPopup>
-            </Tooltip>
+            <LineageRowTooltip
+              popup={relationshipTooltip}
+              popupComponent={RelationshipPopup}
+              trigger={
+                <ThreadDetailsControl
+                  size="sm"
+                  variant="ghost"
+                  part="primary"
+                  aria-label={`${threadTitle} ${threadRelationshipStatusLabel(rowStatus, m)}`}
+                  onClick={() => openThread(threadId)}
+                />
+              }
+            >
+              {renderRelationshipContent}
+            </LineageRowTooltip>
             <span aria-hidden="true" className={THREAD_DETAILS_PANEL_SPLIT_SEPARATOR_CLASS} />
             <Tooltip>
               <TooltipTrigger

@@ -5,12 +5,18 @@ import {
 } from "@t3tools/client-runtime/state/subagentRuntime";
 import type { SideThreadOpenIntent } from "@t3tools/client-runtime/side-thread";
 import { useSideThreadTrigger } from "../../hooks/useSideThreadTrigger";
-import type { ProviderDriverKind, ProviderInstanceId, ServerProvider } from "@t3tools/contracts";
+import type {
+  OrchestrationV2ThreadContextUsage,
+  ProviderDriverKind,
+  ProviderInstanceId,
+  ServerProvider,
+} from "@t3tools/contracts";
 import { msg, T, useGT, useMessages } from "gt-react";
 import { ChevronDownIcon, SquareIcon } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 import { AgentElapsed } from "./AgentElapsed";
+import { SubagentContextRing } from "./ContextUsageRing";
 import { SubagentTooltipContent } from "./SubagentTooltipContent";
 import { ThreadHoverCardPopup } from "../ThreadHoverCard";
 import { ThreadRelationshipIcon } from "./ThreadRelationshipIcon";
@@ -67,6 +73,7 @@ function WorkflowMemberRow({
   providers,
   providerEntries,
   driver,
+  contextUsageByThreadId,
   onOpen,
 }: {
   member: RuntimeSubagent;
@@ -75,15 +82,20 @@ function WorkflowMemberRow({
   providers: ReadonlyArray<ServerProvider> | undefined;
   providerEntries: ReadonlyArray<ProviderInstanceEntry>;
   driver: ProviderDriverKind | undefined;
+  contextUsageByThreadId?: ReadonlyMap<string, OrchestrationV2ThreadContextUsage> | undefined;
   onOpen: (threadId: string, intent: SideThreadOpenIntent) => void;
 }) {
   const gt = useGT();
   const trigger = useSideThreadTrigger();
+  const [rowTooltipOpen, setRowTooltipOpen] = useState(false);
+  const [ringTooltipOpen, setRingTooltipOpen] = useState(false);
   const threadId = member.childThreadId;
   const canOpen = threadId !== null;
+  const contextUsage =
+    (threadId !== null ? contextUsageByThreadId?.get(threadId) : undefined) ?? member.contextUsage;
   return (
     <li>
-      <Tooltip>
+      <Tooltip open={rowTooltipOpen && !ringTooltipOpen} onOpenChange={setRowTooltipOpen}>
         <TooltipTrigger
           delay={200}
           render={
@@ -103,6 +115,7 @@ function WorkflowMemberRow({
           />
           <span className="min-w-0 flex-1 truncate">{member.title}</span>
           <span className="sr-only">{member.status}</span>
+          <SubagentContextRing usage={contextUsage} onTooltipOpenChange={setRingTooltipOpen} />
           {member.startedAt ? (
             <span className="shrink-0 text-2xs font-normal tabular-nums text-muted-foreground">
               <AgentElapsed agent={member} />
@@ -138,6 +151,7 @@ export function ThreadLineageWorkflowRow({
   providers,
   providerEntries,
   driver,
+  contextUsageByThreadId,
   onOpenThread,
   onStop,
   stopping,
@@ -150,6 +164,9 @@ export function ThreadLineageWorkflowRow({
   readonly providers: ReadonlyArray<ServerProvider> | undefined;
   readonly providerEntries: ReadonlyArray<ProviderInstanceEntry>;
   readonly driver: ProviderDriverKind | undefined;
+  readonly contextUsageByThreadId?:
+    | ReadonlyMap<string, OrchestrationV2ThreadContextUsage>
+    | undefined;
   readonly onOpenThread: (threadId: string, intent: SideThreadOpenIntent) => void;
   readonly onStop?: (() => void) | undefined;
   readonly stopping: boolean;
@@ -268,6 +285,7 @@ export function ThreadLineageWorkflowRow({
                         providers={providers}
                         providerEntries={providerEntries}
                         driver={driver}
+                        contextUsageByThreadId={contextUsageByThreadId}
                         onOpen={onOpenThread}
                       />
                     ))}
@@ -285,6 +303,7 @@ export function ThreadLineageWorkflowRow({
               providers={providers}
               providerEntries={providerEntries}
               driver={driver}
+              contextUsageByThreadId={contextUsageByThreadId}
               onOpen={onOpenThread}
             />
           ))}
