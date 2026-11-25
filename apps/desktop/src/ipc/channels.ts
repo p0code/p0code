@@ -36,6 +36,7 @@ export const CLI_COMMAND_UNINSTALL_CHANNEL = "desktop:cli-command-uninstall";
 export const CLI_COMMAND_ADD_TO_PATH_CHANNEL = "desktop:cli-command-add-to-path";
 export const T3_IMPORT_GET_STATE_CHANNEL = "desktop:t3-import-get-state";
 export const T3_IMPORT_RUN_CHANNEL = "desktop:t3-import-run";
+export const T3_IMPORT_RESTART_CHANNEL = "desktop:t3-import-restart";
 export const BACKEND_GET_STATUS_CHANNEL = "desktop:backend-get-status";
 export const BACKEND_UPDATE_CONFIG_CHANNEL = "desktop:backend-update-config";
 export const BACKEND_CONTROL_CHANNEL = "desktop:backend-control";

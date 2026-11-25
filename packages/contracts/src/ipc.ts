@@ -1298,6 +1298,8 @@ export interface DesktopBridge {
   t3Import?: {
     getState: () => Promise<DesktopT3ImportState>;
     run: (input: DesktopT3ImportRunInput) => Promise<DesktopT3ImportRunResult>;
+    /** Restarts the desktop app so a staged import is applied before the next start. */
+    restart?: () => Promise<void>;
   };
   backend?: {
     getStatus: () => Promise<DesktopBackendStatus>;

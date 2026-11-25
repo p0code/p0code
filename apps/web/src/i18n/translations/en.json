@@ -5774,10 +5774,14 @@
   "b923ddc935ea2555": "Could not finish setup",
   "152184c4aefef5d1": "Your settings could not be saved. Try again.",
   "23ec0110d2170502": "Welcome",
+  "988e8c4b349b11fa": "Bring your stuff over",
+  "9af4fcd401aa9ef3": "Your agents",
   "fd8f75f97a5c0e6d": "Importing…",
-  "cd609620fafff02b": "{count, plural, one {Import {count} project and start} other {Import {count} projects and start}}",
-  "99decfb4ea686b61": "Import threads and start",
+  "06b428b511f2bf10": "Import and start",
   "88ddebac4d96eb62": "Start",
+  "c3cd09213d64a15d": "Could not restart p0code. {error}",
+  "1e43b5cc89279fca": "Import",
+  "b2a5cf21e520a888": "Could not import from T3 Code. {error}",
   "9877b52c6722fe99": "Could not turn on {agent}",
   "15903f7ea6a43f95": "{action}: {agent}",
   "82e9b02a3e95e425": "Turn on: {agent}",
@@ -5788,13 +5792,14 @@
   "c193540d6298ce6a": "Set up",
   "2ca89fd7bbd7ea94": "This connection cannot control terminals.",
   "fb41d01d5dadcac0": "This connection cannot manage agents.",
-  "2632f324dc2d9c48": "Agents",
+  "1e8657513ceeee69": "{count, plural, one {{count} agent ready} other {{count} agents ready}}",
+  "18d144bcd97f0371": "Hide",
+  "2a7c937bc65f4b62": "Show",
   "598d1d38b945c279": "Add more agents",
   "615a8310fb4afa0b": "Set up an agent",
   "878c6bcda7eb5adc": "Could not check projects. {error}",
   "e6bcf138d25188d7": "{count, plural, one {Import {count} project and their threads} other {Import {count} projects and their threads}}",
   "d72f296745294c3a": "Import projects and their threads",
-  "18d144bcd97f0371": "Hide",
   "54fc1526df1c0cce": "{count, plural, one {Review all {count}} other {Review all {count}}}",
   "bd2304f25f6f999e": "{selected, plural, one {{selected} of {total} selected} other {{selected} of {total} selected}}",
   "228cd9fd55a55070": "Could not check projects again. {error}",
@@ -5812,6 +5817,7 @@
   "a506c135c2183ac3": "{count, plural, one {{count} folder} other {{count} folders}}",
   "efc48b9736a534bc": "now",
   "eac5ab08ff2ab51f": "Welcome to p0code",
+  "8fcf2e3fcfa54409": "One place to run your coding agents, side by side, and keep their threads.",
   "3cc77f9daa7eeafd": [
     "Setting up",
     " ",
@@ -5827,7 +5833,36 @@
     "."
   ],
   "216ab7514aea1d61": "Start without an agent",
+  "5fc35138b0ff1aea": "Start fresh",
   "501ce2d99da8bfd1": "Set up one agent to start.",
+  "0dfafed03706f50e": "Restart p0code to finish importing",
+  "b3416111fcac5ea0": "Your T3 Code data is copied in before p0code opens its database, so it moves over on the next start.",
+  "1f4f6f8b3a15f338": [
+    "Run ",
+    {
+      "t": "code",
+      "i": 1,
+      "c": "p0 service restart"
+    },
+    " on the computer p0code runs on to finish."
+  ],
+  "eb7648f458efb7ae": "Restart p0code",
+  "674d4f463ccdedfd": "Move my T3 Code data over",
+  "e7f96f059e56bf23": [
+    "Brings your threads, projects, settings, and provider accounts from",
+    " ",
+    {
+      "t": "code",
+      "i": 1,
+      "c": {
+        "i": 2,
+        "k": "_gt_value_2",
+        "v": "v"
+      }
+    },
+    ". T3 Code's own data is never modified."
+  ],
+  "773702e1288c82ed": "Projects and their agent history can be imported after the restart. Importing T3 Code data replaces this p0code home, so anything imported now would be lost.",
   "f77d000c0710f066": "Turn on",
   "4ed27bf946e504db": "Set up",
   "7a26eaacff0607f7": [
@@ -5850,8 +5885,8 @@
     },
     " history…"
   ],
-  "45194b35dc6d858a": [
-    "From your ",
+  "c843bead50fb78e3": [
+    "Import projects from ",
     {
       "i": 1,
       "k": "_gt_value_1",
@@ -11591,6 +11626,7 @@
   "4ec62c39ca3192bf": "Source control & issues",
   "f2bf529f85e05494": "Sharing & access",
   "7cf24feddad00a5e": "Preferences",
+  "2632f324dc2d9c48": "Agents",
   "58058320796d28f6": "Code",
   "1a07e4d043f5df4e": "Connections",
   "d8cd577c915539bd": "{label} accounts and token",

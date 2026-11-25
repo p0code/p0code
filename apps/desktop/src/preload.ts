@@ -344,6 +344,7 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   t3Import: {
     getState: () => ipcRenderer.invoke(IpcChannels.T3_IMPORT_GET_STATE_CHANNEL),
     run: (input) => ipcRenderer.invoke(IpcChannels.T3_IMPORT_RUN_CHANNEL, input),
+    restart: () => ipcRenderer.invoke(IpcChannels.T3_IMPORT_RESTART_CHANNEL),
   },
   backend: {
     getStatus: () => ipcRenderer.invoke(IpcChannels.BACKEND_GET_STATUS_CHANNEL),

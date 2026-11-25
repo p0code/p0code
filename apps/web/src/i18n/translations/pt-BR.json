@@ -5772,10 +5772,14 @@
   "b923ddc935ea2555": "Não foi possível concluir a configuração",
   "152184c4aefef5d1": "Não foi possível salvar suas configurações. Tente novamente.",
   "23ec0110d2170502": "Boas-vindas",
+  "988e8c4b349b11fa": "Traga suas coisas",
+  "9af4fcd401aa9ef3": "Seus agentes",
   "fd8f75f97a5c0e6d": "Importando…",
-  "cd609620fafff02b": "{count, plural, one {Importar {count} projeto e começar} other {Importar {count} projetos e começar}}",
-  "99decfb4ea686b61": "Importar threads e começar",
+  "06b428b511f2bf10": "Importar e começar",
   "88ddebac4d96eb62": "Começar",
+  "c3cd09213d64a15d": "Não foi possível reiniciar o p0code. {error}",
+  "1e43b5cc89279fca": "Importar",
+  "b2a5cf21e520a888": "Não foi possível importar do T3 Code. {error}",
   "9877b52c6722fe99": "Não foi possível ativar {agent}",
   "15903f7ea6a43f95": "{action}: {agent}",
   "82e9b02a3e95e425": "Ativar: {agent}",
@@ -5786,13 +5790,14 @@
   "c193540d6298ce6a": "Configurar",
   "2ca89fd7bbd7ea94": "Esta conexão não pode controlar terminais.",
   "fb41d01d5dadcac0": "Esta conexão não pode gerenciar agentes.",
-  "2632f324dc2d9c48": "Agentes",
+  "1e8657513ceeee69": "{count, plural, one {{count} agente pronto} other {{count} agentes prontos}}",
+  "18d144bcd97f0371": "Ocultar",
+  "2a7c937bc65f4b62": "Mostrar",
   "598d1d38b945c279": "Adicionar mais agentes",
   "615a8310fb4afa0b": "Configurar um agente",
   "878c6bcda7eb5adc": "Não foi possível verificar os projetos. {error}",
   "e6bcf138d25188d7": "{count, plural, one {Importar {count} projeto e suas threads} other {Importar {count} projetos e suas threads}}",
   "d72f296745294c3a": "Importar projetos e suas threads",
-  "18d144bcd97f0371": "Ocultar",
   "54fc1526df1c0cce": "{count, plural, one {Revisar {count}} other {Revisar todos os {count}}}",
   "bd2304f25f6f999e": "{selected, plural, one {{selected} de {total} selecionado} other {{selected} de {total} selecionados}}",
   "228cd9fd55a55070": "Não foi possível verificar os projetos novamente. {error}",
@@ -5810,6 +5815,7 @@
   "a506c135c2183ac3": "{count, plural, one {{count} pasta} other {{count} pastas}}",
   "efc48b9736a534bc": "agora",
   "eac5ab08ff2ab51f": "Boas-vindas ao p0code",
+  "8fcf2e3fcfa54409": "Um só lugar para rodar seus agentes de programação lado a lado e guardar suas conversas.",
   "3cc77f9daa7eeafd": [
     "Configurando",
     " ",
@@ -5825,7 +5831,36 @@
     "."
   ],
   "216ab7514aea1d61": "Começar sem agente",
+  "5fc35138b0ff1aea": "Começar do zero",
   "501ce2d99da8bfd1": "Configure um agente para começar.",
+  "0dfafed03706f50e": "Reinicie o p0code para concluir a importação",
+  "b3416111fcac5ea0": "Os dados do T3 Code são copiados antes de o p0code abrir seu banco de dados, então são transferidos na próxima inicialização.",
+  "1f4f6f8b3a15f338": [
+    "Execute ",
+    {
+      "t": "code",
+      "i": 1,
+      "c": "p0 service restart"
+    },
+    " no computador onde o p0code roda para concluir."
+  ],
+  "eb7648f458efb7ae": "Reiniciar o p0code",
+  "674d4f463ccdedfd": "Trazer meus dados do T3 Code",
+  "e7f96f059e56bf23": [
+    "Traz suas conversas, projetos, configurações e contas de provedores de",
+    " ",
+    {
+      "t": "code",
+      "i": 1,
+      "c": {
+        "i": 2,
+        "k": "_gt_value_2",
+        "v": "v"
+      }
+    },
+    ". Os dados do próprio T3 Code nunca são alterados."
+  ],
+  "773702e1288c82ed": "Projetos e o histórico de agentes podem ser importados após a reinicialização. Importar os dados do T3 Code substitui este lar do p0code, então o que for importado agora será perdido.",
   "f77d000c0710f066": "Ativar",
   "4ed27bf946e504db": "Configurar",
   "7a26eaacff0607f7": [
@@ -5848,8 +5883,8 @@
     },
     "…"
   ],
-  "45194b35dc6d858a": [
-    "Do seu histórico do ",
+  "c843bead50fb78e3": [
+    "Importar projetos do histórico do ",
     {
       "i": 1,
       "k": "_gt_value_1",
@@ -11581,6 +11616,7 @@
   "4ec62c39ca3192bf": "Versões e issues",
   "f2bf529f85e05494": "Compartilhamento",
   "7cf24feddad00a5e": "Preferências",
+  "2632f324dc2d9c48": "Agentes",
   "58058320796d28f6": "Código",
   "1a07e4d043f5df4e": "Conexões",
   "d8cd577c915539bd": "Contas e token do {label}",

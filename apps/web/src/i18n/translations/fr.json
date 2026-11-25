@@ -5773,10 +5773,14 @@
   "b923ddc935ea2555": "Impossible de terminer la configuration",
   "152184c4aefef5d1": "Impossible d’enregistrer vos paramètres. Réessayez.",
   "23ec0110d2170502": "Bienvenue",
+  "988e8c4b349b11fa": "Récupérer vos données",
+  "9af4fcd401aa9ef3": "Vos agents",
   "fd8f75f97a5c0e6d": "Import…",
-  "cd609620fafff02b": "{count, plural, one {Importer {count} projet et commencer} other {Importer {count} projets et commencer}}",
-  "99decfb4ea686b61": "Importer les fils et commencer",
+  "06b428b511f2bf10": "Importer et commencer",
   "88ddebac4d96eb62": "Commencer",
+  "c3cd09213d64a15d": "Impossible de redémarrer p0code. {error}",
+  "1e43b5cc89279fca": "Importer",
+  "b2a5cf21e520a888": "Impossible d'importer depuis T3 Code. {error}",
   "9877b52c6722fe99": "Impossible d’activer {agent}",
   "15903f7ea6a43f95": "{action} : {agent}",
   "82e9b02a3e95e425": "Activer : {agent}",
@@ -5787,13 +5791,14 @@
   "c193540d6298ce6a": "Configurer",
   "2ca89fd7bbd7ea94": "Cette connexion ne peut pas contrôler les terminaux.",
   "fb41d01d5dadcac0": "Cette connexion ne peut pas gérer les agents.",
-  "2632f324dc2d9c48": "Agents",
+  "1e8657513ceeee69": "{count, plural, one {{count} agent prêt} other {{count} agents prêts}}",
+  "18d144bcd97f0371": "Masquer",
+  "2a7c937bc65f4b62": "Afficher",
   "598d1d38b945c279": "Ajouter d’autres agents",
   "615a8310fb4afa0b": "Configurer un agent",
   "878c6bcda7eb5adc": "Impossible de vérifier les projets. {error}",
   "e6bcf138d25188d7": "{count, plural, one {Importer {count} projet et ses fils} other {Importer {count} projets et leurs fils}}",
   "d72f296745294c3a": "Importer les projets et leurs fils",
-  "18d144bcd97f0371": "Masquer",
   "54fc1526df1c0cce": "{count, plural, one {Passer en revue les {count}} other {Passer en revue les {count}}}",
   "bd2304f25f6f999e": "{selected, plural, one {{selected} sélectionné sur {total}} other {{selected} sélectionnés sur {total}}}",
   "228cd9fd55a55070": "Impossible de vérifier à nouveau les projets. {error}",
@@ -5811,6 +5816,7 @@
   "a506c135c2183ac3": "{count, plural, one {{count} dossier} other {{count} dossiers}}",
   "efc48b9736a534bc": "maintenant",
   "eac5ab08ff2ab51f": "Bienvenue dans p0code",
+  "8fcf2e3fcfa54409": "Un seul endroit pour exécuter vos agents de code côte à côte et garder leurs fils.",
   "3cc77f9daa7eeafd": [
     "Configuration de",
     " ",
@@ -5826,7 +5832,36 @@
     "."
   ],
   "216ab7514aea1d61": "Commencer sans agent",
+  "5fc35138b0ff1aea": "Repartir de zéro",
   "501ce2d99da8bfd1": "Configurez un agent pour commencer.",
+  "0dfafed03706f50e": "Redémarrez p0code pour terminer l'importation",
+  "b3416111fcac5ea0": "Vos données T3 Code sont copiées avant que p0code n'ouvre sa base de données ; elles sont donc reprises au prochain démarrage.",
+  "1f4f6f8b3a15f338": [
+    "Exécutez ",
+    {
+      "t": "code",
+      "i": 1,
+      "c": "p0 service restart"
+    },
+    " sur l'ordinateur où p0code s'exécute pour terminer."
+  ],
+  "eb7648f458efb7ae": "Redémarrer p0code",
+  "674d4f463ccdedfd": "Transférer mes données T3 Code",
+  "e7f96f059e56bf23": [
+    "Récupère vos fils, projets, réglages et comptes de fournisseurs depuis",
+    " ",
+    {
+      "t": "code",
+      "i": 1,
+      "c": {
+        "i": 2,
+        "k": "_gt_value_2",
+        "v": "v"
+      }
+    },
+    ". Les données de T3 Code elles-mêmes ne sont jamais modifiées."
+  ],
+  "773702e1288c82ed": "Les projets et leur historique d'agents pourront être importés après le redémarrage. L'importation des données T3 Code remplace ce dossier p0code, donc tout ce qui serait importé maintenant serait perdu.",
   "f77d000c0710f066": "Activer",
   "4ed27bf946e504db": "Configurer",
   "7a26eaacff0607f7": [
@@ -5849,8 +5884,8 @@
     },
     "…"
   ],
-  "45194b35dc6d858a": [
-    "Depuis votre historique ",
+  "c843bead50fb78e3": [
+    "Importer des projets depuis l'historique de ",
     {
       "i": 1,
       "k": "_gt_value_1",
@@ -11581,6 +11616,7 @@
   "4ec62c39ca3192bf": "Versions et tickets",
   "f2bf529f85e05494": "Partage et accès",
   "7cf24feddad00a5e": "Préférences",
+  "2632f324dc2d9c48": "Agents",
   "58058320796d28f6": "Code",
   "1a07e4d043f5df4e": "Connexions",
   "d8cd577c915539bd": "Comptes et jeton {label}",

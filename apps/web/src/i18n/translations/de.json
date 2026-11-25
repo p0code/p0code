@@ -5774,10 +5774,14 @@
   "b923ddc935ea2555": "Einrichtung konnte nicht abgeschlossen werden",
   "152184c4aefef5d1": "Deine Einstellungen konnten nicht gespeichert werden. Versuche es erneut.",
   "23ec0110d2170502": "Willkommen",
+  "988e8c4b349b11fa": "Daten übernehmen",
+  "9af4fcd401aa9ef3": "Deine Agenten",
   "fd8f75f97a5c0e6d": "Wird importiert…",
-  "cd609620fafff02b": "{count, plural, one {{count} Projekt importieren und starten} other {{count} Projekte importieren und starten}}",
-  "99decfb4ea686b61": "Threads importieren und starten",
+  "06b428b511f2bf10": "Importieren und starten",
   "88ddebac4d96eb62": "Starten",
+  "c3cd09213d64a15d": "p0code konnte nicht neu gestartet werden. {error}",
+  "1e43b5cc89279fca": "Importieren",
+  "b2a5cf21e520a888": "Import aus T3 Code fehlgeschlagen. {error}",
   "9877b52c6722fe99": "{agent} konnte nicht aktiviert werden",
   "15903f7ea6a43f95": "{action}: {agent}",
   "82e9b02a3e95e425": "Aktivieren: {agent}",
@@ -5788,13 +5792,14 @@
   "c193540d6298ce6a": "Einrichten",
   "2ca89fd7bbd7ea94": "Diese Verbindung kann keine Terminals steuern.",
   "fb41d01d5dadcac0": "Diese Verbindung kann keine Agenten verwalten.",
-  "2632f324dc2d9c48": "Agenten",
+  "1e8657513ceeee69": "{count, plural, one {{count} Agent bereit} other {{count} Agenten bereit}}",
+  "18d144bcd97f0371": "Ausblenden",
+  "2a7c937bc65f4b62": "Anzeigen",
   "598d1d38b945c279": "Weitere Agenten hinzufügen",
   "615a8310fb4afa0b": "Einen Agenten einrichten",
   "878c6bcda7eb5adc": "Projekte konnten nicht geprüft werden. {error}",
   "e6bcf138d25188d7": "{count, plural, one {{count} Projekt mit seinen Threads importieren} other {{count} Projekte mit ihren Threads importieren}}",
   "d72f296745294c3a": "Projekte mit ihren Threads importieren",
-  "18d144bcd97f0371": "Ausblenden",
   "54fc1526df1c0cce": "{count, plural, one {Alle {count} prüfen} other {Alle {count} prüfen}}",
   "bd2304f25f6f999e": "{selected, plural, one {{selected} von {total} ausgewählt} other {{selected} von {total} ausgewählt}}",
   "228cd9fd55a55070": "Projekte konnten nicht erneut geprüft werden. {error}",
@@ -5812,6 +5817,7 @@
   "a506c135c2183ac3": "{count, plural, one {{count} Ordner} other {{count} Ordner}}",
   "efc48b9736a534bc": "jetzt",
   "eac5ab08ff2ab51f": "Willkommen bei p0code",
+  "8fcf2e3fcfa54409": "Ein Ort, um deine Coding-Agenten nebeneinander auszuführen und ihre Threads zu behalten.",
   "3cc77f9daa7eeafd": [
     {
       "c": {
@@ -5825,7 +5831,36 @@
     " wird eingerichtet."
   ],
   "216ab7514aea1d61": "Ohne Agenten starten",
+  "5fc35138b0ff1aea": "Neu beginnen",
   "501ce2d99da8bfd1": "Richte einen Agenten ein, um zu starten.",
+  "0dfafed03706f50e": "Starte p0code neu, um den Import abzuschließen",
+  "b3416111fcac5ea0": "Deine T3-Code-Daten werden kopiert, bevor p0code seine Datenbank öffnet, also beim nächsten Start übernommen.",
+  "1f4f6f8b3a15f338": [
+    "Führe ",
+    {
+      "t": "code",
+      "i": 1,
+      "c": "p0 service restart"
+    },
+    " auf dem Computer aus, auf dem p0code läuft, um den Import abzuschließen."
+  ],
+  "eb7648f458efb7ae": "p0code neu starten",
+  "674d4f463ccdedfd": "Meine T3-Code-Daten übernehmen",
+  "e7f96f059e56bf23": [
+    "Übernimmt Threads, Projekte, Einstellungen und Anbieterkonten aus",
+    " ",
+    {
+      "t": "code",
+      "i": 1,
+      "c": {
+        "i": 2,
+        "k": "_gt_value_2",
+        "v": "v"
+      }
+    },
+    ". Die Daten von T3 Code selbst werden nie verändert."
+  ],
+  "773702e1288c82ed": "Projekte und ihre Agenten-Historie können nach dem Neustart importiert werden. Der Import der T3-Code-Daten ersetzt dieses p0code-Zuhause, daher ginge alles, was jetzt importiert wird, verloren.",
   "f77d000c0710f066": "Aktivieren",
   "4ed27bf946e504db": "Einrichten",
   "7a26eaacff0607f7": [
@@ -5847,14 +5882,14 @@
     },
     "-Verlauf…"
   ],
-  "45194b35dc6d858a": [
-    "Aus deinem ",
+  "c843bead50fb78e3": [
+    "Projekte aus dem Verlauf von ",
     {
       "i": 1,
       "k": "_gt_value_1",
       "v": "v"
     },
-    "-Verlauf"
+    " importieren"
   ],
   "e164e238c1e22cce": "p0code auf dem Smartphone nutzen",
   "37c66042ce1906da": "Scanne mit deinem Smartphone, um die App zu holen.",
@@ -11584,6 +11619,7 @@
   "4ec62c39ca3192bf": "Versionskontrolle & Issues",
   "f2bf529f85e05494": "Freigabe & Zugriff",
   "7cf24feddad00a5e": "Präferenzen",
+  "2632f324dc2d9c48": "Agenten",
   "58058320796d28f6": "Code",
   "1a07e4d043f5df4e": "Verbindungen",
   "d8cd577c915539bd": "{label}-Konten und -Token",
