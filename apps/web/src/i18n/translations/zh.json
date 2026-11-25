@@ -3043,7 +3043,10 @@
       "v": "v"
     },
     {
-      "c": [" ", "位于打开此页面的计算机上"],
+      "c": [
+        " ",
+        "位于打开此页面的计算机上"
+      ],
       "i": 2,
       "t": "span"
     }
@@ -3055,7 +3058,10 @@
       "v": "v"
     },
     {
-      "c": [" ", "· 运行它的任何人都会获得此访问权限"],
+      "c": [
+        " ",
+        "· 运行它的任何人都会获得此访问权限"
+      ],
       "i": 2,
       "t": "span"
     }
@@ -7955,7 +7961,7 @@
   "c0472e6d94fdfac6": "无法读取后端状态。",
   "2a60193ee8373880": "本地服务 (p0d)",
   "e6df9b742434f520": "远程 URL",
-  "94e81a45de20cc79": "旧版内置",
+  "f76c7460f8858f82": "应用内后端",
   "7342bfc328008926": "运行中",
   "965df6703c163169": "无法保存后端设置。",
   "573409786719966d": "无法保存后端设置",
@@ -7963,25 +7969,26 @@
   "ff2ec75c9f35f7f3": "后端操作失败",
   "91b10cabbd4d53d4": "将 p0d 作为后台用户服务运行。退出桌面窗口时后端将继续运行。",
   "7b16f61e7b3ea96c": "直接连接到远程或自托管的后端 URL，不启动本地进程。",
-  "160e84aa38160711": "Local service (p0d) is the default. Quitting the app window leaves the backend running in the background.",
-  "611d8ffe4377c319": "p0d was not found, so the app is using the embedded backend. Install p0d on PATH (/usr/local/bin or /opt/homebrew/bin), or choose Local service (p0d) to set its path.",
-  "f3d324868f7f1fa0": "Spawns the legacy Node server inside the desktop app. Used only when p0d is not available.",
+  "a707da568eb1f7ac": "在应用内运行后端。关闭窗口后后端会停止，而本地服务 (p0d) 会继续运行。",
   "dd281e638ef8392f": "后端",
   "17cbd5721600c68b": "后端模式",
-  "5ee6a14abe673935": "远程后端 URL",
-  "6644ba2b07966b5e": "请输入有效的 http:// 或 https:// 后端 URL。",
-  "375e36c5ec7cc8cc": "此应用连接的后端服务器地址。",
   "8e17aeb8eac27bee": "p0d 可执行文件路径",
   "846902ced352b850": "可选的本地 p0d 二进制文件路径。留空则自动检测。",
   "b0378e3b527213f4": "自动检测",
+  "3e655f7a1b853dfc": "连接到另一台机器上的 p0code 服务器…",
+  "97cc12a6974a2e1f": "让应用直接连接到你自行运行的服务器 URL。这不是中继：要访问另一台机器，请使用中继配对或已链接的环境。",
+  "5ee6a14abe673935": "远程后端 URL",
+  "6644ba2b07966b5e": "请输入有效的 http:// 或 https:// 后端 URL。",
+  "375e36c5ec7cc8cc": "此应用连接的后端服务器地址。",
   "fc97cbc163303379": "应用后端更改",
   "bbc13d558099d555": "保存更改将重启桌面应用以重新连接。",
   "8528dc862dc6e528": "后端状态",
   "273807c15ad63784": "没有活跃的后端端点。",
   "03eb730d7894e9ac": "刷新后端状态",
+  "160e84aa38160711": "Local service (p0d) is the default. Quitting the app window leaves the backend running in the background.",
+  "e579b7407b4163de": "未找到 p0d，因此应用正在使用其内置后端。请将 p0d 安装到 PATH（/usr/local/bin 或 /opt/homebrew/bin），或选择本地服务 (p0d) 以设置其路径。",
   "6c14d758da9f2467": "本地服务 (p0d)",
-  "8eec8bb6f8aaab9c": "远程 URL",
-  "c4e96477a76cf0a2": "旧版内置",
+  "2b9b601029436eb6": "应用内后端",
   "43cc85f6e68e9e70": [
     "可选覆盖项。当前解析路径：",
     {
@@ -9361,7 +9368,6 @@
   "5c0c973276a61fdb": "无法保存 pull request 路由权限",
   "1bfcffe8411e2439": "{environment} 的 PR 路由",
   "ae4761ddc038b102": "此处信任的机器可借助彼此的版本控制访问权限读取 PR 数据。需要在两台机器上都激活。“读取并操作”可能使用比权限所属机器更广的权限。此设置仅适用于当前设备。",
-  "e2549e5d689d8fa9": "本机连接端口",
   "02bca2d9c90e5f1e": "{value} 秒",
   "af22f973466903c3": "{value} 分钟",
   "401ba3f2391d8742": "{value} 小时",
@@ -9764,6 +9770,7 @@
   "d1a3cd9429a624e9": "链接标签",
   "a0988e4e9321c1b0": "访问层级",
   "d9ba7309688b3241": "链接到期时间",
+  "e2549e5d689d8fa9": "本机连接端口",
   "3432aa767653c49d": "连接端口访问",
   "d7dc565616d13a5c": "分享链接",
   "de603f12452a7942": "分享链接的 QR Code",
@@ -11796,7 +11803,7 @@
   "c349ea1db3f9e9f1": "环境图标",
   "18bd7981d6c50994": "机器 图标 侧边栏 mac mini studio 笔记本 台式机 服务器 云 vm",
   "8ac2984f4e732091": "关闭 打开 禁用 激活 本地服务器 智能体 仅远程 重启",
-  "5534d0a4fca3416e": "p0d 本地 服务 远程 url 旧版 内置 守护进程 pid 启动 停止 重启",
+  "23150f85aa94e8ec": "p0d 本地服务 应用内 内置 远程 url daemon pid 启动 停止 重启",
   "3a54b8d98911331a": "网络访问",
   "1a31308f0884a68b": "公开 后端 远程 配对 本地机器 网络接口 主机 重启",
   "92c2528040ca7442": "serve magicdns 端点 远程 安全 网络",

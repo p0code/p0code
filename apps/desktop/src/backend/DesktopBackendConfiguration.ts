@@ -979,7 +979,7 @@ export const make = Effect.gen(function* () {
     const persistedSettings = yield* settings.get;
     const backendMode = yield* backendService.resolveEffectiveMode;
     const wslRequested =
-      backendMode === "legacy-embedded" &&
+      backendMode === "embedded" &&
       persistedSettings.wslOnly &&
       persistedSettings.wslBackendEnabled;
     // When WSL is unavailable its controls are hidden; fall back to Windows to keep recovery possible.

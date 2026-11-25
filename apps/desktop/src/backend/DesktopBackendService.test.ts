@@ -69,7 +69,7 @@ describe("DesktopBackendService helpers", () => {
     );
     assert.equal(
       DesktopBackendService.resolveEffectiveBackendMode(autoSettings, false),
-      "legacy-embedded",
+      "embedded",
     );
   });
 
@@ -90,10 +90,10 @@ describe("DesktopBackendService helpers", () => {
     );
     assert.equal(
       DesktopBackendService.resolveEffectiveBackendMode(
-        { backendMode: "legacy-embedded", backendModeConfiguredByUser: true },
+        { backendMode: "embedded", backendModeConfiguredByUser: true },
         true,
       ),
-      "legacy-embedded",
+      "embedded",
     );
   });
 
@@ -598,10 +598,7 @@ describe("DesktopBackendService.layer", () => {
       const service = yield* DesktopBackendService.DesktopBackendService.pipe(
         Effect.provide(layerService(baseDir, DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS)),
       );
-      assert.deepEqual(
-        runLikeSyncIpc(service.resolveEffectiveMode),
-        Exit.succeed("legacy-embedded"),
-      );
+      assert.deepEqual(runLikeSyncIpc(service.resolveEffectiveMode), Exit.succeed("embedded"));
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
 
@@ -615,7 +612,7 @@ describe("DesktopBackendService.layer", () => {
         Effect.provide(
           layerService(baseDir, {
             ...DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS,
-            backendMode: "legacy-embedded",
+            backendMode: "embedded",
             backendModeConfiguredByUser: false,
           }),
         ),
@@ -634,19 +631,16 @@ describe("DesktopBackendService.layer", () => {
         Effect.provide(
           layerService(baseDir, {
             ...DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS,
-            backendMode: "legacy-embedded",
+            backendMode: "embedded",
             backendModeConfiguredByUser: true,
           }),
         ),
       );
-      assert.deepEqual(
-        runLikeSyncIpc(service.resolveEffectiveMode),
-        Exit.succeed("legacy-embedded"),
-      );
+      assert.deepEqual(runLikeSyncIpc(service.resolveEffectiveMode), Exit.succeed("embedded"));
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
 
-  it.effect("falls back to legacy-embedded when the local service cannot start", () =>
+  it.effect("falls back to the in-app backend when the local service cannot start", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const baseDir = yield* fileSystem.makeTempDirectoryScoped();
@@ -665,9 +659,9 @@ describe("DesktopBackendService.layer", () => {
         ),
       );
       // No server bundle in this environment, so the service can never come up.
-      assert.equal(result.mode, "legacy-embedded");
+      assert.equal(result.mode, "embedded");
       assert.include(result.fallbackReason ?? "", "Legacy server bundle not found");
-      assert.equal(settings.backendMode, "legacy-embedded");
+      assert.equal(settings.backendMode, "embedded");
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
 
@@ -687,19 +681,19 @@ describe("DesktopBackendService.layer", () => {
           }),
         ),
       );
-      assert.equal(result.mode, "legacy-embedded");
+      assert.equal(result.mode, "embedded");
       assert.isNotNull(result.fallbackReason);
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
 
-  it.effect("keeps legacy-embedded without touching any service", () =>
+  it.effect("keeps embedded without touching any service", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const baseDir = yield* fileSystem.makeTempDirectoryScoped();
       const result = yield* Effect.gen(function* () {
         return yield* (yield* DesktopBackendService.DesktopBackendService).prepareSelectedBackend;
       }).pipe(Effect.provide(layerService(baseDir, DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS)));
-      assert.deepEqual(result, { mode: "legacy-embedded", fallbackReason: null });
+      assert.deepEqual(result, { mode: "embedded", fallbackReason: null });
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
 });

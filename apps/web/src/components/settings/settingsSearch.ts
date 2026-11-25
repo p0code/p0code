@@ -1436,7 +1436,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     title: msg("Backend"),
     to: "/settings/connections",
     searchTerms: [
-      msg("p0d local service remote url legacy embedded daemon pid start stop restart"),
+      msg("p0d local service in-app embedded remote url daemon pid start stop restart"),
     ],
     desktopOnly: true,
   },

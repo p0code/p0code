@@ -270,7 +270,7 @@ const startLocalBackend = Effect.gen(function* () {
     }
   }
 
-  if (effectiveBackendMode === "legacy-embedded") {
+  if (effectiveBackendMode === "embedded") {
     const backendPortSelection = yield* resolveDesktopBackendPort(
       environment.configuredBackendPort,
     );
@@ -324,7 +324,7 @@ const startLocalBackend = Effect.gen(function* () {
     return false;
   }
   if (
-    effectiveBackendMode === "legacy-embedded" &&
+    effectiveBackendMode === "embedded" &&
     settings.wslOnly === true &&
     settings.wslBackendEnabled === true
   ) {
@@ -389,7 +389,7 @@ const bootstrap = Effect.fn("desktop.bootstrap")(function* (backendStarted: bool
   const config = yield* primaryBackend.currentConfig;
   const isExternalMode =
     Option.isSome(config) &&
-    DesktopBackendService.isExternalBackendMode(config.value.backendMode ?? "legacy-embedded");
+    DesktopBackendService.isExternalBackendMode(config.value.backendMode ?? "embedded");
   if (
     !environment.isDevelopment &&
     (isExternalMode || (Option.isSome(config) && Option.isNone(config.value.preflightFailure)))

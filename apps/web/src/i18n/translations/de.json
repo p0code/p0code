@@ -3040,7 +3040,10 @@
       "v": "v"
     },
     {
-      "c": [" ", "auf dem Computer, der diese Seite geöffnet hat"],
+      "c": [
+        " ",
+        "auf dem Computer, der diese Seite geöffnet hat"
+      ],
       "i": 2,
       "t": "span"
     }
@@ -3052,7 +3055,10 @@
       "v": "v"
     },
     {
-      "c": [" ", "· wer es ausführt, erhält diesen Zugriff"],
+      "c": [
+        " ",
+        "· wer es ausführt, erhält diesen Zugriff"
+      ],
       "i": 2,
       "t": "span"
     }
@@ -7938,7 +7944,7 @@
   "c0472e6d94fdfac6": "Backend-Status konnte nicht gelesen werden.",
   "2a60193ee8373880": "Lokaler Dienst (p0d)",
   "e6df9b742434f520": "Remote-URL",
-  "94e81a45de20cc79": "Eingebettet (Legacy)",
+  "f76c7460f8858f82": "In-App-Backend",
   "7342bfc328008926": "Aktiv",
   "965df6703c163169": "Backend-Einstellungen konnten nicht gespeichert werden.",
   "573409786719966d": "Backend-Einstellungen konnten nicht gespeichert werden",
@@ -7946,25 +7952,26 @@
   "ff2ec75c9f35f7f3": "Backend-Aktion fehlgeschlagen",
   "91b10cabbd4d53d4": "Führt p0d als Benutzerdienst im Hintergrund aus. Beim Beenden des Desktop-Fensters läuft das Backend weiter.",
   "7b16f61e7b3ea96c": "Verbindet sich direkt ohne lokalen Prozess mit einer Remote- oder selbst gehosteten Backend-URL.",
-  "160e84aa38160711": "Local service (p0d) is the default. Quitting the app window leaves the backend running in the background.",
-  "611d8ffe4377c319": "p0d was not found, so the app is using the embedded backend. Install p0d on PATH (/usr/local/bin or /opt/homebrew/bin), or choose Local service (p0d) to set its path.",
-  "f3d324868f7f1fa0": "Spawns the legacy Node server inside the desktop app. Used only when p0d is not available.",
+  "a707da568eb1f7ac": "Führt das Backend in der App aus. Beim Beenden des Fensters wird es gestoppt – anders als beim lokalen Dienst (p0d), der weiterläuft.",
   "dd281e638ef8392f": "Backend",
   "17cbd5721600c68b": "Backend-Modus",
-  "5ee6a14abe673935": "Remote-Backend-URL",
-  "6644ba2b07966b5e": "Gib eine gültige http://- oder https://-Backend-URL ein.",
-  "375e36c5ec7cc8cc": "Adresse des Backend-Servers, mit dem sich diese App verbindet.",
   "8e17aeb8eac27bee": "p0d-Binärpfad",
   "846902ced352b850": "Optionaler Pfad zu einer lokalen p0d-Binärdatei. Leer lassen für automatische Erkennung.",
   "b0378e3b527213f4": "Automatisch erkennen",
+  "3e655f7a1b853dfc": "Mit einem p0code-Server auf einem anderen Computer verbinden…",
+  "97cc12a6974a2e1f": "Verbindet die App direkt mit einer URL eines Servers, den du selbst betreibst. Das ist nicht die Relay: Um einen anderen Computer zu erreichen, nutze Relay-Kopplung oder verknüpfte Umgebungen.",
+  "5ee6a14abe673935": "Remote-Backend-URL",
+  "6644ba2b07966b5e": "Gib eine gültige http://- oder https://-Backend-URL ein.",
+  "375e36c5ec7cc8cc": "Adresse des Backend-Servers, mit dem sich diese App verbindet.",
   "fc97cbc163303379": "Backend-Änderungen anwenden",
   "bbc13d558099d555": "Beim Speichern wird die Desktop-App neu gestartet, um neu zu verbinden.",
   "8528dc862dc6e528": "Backend-Status",
   "273807c15ad63784": "Kein aktiver Backend-Endpunkt.",
   "03eb730d7894e9ac": "Backend-Status aktualisieren",
+  "160e84aa38160711": "Local service (p0d) is the default. Quitting the app window leaves the backend running in the background.",
+  "e579b7407b4163de": "p0d wurde nicht gefunden, daher läuft die App mit ihrem In-App-Backend. Installiere p0d im PATH (/usr/local/bin oder /opt/homebrew/bin) oder wähle Lokaler Dienst (p0d), um den Pfad festzulegen.",
   "6c14d758da9f2467": "Lokaler Dienst (p0d)",
-  "8eec8bb6f8aaab9c": "Remote-URL",
-  "c4e96477a76cf0a2": "Eingebettet (Legacy)",
+  "2b9b601029436eb6": "In-App-Backend",
   "43cc85f6e68e9e70": [
     "Optionale Überschreibung. Aktuell aufgelöst: ",
     {
@@ -9345,7 +9352,6 @@
   "5c0c973276a61fdb": "Berechtigung für Pull-Request-Routing konnte nicht gespeichert werden",
   "1bfcffe8411e2439": "Pull-Request-Routing für {environment}",
   "ae4761ddc038b102": "Rechner, denen du hier vertraust, können PR-Daten über den Versionskontrollzugriff des jeweils anderen lesen. Aktiviere es auf beiden Rechnern. „Lesen und handeln“ kann weitergehende Berechtigungen nutzen als der Rechner, dem sie gehören. Gilt nur für dieses Gerät.",
-  "e2549e5d689d8fa9": "Lokaler Port",
   "02bca2d9c90e5f1e": "{value} s",
   "af22f973466903c3": "{value} Min.",
   "401ba3f2391d8742": "{value} Std.",
@@ -9751,6 +9757,7 @@
   "d1a3cd9429a624e9": "Link-Label",
   "a0988e4e9321c1b0": "Zugriffsstufe",
   "d9ba7309688b3241": "Link-Ablauf",
+  "e2549e5d689d8fa9": "Lokaler Port",
   "3432aa767653c49d": "Port-Zugriff",
   "d7dc565616d13a5c": "Link teilen",
   "de603f12452a7942": "QR-Code zum Teilen des Links",
@@ -11775,7 +11782,7 @@
   "c349ea1db3f9e9f1": "Umgebungssymbol",
   "18bd7981d6c50994": "rechner symbol seitenleiste mac mini studio laptop desktop server cloud vm",
   "8ac2984f4e732091": "ausschalten einschalten deaktivieren aktivieren lokaler server agenten nur remote neustart",
-  "5534d0a4fca3416e": "p0d lokaler dienst remote url legacy eingebettet daemon pid starten stoppen neu starten",
+  "23150f85aa94e8ec": "p0d lokaler dienst in-app eingebettet remote url daemon pid start stopp neustart",
   "3a54b8d98911331a": "Netzwerkzugriff",
   "1a31308f0884a68b": "backend freigeben remote kopplung lokaler rechner schnittstellen host neustart",
   "92c2528040ca7442": "serve magicdns endpunkt remote sicher netzwerk",

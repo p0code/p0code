@@ -76,7 +76,7 @@ export const DEFAULT_MAIN_WINDOW_SIZE = {
 
 export const DEFAULT_DESKTOP_SETTINGS: DesktopSettings = {
   backendBinaryPath: null,
-  backendMode: "legacy-embedded",
+  backendMode: "embedded",
   backendModeConfiguredByUser: false,
   backendRemoteUrl: null,
   localEnvironmentEnabled: true,
@@ -105,9 +105,16 @@ const DesktopWindowBoundsDocument = Schema.Struct({
 const optionalReadableKey = <S extends Schema.Top>(schema: S) =>
   Schema.optionalKey(schema.pipe(Schema.catchDecoding(() => Effect.succeedNone)));
 
+// The embedded mode was once persisted as `legacy-embedded`; documents that still carry
+// the old id decode here and are normalised to `embedded` in memory.
+const DesktopBackendModeDocumentSchema = Schema.Union([
+  DesktopBackendModeSchema,
+  Schema.Literal("legacy-embedded"),
+]);
+
 const DesktopSettingsDocument = Schema.Struct({
   backendBinaryPath: optionalReadableKey(Schema.NullOr(Schema.String)),
-  backendMode: optionalReadableKey(DesktopBackendModeSchema),
+  backendMode: optionalReadableKey(DesktopBackendModeDocumentSchema),
   backendModeConfiguredByUser: optionalReadableKey(Schema.Boolean),
   backendRemoteUrl: optionalReadableKey(Schema.NullOr(Schema.String)),
   localEnvironmentEnabled: optionalReadableKey(Schema.Boolean),
@@ -265,7 +272,8 @@ function normalizeDesktopSettingsDocument(
     parsed.wslBackendEnabled === true ||
     (parsed.wslBackendEnabled === undefined && parsed.wslMode === "wsl");
 
-  const parsedBackendMode = parsed.backendMode;
+  const parsedBackendMode =
+    parsed.backendMode === "legacy-embedded" ? "embedded" : parsed.backendMode;
   // A recorded mode is not an explicit choice on its own: older documents stored the
   // default, and only the flag distinguishes that from a mode the user picked.
   const backendModeConfiguredByUser =
@@ -489,7 +497,7 @@ function setBackendConfig(
 
 const applyBuiltInBackendFallback = (settings: DesktopSettings): DesktopSettings =>
   setBackendConfig(settings, {
-    mode: "legacy-embedded",
+    mode: "embedded",
     modeConfiguredByUser: settings.backendModeConfiguredByUser,
   });
 

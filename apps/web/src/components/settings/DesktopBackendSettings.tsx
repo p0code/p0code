@@ -9,10 +9,12 @@ import { useEffect, useState } from "react";
 
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
+import { Checkbox } from "../ui/checkbox";
 import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Spinner } from "../ui/spinner";
 import { stackedThreadToast, toastManager } from "../ui/toast";
+import { AdvancedSettings } from "./AdvancedSettings";
 import { SettingsRow, SettingsSection } from "./settingsLayout";
 import { useSearchableSetting } from "./settingsSearch";
 
@@ -33,8 +35,9 @@ export function DesktopBackendSettings() {
   const bridge = typeof window === "undefined" ? undefined : window.desktopBridge?.backend;
 
   const [status, setStatus] = useState<DesktopBackendStatus | null>(null);
-  const [draftMode, setDraftMode] = useState<DesktopBackendMode>("legacy-embedded");
+  const [draftMode, setDraftMode] = useState<DesktopBackendMode>("embedded");
   const [modeTouched, setModeTouched] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [draftRemoteUrl, setDraftRemoteUrl] = useState("");
   const [draftBinaryPath, setDraftBinaryPath] = useState("");
   const [busyAction, setBusyAction] = useState<DesktopBackendAction | "save" | "refresh" | null>(
@@ -92,7 +95,7 @@ export function DesktopBackendSettings() {
   const modeLabel = (mode: DesktopBackendMode): string => {
     if (mode === "local-service") return gt("Local service (p0d)");
     if (mode === "remote") return gt("Remote URL");
-    return gt("Legacy embedded");
+    return gt("In-app backend");
   };
 
   const statusBadge = () => {
@@ -180,7 +183,7 @@ export function DesktopBackendSettings() {
       : draftMode === "remote"
         ? gt("Connects directly to a remote or self-hosted backend URL with no local process.")
         : gt(
-            "Spawns the legacy Node server inside the desktop app. Used only when p0d is not available.",
+            "Runs the backend inside the app. Quitting the window stops it, unlike Local service (p0d), which keeps running.",
           );
 
   const statusMetaParts: string[] = [];
@@ -201,7 +204,7 @@ export function DesktopBackendSettings() {
       {status !== null && !status.resolvedBinaryPath ? (
         <p className="px-3 text-sm leading-relaxed text-muted-foreground sm:px-4">
           <T>
-            p0d was not found, so the app is using the embedded backend. Install p0d on PATH
+            p0d was not found, so the app is running its in-app backend. Install p0d on PATH
             (/usr/local/bin or /opt/homebrew/bin), or choose Local service (p0d) to set its path.
           </T>
         </p>
@@ -213,8 +216,9 @@ export function DesktopBackendSettings() {
           <Select
             value={draftMode}
             onValueChange={(value) => {
-              if (value === "local-service" || value === "remote" || value === "legacy-embedded") {
+              if (value === "local-service" || value === "embedded") {
                 setDraftMode(value);
+                setShowAdvanced(false);
                 setModeTouched(true);
               }
             }}
@@ -231,40 +235,13 @@ export function DesktopBackendSettings() {
               <SelectItem hideIndicator value="local-service">
                 <T>Local service (p0d)</T>
               </SelectItem>
-              <SelectItem hideIndicator value="remote">
-                <T>Remote URL</T>
-              </SelectItem>
-              <SelectItem hideIndicator value="legacy-embedded">
-                <T>Legacy embedded</T>
+              <SelectItem hideIndicator value="embedded">
+                <T>In-app backend</T>
               </SelectItem>
             </SelectPopup>
           </Select>
         }
       />
-
-      {draftMode === "remote" ? (
-        <SettingsRow
-          title={gt("Remote backend URL")}
-          description={
-            remoteUrlInvalid
-              ? gt("Enter a valid http:// or https:// backend URL.")
-              : gt("Address of the backend server this app connects to.")
-          }
-          control={
-            <Input
-              size="sm"
-              type="url"
-              font="mono"
-              className="w-full sm:w-72"
-              aria-label={gt("Remote backend URL")}
-              placeholder="http://127.0.0.1:3773"
-              value={draftRemoteUrl}
-              disabled={busyAction !== null}
-              onChange={(event) => setDraftRemoteUrl(event.target.value)}
-            />
-          }
-        />
-      ) : null}
 
       {draftMode === "local-service" ? (
         <SettingsRow
@@ -292,6 +269,60 @@ export function DesktopBackendSettings() {
           }
         />
       ) : null}
+
+      <AdvancedSettings
+        targetIds={["desktop-backend-remote"]}
+        open={showAdvanced || draftMode === "remote"}
+        onOpenChange={setShowAdvanced}
+      >
+        <SettingsRow
+          title={gt("Connect to a p0code server on another machine…")}
+          description={gt(
+            "Points the app straight at a URL for a server you run elsewhere. This is not the relay: to reach another machine, use relay pairing or linked environments.",
+          )}
+          control={
+            <Checkbox
+              checked={draftMode === "remote"}
+              disabled={busyAction !== null}
+              aria-label={gt("Connect to a p0code server on another machine…")}
+              onCheckedChange={(checked) => {
+                if (checked) {
+                  setShowAdvanced(true);
+                  setDraftMode("remote");
+                } else {
+                  setShowAdvanced(false);
+                  setDraftMode(status?.resolvedBinaryPath ? "local-service" : "embedded");
+                }
+                setModeTouched(true);
+              }}
+            />
+          }
+        />
+
+        {draftMode === "remote" ? (
+          <SettingsRow
+            title={gt("Remote backend URL")}
+            description={
+              remoteUrlInvalid
+                ? gt("Enter a valid http:// or https:// backend URL.")
+                : gt("Address of the backend server this app connects to.")
+            }
+            control={
+              <Input
+                size="sm"
+                type="url"
+                font="mono"
+                className="w-full sm:w-72"
+                aria-label={gt("Remote backend URL")}
+                placeholder="http://127.0.0.1:3773"
+                value={draftRemoteUrl}
+                disabled={busyAction !== null}
+                onChange={(event) => setDraftRemoteUrl(event.target.value)}
+              />
+            }
+          />
+        ) : null}
+      </AdvancedSettings>
 
       {hasUnsavedChanges ? (
         <SettingsRow

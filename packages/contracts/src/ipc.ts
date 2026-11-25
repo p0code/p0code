@@ -1129,13 +1129,9 @@ export const DesktopT3ImportRunResultSchema = Schema.Struct({
 });
 export type DesktopT3ImportRunResult = typeof DesktopT3ImportRunResultSchema.Type;
 
-export type DesktopBackendMode = "local-service" | "remote" | "legacy-embedded";
+export type DesktopBackendMode = "local-service" | "remote" | "embedded";
 
-export const DesktopBackendModeSchema = Schema.Literals([
-  "local-service",
-  "remote",
-  "legacy-embedded",
-]);
+export const DesktopBackendModeSchema = Schema.Literals(["local-service", "remote", "embedded"]);
 
 const DesktopBackendRuntimeStatusSchema = Schema.Literals([
   "running",

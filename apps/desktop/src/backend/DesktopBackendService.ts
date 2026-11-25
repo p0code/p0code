@@ -130,7 +130,7 @@ export function isExternalBackendMode(mode: DesktopBackendMode): boolean {
 
 /**
  * The auto default follows p0d availability instead of the stored mode. A document that
- * recorded the old legacy-embedded default (no explicit choice) moves to local-service as
+ * recorded the embedded default (no explicit choice) moves to local-service as
  * soon as p0d resolves, and moves back if it disappears.
  */
 export function resolveEffectiveBackendMode(
@@ -140,7 +140,7 @@ export function resolveEffectiveBackendMode(
   if (settings.backendModeConfiguredByUser) {
     return settings.backendMode;
   }
-  return hasP0d ? "local-service" : "legacy-embedded";
+  return hasP0d ? "local-service" : "embedded";
 }
 
 function p0dBinaryName(platform: NodeJS.Platform): string {
@@ -986,7 +986,7 @@ export class DesktopBackendService extends Context.Service<
     readonly resolveServiceDriver: Effect.Effect<BackendServiceDriver>;
     /**
      * Brings an external backend up before any window loads; if it cannot serve the desktop,
-     * switches this install back to legacy-embedded and says why.
+     * switches this install back to the in-app backend and says why.
      */
     readonly prepareSelectedBackend: Effect.Effect<{
       readonly mode: DesktopBackendMode;
@@ -1172,23 +1172,23 @@ export const make = Effect.gen(function* () {
       }
       const fallbackReason = yield* externalBackendFailure(mode);
       if (fallbackReason === null) return { mode, fallbackReason };
-      yield* logServiceWarning("selected backend mode failed; falling back to legacy-embedded", {
+      yield* logServiceWarning("selected backend mode failed; falling back to the in-app backend", {
         mode,
         reason: fallbackReason,
       });
       yield* appSettings
         .setBackendConfig({
-          mode: "legacy-embedded",
+          mode: "embedded",
           modeConfiguredByUser: settings.backendModeConfiguredByUser,
         })
         .pipe(
           Effect.catch((error) =>
-            logServiceWarning("failed to persist the legacy-embedded fallback", {
+            logServiceWarning("failed to persist the in-app backend fallback", {
               error: error.message,
             }).pipe(Effect.andThen(appSettings.applyBuiltInBackendFallbackInMemory)),
           ),
         );
-      return { mode: "legacy-embedded" as const, fallbackReason };
+      return { mode: "embedded" as const, fallbackReason };
     }).pipe(Effect.withSpan("desktop.backendService.prepareSelectedBackend"));
 
   const getStatus: DesktopBackendService["Service"]["getStatus"] = Effect.fn(
@@ -1325,13 +1325,13 @@ export const layerTest = (
     DesktopBackendService,
     DesktopBackendService.of({
       hasP0d: Effect.succeed(false),
-      resolveEffectiveMode: Effect.succeed("legacy-embedded"),
+      resolveEffectiveMode: Effect.succeed("embedded"),
       findP0dBinary: Effect.succeedNone,
       resolveServiceDriver: Effect.die("DesktopBackendService.layerTest resolveServiceDriver"),
-      prepareSelectedBackend: Effect.succeed({ mode: "legacy-embedded", fallbackReason: null }),
+      prepareSelectedBackend: Effect.succeed({ mode: "embedded", fallbackReason: null }),
       getStatus: Effect.fn("DesktopBackendService.getStatus")(function () {
         return Effect.succeed({
-          mode: "legacy-embedded" as const,
+          mode: "embedded" as const,
           status: "stopped" as const,
           running: false,
           url: null,

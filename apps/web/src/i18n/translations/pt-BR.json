@@ -3039,7 +3039,10 @@
       "v": "v"
     },
     {
-      "c": [" ", "no computador que abriu esta página"],
+      "c": [
+        " ",
+        "no computador que abriu esta página"
+      ],
       "i": 2,
       "t": "span"
     }
@@ -3051,7 +3054,10 @@
       "v": "v"
     },
     {
-      "c": [" ", "· quem executar recebe este acesso"],
+      "c": [
+        " ",
+        "· quem executar recebe este acesso"
+      ],
       "i": 2,
       "t": "span"
     }
@@ -7938,7 +7944,7 @@
   "c0472e6d94fdfac6": "Não foi possível ler o status do backend.",
   "2a60193ee8373880": "Serviço local (p0d)",
   "e6df9b742434f520": "URL remota",
-  "94e81a45de20cc79": "Embutido legado",
+  "f76c7460f8858f82": "Backend no app",
   "7342bfc328008926": "Em execução",
   "965df6703c163169": "Não foi possível salvar as configurações do backend.",
   "573409786719966d": "Não foi possível salvar as configurações do backend",
@@ -7946,25 +7952,26 @@
   "ff2ec75c9f35f7f3": "Falha na ação do backend",
   "91b10cabbd4d53d4": "Executa o p0d como serviço de usuário em segundo plano. Fechar a janela do aplicativo mantém o backend em execução.",
   "7b16f61e7b3ea96c": "Conecta-se diretamente a uma URL de backend remota ou auto-hospedada sem processo local.",
-  "160e84aa38160711": "Local service (p0d) is the default. Quitting the app window leaves the backend running in the background.",
-  "611d8ffe4377c319": "p0d was not found, so the app is using the embedded backend. Install p0d on PATH (/usr/local/bin or /opt/homebrew/bin), or choose Local service (p0d) to set its path.",
-  "f3d324868f7f1fa0": "Spawns the legacy Node server inside the desktop app. Used only when p0d is not available.",
+  "a707da568eb1f7ac": "Executa o backend dentro do app. Fechar a janela o encerra, ao contrário do serviço local (p0d), que continua em execução.",
   "dd281e638ef8392f": "Backend",
   "17cbd5721600c68b": "Modo do backend",
-  "5ee6a14abe673935": "URL do backend remoto",
-  "6644ba2b07966b5e": "Informe uma URL de backend http:// ou https:// válida.",
-  "375e36c5ec7cc8cc": "Endereço do servidor backend ao qual este aplicativo se conecta.",
   "8e17aeb8eac27bee": "Caminho do binário p0d",
   "846902ced352b850": "Caminho opcional para um binário p0d local. Deixe em branco para detecção automática.",
   "b0378e3b527213f4": "Detectar automaticamente",
+  "3e655f7a1b853dfc": "Conectar a um servidor p0code em outra máquina…",
+  "97cc12a6974a2e1f": "Aponta o app diretamente para a URL de um servidor que você executa em outro lugar. Isto não é o relay: para alcançar outra máquina, use o pareamento por relay ou ambientes vinculados.",
+  "5ee6a14abe673935": "URL do backend remoto",
+  "6644ba2b07966b5e": "Informe uma URL de backend http:// ou https:// válida.",
+  "375e36c5ec7cc8cc": "Endereço do servidor backend ao qual este aplicativo se conecta.",
   "fc97cbc163303379": "Aplicar alterações do backend",
   "bbc13d558099d555": "Salvar as alterações reiniciará o aplicativo desktop para reconectar.",
   "8528dc862dc6e528": "Status do backend",
   "273807c15ad63784": "Nenhum endpoint de backend ativo.",
   "03eb730d7894e9ac": "Atualizar status do backend",
+  "160e84aa38160711": "Local service (p0d) is the default. Quitting the app window leaves the backend running in the background.",
+  "e579b7407b4163de": "p0d não foi encontrado, então o app está usando o backend interno. Instale o p0d no PATH (/usr/local/bin ou /opt/homebrew/bin) ou escolha Serviço local (p0d) para definir o caminho.",
   "6c14d758da9f2467": "Serviço local (p0d)",
-  "8eec8bb6f8aaab9c": "URL remota",
-  "c4e96477a76cf0a2": "Embutido legado",
+  "2b9b601029436eb6": "Backend no app",
   "43cc85f6e68e9e70": [
     "Substituição opcional. Resolvido atualmente: ",
     {
@@ -9345,7 +9352,6 @@
   "5c0c973276a61fdb": "Não foi possível salvar a permissão de roteamento de pull requests",
   "1bfcffe8411e2439": "Roteamento de pull requests de {environment}",
   "ae4761ddc038b102": "As máquinas em que você confia aqui podem ler dados de PRs pelo acesso ao controle de versão umas das outras. Ative nas duas máquinas. \"Ler e agir\" pode usar permissões mais amplas que as da máquina dona delas. Isso vale só para este dispositivo.",
-  "e2549e5d689d8fa9": "Porta local",
   "02bca2d9c90e5f1e": "{value} s",
   "af22f973466903c3": "{value}min",
   "401ba3f2391d8742": "{value} h",
@@ -9749,6 +9755,7 @@
   "d1a3cd9429a624e9": "Rótulo do link",
   "a0988e4e9321c1b0": "Nível de acesso",
   "d9ba7309688b3241": "Expiração do link",
+  "e2549e5d689d8fa9": "Porta local",
   "3432aa767653c49d": "Acesso à porta",
   "d7dc565616d13a5c": "Compartilhar link",
   "de603f12452a7942": "Código QR do link compartilhado",
@@ -11772,7 +11779,7 @@
   "c349ea1db3f9e9f1": "Ícone do ambiente",
   "18bd7981d6c50994": "máquina glifo barra lateral mac mini studio notebook desktop servidor nuvem vm",
   "8ac2984f4e732091": "desligar ligar desativar ativar servidor local agentes só remoto reiniciar",
-  "5534d0a4fca3416e": "p0d serviço local url remota legado embutido daemon pid iniciar parar reiniciar",
+  "23150f85aa94e8ec": "p0d serviço local no app integrado remoto url daemon pid iniciar parar reiniciar",
   "3a54b8d98911331a": "Acesso à rede",
   "1a31308f0884a68b": "expor backend remoto pareamento máquina local interfaces host reiniciar",
   "92c2528040ca7442": "serve magicdns endpoint remoto seguro rede",
