@@ -3042,7 +3042,10 @@
       "v": "v"
     },
     {
-      "c": [" ", "en el ordenador que abrió esta página"],
+      "c": [
+        " ",
+        "en el ordenador que abrió esta página"
+      ],
       "i": 2,
       "t": "span"
     }
@@ -3054,7 +3057,10 @@
       "v": "v"
     },
     {
-      "c": [" ", "· quien lo ejecute obtiene este acceso"],
+      "c": [
+        " ",
+        "· quien lo ejecute obtiene este acceso"
+      ],
       "i": 2,
       "t": "span"
     }
@@ -8073,36 +8079,33 @@
   ],
   "c56b618d212bf018": "Reiniciar y recuperar",
   "c0472e6d94fdfac6": "No se pudo leer el estado del backend.",
-  "2a60193ee8373880": "Servicio local (p0d)",
-  "e6df9b742434f520": "URL remota",
+  "80e9842fba54a764": "Background service",
+  "20119adcdeba05d6": "Remote URL (experimental)",
   "f76c7460f8858f82": "Backend en la app",
   "7342bfc328008926": "En ejecución",
   "965df6703c163169": "No se pudo guardar la configuración del backend.",
   "573409786719966d": "No se pudo guardar la configuración del backend",
   "50db9925f4ae4c5c": "La acción del backend falló.",
   "ff2ec75c9f35f7f3": "Error en la acción del backend",
-  "91b10cabbd4d53d4": "Ejecuta p0d como un servicio de usuario en segundo plano. Cerrar la ventana de escritorio deja el backend en ejecución.",
-  "7b16f61e7b3ea96c": "Se conecta directamente a una URL de backend remota o autoalojada sin proceso local.",
-  "a707da568eb1f7ac": "Ejecuta el backend dentro de la app. Al cerrar la ventana, el backend se detiene, a diferencia del servicio local (p0d), que sigue funcionando.",
+  "a6ed5086a49826b7": "Runs the backend as a background service so quitting the window leaves it running. This is an opt-in; the in-app backend is the default.",
+  "11f39ab8c7ef7f2c": "Remote backend mode is experimental and not supported yet.",
+  "acde32a90babc3d9": "Runs the backend inside the app. This is the default and always available, and quitting the window stops it.",
   "dd281e638ef8392f": "Backend",
+  "0eceeba3445dbce6": "Remote backend mode is experimental and not supported yet",
+  "016d261db78d0a6f": "This app cannot pair with or sign in to a remote server yet. Add another machine from Settings > Connections instead.",
   "17cbd5721600c68b": "Modo de backend",
-  "8e17aeb8eac27bee": "Ruta del binario p0d",
-  "846902ced352b850": "Ruta opcional a un binario p0d local. Déjala vacía para detección automática.",
+  "612fd40b9f63e20c": "Backend binary path",
+  "8bc25cadc55fed65": "Optional path to a background service binary. Leave blank to use the bundled server.",
   "b0378e3b527213f4": "Detección automática",
-  "3e655f7a1b853dfc": "Conectar con un servidor p0code en otra máquina…",
-  "97cc12a6974a2e1f": "Conecta la app directamente a la URL de un servidor que ejecutas en otro lugar. Esto no es el relay: para llegar a otra máquina, usa el emparejamiento por relay o los entornos vinculados.",
-  "5ee6a14abe673935": "URL del backend remoto",
-  "6644ba2b07966b5e": "Introduce una URL de backend http:// o https:// válida.",
-  "375e36c5ec7cc8cc": "Dirección del servidor backend al que se conecta esta aplicación.",
   "fc97cbc163303379": "Aplicar cambios del backend",
   "bbc13d558099d555": "Guardar los cambios reiniciará la aplicación de escritorio para reconectar.",
   "8528dc862dc6e528": "Estado del backend",
   "273807c15ad63784": "No hay ningún punto de conexión de backend activo.",
   "03eb730d7894e9ac": "Actualizar estado del backend",
-  "160e84aa38160711": "Local service (p0d) is the default. Quitting the app window leaves the backend running in the background.",
-  "e579b7407b4163de": "No se encontró p0d, así que la app usa su backend interno. Instala p0d en el PATH (/usr/local/bin o /opt/homebrew/bin) o elige Servicio local (p0d) para indicar su ruta.",
-  "6c14d758da9f2467": "Servicio local (p0d)",
+  "6fcdce1ee867284c": "The in-app backend is the default and starts with the app. A background service is an opt-in and must pass its sign-in check before the app will switch to it.",
+  "7df2c5b1e6b025ac": "Use the in-app backend",
   "2b9b601029436eb6": "Backend en la app",
+  "f20bf106a8d66566": "Background service",
   "43cc85f6e68e9e70": [
     "Anulación opcional. Resuelto actualmente: ",
     {
@@ -8111,6 +8114,7 @@
       "v": "v"
     }
   ],
+  "b32cb7797f7e3e9e": "Background service mode is blocked when the service cannot prove it belongs to this app. Saving a mode that cannot sign in leaves your current setting untouched.",
   "6d49999f19231b80": "Restablecer",
   "1b42837e32eaa319": "Guardar y reiniciar",
   "7a4e5e17bc86fd03": "Iniciar",

@@ -3046,7 +3046,10 @@
       "v": "v"
     },
     {
-      "c": [" ", "位於開啟此頁面的計算機上"],
+      "c": [
+        " ",
+        "位於開啟此頁面的計算機上"
+      ],
       "i": 2,
       "t": "span"
     }
@@ -3058,7 +3061,10 @@
       "v": "v"
     },
     {
-      "c": [" ", "· 執行它的任何人都會獲得此訪問許可權"],
+      "c": [
+        " ",
+        "· 執行它的任何人都會獲得此訪問許可權"
+      ],
       "i": 2,
       "t": "span"
     }
@@ -8090,36 +8096,33 @@
   ],
   "c56b618d212bf018": "重啟並回收",
   "c0472e6d94fdfac6": "無法讀取後端狀態。",
-  "2a60193ee8373880": "本機服務 (p0d)",
-  "e6df9b742434f520": "遠端 URL",
+  "80e9842fba54a764": "Background service",
+  "20119adcdeba05d6": "Remote URL (experimental)",
   "f76c7460f8858f82": "應用程式內後端",
   "7342bfc328008926": "執行中",
   "965df6703c163169": "無法儲存後端設定。",
   "573409786719966d": "無法儲存後端設定",
   "50db9925f4ae4c5c": "後端操作失敗。",
   "ff2ec75c9f35f7f3": "後端操作失敗",
-  "91b10cabbd4d53d4": "將 p0d 作為背景使用者服務執行。關閉桌面視窗時後端會繼續執行。",
-  "7b16f61e7b3ea96c": "直接連線到遠端或自託管的後端 URL，不啟動本機程序。",
-  "a707da568eb1f7ac": "在應用程式內執行後端。關閉視窗後後端會停止，而本機服務 (p0d) 會繼續執行。",
+  "a6ed5086a49826b7": "Runs the backend as a background service so quitting the window leaves it running. This is an opt-in; the in-app backend is the default.",
+  "11f39ab8c7ef7f2c": "Remote backend mode is experimental and not supported yet.",
+  "acde32a90babc3d9": "Runs the backend inside the app. This is the default and always available, and quitting the window stops it.",
   "dd281e638ef8392f": "後端",
+  "0eceeba3445dbce6": "Remote backend mode is experimental and not supported yet",
+  "016d261db78d0a6f": "This app cannot pair with or sign in to a remote server yet. Add another machine from Settings > Connections instead.",
   "17cbd5721600c68b": "後端模式",
-  "8e17aeb8eac27bee": "p0d 執行檔路徑",
-  "846902ced352b850": "選用的本機 p0d 執行檔路徑。留空則自動偵測。",
+  "612fd40b9f63e20c": "Backend binary path",
+  "8bc25cadc55fed65": "Optional path to a background service binary. Leave blank to use the bundled server.",
   "b0378e3b527213f4": "自動檢測",
-  "3e655f7a1b853dfc": "連線到另一台機器上的 p0code 伺服器…",
-  "97cc12a6974a2e1f": "讓應用程式直接連線到你自行執行的伺服器 URL。這不是中繼：要存取另一台機器，請使用中繼配對或已連結的環境。",
-  "5ee6a14abe673935": "遠端後端 URL",
-  "6644ba2b07966b5e": "請輸入有效的 http:// 或 https:// 後端 URL。",
-  "375e36c5ec7cc8cc": "此應用程式連線的後端伺服器位址。",
   "fc97cbc163303379": "套用後端變更",
   "bbc13d558099d555": "儲存變更將重新啟動桌面應用程式以重新連線。",
   "8528dc862dc6e528": "後端狀態",
   "273807c15ad63784": "沒有使用中的後端端點。",
   "03eb730d7894e9ac": "重新整理後端狀態",
-  "160e84aa38160711": "Local service (p0d) is the default. Quitting the app window leaves the backend running in the background.",
-  "e579b7407b4163de": "找不到 p0d，因此應用程式正在使用其內建後端。請將 p0d 安裝到 PATH（/usr/local/bin 或 /opt/homebrew/bin），或選擇本機服務 (p0d) 以設定其路徑。",
-  "6c14d758da9f2467": "本機服務 (p0d)",
+  "6fcdce1ee867284c": "The in-app backend is the default and starts with the app. A background service is an opt-in and must pass its sign-in check before the app will switch to it.",
+  "7df2c5b1e6b025ac": "Use the in-app backend",
   "2b9b601029436eb6": "應用程式內後端",
+  "f20bf106a8d66566": "Background service",
   "43cc85f6e68e9e70": [
     "選用覆寫項目。目前解析路徑：",
     {
@@ -8128,6 +8131,7 @@
       "v": "v"
     }
   ],
+  "b32cb7797f7e3e9e": "Background service mode is blocked when the service cannot prove it belongs to this app. Saving a mode that cannot sign in leaves your current setting untouched.",
   "6d49999f19231b80": "重設",
   "1b42837e32eaa319": "儲存並重新啟動",
   "7a4e5e17bc86fd03": "啟動",
