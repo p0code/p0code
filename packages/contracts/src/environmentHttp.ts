@@ -1,4 +1,10 @@
-import { SelfRelayStatus, SelfRelayLink, RelayExposePort, RelayPortLink } from "./selfRelay.ts";
+import {
+  SelfRelayStatus,
+  SelfRelayStatusInput,
+  SelfRelayLink,
+  RelayExposePort,
+  RelayPortLink,
+} from "./selfRelay.ts";
 import { PortSchema } from "./baseSchemas.ts";
 import * as Context from "effect/Context";
 import type * as DateTime from "effect/DateTime";
@@ -833,6 +839,7 @@ export class EnvironmentVoiceHttpApi extends HttpApiGroup.make("voice")
 class EnvironmentSelfRelayHttpApi extends HttpApiGroup.make("selfRelay")
   .add(
     HttpApiEndpoint.get("status", "/api/relay/status", {
+      query: SelfRelayStatusInput,
       headers: OptionalBearerHeaders,
       success: SelfRelayStatus,
       error: EnvironmentScopedOperationErrors,

@@ -12,6 +12,8 @@ export const RelayPort = Schema.Struct({
 });
 export type RelayPort = typeof RelayPort.Type;
 export const SelfRelayStatus = Schema.Struct({
+  signupUrl: Schema.NullOr(Schema.String).pipe(Schema.withDecodingDefaultKey(Effect.succeed(null))),
+  slug: Schema.NullOr(Schema.String).pipe(Schema.withDecodingDefaultKey(Effect.succeed(null))),
   linked: Schema.Boolean,
   connected: Schema.Boolean,
   relayUrl: Schema.NullOr(Schema.String),
@@ -24,7 +26,16 @@ export const SelfRelayStatus = Schema.Struct({
   ports: Schema.Array(RelayPort),
 });
 export type SelfRelayStatus = typeof SelfRelayStatus.Type;
-export const SelfRelayLink = Schema.Struct({ relayUrl: Schema.String, token: Schema.String });
+export const SelfRelayStatusInput = Schema.Struct({ relayUrl: Schema.optionalKey(Schema.String) });
+export const SelfRelayLink = Schema.Union([
+  Schema.Struct({ relayUrl: Schema.String, token: Schema.String }),
+  Schema.Struct({
+    relayUrl: Schema.String,
+    username: Schema.String,
+    password: Schema.String,
+    desiredSlug: Schema.optionalKey(Schema.String),
+  }),
+]);
 export type SelfRelayLink = typeof SelfRelayLink.Type;
 export const RelayExposePort = Schema.Struct({
   port: PortSchema,

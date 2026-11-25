@@ -1,5 +1,6 @@
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeCrypto from "node:crypto";
+import * as NodeHttp from "node:http";
 import type { ManagedPolicyDocument } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import * as ManagedPolicy from "../policy/ManagedPolicy.ts";
@@ -182,4 +183,138 @@ it.effect("refuses links to a port exposed before the policy denied preview tunn
       ]),
     ),
   ),
+);
+
+const httpRelay = (statusCode: number, onEnroll: (body: unknown) => void = () => {}) =>
+  Effect.acquireRelease(
+    Effect.promise(async () => {
+      const server = NodeHttp.createServer(async (request, response) => {
+        if (request.url === "/_hhh/auth/config") {
+          response.setHeader("content-type", "application/json");
+          response.end(JSON.stringify({ signup: true, password: true }));
+          return;
+        }
+        const chunks: Buffer[] = [];
+        for await (const chunk of request) chunks.push(Buffer.from(chunk));
+        onEnroll(JSON.parse(Buffer.concat(chunks).toString()));
+        response.writeHead(statusCode, { "content-type": "application/json" });
+        response.end(
+          JSON.stringify(
+            statusCode === 200
+              ? { slug: "linked123", relayHost: "LOCALHOST" }
+              : { error: "secret-password unknown user disabled account" },
+          ),
+        );
+      });
+      await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+      const address = server.address();
+      if (address === null || typeof address === "string") throw new Error("Missing HTTP address");
+      return { server, url: `http://localhost:${address.port}` };
+    }),
+    ({ server }) =>
+      Effect.promise(
+        () =>
+          new Promise<void>((resolve, reject) =>
+            server.close((error) => (error ? reject(error) : resolve())),
+          ),
+      ),
+  );
+
+it.live("links an account using the existing key, discovers signup, and persists no password", () =>
+  Effect.gen(function* () {
+    const relay = yield* SelfRelay.SelfRelay;
+    const config = yield* ServerConfig.ServerConfig;
+    const fs = yield* FileSystem.FileSystem;
+    const secrets = yield* ServerSecretStore.ServerSecretStore;
+    const keyBefore = yield* secrets.get("self-relay-tunnel-key");
+    const storedBefore = JSON.parse(
+      yield* fs.readFileString(`${config.stateDir}/self-relay/link.json`),
+    ) as { publicKey: string };
+    const http = yield* httpRelay(200, (body) =>
+      expect(body).toEqual({
+        username: "howard",
+        password: "secret-password",
+        desiredSlug: "linked123",
+        publicKey: storedBefore.publicKey,
+      }),
+    );
+    const status = yield* relay.link({
+      relayUrl: `${http.url.replace("localhost", "LOCALHOST")}///`,
+      username: "howard",
+      password: "secret-password",
+      desiredSlug: "linked123",
+    });
+    expect(status).toMatchObject({
+      linked: true,
+      slug: "linked123",
+      relayUrl: http.url,
+      publicOrigin: "https://linked123.localhost",
+    });
+    expect(yield* secrets.get("self-relay-tunnel-key")).toEqual(keyBefore);
+    const stored = yield* fs.readFileString(`${config.stateDir}/self-relay/link.json`);
+    expect(stored).not.toContain("password");
+    expect(stored).not.toContain("howard");
+    expect(JSON.stringify(status)).not.toContain("secret-password");
+    expect(yield* fs.exists(`${config.stateDir}/settings.json`)).toBe(false);
+    yield* relay.unlink();
+    expect((yield* relay.statusFor(http.url)).signupUrl).toBe(`${http.url}/_hhh/auth/register`);
+  }).pipe(Effect.provide(makeLayer())),
+);
+
+it.live.each([
+  [401, "Wrong username or password"],
+  [409, "The relay slug or public key is already linked to another environment."],
+  [500, "The relay could not enroll this environment."],
+] as const)(
+  "maps account enrollment %s without exposing relay text or passwords",
+  ([statusCode, message]) =>
+    Effect.gen(function* () {
+      const relay = yield* SelfRelay.SelfRelay;
+      const http = yield* httpRelay(statusCode);
+      const result = yield* relay
+        .link({ relayUrl: http.url, username: "unknown", password: "secret-password" })
+        .pipe(Effect.result);
+      expect(result._tag).toBe("Failure");
+      if (result._tag === "Failure") {
+        expect(result.failure.message).toBe(message);
+        expect(JSON.stringify(result.failure)).not.toContain("secret-password");
+        expect(result.failure.cause).toBeNull();
+      }
+      expect((yield* relay.status).relayUrl).toBe("https://relay.example.com");
+    }).pipe(Effect.provide(makeLayer())),
+);
+
+it.effect("refuses invalid and insecure relay URLs before sending account credentials", () =>
+  Effect.gen(function* () {
+    const relay = yield* SelfRelay.SelfRelay;
+    for (const relayUrl of [
+      "invalid",
+      "http://example.com",
+      "https://user:secret-password@example.com",
+      "https://example.com/path",
+      "https://example.com?password=secret-password",
+      "ftp://localhost",
+    ]) {
+      const result = yield* relay
+        .link({ relayUrl, username: "howard", password: "secret-password" })
+        .pipe(Effect.result);
+      expect(result._tag).toBe("Failure");
+      if (result._tag === "Failure") {
+        expect(result.failure.reason).toBe("url");
+        expect(JSON.stringify(result.failure)).not.toContain("secret-password");
+      }
+    }
+  }).pipe(Effect.provide(makeLayer())),
+);
+
+it.live("reports relay network failures separately", () =>
+  Effect.gen(function* () {
+    const relay = yield* SelfRelay.SelfRelay;
+    const http = yield* Effect.scoped(httpRelay(200));
+    const result = yield* relay
+      .link({ relayUrl: http.url, username: "howard", password: "secret-password" })
+      .pipe(Effect.result);
+    expect(result._tag).toBe("Failure");
+    if (result._tag === "Failure") expect(result.failure.reason).toBe("network");
+  }).pipe(Effect.provide(makeLayer())),
 );

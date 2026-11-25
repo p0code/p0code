@@ -96,7 +96,7 @@ export const relayCommand = Command.make("relay").pipe(
         withRelay(flags, (relay) =>
           RunningServer.changeState({
             scopes: [AuthRelayReadScope],
-            viaServer: (client) => client.selfRelay.status({ headers: {} }),
+            viaServer: (client) => client.selfRelay.status({ headers: {}, query: {} }),
             locally: relay.status,
           }).pipe(Effect.flatMap((state) => Console.log(JSON.stringify(state, null, 2)))),
         ),
