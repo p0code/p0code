@@ -173,7 +173,7 @@ describe("DesktopBackendService helpers", () => {
     );
   });
 
-  it("orders p0d binary candidates with user override first, then packaged and dev paths", () => {
+  it("only considers the explicit override and the packaged p0d", () => {
     const posixPath = { join: (...parts: string[]) => parts.join("/") };
     const candidates = DesktopBackendService.p0dBinaryCandidates({
       path: posixPath,
@@ -190,10 +190,7 @@ describe("DesktopBackendService helpers", () => {
 
     assert.equal(candidates[0], "/custom/bin/p0d");
     assert.equal(candidates[1], "/App/Contents/Resources/p0d/p0d");
-    assert.include(candidates, "/repo/apps/p0d/dist/darwin-arm64/p0d");
-    assert.include(candidates, "/Users/test/.p0code/bin/p0d");
-    assert.include(candidates, "/opt/homebrew/bin/p0d");
-    assert.include(candidates, "/usr/local/bin/p0d");
+    assert.deepEqual(candidates, ["/custom/bin/p0d", "/App/Contents/Resources/p0d/p0d"]);
   });
 
   it("uses p0d.exe on Windows", () => {
@@ -212,7 +209,7 @@ describe("DesktopBackendService helpers", () => {
     });
 
     assert.include(candidates, "C:\\App\\resources\\p0d\\p0d.exe");
-    assert.include(candidates, "C:\\repo\\apps\\p0d\\dist\\windows-amd64\\p0d.exe");
+    assert.equal(candidates.length, 1);
   });
 
   it("parses ready-file JSON and p0d service status in JSON or text formats", () => {
@@ -678,7 +675,31 @@ describe("DesktopBackendService.layer", () => {
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
 
-  it.effect("adopts local-service for a legacy default settings document when p0d resolves", () =>
+  it.effect("refreshes an explicit p0d override before starting the backend", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const baseDir = yield* fileSystem.makeTempDirectoryScoped();
+      yield* fileSystem.makeDirectory(`${baseDir}/bin`, { recursive: true });
+      yield* fileSystem.writeFileString(`${baseDir}/bin/p0d`, "#!/bin/sh\nexit 0\n");
+      yield* fileSystem.chmod(`${baseDir}/bin/p0d`, 0o700);
+      const service = yield* DesktopBackendService.DesktopBackendService.pipe(
+        Effect.provide(
+          layerService(baseDir, {
+            ...DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS,
+            backendMode: "embedded",
+            backendModeConfiguredByUser: false,
+            backendBinaryPath: `${baseDir}/bin/p0d`,
+          }),
+        ),
+      );
+      assert.deepEqual(runLikeSyncIpc(service.resolveEffectiveMode), Exit.succeed("local-service"));
+      yield* fileSystem.remove(`${baseDir}/bin/p0d`);
+      assert.equal((yield* service.prepareSelectedBackend).mode, "embedded");
+      assert.deepEqual(runLikeSyncIpc(service.resolveEffectiveMode), Exit.succeed("embedded"));
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("ignores an unrelated home/bin p0d", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const baseDir = yield* fileSystem.makeTempDirectoryScoped();
@@ -690,25 +711,6 @@ describe("DesktopBackendService.layer", () => {
             ...DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS,
             backendMode: "embedded",
             backendModeConfiguredByUser: false,
-          }),
-        ),
-      );
-      assert.deepEqual(runLikeSyncIpc(service.resolveEffectiveMode), Exit.succeed("local-service"));
-    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
-  );
-
-  it.effect("keeps an explicit embedded choice even when p0d resolves", () =>
-    Effect.gen(function* () {
-      const fileSystem = yield* FileSystem.FileSystem;
-      const baseDir = yield* fileSystem.makeTempDirectoryScoped();
-      yield* fileSystem.makeDirectory(`${baseDir}/bin`, { recursive: true });
-      yield* fileSystem.writeFileString(`${baseDir}/bin/p0d`, "#!/bin/sh\nexit 0\n");
-      const service = yield* DesktopBackendService.DesktopBackendService.pipe(
-        Effect.provide(
-          layerService(baseDir, {
-            ...DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS,
-            backendMode: "embedded",
-            backendModeConfiguredByUser: true,
           }),
         ),
       );

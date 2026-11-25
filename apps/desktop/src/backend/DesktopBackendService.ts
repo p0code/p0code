@@ -175,33 +175,13 @@ function p0dBinaryName(platform: NodeJS.Platform): string {
   return platform === "win32" ? "p0d.exe" : "p0d";
 }
 
-function p0dDistSubdirs(platform: NodeJS.Platform, arch: string): readonly string[] {
-  const osNames =
-    platform === "darwin"
-      ? ["darwin", "mac"]
-      : platform === "win32"
-        ? ["windows", "win", "win32"]
-        : ["linux"];
-  const archNames = arch === "x64" ? ["amd64", "x64"] : arch === "arm64" ? ["arm64"] : [arch];
-  const subdirs: string[] = [];
-  for (const osName of osNames) {
-    for (const archName of archNames) {
-      subdirs.push(`${osName}-${archName}`);
-    }
-  }
-  return subdirs;
-}
-
 function packagedP0dBinaryCandidates(input: {
   readonly path: Pick<Path.Path, "join">;
   readonly platform: NodeJS.Platform;
   readonly resourcesPath: string;
 }): readonly string[] {
   const binaryName = p0dBinaryName(input.platform);
-  return [
-    input.path.join(input.resourcesPath, "p0d", binaryName),
-    input.path.join(input.resourcesPath, "bin", binaryName),
-  ];
+  return [input.path.join(input.resourcesPath, "p0d", binaryName)];
 }
 
 export function p0dBinaryCandidates(input: {
@@ -216,7 +196,6 @@ export function p0dBinaryCandidates(input: {
   readonly appDataDirectory: string;
   readonly configuredBinaryPath: string | null;
 }): readonly string[] {
-  const binaryName = p0dBinaryName(input.platform);
   const candidates: string[] = [];
   const pushUnique = (candidate: string) => {
     const trimmed = candidate.trim();
@@ -231,27 +210,8 @@ export function p0dBinaryCandidates(input: {
   for (const packaged of packagedP0dBinaryCandidates(input)) {
     pushUnique(packaged);
   }
-  if (!input.isPackaged) {
-    for (const subdir of p0dDistSubdirs(input.platform, input.arch)) {
-      pushUnique(input.path.join(input.rootDir, "apps", "p0d", "dist", subdir, binaryName));
-    }
-  }
-  pushUnique(input.path.join(input.baseDir, "bin", binaryName));
-  pushUnique(input.path.join(input.baseDir, "p0d", "bin", binaryName));
-  pushUnique(input.path.join(input.homeDirectory, ".p0code", "bin", binaryName));
-  if (input.platform === "win32") {
-    pushUnique(
-      input.path.join(input.appDataDirectory, "..", "Local", "p0code", "p0d", "bin", binaryName),
-    );
-  } else if (input.platform === "linux") {
-    pushUnique(
-      input.path.join(input.homeDirectory, ".local", "share", "p0code", "p0d", "bin", binaryName),
-    );
-    pushUnique("/usr/local/bin/p0d");
-  } else if (input.platform === "darwin") {
-    pushUnique("/opt/homebrew/bin/p0d");
-    pushUnique("/usr/local/bin/p0d");
-  }
+  // Other installs (PATH, home/bin, dev dist) are not a compatibility guarantee.
+  // They can be selected deliberately through backendBinaryPath.
   return candidates;
 }
 
@@ -1063,7 +1023,12 @@ export const make = Effect.gen(function* () {
     candidates: readonly string[],
   ) {
     for (const candidate of candidates) {
-      if (yield* fileSystem.exists(candidate).pipe(Effect.orElseSucceed(() => false))) {
+      if (!environment.path.isAbsolute(candidate)) continue;
+      const stat = yield* fileSystem.stat(candidate).pipe(Effect.orElseSucceed(() => null));
+      if (
+        stat?.type === "File" &&
+        (environment.platform === "win32" || (stat.mode & 0o111) !== 0)
+      ) {
         return Option.some(candidate);
       }
     }
@@ -1205,6 +1170,8 @@ export const make = Effect.gen(function* () {
       }
       const fallbackReason = yield* externalBackendFailure(mode);
       if (fallbackReason === null) return { mode, fallbackReason };
+      // A failed binary may have disappeared or been replaced since the initial resolution.
+      yield* refreshP0dAvailability;
       yield* logServiceWarning("selected backend mode failed; falling back to the in-app backend", {
         mode,
         reason: fallbackReason,
