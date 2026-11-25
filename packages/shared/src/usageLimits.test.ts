@@ -404,6 +404,117 @@ describe("pools", () => {
     expect(collectLimitAccounts(input)).toHaveLength(1);
   });
 
+  it("shows one bar when two provider instances report the same OpenCode Go account", () => {
+    const goLimits = {
+      checkedAt,
+      windows: [
+        {
+          id: "go_rolling",
+          kind: "session",
+          label: "Go · Session",
+          usedPercent: 51,
+          windowDurationMins: 300,
+          resetsAt: "2026-09-03T12:30:00.000Z",
+        },
+        {
+          id: "go_weekly",
+          kind: "weekly",
+          label: "Go · Weekly",
+          usedPercent: 23,
+          windowDurationMins: 7 * 24 * 60,
+          resetsAt: "2026-09-08T00:00:00.000Z",
+        },
+        {
+          id: "go_monthly",
+          kind: "monthly",
+          label: "Go · Monthly",
+          usedPercent: 93,
+          resetsAt: "2026-10-01T00:00:00.000Z",
+        },
+      ],
+    } satisfies ServerProviderUsageLimits;
+    const instance = (
+      driver: string,
+      instanceId: string,
+      limits: ServerProviderUsageLimits = goLimits,
+    ) =>
+      provider({
+        driver: ProviderDriverKind.make(driver),
+        instanceId: ProviderInstanceId.make(instanceId),
+        usageLimits: limits,
+      });
+    // Each environment refreshes on its own, so the spent percentages drift between reads.
+    const drifted = {
+      ...goLimits,
+      windows: goLimits.windows.map((window) => ({
+        ...window,
+        usedPercent: Math.max(0, window.usedPercent - 1),
+      })),
+    };
+    for (const providers of [
+      [instance("opencode", "opencode"), instance("pi", "pi")],
+      [instance("opencode", "opencode"), instance("pi", "pi", drifted)],
+      [
+        instance("opencode", "opencode", {
+          ...goLimits,
+          credentialFingerprint: "shared-go-key",
+        }),
+        instance("pi", "pi"),
+      ],
+    ]) {
+      const accounts = collectLimitAccounts(
+        new Map([
+          [
+            EnvironmentId.make("env-a"),
+            {
+              ...laptop,
+              serverConfig: { providers },
+            },
+          ],
+        ]),
+      );
+      expect(accounts).toHaveLength(1);
+      const pools = collectLimitPools(accounts, now);
+      expect(pools).toHaveLength(1);
+      expect(pools[0]?.windows.map((window) => window.members.length)).toEqual([1, 1, 1]);
+    }
+  });
+
+  it("keeps plans without a stable id apart when their reset times differ", () => {
+    const go = (usedPercent: number, resetsAt: string) =>
+      provider({
+        driver: ProviderDriverKind.make("opencode"),
+        instanceId: ProviderInstanceId.make("opencode"),
+        usageLimits: {
+          checkedAt,
+          windows: [
+            {
+              id: "go_rolling",
+              kind: "session",
+              label: "Go · Session",
+              usedPercent,
+              resetsAt,
+            },
+          ],
+        },
+      });
+    const accounts = collectLimitAccounts(
+      new Map([
+        [
+          EnvironmentId.make("env-a"),
+          {
+            ...laptop,
+            serverConfig: {
+              providers: [go(51, "2026-09-03T12:30:00.000Z"), go(51, "2026-09-03T13:00:00.000Z")],
+            },
+          },
+        ],
+      ]),
+    );
+    expect(accounts).toHaveLength(2);
+    expect(collectLimitPools(accounts, now)[0]?.windows[0]?.members).toHaveLength(2);
+  });
+
   it("merges a local Antigravity login with its hub account by Google account fingerprint", () => {
     const antigravity = ProviderDriverKind.make("antigravity");
     const local = provider({

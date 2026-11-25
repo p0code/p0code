@@ -231,6 +231,8 @@ interface AccountReport {
   readonly email?: string | undefined;
   readonly workspaceId?: string | undefined;
   readonly usageLimits?: ServerProviderUsageLimits | undefined;
+  /** Rows read from a usage hub already identify themselves by source and account. */
+  readonly hub?: boolean | undefined;
 }
 
 const nativeReport = (provider: ServerProvider): AccountReport => ({
@@ -240,22 +242,77 @@ const nativeReport = (provider: ServerProvider): AccountReport => ({
   usageLimits: provider.usageLimits,
 });
 
+const hubReport = (account: AccountReport): AccountReport => ({ ...account, hub: true });
+
+/**
+ * OpenCode Go reports the same window ids from every instance that reads the account.
+ * Identical windows and reset times name that one plan even when no instance reports a
+ * stable account id; the spent percentage is left out because independent reads drift.
+ */
+function usageWindowsIdentity(limits?: ServerProviderUsageLimits): string | null {
+  if (!limits || limits.unavailable || limits.windows.length === 0) return null;
+  const plan = limits.windows.some((window) => window.id.startsWith("go_")) ? "opencode-go" : null;
+  if (plan === null) return null;
+  return JSON.stringify([
+    plan,
+    ...[...limits.windows]
+      .sort((left, right) => left.id.localeCompare(right.id) || left.kind.localeCompare(right.kind))
+      .map((window) => [
+        window.id,
+        window.kind,
+        window.resetsAt ?? null,
+        window.windowDurationMins ?? null,
+        window.modelIds === undefined ? null : [...window.modelIds].sort(),
+        window.providerIds === undefined ? null : [...window.providerIds].sort(),
+      ]),
+  ]);
+}
+
 // Include every enabled login, even unreadable workspaces.
 function accountKeyResolver(reports: Iterable<AccountReport>) {
+  const allReports = [...reports];
   const workspaces = new Map<string, Set<string>>();
-  for (const report of reports) {
+  for (const report of allReports) {
     const key = accountKey(report.driver, report.email, report.usageLimits);
     if (key && report.workspaceId) {
       workspaces.set(key, (workspaces.get(key) ?? new Set()).add(report.workspaceId));
     }
   }
-  return (report: AccountReport): string | null => {
+  const resolveAccountKey = (report: AccountReport): string | null => {
     const key = accountKey(report.driver, report.email, report.usageLimits);
     if (!key) return null;
     if (report.workspaceId) return `${key}:${report.workspaceId}`;
     const known = workspaces.get(key);
     if (!known) return key;
     return known.size === 1 ? `${key}:${[...known][0]}` : null;
+  };
+  const keysByWindows = new Map<string, Set<string>>();
+  for (const report of allReports) {
+    const windows = usageWindowsIdentity(report.usageLimits);
+    const key = resolveAccountKey(report);
+    if (windows === null || key === null) continue;
+    const keys = keysByWindows.get(windows) ?? new Set<string>();
+    keys.add(key);
+    keysByWindows.set(windows, keys);
+  }
+  return (report: AccountReport): string | null => {
+    const key = resolveAccountKey(report);
+    if (key !== null) return key;
+    // A keyed login whose workspace stays ambiguous must not fall through to its windows.
+    if (
+      report.hub ||
+      accountKey(report.driver, report.email, report.usageLimits) ||
+      report.workspaceId
+    ) {
+      return null;
+    }
+    const windows = usageWindowsIdentity(report.usageLimits);
+    if (windows === null) return null;
+    const matches = keysByWindows.get(windows);
+    if (matches?.size === 1) return [...matches][0]!;
+    // Several stable accounts read the same values, so these windows cannot pick one.
+    if (matches !== undefined) return null;
+    return `limits:${windows}`;
   };
 }
 
@@ -267,7 +324,9 @@ function limitAccountKeyResolver(presentations: LimitPresentations) {
       ...(presentation.serverConfig?.providers ?? [])
         .filter((provider) => provider.enabled)
         .map(nativeReport),
-      ...(presentation.serverConfig?.usageLimitSources ?? []).flatMap((source) => source.accounts),
+      ...(presentation.serverConfig?.usageLimitSources ?? []).flatMap((source) =>
+        source.accounts.map(hubReport),
+      ),
     ]),
   );
 }
@@ -987,7 +1046,7 @@ export function collectProviderUsageLimits(
   }
   const resolveKey = accountKeyResolver([
     ...providers.filter((provider) => provider.enabled).map(nativeReport),
-    ...sources.flatMap((source) => source.accounts),
+    ...sources.flatMap((source) => source.accounts.map(hubReport)),
   ]);
   // Behind a hub, a local login counts only when it is one of the accounts the hub routes to.
   const routedKeys =
