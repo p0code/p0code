@@ -49,7 +49,7 @@ Updates are signed with the same certificate, so macOS keeps your keychain appro
 From a checkout of this repository, install dependencies and start the server (the `p0` command):
 
 ```bash
-bb i
+pnpm install
 node apps/server/src/bin.ts
 ```
 
