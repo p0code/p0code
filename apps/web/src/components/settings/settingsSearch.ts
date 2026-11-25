@@ -791,14 +791,6 @@ export const SETTINGS_SEARCH_ITEMS = [
     pluginsOnly: true,
   },
   {
-    id: "tokscale-auto-publish",
-    title: msg("Tokscale auto-publish"),
-    to: "/settings/plugins",
-    targetId: "plugin-tokscale-auto-publish",
-    searchTerms: [msg("Tokscale leaderboard usage tokens cost auto publish")],
-    pluginsOnly: true,
-  },
-  {
     id: "thread-notifications",
     title: msg("Thread notifications"),
     to: "/settings/general",

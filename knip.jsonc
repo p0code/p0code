@@ -175,10 +175,5 @@
       "entry": ["graphql.config.ts", "scripts/measure-pr-preview.ts"],
       "ignoreIssues": { "**/*.graphql.ts": ["exports", "types", "namespaceMembers"] },
     },
-    "plugins/tokscale-auto-publish-plugin": {
-      // Mounted git submodule ships its standalone harness and reference panel draft.
-      "ignore": ["standalone/**", "web/**"],
-      "ignoreDependencies": ["@effect/platform-node", "@effect/vitest"],
-    },
   },
 }

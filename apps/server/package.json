@@ -46,7 +46,6 @@
     "@t3tools/plugin-api": "workspace:*",
     "@t3tools/plugin-obsidian-shared-memory": "workspace:*",
     "@t3tools/plugin-t3-connect-bridge": "workspace:*",
-    "@t3tools/plugin-tokscale-auto-publish": "workspace:*",
     "@t3tools/provider-acp": "workspace:*",
     "@t3tools/provider-acp-registry": "workspace:*",
     "@t3tools/provider-core": "workspace:*",
