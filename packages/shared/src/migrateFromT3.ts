@@ -136,7 +136,10 @@ const USERDATA_RULES: Readonly<Record<string, Rule>> = {
   "keybindings.json": { action: "copy", rewrite: true },
   "keybindings-migrations": { action: "copy-tree" },
   "saved-environments.json": { action: "copy", rewrite: true },
-  "connection-catalog.json": { action: "copy", rewrite: true },
+  "connection-catalog.json": {
+    action: "skip",
+    reason: "encrypted for the source app identity; rebuild from saved environments",
+  },
   "model-manifest.json": { action: "copy", rewrite: true },
   "usage-model-rates.json": { action: "copy" },
   "desktop-host-scope": { action: "copy" },
@@ -660,6 +663,13 @@ const buildPlan = async (input: {
         plan.steps.push(async () => {
           await copyFile(source, destination);
           if (rule.rewrite === true) await rewriteFile(destination, relative);
+          if (relative === NodePath.join("userdata", "saved-environments.json")) {
+            const raw = await NodeFSP.readFile(destination, "utf8");
+            const plaintext: unknown = JSON.parse(raw, (key, value: unknown) =>
+              key === "encryptedBearerToken" ? undefined : value,
+            );
+            await NodeFSP.writeFile(destination, `${JSON.stringify(plaintext)}\n`);
+          }
         });
         return;
       }

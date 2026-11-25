@@ -144,6 +144,39 @@ const seedMigrations = (
 };
 
 describe("migrateFromT3", () => {
+  it("imports plaintext connection profiles without source app ciphertext", async () => {
+    const fixture = makeFixture();
+    fixture.database.close();
+    const registry = {
+      version: 1,
+      records: [
+        {
+          environmentId: "remote",
+          label: "Remote",
+          httpBaseUrl: "https://remote.example/",
+          wsBaseUrl: "wss://remote.example/",
+          createdAt: "2026-06-01T00:00:00.000Z",
+          lastConnectedAt: null,
+          encryptedBearerToken: "foreign-ciphertext",
+        },
+      ],
+    };
+    write(
+      NodePath.join(fixture.from, "userdata", "saved-environments.json"),
+      JSON.stringify(registry),
+    );
+    write(NodePath.join(fixture.from, "userdata", "connection-catalog.json"), "foreign catalog");
+    await migrateFromT3({ from: fixture.from, to: fixture.to });
+    const imported = NodeFS.readFileSync(
+      NodePath.join(fixture.to, "userdata", "saved-environments.json"),
+      "utf8",
+    );
+    assert.notInclude(imported, "encryptedBearerToken");
+    assert.include(imported, "https://remote.example/");
+    assert.isFalse(
+      NodeFS.existsSync(NodePath.join(fixture.to, "userdata", "connection-catalog.json")),
+    );
+  });
   it("imports every kept file, rewrites paths into the old home and leaves the source untouched", async () => {
     const fixture = makeFixture();
     const before = snapshotTree(fixture.from);

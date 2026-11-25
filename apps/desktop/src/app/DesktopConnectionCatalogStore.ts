@@ -314,6 +314,7 @@ const migrateSavedEnvironmentRecords = Effect.fn(
   records: readonly PersistedSavedEnvironmentRecord[],
   savedEnvironments: DesktopSavedEnvironments.DesktopSavedEnvironments["Service"],
   catalogPath: string,
+  skipSecrets = false,
 ): Effect.fn.Return<
   RuntimeConnectionCatalogDocumentType,
   DesktopConnectionCatalogStoreMigrationError
@@ -362,6 +363,7 @@ const migrateSavedEnvironmentRecords = Effect.fn(
         wsBaseUrl: record.wsBaseUrl,
       }),
     );
+    if (skipSecrets) continue;
     const token = yield* savedEnvironments.getSecret(record.environmentId).pipe(
       Effect.mapError(
         (cause) =>
@@ -431,6 +433,7 @@ export const make = Effect.gen(function* () {
   // A catalog this build cannot decrypt or decode may still hold another build's saved
   // environments and credentials, so a save copies it aside instead of destroying it.
   const keepUnreadableCatalog = Effect.gen(function* () {
+    if (Option.isSome(yield* Ref.get(recoveryRef))) return;
     const readable = yield* readDocument(fileSystem, catalogPath).pipe(
       Effect.flatMap(
         Option.match({
@@ -496,9 +499,11 @@ export const make = Effect.gen(function* () {
     reason: DesktopConnectionCatalogRecoveryReason,
   ): Effect.fn.Return<
     string,
-    DesktopConnectionCatalogStoreWriteError | DesktopConnectionCatalogStoreProtectionError
+    | DesktopConnectionCatalogStoreWriteError
+    | DesktopConnectionCatalogStoreProtectionError
+    | DesktopConnectionCatalogStoreMigrationError
   > {
-    const keptPath = `${catalogPath}.broken-${yield* Clock.currentTimeMillis}`;
+    const keptPath = `${catalogPath}.unreadable-${yield* Clock.currentTimeMillis}`;
     yield* fileSystem.rename(catalogPath, keptPath).pipe(
       Effect.mapError(
         (cause) =>
@@ -509,9 +514,14 @@ export const make = Effect.gen(function* () {
           }),
       ),
     );
-    const encoded = yield* encodeRuntimeConnectionCatalogDocumentJson(
-      EMPTY_CONNECTION_CATALOG_DOCUMENT,
-    ).pipe(
+    const records = yield* savedEnvironments.getRegistry.pipe(Effect.orElseSucceed(() => []));
+    const repaired = yield* migrateSavedEnvironmentRecords(
+      records,
+      savedEnvironments,
+      catalogPath,
+      true,
+    );
+    const encoded = yield* encodeRuntimeConnectionCatalogDocumentJson(repaired).pipe(
       Effect.mapError(
         (cause) =>
           new DesktopConnectionCatalogStoreWriteError({

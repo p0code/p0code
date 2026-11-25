@@ -263,7 +263,7 @@ describe("DesktopConnectionCatalogStore", () => {
         assert.isTrue(Option.isSome(recovery));
         assert.equal(Option.getOrThrow(recovery).reason, "decode-catalog");
         assert.equal(Option.getOrThrow(recovery).catalogPath, catalogPath);
-        assert.match(Option.getOrThrow(recovery).keptPath, /\.broken-\d+$/);
+        assert.match(Option.getOrThrow(recovery).keptPath, /\.unreadable-\d+$/);
         assert.equal(
           yield* fileSystem.readFileString(Option.getOrThrow(recovery).keptPath),
           "{not-json",
@@ -308,7 +308,7 @@ describe("DesktopConnectionCatalogStore", () => {
       assert.isTrue(Option.isSome(recovery));
       assert.equal(Option.getOrThrow(recovery).reason, "decrypt-catalog");
       assert.equal(Option.getOrThrow(recovery).catalogPath, catalogPath);
-      assert.match(Option.getOrThrow(recovery).keptPath, /\.broken-\d+$/);
+      assert.match(Option.getOrThrow(recovery).keptPath, /\.unreadable-\d+$/);
       assert.equal(
         yield* fileSystem.readFileString(Option.getOrThrow(recovery).keptPath),
         original,
@@ -319,6 +319,49 @@ describe("DesktopConnectionCatalogStore", () => {
       yield* Ref.set(failDecrypt, false);
       assert.deepStrictEqual(yield* store.get, recovered);
     }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
+  );
+
+  it.effect(
+    "repairs foreign ciphertext from legacy plaintext profiles without reading tokens",
+    () =>
+      withStore(
+        Effect.gen(function* () {
+          const store = yield* DesktopConnectionCatalogStore.DesktopConnectionCatalogStore;
+          const environment = yield* DesktopEnvironment.DesktopEnvironment;
+          const fileSystem = yield* FileSystem.FileSystem;
+          const path = yield* Path.Path;
+          yield* fileSystem.makeDirectory(environment.stateDir, { recursive: true });
+          yield* fileSystem.writeFileString(
+            path.join(environment.stateDir, "connection-catalog.json"),
+            JSON.stringify({
+              version: 1,
+              encryptedCatalog: Base64.encode(textEncoder.encode("foreign")),
+            }),
+          );
+          yield* fileSystem.writeFileString(
+            environment.savedEnvironmentRegistryPath,
+            JSON.stringify({
+              version: 1,
+              records: [
+                {
+                  environmentId: "imported",
+                  label: "Imported",
+                  httpBaseUrl: "https://remote.example/",
+                  wsBaseUrl: "wss://remote.example/",
+                  createdAt: "2026-06-01T00:00:00.000Z",
+                  lastConnectedAt: null,
+                  encryptedBearerToken: Base64.encode(textEncoder.encode("foreign token")),
+                },
+              ],
+            }),
+          );
+          const catalog = yield* decodeConnectionCatalog(Option.getOrThrow(yield* store.get));
+          assert.equal(catalog.targets[0]?.environmentId, "imported");
+          assert.equal(catalog.profiles[0]?._tag, "BearerConnectionProfile");
+          assert.isEmpty(catalog.credentials);
+          assert.isTrue(Option.isSome(yield* store.recovery));
+        }),
+      ),
   );
 
   it.effect("loads a healthy catalog without a recovery notice", () =>
