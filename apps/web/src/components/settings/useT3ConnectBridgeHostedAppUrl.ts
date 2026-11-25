@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { hostedAppUrlFromBridgeStatus } from "./bridgeHostedAppUrl";
 
 const decodeStatus = Schema.decodeUnknownOption(BridgeStatus);
 
@@ -23,12 +24,12 @@ export function useT3ConnectBridgeHostedAppUrl(environmentId: EnvironmentId | nu
     (plugin) => plugin.manifest.id === T3_CONNECT_BRIDGE_ID,
   );
   const bridgeRunning = bridge?.enabled === true && bridge.state === "running";
-  const [loaded, setLoaded] = useState<{
-    environmentId: EnvironmentId;
-    hostedAppUrl: string | null;
-  } | null>(null);
+  // The bridge keeps its config behind its status action, not in the plugin snapshot, so each
+  // snapshot push (a config edit republishes one) and running change needs a fresh status read.
+  const refreshKey = `${environmentId ?? ""}:${plugins.dataUpdatedAt}:${bridgeRunning ? "on" : "off"}`;
+  const [loaded, setLoaded] = useState<{ key: string; hostedAppUrl: string | null } | null>(null);
 
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- the bridge keeps its config behind its status action, not in the plugin snapshot.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- the status action returns the bridge's config; the snapshot only says it changed.
   useEffect(() => {
     if (!environmentId || !bridgeRunning) return;
 
@@ -37,19 +38,17 @@ export function useT3ConnectBridgeHostedAppUrl(environmentId: EnvironmentId | nu
       environmentId,
       input: { pluginId: T3_CONNECT_BRIDGE_ID, action: "status", input: {} },
     }).then((result) => {
-      if (cancelled || result._tag !== "Success") return;
-      const decoded = decodeStatus(result.value);
+      if (cancelled) return;
+      const decoded = result._tag === "Success" ? decodeStatus(result.value) : Option.none();
       setLoaded({
-        environmentId,
-        hostedAppUrl: Option.isSome(decoded)
-          ? decoded.value.config.hostedAppUrl.trim() || null
-          : null,
+        key: refreshKey,
+        hostedAppUrl: Option.isSome(decoded) ? hostedAppUrlFromBridgeStatus(decoded.value) : null,
       });
     });
     return () => {
       cancelled = true;
     };
-  }, [bridgeRunning, environmentId, invoke]);
+  }, [bridgeRunning, environmentId, invoke, refreshKey]);
 
-  return bridgeRunning && loaded?.environmentId === environmentId ? loaded.hostedAppUrl : null;
+  return bridgeRunning && loaded?.key === refreshKey ? loaded.hostedAppUrl : null;
 }
