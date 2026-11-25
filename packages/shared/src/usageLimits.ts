@@ -232,8 +232,6 @@ interface AccountReport {
   readonly email?: string | undefined;
   readonly workspaceId?: string | undefined;
   readonly usageLimits?: ServerProviderUsageLimits | undefined;
-  /** Rows read from a usage hub already identify themselves by source and account. */
-  readonly hub?: boolean | undefined;
 }
 
 const nativeReport = (provider: ServerProvider): AccountReport => ({
@@ -243,12 +241,17 @@ const nativeReport = (provider: ServerProvider): AccountReport => ({
   usageLimits: provider.usageLimits,
 });
 
-const hubReport = (account: AccountReport): AccountReport => ({ ...account, hub: true });
+/**
+ * OpenCode Go's rolling window resets a fixed span after the read that reported it, so every
+ * poll moves its reset. Weekly and monthly resets are fixed boundaries of the plan.
+ */
+const READ_RELATIVE_WINDOW_IDS = new Set(["go_rolling"]);
 
 /**
  * OpenCode Go reports the same window ids from every instance that reads the account.
- * Identical windows and reset times name that one plan even when no instance reports a
- * stable account id; the spent percentage is left out because independent reads drift.
+ * Identical windows and fixed reset times name that one plan even when no instance reports a
+ * stable account id; the spent percentage is left out because independent reads drift, and so
+ * is the rolling window's reset for the same reason.
  */
 function usageWindowsIdentity(limits?: ServerProviderUsageLimits): string | null {
   if (!limits || limits.unavailable || limits.windows.length === 0) return null;
@@ -261,7 +264,7 @@ function usageWindowsIdentity(limits?: ServerProviderUsageLimits): string | null
       .map((window) => [
         window.id,
         window.kind,
-        window.resetsAt ?? null,
+        READ_RELATIVE_WINDOW_IDS.has(window.id) ? null : (window.resetsAt ?? null),
         window.windowDurationMins ?? null,
         window.modelIds === undefined ? null : [...window.modelIds].sort(),
         window.providerIds === undefined ? null : [...window.providerIds].sort(),
@@ -300,11 +303,9 @@ function accountKeyResolver(reports: Iterable<AccountReport>) {
     const key = resolveAccountKey(report);
     if (key !== null) return key;
     // A keyed login whose workspace stays ambiguous must not fall through to its windows.
-    if (
-      report.hub ||
-      accountKey(report.driver, report.email, report.usageLimits) ||
-      report.workspaceId
-    ) {
+    // A hub row without any identity can still be the same Go plan as a local read, so only
+    // its windows can say so.
+    if (accountKey(report.driver, report.email, report.usageLimits) || report.workspaceId) {
       return null;
     }
     const windows = usageWindowsIdentity(report.usageLimits);
@@ -325,9 +326,7 @@ function limitAccountKeyResolver(presentations: LimitPresentations) {
       ...(presentation.serverConfig?.providers ?? [])
         .filter((provider) => provider.enabled)
         .map(nativeReport),
-      ...(presentation.serverConfig?.usageLimitSources ?? []).flatMap((source) =>
-        source.accounts.map(hubReport),
-      ),
+      ...(presentation.serverConfig?.usageLimitSources ?? []).flatMap((source) => source.accounts),
     ]),
   );
 }
@@ -1176,7 +1175,7 @@ export function collectProviderUsageLimits(
   }
   const resolveKey = accountKeyResolver([
     ...providers.filter((provider) => provider.enabled).map(nativeReport),
-    ...sources.flatMap((source) => source.accounts.map(hubReport)),
+    ...sources.flatMap((source) => source.accounts),
   ]);
   // Behind a hub, a local login counts only when it is one of the accounts the hub routes to.
   const routedKeys =
