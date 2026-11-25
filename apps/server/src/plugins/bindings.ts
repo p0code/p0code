@@ -5,8 +5,15 @@ import {
   type PluginCapability,
   type PluginManifest,
   type ThreadId,
+  type UsageBucket,
+  UsageSummaryInput,
 } from "@t3tools/contracts";
-import { PluginContext, PluginError, type PluginServices } from "@t3tools/plugin-api";
+import {
+  PluginContext,
+  PluginError,
+  type PluginServices,
+  type UsageDailyTotal,
+} from "@t3tools/plugin-api";
 import {
   projectThreadAwarenessV2,
   turnItemCanChangeUserWait,
@@ -19,6 +26,7 @@ import * as HttpServer from "effect/http/HttpServer";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
+import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 
 import * as EnvironmentAuth from "../auth/EnvironmentAuth.ts";
@@ -31,6 +39,7 @@ import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.t
 import * as ProjectService from "../project/ProjectService.ts";
 import type * as ServerSettings from "../serverSettings.ts";
 import { loopbackUrlHostForAddress } from "../startupAccess.ts";
+import * as UsageService from "../usage/UsageService.ts";
 import { migrateObsidianSharedMemory } from "./migrateObsidianSharedMemory.ts";
 import { PluginHostBindings } from "./PluginHost.ts";
 
@@ -76,6 +85,31 @@ function isTurnItemPayload(
 
 const hostError = (message: string) => (cause: unknown) => new PluginError({ message, cause });
 
+const decodeUsageSummaryInput = Schema.decodeUnknownEffect(UsageSummaryInput);
+
+/** One row per day, provider and model; drops sourcePath, hourStart and session counts. */
+function toDailyTotals(buckets: ReadonlyArray<UsageBucket>): Array<UsageDailyTotal> {
+  const rows = new Map<string, UsageDailyTotal>();
+  for (const bucket of buckets) {
+    const key = `${bucket.day}\u0000${bucket.provider}\u0000${bucket.model}`;
+    const row = rows.get(key);
+    rows.set(key, {
+      day: bucket.day,
+      provider: bucket.provider,
+      model: bucket.model,
+      uncachedInputTokens: (row?.uncachedInputTokens ?? 0) + bucket.totals.uncachedInputTokens,
+      cachedInputTokens: (row?.cachedInputTokens ?? 0) + bucket.totals.cachedInputTokens,
+      cacheCreationTokens: (row?.cacheCreationTokens ?? 0) + bucket.totals.cacheCreationTokens,
+      outputTokens: (row?.outputTokens ?? 0) + bucket.totals.outputTokens,
+      reasoningTokens: (row?.reasoningTokens ?? 0) + bucket.totals.reasoningTokens,
+      costUsd: (row?.costUsd ?? 0) + bucket.costUsd,
+      records: (row?.records ?? 0) + bucket.records,
+      unpricedRecords: (row?.unpricedRecords ?? 0) + bucket.unpricedRecords,
+    });
+  }
+  return [...rows.values()];
+}
+
 export const layer = Layer.effect(
   PluginHostBindings,
   Effect.gen(function* () {
@@ -88,6 +122,7 @@ export const layer = Layer.effect(
     const httpServer = yield* HttpServer.HttpServer;
     const threads = yield* ThreadManagement.ThreadManagementService;
     const projects = yield* ProjectService.ProjectService;
+    const usage = yield* UsageService.UsageService;
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const platform = yield* Effect.context<Exclude<PluginServices, PluginContext>>();
@@ -219,6 +254,26 @@ export const layer = Layer.effect(
               ),
             }
           : { changes: Stream.empty, read: () => refused, activeThreadIds: refused },
+        usage: declared("usage:read")
+          ? {
+              dailyTotals: (input) =>
+                decodeUsageSummaryInput({
+                  sinceDay: input.sinceDay,
+                  untilDay: input.untilDay,
+                  timeZone: input.timeZone,
+                  resolution: "day",
+                  awaitRefresh: true,
+                }).pipe(
+                  Effect.mapError(hostError("Could not read usage.")),
+                  Effect.flatMap((summaryInput) =>
+                    usage.readSummary(summaryInput).pipe(
+                      Effect.map((summary) => toDailyTotals(summary.buckets)),
+                      Effect.mapError(hostError("Could not read usage.")),
+                    ),
+                  ),
+                ),
+            }
+          : { dailyTotals: () => refused },
       });
     });
 
