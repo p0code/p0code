@@ -18,6 +18,7 @@
   "3874c9f538653a6d": "Quit",
   "0eec8b51246f5e2c": "The server wrote no output.",
   "8f53691317d0a2ce": "Version {version}. p0code tries again in the background. Logs: {logDir}",
+  "2d4fe71ed9a6cbec": "This T3 Code install is newer than this p0code build understands. Update p0code, then import again.",
   "a5e5026e2a80fb37": "Import from T3 Code",
   "716462b75f389681": "Bring your T3 Code threads, settings and providers over?",
   "28bb9273985c14b6": "p0code keeps its data in {home}, separate from T3 Code in {stock}. Importing copies everything you need and never changes T3 Code's data. You can also do this later with `p0 migrate from-t3`.",

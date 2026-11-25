@@ -403,6 +403,10 @@
       "types": "./src/migrateFromT3.ts",
       "import": "./src/migrateFromT3.ts"
     },
+    "./migrationManifest": {
+      "types": "./src/migrationManifest.ts",
+      "import": "./src/migrationManifest.ts"
+    },
     "./credentialKeychain": {
       "types": "./src/credentialKeychain.ts",
       "import": "./src/credentialKeychain.ts"

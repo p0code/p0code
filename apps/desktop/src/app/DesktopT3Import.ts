@@ -10,6 +10,7 @@ import {
 } from "@t3tools/shared/credentialKeychain";
 import {
   MIGRATION_MARKER_FILE,
+  MigrateFromT3Error,
   migrateFromT3,
   shouldOfferT3Import,
 } from "@t3tools/shared/migrateFromT3";
@@ -18,6 +19,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
 import { msg } from "gt-i18n";
 
 import * as ElectronApp from "../electron/ElectronApp.ts";
@@ -49,6 +51,27 @@ const tryLoadKeychain = async (
   } catch {
     return null;
   }
+};
+
+const isUnsupportedSourceError = Schema.is(MigrateFromT3Error);
+
+const formatImportFailure = (
+  cause: unknown,
+): { readonly message: string; readonly retryWithCli: boolean } => {
+  if (isUnsupportedSourceError(cause) && cause.code === "source-unsupported") {
+    return {
+      message: m(
+        msg(
+          "This T3 Code install is newer than this p0code build understands. Update p0code, then import again.",
+        ),
+      ),
+      retryWithCli: false,
+    };
+  }
+  return {
+    message: cause instanceof Error ? cause.message : String(cause),
+    retryWithCli: true,
+  };
 };
 
 /**
@@ -96,17 +119,19 @@ export const offerT3Import = Effect.fn("desktop.offerT3Import")(function* () {
       );
       return migrateFromT3({ from: stockHome, to: environment.baseDir, force: true, keychain });
     },
-    catch: (cause) => (cause instanceof Error ? cause.message : String(cause)),
+    catch: formatImportFailure,
   }).pipe(Effect.match({ onFailure: (reason) => reason, onSuccess: () => undefined }));
   if (failure !== undefined) {
     yield* dialog.showErrorBox(
       m(msg("Could not import from T3 Code")),
-      m(
-        msg(
-          "{reason} Quit p0code and run `p0 migrate from-t3 --force` in a terminal to try again.",
-        ),
-        { reason: failure },
-      ),
+      failure.retryWithCli
+        ? m(
+            msg(
+              "{reason} Quit p0code and run `p0 migrate from-t3 --force` in a terminal to try again.",
+            ),
+            { reason: failure.message },
+          )
+        : failure.message,
     );
     return false;
   }
@@ -172,7 +197,7 @@ export const runT3ImportOnTheFly = Effect.fn("desktop.runT3ImportOnTheFly")(func
       });
       return keychain;
     },
-    catch: (cause) => (cause instanceof Error ? cause.message : String(cause)),
+    catch: (cause) => formatImportFailure(cause).message,
   }).pipe(Effect.result);
 
   if (preflight._tag === "Failure") {
@@ -194,17 +219,19 @@ export const runT3ImportOnTheFly = Effect.fn("desktop.runT3ImportOnTheFly")(func
           keepEnvironmentId: input.keepEnvironmentId,
           keychain,
         }),
-      catch: (cause) => (cause instanceof Error ? cause.message : String(cause)),
+      catch: formatImportFailure,
     }).pipe(Effect.match({ onFailure: (reason) => reason, onSuccess: () => undefined }));
     if (failure !== undefined) {
       yield* dialog.showErrorBox(
         m(msg("Could not import from T3 Code")),
-        m(
-          msg(
-            "{reason} Quit p0code and run `p0 migrate from-t3 --force` in a terminal to try again.",
-          ),
-          { reason: failure },
-        ),
+        failure.retryWithCli
+          ? m(
+              msg(
+                "{reason} Quit p0code and run `p0 migrate from-t3 --force` in a terminal to try again.",
+              ),
+              { reason: failure.message },
+            )
+          : failure.message,
       );
     }
     yield* electronApp.relaunch({});

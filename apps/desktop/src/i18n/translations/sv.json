@@ -18,6 +18,7 @@
   "3874c9f538653a6d": "Avsluta",
   "0eec8b51246f5e2c": "Servern skrev ingen utdata.",
   "8f53691317d0a2ce": "Version {version}. p0code försöker igen i bakgrunden. Loggar: {logDir}",
+  "2d4fe71ed9a6cbec": "Den här T3 Code-installationen är nyare än vad den här p0code-versionen förstår. Uppdatera p0code och importera igen.",
   "a5e5026e2a80fb37": "Importera från T3 Code",
   "716462b75f389681": "Vill du ta med trådar, inställningar och leverantörer från T3 Code?",
   "28bb9273985c14b6": "p0code sparar sina data i {home}, åtskilt från T3 Code i {stock}. Importen kopierar allt som behövs och ändrar aldrig T3 Codes data. Du kan också göra det senare med `p0 migrate from-t3`.",

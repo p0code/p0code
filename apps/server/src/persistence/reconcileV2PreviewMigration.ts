@@ -1,46 +1,12 @@
 import * as Effect from "effect/Effect";
 import * as Migrator from "effect/sql/Migrator";
 import * as SqlClient from "effect/sql/SqlClient";
+import { reconciledV2PreviewHistory, v2PreviewId } from "@t3tools/shared/migrationManifest";
 
 import PullRequestFilesViewed from "./Migrations/053_PullRequestFilesViewed.ts";
 import AutoSettleDisabledAt from "./Migrations/054_ProjectionThreadsAutoSettleDisabledAt.ts";
 
-type MigrationRow = { readonly id: number; readonly name: string };
-
-// Previews used V2 ids 53/54; preserve their schema and import progress while reserving main's ids.
-function v2PreviewId(history: ReadonlyArray<MigrationRow>): number | "invalid" | undefined {
-  const later = history.filter((row) => row.id >= 53);
-  const legacy = later.find(
-    (row) => row.name === "OrchestrationV2" && (row.id === 53 || row.id === 54),
-  );
-  if (!legacy) return undefined;
-  const valid = later.every(
-    (row) =>
-      row === legacy ||
-      (legacy.id === 54 &&
-        ((row.id === 53 && row.name === "PullRequestFilesViewed") ||
-          (row.id === 55 && row.name === "RemoveRedundantProjectionIndexes"))),
-  );
-  return valid ? legacy.id : "invalid";
-}
-
-/** The history as startup's preview reconciliation leaves it, or null when startup rejects it. */
-export function reconciledV2PreviewHistory(
-  history: ReadonlyArray<MigrationRow>,
-): ReadonlyArray<MigrationRow> | null {
-  const previewId = v2PreviewId(history);
-  if (previewId === undefined) return history;
-  if (previewId === "invalid") return null;
-  return [
-    ...history.filter((row) => row.id < 53),
-    { id: 53, name: "PullRequestFilesViewed" },
-    { id: 54, name: "ProjectionThreadsAutoSettleDisabledAt" },
-    { id: 55, name: "OrchestrationV2" },
-    ...(history.some((row) => row.id === 55)
-      ? [{ id: 56, name: "RemoveRedundantProjectionIndexes" }]
-      : []),
-  ];
-}
+export { reconciledV2PreviewHistory };
 
 export const reconcileV2PreviewMigration = Effect.fn("reconcileV2PreviewMigration")(function* () {
   const sql = yield* SqlClient.SqlClient;

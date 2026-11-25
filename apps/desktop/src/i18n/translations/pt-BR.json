@@ -18,6 +18,7 @@
   "3874c9f538653a6d": "Sair",
   "0eec8b51246f5e2c": "O servidor não gerou saída.",
   "8f53691317d0a2ce": "Versão {version}. O p0code tenta novamente em segundo plano. Logs: {logDir}",
+  "2d4fe71ed9a6cbec": "Esta instalação do T3 Code é mais recente do que esta compilação do p0code suporta. Atualize o p0code e importe novamente.",
   "a5e5026e2a80fb37": "Importar do T3 Code",
   "716462b75f389681": "Trazer suas conversas, configurações e provedores do T3 Code?",
   "28bb9273985c14b6": "O p0code guarda seus dados em {home}, separado do T3 Code em {stock}. A importação copia tudo o que é necessário e nunca altera os dados do T3 Code. Você também pode fazer isso depois com `p0 migrate from-t3`.",

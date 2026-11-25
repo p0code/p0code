@@ -17,6 +17,7 @@ import {
   realpathLoose,
   type KeychainStore,
 } from "./credentialKeychain.ts";
+import { incompatibleSourceMigrations } from "./migrationManifest.ts";
 
 /**
  * One-shot import of a stock T3 Code home (`~/.t3`) into an p0code home (`~/.p0code`).
@@ -62,6 +63,7 @@ export class MigrateFromT3Error extends Schema.TaggedError<MigrateFromT3Error>()
       "overlapping-paths",
       "destination-not-empty",
       "destination-in-use",
+      "source-unsupported",
     ]),
     detail: Schema.String,
   },
@@ -384,6 +386,27 @@ const openSourceDatabase = (source: string) => {
   const url = NodeURL.pathToFileURL(source);
   url.search = hasLiveSideFiles ? "mode=ro" : "mode=ro&immutable=1";
   return new NodeSqlite.DatabaseSync(url, { readOnly: true });
+};
+
+/** Migration history a source database records, read-only; empty when it has none. */
+const readSourceMigrations = (
+  source: string,
+): ReadonlyArray<{ readonly id: number; readonly name: string }> => {
+  const database = openSourceDatabase(source);
+  try {
+    const hasTable = database
+      .prepare(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'effect_sql_migrations'",
+      )
+      .get();
+    if (hasTable === undefined) return [];
+    return database
+      .prepare("SELECT migration_id, name FROM effect_sql_migrations ORDER BY migration_id")
+      .all()
+      .map((row) => ({ id: Number(row.migration_id), name: String(row.name) }));
+  } finally {
+    database.close();
+  }
 };
 
 const snapshotDatabase = (source: string, destination: string) => {
@@ -830,6 +853,19 @@ export async function migrateFromT3(options: MigrateFromT3Options): Promise<Migr
       "overlapping-paths",
       `The source ${from} and destination ${to} overlap. Choose separate folders.`,
     );
+  }
+
+  // Refuse a source written by a newer T3 Code than this build understands before replacing or
+  // creating anything. The check reuses the migrator's own compatibility rule so they never disagree.
+  const sourceStateDatabase = NodePath.join(from, "userdata", "statev2.sqlite");
+  if (await pathExists(sourceStateDatabase)) {
+    const recorded = readSourceMigrations(sourceStateDatabase);
+    if (incompatibleSourceMigrations(recorded).length > 0) {
+      throw migrationError(
+        "source-unsupported",
+        "This T3 Code install is newer than this p0code build understands. Update p0code, then import again.",
+      );
+    }
   }
 
   const markerPath = NodePath.join(to, "userdata", MIGRATION_MARKER_FILE);

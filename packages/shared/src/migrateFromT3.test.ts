@@ -19,6 +19,7 @@ import {
   migrateFromT3,
   shouldOfferT3Import,
 } from "./migrateFromT3.ts";
+import { migrationManifest } from "./migrationManifest.ts";
 
 const roots: Array<string> = [];
 afterEach(() => {
@@ -127,6 +128,19 @@ const makeFixture = () => {
   );
   database.prepare("INSERT INTO search VALUES (?)").run("hello");
   return { root, from, to, userdata, externalClaude, database };
+};
+
+const seedMigrations = (
+  database: NodeSqlite.DatabaseSync,
+  entries: ReadonlyArray<readonly [number, string]>,
+) => {
+  database.exec(
+    "CREATE TABLE effect_sql_migrations (migration_id INTEGER PRIMARY KEY, name TEXT NOT NULL)",
+  );
+  const insert = database.prepare(
+    "INSERT INTO effect_sql_migrations (migration_id, name) VALUES (?, ?)",
+  );
+  for (const [id, name] of entries) insert.run(id, name);
 };
 
 describe("migrateFromT3", () => {
@@ -334,6 +348,126 @@ describe("migrateFromT3", () => {
       (error: unknown) => error,
     );
     assert.equal((missing as MigrateFromT3Error).code, "source-missing");
+  });
+
+  it("refuses a source with migrations newer than this build, leaving the destination untouched", async () => {
+    const fixture = makeFixture();
+    seedMigrations(fixture.database, [...migrationManifest, [120, "NewerT3Migration"]]);
+    fixture.database.close();
+
+    write(NodePath.join(fixture.to, "userdata", "settings.json"), '{"mine":true}');
+    const sourceBefore = snapshotTree(fixture.from);
+    const destinationBefore = snapshotTree(fixture.to);
+
+    const refused = await migrateFromT3({ from: fixture.from, to: fixture.to, force: true }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    assert.instanceOf(refused, MigrateFromT3Error);
+    assert.equal((refused as MigrateFromT3Error).code, "source-unsupported");
+    assert.include(
+      (refused as MigrateFromT3Error).message,
+      "This T3 Code install is newer than this p0code build understands",
+    );
+    // Neither the source nor the existing p0code home is touched, even with --force.
+    assert.deepEqual(snapshotTree(fixture.from), sourceBefore);
+    assert.deepEqual(snapshotTree(fixture.to), destinationBefore);
+    assert.isFalse(
+      NodeFS.readdirSync(NodePath.dirname(fixture.to)).some((name) =>
+        name.startsWith(`${NodePath.basename(fixture.to)}.replaced-`),
+      ),
+    );
+  });
+
+  it("refuses a source whose migration history this build would not accept", async () => {
+    const fixture = makeFixture();
+    seedMigrations(
+      fixture.database,
+      migrationManifest.map(([id, name]) =>
+        id === 112 ? ([id, "SomeOtherMigration"] as const) : ([id, name] as const),
+      ),
+    );
+    fixture.database.close();
+
+    const refused = await migrateFromT3({ from: fixture.from, to: fixture.to }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    assert.instanceOf(refused, MigrateFromT3Error);
+    assert.equal((refused as MigrateFromT3Error).code, "source-unsupported");
+  });
+
+  it("refuses a source with an unexpected migration at this build's head id", async () => {
+    const fixture = makeFixture();
+    seedMigrations(
+      fixture.database,
+      migrationManifest.map(([id, name]) =>
+        id === 119 ? ([id, "UpstreamMigration119"] as const) : ([id, name] as const),
+      ),
+    );
+    fixture.database.close();
+
+    const refused = await migrateFromT3({ from: fixture.from, to: fixture.to, dryRun: true }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    assert.instanceOf(refused, MigrateFromT3Error);
+    assert.equal((refused as MigrateFromT3Error).code, "source-unsupported");
+  });
+
+  it("matches the migrator's handling of fork migration 112", async () => {
+    const compatible = makeFixture();
+    seedMigrations(compatible.database, [
+      ...migrationManifest.filter(([id]) => id < 112),
+      [112, "DropUnusedProviderTurnIndexes"],
+    ]);
+    compatible.database.close();
+
+    const report = await migrateFromT3({ from: compatible.from, to: compatible.to });
+    assert.equal(report.status, "migrated");
+
+    const conflicting = makeFixture();
+    seedMigrations(conflicting.database, [
+      ...migrationManifest.filter(([id]) => id < 112),
+      [112, "DropUnusedProviderTurnIndexes"],
+      [113, "WorkflowSkippedRuns"],
+    ]);
+    conflicting.database.close();
+
+    const refused = await migrateFromT3({ from: conflicting.from, to: conflicting.to }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    assert.instanceOf(refused, MigrateFromT3Error);
+    assert.equal((refused as MigrateFromT3Error).code, "source-unsupported");
+  });
+
+  it("still imports a stock T3 Code source before p0code's fork migration 119", async () => {
+    const fixture = makeFixture();
+    const stockT3Migrations = migrationManifest.filter(([id]) => id <= 118);
+    seedMigrations(fixture.database, stockT3Migrations);
+    fixture.database.close();
+
+    const report = await migrateFromT3({ from: fixture.from, to: fixture.to });
+    assert.equal(report.status, "migrated");
+  });
+
+  it("still imports a source whose migrations this build understands", async () => {
+    const fixture = makeFixture();
+    seedMigrations(fixture.database, migrationManifest);
+    fixture.database.close();
+
+    const report = await migrateFromT3({ from: fixture.from, to: fixture.to });
+    assert.equal(report.status, "migrated");
+    const copy = new NodeSqlite.DatabaseSync(
+      NodePath.join(fixture.to, "userdata", "statev2.sqlite"),
+      { readOnly: true },
+    );
+    assert.equal(
+      copy.prepare("SELECT count(*) AS count FROM effect_sql_migrations").get()?.count,
+      migrationManifest.length,
+    );
+    copy.close();
   });
 
   it("writes credentials to the keychain instead of .bin files and skips replay markers", async () => {

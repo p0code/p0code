@@ -18,6 +18,7 @@
   "3874c9f538653a6d": "退出",
   "0eec8b51246f5e2c": "服务器没有输出任何内容。",
   "8f53691317d0a2ce": "版本 {version}。p0code 会在后台重试。日志：{logDir}",
+  "2d4fe71ed9a6cbec": "这个 T3 Code 安装版本比此 p0code 构建所能理解的更新。请更新 p0code 后再导入。",
   "a5e5026e2a80fb37": "从 T3 Code 导入",
   "716462b75f389681": "要把 T3 Code 的对话串、设置和 provider 搬过来吗？",
   "28bb9273985c14b6": "p0code 把数据存放在 {home}，与 T3 Code 的 {stock} 分开。导入只会拷贝需要的数据，绝不会更动 T3 Code 的数据。之后也可以用 `p0 migrate from-t3` 再导入。",

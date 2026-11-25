@@ -18,6 +18,7 @@
   "3874c9f538653a6d": "Beenden",
   "0eec8b51246f5e2c": "Der Server hat keine Ausgabe geschrieben.",
   "8f53691317d0a2ce": "Version {version}. p0code versucht es im Hintergrund erneut. Logs: {logDir}",
+  "2d4fe71ed9a6cbec": "Diese T3 Code-Installation ist neuer als diese p0code-Version. Aktualisiere p0code und importiere dann erneut.",
   "a5e5026e2a80fb37": "Aus T3 Code importieren",
   "716462b75f389681": "Threads, Einstellungen und Provider aus T3 Code übernehmen?",
   "28bb9273985c14b6": "p0code speichert seine Daten in {home}, getrennt von T3 Code in {stock}. Beim Import wird alles Nötige kopiert, die Daten von T3 Code werden nie verändert. Du kannst das auch später mit `p0 migrate from-t3` erledigen.",

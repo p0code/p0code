@@ -18,6 +18,7 @@
   "3874c9f538653a6d": "Quitter",
   "0eec8b51246f5e2c": "Le serveur n’a écrit aucune sortie.",
   "8f53691317d0a2ce": "Version {version}. p0code réessaie en arrière-plan. Journaux : {logDir}",
+  "2d4fe71ed9a6cbec": "Cette installation de T3 Code est plus récente que ce que cette version de p0code prend en charge. Mettez à jour p0code, puis réimportez.",
   "a5e5026e2a80fb37": "Importer depuis T3 Code",
   "716462b75f389681": "Récupérer vos fils, réglages et fournisseurs de T3 Code ?",
   "28bb9273985c14b6": "p0code conserve ses données dans {home}, séparément de T3 Code dans {stock}. L’import copie tout ce qu’il faut et ne modifie jamais les données de T3 Code. Vous pouvez aussi le faire plus tard avec `p0 migrate from-t3`.",

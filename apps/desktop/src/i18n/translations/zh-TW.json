@@ -18,6 +18,7 @@
   "3874c9f538653a6d": "退出",
   "0eec8b51246f5e2c": "伺服器沒有輸出任何內容。",
   "8f53691317d0a2ce": "版本 {version}。p0code 會在後臺重試。日誌：{logDir}",
+  "2d4fe71ed9a6cbec": "這個 T3 Code 安裝版本比此 p0code 建置所能理解的更新。請更新 p0code 後再匯入。",
   "a5e5026e2a80fb37": "從 T3 Code 匯入",
   "716462b75f389681": "要把 T3 Code 的對話串、設定和 provider 搬過來嗎？",
   "28bb9273985c14b6": "p0code 把資料存放在 {home}，與 T3 Code 的 {stock} 分開。匯入只會複製需要的資料，絕不會更動 T3 Code 的資料。之後也可以用 `p0 migrate from-t3` 再匯入。",
