@@ -38,6 +38,8 @@ import {
 } from "./PluginHost.ts";
 
 const readSummaryCalls: Array<UsageSummaryInput> = [];
+let activeUsageReads = 0;
+let peakUsageReads = 0;
 
 const sampleSummary: UsageSummary = {
   contractVersion: USAGE_CONTRACT_VERSION,
@@ -158,10 +160,18 @@ const stubUsageLayer = Layer.succeed(
   UsageService.UsageService,
   UsageService.UsageService.of({
     readSummary: (input) =>
-      Effect.sync(() => {
-        readSummaryCalls.push(input);
-        return sampleSummary;
-      }),
+      Effect.acquireUseRelease(
+        Effect.sync(() => {
+          readSummaryCalls.push(input);
+          activeUsageReads++;
+          peakUsageReads = Math.max(peakUsageReads, activeUsageReads);
+        }),
+        () => Effect.yieldNow.pipe(Effect.as(sampleSummary)),
+        () =>
+          Effect.sync(() => {
+            activeUsageReads--;
+          }),
+      ),
     refreshRates: Effect.die("unused"),
     priceModelTotals: () => Effect.die("unused"),
   }),
@@ -291,6 +301,77 @@ describe("PluginHostBindings usage:read", () => {
       }),
     );
 
+    it.effect("refuses windows over 400 days before reading usage", () =>
+      Effect.gen(function* () {
+        readSummaryCalls.length = 0;
+        const bindings = yield* PluginHostBindings;
+        const ctx = yield* bindings.contextFor(
+          manifest("wide-reader", ["usage:read"]),
+          () => Effect.void,
+        );
+        const result = yield* ctx.usage
+          .dailyTotals({ sinceDay: "2025-01-01", untilDay: "2026-02-05", timeZone: "UTC" })
+          .pipe(Effect.flip);
+        assert.include(result.message, "at most 400 days");
+        assert.strictEqual(readSummaryCalls.length, 0);
+        yield* ctx.usage.dailyTotals({
+          sinceDay: "2025-01-01",
+          untilDay: "2026-02-04",
+          timeZone: "UTC",
+        });
+        assert.strictEqual(readSummaryCalls.length, 1);
+      }),
+    );
+
+    it.effect("coalesces parallel usage reads across plugins", () =>
+      Effect.gen(function* () {
+        readSummaryCalls.length = 0;
+        const bindings = yield* PluginHostBindings;
+        const contexts = yield* Effect.forEach(
+          Array.from({ length: 12 }, (_, i) => i),
+          (i) => bindings.contextFor(manifest(`parallel-${i}`, ["usage:read"]), () => Effect.void),
+        );
+        const rows = yield* Effect.forEach(
+          contexts,
+          (ctx) =>
+            ctx.usage.dailyTotals({
+              sinceDay: "2026-07-01",
+              untilDay: "2026-07-02",
+              timeZone: "UTC",
+            }),
+          { concurrency: "unbounded" },
+        );
+        assert.strictEqual(readSummaryCalls.length, 1);
+        assert.strictEqual(rows.length, 12);
+        for (const result of rows) assert.deepStrictEqual(result, rows[0]);
+      }),
+    );
+
+    it.effect("serializes different usage windows across plugins", () =>
+      Effect.gen(function* () {
+        readSummaryCalls.length = 0;
+        peakUsageReads = 0;
+        const bindings = yield* PluginHostBindings;
+        const contexts = yield* Effect.forEach(
+          Array.from({ length: 12 }, (_, i) => i),
+          (i) => bindings.contextFor(manifest(`different-${i}`, ["usage:read"]), () => Effect.void),
+        );
+        yield* Effect.forEach(
+          contexts,
+          (ctx, i) =>
+            ctx.usage.dailyTotals({
+              sinceDay: `2026-06-${String(i + 1).padStart(2, "0")}`,
+              untilDay: "2026-06-30",
+              timeZone: "UTC",
+            }),
+          { concurrency: "unbounded" },
+        );
+        assert.strictEqual(readSummaryCalls.length, 12);
+        assert.strictEqual(peakUsageReads, 1);
+        assert.strictEqual(activeUsageReads, 0);
+      }),
+    );
+
     it.effect("returns folded numeric daily rows without paths, hours, or session counts", () =>
       Effect.gen(function* () {
         readSummaryCalls.length = 0;
@@ -309,7 +390,8 @@ describe("PluginHostBindings usage:read", () => {
             untilDay: UsageDay.make("2026-08-02"),
             timeZone: "UTC",
             resolution: "day",
-            awaitRefresh: true,
+            awaitRefresh: false,
+            provisional: true,
           },
         ]);
 

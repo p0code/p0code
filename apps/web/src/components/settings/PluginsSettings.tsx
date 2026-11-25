@@ -4,7 +4,7 @@ import { useAtomValue } from "@effect/atom-react";
 import type { EnvironmentId, PluginInfo } from "@t3tools/contracts";
 import { OBSIDIAN_SHARED_MEMORY_ID } from "@t3tools/plugin-obsidian-shared-memory/actions";
 import { T3_CONNECT_BRIDGE_ID } from "@t3tools/plugin-t3-connect-bridge/actions";
-import { T, useGT } from "gt-react";
+import { T, useGT, useMessages } from "gt-react";
 import type { ComponentType } from "react";
 
 import { useEnvironmentQuery } from "../../state/query";
@@ -18,6 +18,7 @@ import {
   ObsidianSharedMemoryPanel,
 } from "./ObsidianSharedMemoryPanel";
 import { T3ConnectBridgeDisclosure, T3ConnectBridgePanel } from "./T3ConnectBridgePanel";
+import { pluginCapabilityCopy } from "./pluginCapabilityCopy";
 
 interface PluginPanel {
   /** Shown whether or not the plugin runs, so nobody turns it on unwarned. */
@@ -75,6 +76,7 @@ function PluginSection({
   readonly plugin: PluginInfo;
 }) {
   const gt = useGT();
+  const m = useMessages();
   const canManage = useAtomValue(serverEnvironment.pluginsSetEnabled.permissionAtom(environmentId));
   const setEnabled = useAtomCommand(serverEnvironment.pluginsSetEnabled);
   const panel = PLUGIN_PANELS[plugin.manifest.id];
@@ -103,6 +105,13 @@ function PluginSection({
     >
       <div className="space-y-3 px-3 py-3 text-sm sm:px-4">
         {panel?.Disclosure ? <panel.Disclosure /> : <p>{plugin.manifest.description}</p>}
+        {plugin.manifest.capabilities.length > 0 ? (
+          <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
+            {plugin.manifest.capabilities.map((capability) => (
+              <li key={capability}>{m(pluginCapabilityCopy[capability])}</li>
+            ))}
+          </ul>
+        ) : null}
         {status && !(plugin.state === "running" && panel?.Panel) ? (
           <p
             role={plugin.state === "failed" ? "alert" : "status"}

@@ -20,14 +20,17 @@ import {
   turnItemCanChangeUserWait,
 } from "@t3tools/shared/agentAwareness";
 import { turnItemUpdateCanEndBackgroundWork } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
+import * as Cache from "effect/Cache";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
 import * as HttpServer from "effect/http/HttpServer";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 
 import * as EnvironmentAuth from "../auth/EnvironmentAuth.ts";
@@ -125,6 +128,19 @@ export const layer = Layer.effect(
     const threads = yield* ThreadManagement.ThreadManagementService;
     const projects = yield* ProjectService.ProjectService;
     const usage = yield* UsageService.UsageService;
+    const usageGate = yield* Semaphore.make(1);
+    // Shared across plugins: identical reads coalesce, and different windows cannot scan together.
+    const usageReads = yield* Cache.makeWith(
+      (key: string) =>
+        usageGate.withPermits(1)(
+          usage.readSummary(JSON.parse(key) as UsageSummaryInput).pipe(
+            // Usage scans outlive their callers; keep the permit until the scan finishes.
+            Effect.uninterruptible,
+            Effect.mapError(hostError("Could not read usage.")),
+          ),
+        ),
+      { capacity: 32, timeToLive: (exit) => (Exit.isSuccess(exit) ? "10 seconds" : Duration.zero) },
+    );
     const dataBackup = yield* DataBackup;
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
@@ -304,15 +320,29 @@ export const layer = Layer.effect(
                   untilDay: input.untilDay,
                   timeZone: input.timeZone,
                   resolution: "day",
-                  awaitRefresh: true,
+                  awaitRefresh: false,
+                  provisional: true,
                 }).pipe(
                   Effect.mapError(hostError("Could not read usage.")),
-                  Effect.flatMap((summaryInput) =>
-                    usage.readSummary(summaryInput).pipe(
+                  Effect.flatMap((summaryInput) => {
+                    const start = Date.parse(`${summaryInput.sinceDay}T00:00:00Z`);
+                    const end = Date.parse(`${summaryInput.untilDay}T00:00:00Z`);
+                    if (
+                      !Number.isFinite(start) ||
+                      !Number.isFinite(end) ||
+                      end < start ||
+                      end - start >= 400 * 86_400_000
+                    ) {
+                      return Effect.fail(
+                        new PluginError({
+                          message: "Usage reads require a valid window of at most 400 days.",
+                        }),
+                      );
+                    }
+                    return Cache.get(usageReads, JSON.stringify(summaryInput)).pipe(
                       Effect.map((summary) => toDailyTotals(summary.buckets)),
-                      Effect.mapError(hostError("Could not read usage.")),
-                    ),
-                  ),
+                    );
+                  }),
                 ),
             }
           : { dailyTotals: () => refused },
