@@ -176,6 +176,7 @@ jobs:
         if: steps.expo-token.outputs.present == 'true'
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
+          submodules: true
           ref: ${{ needs.request.outputs.sha }}
           fetch-depth: 0
           # No sparse-checkout: see mobile-eas-preview.yml.
@@ -352,6 +353,7 @@ jobs:
       - name: Checkout reviewed commit
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
+          submodules: true
           ref: ${{ needs.request.outputs.sha }}
           fetch-depth: 0
 
@@ -427,6 +429,7 @@ jobs:
       - name: Checkout reviewed commit
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
+          submodules: true
           ref: ${{ needs.request.outputs.sha }}
           fetch-depth: 0
 

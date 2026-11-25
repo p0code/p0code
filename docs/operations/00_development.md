@@ -9,16 +9,22 @@ curl -fsSL https://vite.plus | bash
 # Windows PowerShell: irm https://vite.plus/ps1 | iex
 ```
 
-On Windows, clone with long paths enabled so `.repos/` checks out cleanly:
+Clone with `--recurse-submodules` so bundled plugins under `plugins/` are checked out:
+
+```sh
+git clone --recurse-submodules https://github.com/p0code/p0code.git
+```
+
+On Windows, also enable long paths so `.repos/` checks out cleanly:
 
 ```powershell
-git clone -c core.longpaths=true https://github.com/pingdotgg/t3code.git
+git clone --recurse-submodules -c core.longpaths=true https://github.com/p0code/p0code.git
 ```
 
 From the repository root:
 
 ```sh
-vp i
+pnpm install
 vp run dev
 ```
 

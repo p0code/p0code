@@ -102,7 +102,7 @@ URL remains valid until it expires even if the session or grant is revoked.
 ## Credential storage
 
 Server credentials (signing keys, share/MCP/asset keys, peer links, provider auth, self-hosted
-relay tunnel and ACME/TLS private keys, Obsidian sync token, and plugin secrets) live in the OS
+relay tunnel and ACME/TLS private keys, and plugin secrets) live in the OS
 keychain (macOS Keychain, Windows Credential Manager, Linux Secret Service) via
 [`ServerSecretStore.ts`](../../apps/server/src/auth/ServerSecretStore.ts) and
 [`credentialKeychain.ts`](../../packages/shared/src/credentialKeychain.ts), namespaced by a hash

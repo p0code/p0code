@@ -46,9 +46,11 @@ Updates are signed with the same certificate, so macOS keeps your keychain appro
 
 ### Command line
 
-From a checkout of this repository, install dependencies and start the server (the `p0` command):
+Clone with submodules (`plugins/*` live in their own repositories), install dependencies, and start the server (the `p0` command):
 
 ```bash
+git clone --recurse-submodules https://github.com/p0code/p0code.git
+cd p0code
 pnpm install
 node apps/server/src/bin.ts
 ```

@@ -1,16 +1,20 @@
 # Plugins
 
 Plugins are first-party workspace packages under [`plugins/`](../../plugins) that the server runs
-in-process, off by default. The host is [`apps/server/src/plugins`](../../apps/server/src/plugins);
+in-process, off by default. Each plugin lives in its own repository and is mounted as a git
+submodule (`plugins/t3-connect-bridge` from `p0code/t3-connect-bridge`,
+`plugins/obsidian-shared-memory` from `p0code/obsidian-sync`), so clone with
+`git clone --recurse-submodules` (or run `git submodule update --init` in an existing checkout)
+before running `pnpm install`. The host is [`apps/server/src/plugins`](../../apps/server/src/plugins);
 plugins depend only on [`@t3tools/plugin-api`](../../packages/plugin-api), never on server internals.
 
 ## Shape
 
 - **Bundled only.** [`registry.ts`](../../apps/server/src/plugins/registry.ts) lists what a build
   ships; nothing is loaded from disk. Capabilities are declarations shown before enabling. The
-  host enforces the ones it brokers (device credentials, agent activity, declared HTTP routes);
-  outbound network and helper processes cannot be enforced in-process, which is why third-party
-  loading would need a separate process boundary first.
+  host enforces the ones it brokers (device credentials, agent activity, declared HTTP routes,
+  agent turn instructions); outbound network and helper processes cannot be enforced in-process,
+  which is why third-party loading would need a separate process boundary first.
 - **One scope per plugin.** Enabling runs `plugin.start` in a fresh scope; disabling closes it, so
   every fiber, child process, and finalizer the plugin owns ends with it. A failed start closes
   the scope and shows the error as the plugin's status; nothing a plugin does can stop the server.
@@ -26,6 +30,20 @@ plugins depend only on [`@t3tools/plugin-api`](../../packages/plugin-api), never
 - **Routes are fixed paths.** A plugin's HTTP routes are declared in its manifest and mounted at
   startup; they answer 404 while the plugin is off. Paths are absolute because an external
   service may call them (the bridge's are upstream T3 Connect's).
+- **Agent instructions are opt-in.** A plugin declaring `agent:instructions` may expose an
+  `agentInstructions` effect returning a block appended to every agent turn while the plugin runs.
+  `PluginHost` feeds those blocks into the runtime policy (`pluginInstructions`) through
+  `PluginAgentInstructions` so orchestration layers built before `PluginHost` read live plugin
+  state without a layer cycle.
+
+## Obsidian shared memory
+
+[`plugins/obsidian-shared-memory`](../../plugins/obsidian-shared-memory) (repo
+[`p0code/obsidian-sync`](https://github.com/p0code/obsidian-sync)) syncs a shared agent memory
+folder via Obsidian Headless (`ob`, Node 22+) and appends its memory instructions to agent turns
+when enabled. Existing installs that used the former built-in `SharedMemorySync` are migrated once
+at startup into `<stateDir>/plugins/obsidian-shared-memory/` (and secret
+`plugin-obsidian-shared-memory-token`) before the plugin host reconciles enabled plugins.
 
 ## Unofficial T3 Connect bridge
 
