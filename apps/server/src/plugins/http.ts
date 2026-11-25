@@ -15,10 +15,10 @@ import { API_MAX_BODY_BYTES } from "../http.ts";
 import { DESKTOP_RENDERER_ORIGINS } from "../httpCors.ts";
 import { requestUrl } from "../requestUrl.ts";
 import { timingSafeEqualBase64Url } from "../auth/utils.ts";
-import { PluginHost } from "./PluginHost.ts";
+import { BundledPlugins, PluginHost } from "./PluginHost.ts";
 import * as Headers from "effect/http/Headers";
 import * as UrlParams from "effect/http/UrlParams";
-import { bundledPlugins } from "./registry.ts";
+import { layer as pluginRegistryLayer } from "./registry.ts";
 import { removeObsoleteRouteSecrets, routeSecret } from "./routeSecret.ts";
 
 const NO_STORE = { "cache-control": "no-store", pragma: "no-cache" };
@@ -140,9 +140,10 @@ export const makeLayer = <R>(
 
 export const layer = Layer.unwrap(
   Effect.gen(function* () {
-    yield* removeObsoleteRouteSecrets(bundledPlugins.map((plugin) => plugin.manifest)).pipe(
+    const hosted = yield* BundledPlugins;
+    yield* removeObsoleteRouteSecrets(hosted.plugins.map((plugin) => plugin.manifest)).pipe(
       Effect.orDie,
     );
-    return makeLayer(bundledPlugins, (id) => routeSecret(id).pipe(Effect.orDie));
+    return makeLayer(hosted.plugins, (id) => routeSecret(id).pipe(Effect.orDie));
   }),
-);
+).pipe(Layer.provide(pluginRegistryLayer));

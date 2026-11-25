@@ -27,6 +27,7 @@ import * as Stream from "effect/Stream";
 import * as SubscriptionRef from "effect/SubscriptionRef";
 
 import * as ServerSettings from "../serverSettings.ts";
+import type { FailedInstallation } from "./loader.ts";
 
 /** How a running plugin reaches the server; the live binding lives in `bindings.ts`. */
 export class PluginHostBindings extends Context.Service<
@@ -45,9 +46,15 @@ export class PluginHostBindings extends Context.Service<
   }
 >()("p0/plugins/PluginHost/PluginHostBindings") {}
 
-export class BundledPlugins extends Context.Service<BundledPlugins, ReadonlyArray<Plugin>>()(
-  "p0/plugins/PluginHost/BundledPlugins",
-) {}
+export class BundledPlugins extends Context.Service<
+  BundledPlugins,
+  {
+    /** Bundled plugins plus the installed ones the loader loaded. */
+    readonly plugins: ReadonlyArray<Plugin>;
+    /** Installed plugins that did not load; shown failed in the snapshot, never run. */
+    readonly failures: ReadonlyArray<FailedInstallation>;
+  }
+>()("p0/plugins/PluginHost/BundledPlugins") {}
 
 /**
  * Late-bound reader for active plugin instructions so orchestration layers built before
@@ -107,7 +114,8 @@ const failureMessage = (cause: Cause.Cause<{ readonly message: string }>) => {
 };
 
 const make = Effect.gen(function* () {
-  const plugins = yield* BundledPlugins;
+  const hosted = yield* BundledPlugins;
+  const plugins = hosted.plugins;
   const bindings = yield* PluginHostBindings;
   const settingsService = yield* ServerSettings.ServerSettingsService;
   const platform = bindings.platform;
@@ -116,9 +124,25 @@ const make = Effect.gen(function* () {
   const infos = new Map<string, PluginInfo>(
     plugins.map((plugin) => [
       plugin.manifest.id,
-      { manifest: plugin.manifest, enabled: false, state: "disabled", message: null },
+      {
+        manifest: plugin.manifest,
+        origin: plugin.origin ?? "bundled",
+        enabled: false,
+        state: "disabled",
+        message: null,
+      },
     ]),
   );
+  // A broken install is not runnable, but it stays visible with why it failed.
+  for (const failure of hosted.failures) {
+    infos.set(failure.manifest.id, {
+      manifest: failure.manifest,
+      origin: "installed",
+      enabled: false,
+      state: "failed",
+      message: failure.message,
+    });
+  }
   const snapshotRef = yield* SubscriptionRef.make<PluginsSnapshot>({
     plugins: [...infos.values()],
   });
@@ -211,9 +235,16 @@ const make = Effect.gen(function* () {
 
   const pluginById = (pluginId: string) => {
     const plugin = plugins.find((candidate) => candidate.manifest.id === pluginId);
-    return plugin === undefined
+    if (plugin !== undefined) return Effect.succeed(plugin);
+    const failure = hosted.failures.find((candidate) => candidate.manifest.id === pluginId);
+    return failure === undefined
       ? Effect.fail(new PluginOperationError({ pluginId, message: "Unknown plugin." }))
-      : Effect.succeed(plugin);
+      : Effect.fail(
+          new PluginOperationError({
+            pluginId,
+            message: `The plugin did not load, so it cannot be turned on: ${failure.message}`,
+          }),
+        );
   };
 
   const setEnabled: PluginHost["Service"]["setEnabled"] = Effect.fn("PluginHost.setEnabled")(

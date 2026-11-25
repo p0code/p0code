@@ -4,6 +4,7 @@ import type {
   EnvironmentId,
   ExecutionEnvironmentDescriptor,
   PluginManifest,
+  PluginOrigin,
   ThreadId,
 } from "@t3tools/contracts";
 import type { AgentAwarenessState } from "@t3tools/shared/agentAwareness";
@@ -30,6 +31,9 @@ export class PluginError extends Schema.TaggedError<PluginError>()("PluginError"
 }) {}
 
 export { DataSnapshotManifest, PendingRestore } from "@t3tools/contracts";
+
+/** The plugin API this server speaks. A manifest asking for a higher one is refused at load. */
+export const PLUGIN_API_VERSION = 1;
 
 export type ActivityState = AgentAwarenessState;
 
@@ -160,6 +164,8 @@ export interface PluginInstance<Actions extends PluginActionSchemas> {
 /** What the host runs. Built by `definePlugin`, which owns decoding at the wire. */
 export interface Plugin {
   readonly manifest: PluginManifest;
+  /** Where the code came from. Bundled plugins omit it; the loader marks installed ones. */
+  readonly origin?: PluginOrigin;
   /** Runs in the plugin's scope; closing it is how the host stops the plugin. */
   readonly start: Effect.Effect<StartedPlugin, PluginError, PluginServices | Scope.Scope>;
 }

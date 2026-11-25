@@ -167,14 +167,25 @@ const layerBindings = Layer.effect(
 
 const layerHost = pluginHostLayer.pipe(
   Layer.provide(
-    Layer.succeed(BundledPlugins, [
-      echo,
-      broken,
-      advisor,
-      undeclaredAdvisor,
-      routesWithoutCapability,
-      undeclaredRoute,
-    ]),
+    Layer.succeed(
+      BundledPlugins,
+      BundledPlugins.of({
+        plugins: [
+          echo,
+          broken,
+          advisor,
+          undeclaredAdvisor,
+          routesWithoutCapability,
+          undeclaredRoute,
+        ],
+        failures: [
+          {
+            manifest: manifest("unloaded", []),
+            message: "Version 1.0.0 is not active: plugin.mjs is missing.",
+          },
+        ],
+      }),
+    ),
   ),
   Layer.provide(layerBindings),
   Layer.provideMerge(layerAgentInstructions),
@@ -307,6 +318,25 @@ describe("PluginHost", () => {
           assert.deepStrictEqual(yield* host.agentInstructions, []);
           assert.deepStrictEqual(yield* slot.read, []);
         }),
+    );
+
+    it.effect("surfaces an installed plugin that failed to load, and keeps it off", () =>
+      Effect.gen(function* () {
+        const host = yield* PluginHost;
+        const failed = yield* snapshotOf("unloaded");
+        assert.strictEqual(failed?.origin, "installed");
+        assert.strictEqual(failed?.state, "failed");
+        assert.strictEqual(failed?.message, "Version 1.0.0 is not active: plugin.mjs is missing.");
+        const error = yield* host
+          .setEnabled({ pluginId: "unloaded", enabled: true })
+          .pipe(
+            Effect.match({ onFailure: (error) => error.message, onSuccess: () => "succeeded" }),
+          );
+        assert.strictEqual(
+          error,
+          "The plugin did not load, so it cannot be turned on: Version 1.0.0 is not active: plugin.mjs is missing.",
+        );
+      }),
     );
   });
 

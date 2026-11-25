@@ -224,7 +224,12 @@ const stubDependencies = Layer.mergeAll(
 const layerBindingsTest = bindingsLayer.pipe(Layer.provide(stubDependencies));
 
 const layerHostWithBindings = pluginHostLayer.pipe(
-  Layer.provide(Layer.succeed(BundledPlugins, [declaredReader, undeclaredReader])),
+  Layer.provide(
+    Layer.succeed(
+      BundledPlugins,
+      BundledPlugins.of({ plugins: [declaredReader, undeclaredReader], failures: [] }),
+    ),
+  ),
   Layer.provideMerge(layerBindingsTest),
   Layer.provideMerge(ServerSettings.ServerSettingsService.layerTest()),
 );

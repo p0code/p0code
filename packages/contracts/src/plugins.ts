@@ -21,6 +21,10 @@ export const PluginCapability = Schema.Literals([
 ]);
 export type PluginCapability = typeof PluginCapability.Type;
 
+/** Where a running plugin's code came from. */
+export const PluginOrigin = Schema.Literals(["bundled", "installed"]);
+export type PluginOrigin = typeof PluginOrigin.Type;
+
 export const PluginManifest = Schema.Struct({
   id: PluginId,
   name: TrimmedNonEmptyString,
@@ -33,6 +37,12 @@ export const PluginManifest = Schema.Struct({
   capabilities: Schema.Array(PluginCapability),
   /** Absolute paths the plugin answers while it runs, outside any session auth. */
   httpRoutes: Schema.Array(Schema.String.check(Schema.isPattern(/^\/api\/[a-z0-9/-]+$/))),
+  /**
+   * The plugin API this manifest targets, as `PLUGIN_API_VERSION` from `@t3tools/plugin-api`.
+   * Absent means the API the server ships; a higher one is refused with a note to update
+   * p0code or the plugin. Written into a plugin's `manifest.json` file.
+   */
+  apiVersion: Schema.optionalKey(Schema.Int),
 });
 export type PluginManifest = typeof PluginManifest.Type;
 
@@ -41,6 +51,8 @@ export type PluginState = typeof PluginState.Type;
 
 export const PluginInfo = Schema.Struct({
   manifest: PluginManifest,
+  /** Bundled plugins update with the app; installed ones live in the server's plugin folder. */
+  origin: PluginOrigin,
   enabled: Schema.Boolean,
   state: PluginState,
   /** A plugin's own one-line status while it runs, or why it failed. */
@@ -69,7 +81,15 @@ export class PluginOperationError extends Schema.TaggedError<PluginOperationErro
 
 export const PluginSettings = Schema.Record(
   Schema.String,
-  Schema.Struct({ enabled: Schema.Boolean }),
+  Schema.Struct({
+    enabled: Schema.Boolean,
+    /**
+     * Capabilities the person consented to for this plugin, recorded when it is installed or
+     * updated. An installed version whose manifest declares more than this stays inactive; the
+     * installer writes it, the loader only reads it to pick which installed version may run.
+     */
+    consentedCapabilities: Schema.optionalKey(Schema.Array(PluginCapability)),
+  }),
 );
 export type PluginSettings = typeof PluginSettings.Type;
 
