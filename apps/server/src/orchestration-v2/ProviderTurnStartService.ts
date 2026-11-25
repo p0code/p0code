@@ -1,4 +1,4 @@
-import * as SharedMemorySync from "../memory/SharedMemorySync.ts";
+import * as PluginHost from "../plugins/PluginHost.ts";
 import { classifyCodexManagedError } from "../provider/CodexManagedErrors.ts";
 import { modelSelectionsEqual } from "@t3tools/shared/model";
 import { projectComposerContextForProvider } from "@t3tools/shared/composerContextReferences";
@@ -325,6 +325,7 @@ export const layer: Layer.Layer<
     const restoreMissingWorktree = yield* makeRestoreMissingWorktree;
     const worktreeRestore = yield* ThreadWorktreeRestore;
     const turnItemPositions = yield* TurnItemPositionStore.TurnItemPositionStoreV2;
+    const pluginAgentInstructions = yield* Effect.serviceOption(PluginHost.PluginAgentInstructions);
 
     // Build draining callbacks outside startup scope so they cannot retain full thread history.
     const makeRunControls = (input: {
@@ -950,13 +951,15 @@ export const layer: Layer.Layer<
         });
         return;
       }
-      const memoryService = yield* Effect.serviceOption(SharedMemorySync.SharedMemorySync);
-      const sharedMemory = Option.isSome(memoryService)
-        ? yield* memoryService.value.instructions
-        : undefined;
+      const pluginHost = yield* Effect.serviceOption(PluginHost.PluginHost);
+      const pluginInstructions = Option.isSome(pluginHost)
+        ? yield* pluginHost.value.agentInstructions
+        : Option.isSome(pluginAgentInstructions)
+          ? yield* pluginAgentInstructions.value.read
+          : [];
       const resolvedRuntimePolicy = {
         ...resolvedPolicy.success,
-        ...(sharedMemory ? { sharedMemory } : {}),
+        ...(pluginInstructions.length > 0 ? { pluginInstructions } : {}),
       };
       if (!(yield* isCurrentAttemptInStatus("starting"))) return;
       const existingSessionProjection = projection.providerSessions.find(

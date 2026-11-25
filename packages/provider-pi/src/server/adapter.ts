@@ -1,4 +1,3 @@
-import { buildSharedMemoryInstructions } from "@t3tools/provider-core/server/runtimeInstructions";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as NodeUtil from "node:util";
 import { AgentScope } from "@t3tools/shared/AgentScope";
@@ -498,7 +497,7 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
     ) {
       const scope = yield* Effect.scope;
       const cwd = input.runtimePolicy.cwd ?? host.paths.cwd;
-      const memoryInstructionPath = `${host.paths.providerStatusCacheDir}/shared-memory-${input.providerSessionId}.txt`;
+      const pluginInstructionsPath = `${host.paths.providerStatusCacheDir}/plugin-instructions-${input.providerSessionId}.txt`;
       const mcpSession = yield* mcpSessions.read(input.threadId);
       const provideCacheFs = <A, E>(effect: Effect.Effect<A, E, FileSystem.FileSystem>) =>
         effect.pipe(
@@ -550,7 +549,7 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
             environment: {
               ...options.environment,
               T3CODE_THREAD_ID: input.threadId,
-              T3_SHARED_MEMORY_INSTRUCTIONS_FILE: memoryInstructionPath,
+              T3_PLUGIN_INSTRUCTIONS_FILE: pluginInstructionsPath,
             },
             mcpSession,
             extensionPath,
@@ -3543,10 +3542,10 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
             }
             yield* fileSystem
               .writeFileString(
-                memoryInstructionPath,
-                turnInput.runtimePolicy.sharedMemory
-                  ? buildSharedMemoryInstructions(turnInput.runtimePolicy.sharedMemory)
-                  : "",
+                pluginInstructionsPath,
+                (turnInput.runtimePolicy.pluginInstructions ?? [])
+                  .filter((block) => block.trim().length > 0)
+                  .join("\n\n"),
               )
               .pipe(Effect.orDie);
             // Resolve attachments before turn installation so failures cannot strand activeTurn.

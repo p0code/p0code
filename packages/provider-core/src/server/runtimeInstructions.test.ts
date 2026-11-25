@@ -139,17 +139,21 @@ describe("buildRuntimeInstructions", () => {
   });
 });
 
-it("includes shared memory only when the runtime policy enables it", () => {
-  assert.notInclude(buildRuntimeInstructions({ harness: "Codex" }), "<shared_memory>");
+it("appends non-empty plugin instructions only when provided by the runtime policy", () => {
+  const base = buildRuntimeInstructions({ harness: "Codex" });
+  assert.equal(
+    buildRuntimeInstructions({
+      harness: "Codex",
+      runtimePolicy: { cwd: "/repo", pluginInstructions: ["", "   "] },
+    }),
+    base,
+  );
   const text = buildRuntimeInstructions({
     harness: "Codex",
     runtimePolicy: {
       cwd: "/repo",
-      sharedMemory: { folder: "/shared/memory", agentId: "shared-agent" },
+      pluginInstructions: ["<plugin_a>first</plugin_a>", "<plugin_b>second</plugin_b>"],
     },
   });
-  assert.include(text, "/shared/memory");
-  assert.include(text, "shared-agent");
-  assert.include(text, "MEMORY.md");
-  assert.include(text, "root cause");
+  assert.equal(text, `${base}\n\n<plugin_a>first</plugin_a>\n\n<plugin_b>second</plugin_b>`);
 });

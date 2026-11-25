@@ -17,9 +17,9 @@ export function buildRuntimeInstructions(runtime: {
   readonly reasoningEffort?: string | undefined;
   /** False when the session's system prompt already carries the linking instructions. */
   readonly pullRequestLinking?: boolean;
-  /** Adds the folder list of a multi-folder thread. */
+  /** Adds the folder list of a multi-folder thread and any active plugin instructions. */
   readonly runtimePolicy?:
-    | Pick<ProviderAdapterV2RuntimePolicy, "cwd" | "workspace" | "sharedMemory">
+    | Pick<ProviderAdapterV2RuntimePolicy, "cwd" | "workspace" | "pluginInstructions">
     | undefined;
 }): string {
   const harness = toSingleLine(runtime.harness);
@@ -37,13 +37,9 @@ export function buildRuntimeInstructions(runtime: {
     runtime.pullRequestLinking === false
       ? runtimeInfo
       : `${runtimeInfo}\n\n${PULL_REQUEST_LINKING_INSTRUCTIONS}`;
-  return [
-    linked,
-    ...(workspace === "" ? [] : [workspace]),
-    ...(runtime.runtimePolicy?.sharedMemory
-      ? [buildSharedMemoryInstructions(runtime.runtimePolicy.sharedMemory)]
-      : []),
-  ].join("\n\n");
+  const pluginInstructions =
+    runtime.runtimePolicy?.pluginInstructions?.filter((block) => block.trim().length > 0) ?? [];
+  return [linked, ...(workspace === "" ? [] : [workspace]), ...pluginInstructions].join("\n\n");
 }
 
 function toSingleLine(value: string): string {
@@ -103,11 +99,4 @@ export function buildWorkspaceInstructions(
   return [...head, ...shown, ...(hidden > 0 ? [`- Not listed: ${hidden} more`] : []), ...tail].join(
     "\n",
   );
-}
-
-export function buildSharedMemoryInstructions(memory: {
-  readonly folder: string;
-  readonly agentId: string;
-}): string {
-  return `<shared_memory>Shared agent identity: ${folderPath(memory.agentId)}. Shared memory folder: ${folderPath(memory.folder)}. Read MEMORY.md before starting. Save durable learnings as one-fact Markdown notes in notes/ linked from MEMORY.md. After fixing a notable issue, write issues/YYYY-MM-DD-<slug>.md with problem, root cause, fix, repo, and machine. Preserve other agents' notes; never store secrets.</shared_memory>`;
 }

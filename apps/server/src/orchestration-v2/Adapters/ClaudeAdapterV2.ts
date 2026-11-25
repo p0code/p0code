@@ -2529,7 +2529,7 @@ export function makeClaudeQueryOptions(input: {
   readonly cwd: string | null;
   /** The thread's other folders: listed in the system prompt and granted as directories. */
   readonly workspace?: ProviderAdapter.ProviderAdapterV2RuntimePolicy["workspace"];
-  readonly sharedMemory?: ProviderAdapter.ProviderAdapterV2RuntimePolicy["sharedMemory"];
+  readonly pluginInstructions?: ProviderAdapter.ProviderAdapterV2RuntimePolicy["pluginInstructions"];
   readonly attachmentsDir?: string;
   readonly settings?: ClaudeSettings;
   readonly promptSuggestions?: boolean;
@@ -2702,7 +2702,7 @@ export function makeClaudeQueryOptions(input: {
           runtimePolicy: {
             cwd: input.cwd,
             workspace: input.workspace,
-            sharedMemory: input.sharedMemory,
+            pluginInstructions: input.pluginInstructions,
           },
         }) +
           (input.mcpServers === undefined
@@ -13711,7 +13711,9 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             resume: shouldResume,
             ...(resumeSessionAt === undefined ? {} : { resumeSessionAt }),
             cwd: turnInput.runtimePolicy.cwd,
-            sharedMemory: turnInput.runtimePolicy.sharedMemory,
+            ...(turnInput.runtimePolicy.pluginInstructions === undefined
+              ? {}
+              : { pluginInstructions: turnInput.runtimePolicy.pluginInstructions }),
             ...(turnInput.runtimePolicy.workspace === undefined
               ? {}
               : { workspace: turnInput.runtimePolicy.workspace }),

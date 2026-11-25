@@ -73,7 +73,7 @@ export const ProviderAdapterV2RuntimePolicy = Schema.Struct({
    */
   maxRuntimeMode: Schema.optional(RuntimeMode),
   workspace: Schema.optional(ProviderAdapterV2RuntimeWorkspace),
-  sharedMemory: Schema.optional(Schema.Struct({ folder: Schema.String, agentId: Schema.String })),
+  pluginInstructions: Schema.optional(Schema.Array(Schema.String)),
 });
 export type ProviderAdapterV2RuntimePolicy = typeof ProviderAdapterV2RuntimePolicy.Type;
 

@@ -166,10 +166,7 @@ import {
 } from "@t3tools/provider-core/server/subagentProjection";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
-import {
-  buildSharedMemoryInstructions,
-  buildWorkspaceInstructions,
-} from "@t3tools/provider-core/server/runtimeInstructions";
+import { buildWorkspaceInstructions } from "@t3tools/provider-core/server/runtimeInstructions";
 
 const CODEX_PROVIDER = ProviderDriverKind.make("codex");
 const CODEX_CAPACITY_MAX_RETRIES = 5;
@@ -989,11 +986,9 @@ export const buildCodexTurnStartParams = Effect.fn("CodexAdapterV2.buildCodexTur
     // Its own entry, so the folder list reaches the model without T3 Code's MCP tools too.
     const workspaceInstructions = [
       buildWorkspaceInstructions(input.runtimePolicy),
-      input.runtimePolicy.sharedMemory
-        ? buildSharedMemoryInstructions(input.runtimePolicy.sharedMemory)
-        : "",
+      ...(input.runtimePolicy.pluginInstructions ?? []),
     ]
-      .filter(Boolean)
+      .filter((block) => block.trim().length > 0)
       .join("\n\n");
     const workspaceContext =
       workspaceInstructions === ""
