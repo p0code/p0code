@@ -31,6 +31,7 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { rpcInitialItems } from "./rpcInitialItems.ts";
+import packageJson from "../package.json" with { type: "json" };
 import { subscribeChatGptHandoff } from "./provider/CodexChatGptHandoff.ts";
 import {
   AcpRegistryOperationError,
@@ -103,6 +104,7 @@ import {
   PersistChatAttachmentsError,
   RpcClientId,
   EnvironmentAuthorizationError,
+  T3ImportError,
   ThreadId,
   type TerminalMetadataStreamEvent,
   type PullRequestRef,
@@ -120,6 +122,7 @@ import { RpcGroup, RpcSerialization, RpcServer } from "effect/rpc";
 import * as CheckpointDiffQuery from "./checkpointing/CheckpointDiffQuery.ts";
 import * as NativeChildWorkQuery from "./orchestration-v2/NativeChildWorkQuery.ts";
 import * as ServerConfig from "./config.ts";
+import * as T3Import from "./t3Import.ts";
 import * as EnvironmentTheme from "./environmentTheme.ts";
 import * as Keybindings from "./keybindings.ts";
 import * as ExternalLauncher from "./process/externalLauncher.ts";
@@ -1492,6 +1495,7 @@ export const layerWsRpc = (
       const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
       const npmRelease = yield* NpmRelease.NpmRelease;
       const config = yield* ServerConfig.ServerConfig;
+      const homeDirectory = yield* HostProcess.HomeDirectory;
       const lifecycleEvents = yield* ServerLifecycleEvents.ServerLifecycleEvents;
       const storageCleanup = yield* StorageCleanup.StorageCleanup;
       const databaseStorage = yield* DatabaseStorage.DatabaseStorage;
@@ -2759,6 +2763,33 @@ export const layerWsRpc = (
               ? serverSettings.updateSettings(nextPatch)
               : serverSettings.updateProviderInstance(providerInstanceMutation, nextPatch);
             return ServerSettings.redactServerSettingsForClient(settings, settingsClient);
+          }),
+        [WS_METHODS.t3ImportStatus]: (_input) =>
+          Effect.promise(() =>
+            T3Import.readT3ImportStatus({
+              appHome: config.baseDir,
+              stockHome: T3Import.t3ImportStockHome(homeDirectory),
+            }),
+          ),
+        [WS_METHODS.t3ImportAccept]: (_input) =>
+          Effect.tryPromise({
+            try: () =>
+              T3Import.acceptT3Import({
+                appHome: config.baseDir,
+                stockHome: T3Import.t3ImportStockHome(homeDirectory),
+                appVersion: packageJson.version,
+              }),
+            catch: (cause) =>
+              cause instanceof T3Import.T3ImportUnavailableError
+                ? new T3ImportError({
+                    code: "not-available",
+                    reason: cause.reason,
+                    detail: cause.message,
+                  })
+                : new T3ImportError({
+                    code: "write-failed",
+                    detail: cause instanceof Error ? cause.message : String(cause),
+                  }),
           }),
         [WS_METHODS.serverDeleteEnvironmentTheme]: ({ themeId }) =>
           environmentTheme.remove(themeId).pipe(

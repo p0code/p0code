@@ -107,6 +107,9 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.peerLinksThreadItem]: AuthOrchestrationReadScope,
   [WS_METHODS.serverUpdateSettings]: AuthSettingsWriteScope,
   [WS_METHODS.serverDeleteEnvironmentTheme]: AuthSettingsWriteScope,
+  [WS_METHODS.t3ImportStatus]: AuthOrchestrationReadScope,
+  // Consent changes which home the next start uses, as saving settings does.
+  [WS_METHODS.t3ImportAccept]: AuthSettingsWriteScope,
   [WS_METHODS.serverSearchAcpRegistry]: AuthOrchestrationReadScope,
   [WS_METHODS.serverPrepareAcpRegistryAgent]: AuthProvidersManageScope,
   [WS_METHODS.serverUninstallAcpRegistryManagedBinary]: AuthProvidersManageScope,

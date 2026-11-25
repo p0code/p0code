@@ -12,6 +12,7 @@ import {
   MIGRATION_MARKER_FILE,
   MigrateFromT3Error,
   migrateFromT3,
+  PENDING_T3_IMPORT_FILE,
   shouldOfferT3Import,
 } from "@t3tools/shared/migrateFromT3";
 import type { DesktopT3ImportRunResult, DesktopT3ImportState } from "@t3tools/contracts";
@@ -81,8 +82,14 @@ const formatImportFailure = (
 export const offerT3Import = Effect.fn("desktop.offerT3Import")(function* () {
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
   const path = yield* Path.Path;
+  const fs = yield* FileSystem.FileSystem;
   const defaultHome = path.join(environment.homeDirectory, APP_HOME_DIRECTORY_NAME);
   if (environment.isDevelopment || environment.baseDir !== defaultHome) return false;
+  // The web welcome screen already staged consent; the server applies it on the next start.
+  const pending = yield* fs
+    .exists(path.join(environment.baseDir, "userdata", PENDING_T3_IMPORT_FILE))
+    .pipe(Effect.orElseSucceed(() => false));
+  if (pending) return false;
   const stockHome = path.join(environment.homeDirectory, STOCK_T3_HOME_DIRECTORY_NAME);
   const offer = yield* Effect.promise(() =>
     shouldOfferT3Import({ appHome: environment.baseDir, stockHome }),
