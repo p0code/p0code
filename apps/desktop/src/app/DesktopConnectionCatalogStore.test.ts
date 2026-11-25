@@ -106,7 +106,8 @@ describe("DesktopConnectionCatalogStore", () => {
     withStore(
       Effect.gen(function* () {
         const store = yield* DesktopConnectionCatalogStore.DesktopConnectionCatalogStore;
-        const catalog = '{"schemaVersion":1,"targets":[]}';
+        const catalog =
+          '{"schemaVersion":1,"targets":[],"profiles":[],"credentials":[],"remoteDpopTokens":[],"disabledEnvironmentIds":[]}';
 
         assert.isTrue(yield* store.set(catalog));
         assert.deepStrictEqual(yield* store.get, Option.some(catalog));
@@ -289,7 +290,11 @@ describe("DesktopConnectionCatalogStore", () => {
       );
       const catalogPath = path.join(baseDir, "userdata", "connection-catalog.json");
 
-      assert.isTrue(yield* store.set('{"schemaVersion":1,"targets":[]}'));
+      assert.isTrue(
+        yield* store.set(
+          '{"schemaVersion":1,"targets":[],"profiles":[],"credentials":[],"remoteDpopTokens":[],"disabledEnvironmentIds":[]}',
+        ),
+      );
       const original = yield* fileSystem.readFileString(catalogPath);
       yield* Ref.set(failDecrypt, true);
 
@@ -306,6 +311,10 @@ describe("DesktopConnectionCatalogStore", () => {
 
       const recovery = yield* store.recovery;
       assert.isTrue(Option.isSome(recovery));
+      assert.deepInclude((yield* store.read).catalogError, {
+        reason: "unreadable",
+        keptPath: Option.getOrThrow(recovery).keptPath,
+      });
       assert.equal(Option.getOrThrow(recovery).reason, "decrypt-catalog");
       assert.equal(Option.getOrThrow(recovery).catalogPath, catalogPath);
       assert.match(Option.getOrThrow(recovery).keptPath, /\.unreadable-\d+$/);
@@ -313,7 +322,7 @@ describe("DesktopConnectionCatalogStore", () => {
         yield* fileSystem.readFileString(Option.getOrThrow(recovery).keptPath),
         original,
       );
-      assert.notEqual(yield* fileSystem.readFileString(catalogPath), original);
+      assert.isTrue(yield* fileSystem.exists(catalogPath));
 
       // The fresh catalog decrypts once this build can use the key again.
       yield* Ref.set(failDecrypt, false);
@@ -368,7 +377,8 @@ describe("DesktopConnectionCatalogStore", () => {
     withStore(
       Effect.gen(function* () {
         const store = yield* DesktopConnectionCatalogStore.DesktopConnectionCatalogStore;
-        const catalog = '{"schemaVersion":1,"targets":[]}';
+        const catalog =
+          '{"schemaVersion":1,"targets":[],"profiles":[],"credentials":[],"remoteDpopTokens":[],"disabledEnvironmentIds":[]}';
         assert.isTrue(yield* store.set(catalog));
         assert.deepStrictEqual(yield* store.get, Option.some(catalog));
         assert.deepStrictEqual(yield* store.recovery, Option.none());
@@ -425,7 +435,11 @@ describe("DesktopConnectionCatalogStore", () => {
         Effect.provide(layerFor(baseDir, true, failDecrypt)),
       );
       const stateDir = path.join(baseDir, "userdata");
-      assert.isTrue(yield* store.set('{"schemaVersion":1,"targets":[]}'));
+      assert.isTrue(
+        yield* store.set(
+          '{"schemaVersion":1,"targets":[],"profiles":[],"credentials":[],"remoteDpopTokens":[],"disabledEnvironmentIds":[]}',
+        ),
+      );
       const original = yield* fileSystem.readFileString(
         path.join(stateDir, "connection-catalog.json"),
       );

@@ -1,3 +1,4 @@
+import type { ConnectionCatalogError } from "@t3tools/contracts";
 import { msg } from "gt-i18n";
 import { translatableDetail } from "../errors/translatable.ts";
 import { EnvironmentId } from "@t3tools/contracts";
@@ -96,6 +97,7 @@ export class PlatformEnvironmentRemovalError extends Schema.TaggedError<Platform
 export class EnvironmentRegistry extends Context.Service<
   EnvironmentRegistry,
   {
+    readonly catalogError?: ConnectionCatalogError | null;
     readonly entries: SubscriptionRef.SubscriptionRef<
       ReadonlyMap<EnvironmentId, ConnectionCatalogEntry>
     >;
@@ -1195,6 +1197,7 @@ export const make = Effect.gen(function* () {
   });
 
   return EnvironmentRegistry.of({
+    catalogError: storage.catalogError === undefined ? null : yield* storage.catalogError,
     entries,
     networkStatus,
     start,

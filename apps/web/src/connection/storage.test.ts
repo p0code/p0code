@@ -31,6 +31,21 @@ afterEach(() => {
 });
 
 describe("ConnectionStorage.makeCatalogStore", () => {
+  it.effect("propagates desktop recovery with the preserved copy path", () =>
+    Effect.gen(function* () {
+      const error = {
+        reason: "unreadable",
+        message: "Cannot decrypt",
+        keptPath: "/home/catalog.unreadable-1",
+      } as const;
+      const store = yield* ConnectionStorage.makeCatalogStore({
+        read: Effect.succeed({ catalog: encodeCatalog(emptyCatalog), catalogError: error }),
+        write: () => Effect.void,
+      });
+      expect(yield* store.read).toEqual(emptyCatalog);
+      expect(yield* store.catalogError).toEqual(error);
+    }),
+  );
   it.effect("quarantines malformed catalogs and starts from an empty document", () =>
     Effect.gen(function* () {
       const writes: string[] = [];
@@ -48,7 +63,7 @@ describe("ConnectionStorage.makeCatalogStore", () => {
     }),
   );
 
-  it.effect("does not hide catalog read failures", () =>
+  it.effect("starts the runtime with a visible error when the catalog read fails", () =>
     Effect.gen(function* () {
       const failure = new ConnectionTransientError({
         reason: "remote-unavailable",
@@ -59,7 +74,11 @@ describe("ConnectionStorage.makeCatalogStore", () => {
         write: () => Effect.void,
       });
 
-      expect(yield* Effect.flip(store.read)).toBe(failure);
+      expect(yield* store.read).toEqual(emptyCatalog);
+      expect(yield* store.catalogError).toEqual({
+        reason: "read-failed",
+        message: failure.message,
+      });
     }),
   );
 });

@@ -1167,6 +1167,19 @@ export type DesktopBackendConfigUpdate = typeof DesktopBackendConfigUpdateSchema
 export const DesktopBackendActionSchema = Schema.Literals(["start", "stop", "restart"]);
 export type DesktopBackendAction = typeof DesktopBackendActionSchema.Type;
 
+export const ConnectionCatalogError = Schema.Struct({
+  reason: Schema.Literals(["unreadable", "encryption-unavailable", "read-failed"]),
+  message: Schema.String,
+  keptPath: Schema.optionalKey(Schema.String),
+});
+export type ConnectionCatalogError = typeof ConnectionCatalogError.Type;
+
+export const DesktopConnectionCatalogReadResult = Schema.Struct({
+  catalog: Schema.NullOr(Schema.String),
+  catalogError: Schema.NullOr(ConnectionCatalogError),
+});
+export type DesktopConnectionCatalogReadResult = typeof DesktopConnectionCatalogReadResult.Type;
+
 export interface DesktopBridge {
   getAppBranding: () => DesktopAppBranding | null;
   getDatabaseMigrationProgress?: () => Promise<DatabaseMigrationProgress | null>;
@@ -1203,7 +1216,7 @@ export interface DesktopBridge {
   getLocalEnvironmentBearerToken: () => Promise<string>;
   getClientSettings: () => Promise<ClientSettings | null>;
   setClientSettings: (settings: ClientSettings) => Promise<void>;
-  getConnectionCatalog: () => Promise<string | null>;
+  getConnectionCatalog: () => Promise<DesktopConnectionCatalogReadResult>;
   setConnectionCatalog: (catalog: string) => Promise<boolean>;
   discoverSshHosts: () => Promise<readonly DesktopDiscoveredSshHost[]>;
   resolveSshHost: (alias: string) => Promise<DesktopSshEnvironmentTarget>;

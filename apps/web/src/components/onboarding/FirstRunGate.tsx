@@ -1,3 +1,4 @@
+import { CatalogRecovery } from "./CatalogRecovery";
 import { RefreshIcon } from "~/components/ui/refresh-icon";
 import {
   AVAILABLE_CONNECTION_STATE,
@@ -156,6 +157,8 @@ export function FirstRunGate({
   const onboardingCompletedAt = useClientSettings((settings) => settings.onboardingCompletedAt);
   const bootstrapped = useAllEnvironmentShellsBootstrapped();
   const { isReady: environmentCatalogReady } = useEnvironments();
+  const catalogError = useAtomValue(environmentCatalog.catalogValueAtom).catalogError;
+  const [catalogRecoveryDismissed, setCatalogRecoveryDismissed] = useState(false);
   const projects = useProjects();
   const threadCount = useAtomValue(threadCountAtom);
   const soleThread = useAtomValue(soleThreadAtom);
@@ -287,6 +290,11 @@ export function FirstRunGate({
     }
   }, [decision, navigate, wizardOwnsRoute]);
 
+  if (catalogError && !catalogRecoveryDismissed) {
+    return (
+      <CatalogRecovery error={catalogError} onContinue={() => setCatalogRecoveryDismissed(true)} />
+    );
+  }
   if (settingsReadFailed) {
     return <FirstRunRecovery reason="settings" retrying={hydrationStatus === "retrying"} />;
   }
