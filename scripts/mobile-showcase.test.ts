@@ -11,7 +11,8 @@ import {
   readPngMetadata,
   validateStoreAsset,
 } from "./mobile-showcase.ts";
-import { resolveMobileAppIdentifiers } from "../apps/mobile/app.config.ts";
+import { resolveMobileAppIdentifiers } from "./lib/mobile-app-identifiers.ts";
+import { loadRepoEnv } from "./lib/public-config.ts";
 
 function rgbaPng(width: number, height: number): Buffer {
   const png = new PNG({ width, height });
@@ -95,6 +96,9 @@ it("encodes Android pairing URLs without shell-sensitive JSON quotes", () => {
 });
 
 it("drives the production app resolved from the Expo config", () => {
-  assert.strictEqual(ANDROID_PACKAGE, resolveMobileAppIdentifiers("production").androidPackage);
+  assert.strictEqual(
+    ANDROID_PACKAGE,
+    resolveMobileAppIdentifiers("production", loadRepoEnv()).androidPackage,
+  );
   assert.notStrictEqual(ANDROID_PACKAGE, "com.t3tools.t3code");
 });

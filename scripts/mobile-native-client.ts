@@ -3,7 +3,8 @@ import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { isCommandAvailable, resolveSpawnCommand } from "@t3tools/shared/shell";
-import { resolveMobileAppIdentifiers } from "../apps/mobile/app.config.ts";
+import { resolveMobileAppIdentifiers } from "./lib/mobile-app-identifiers.ts";
+import { loadRepoEnv } from "./lib/public-config.ts";
 import * as Clock from "effect/Clock";
 import * as Console from "effect/Console";
 import * as Context from "effect/Context";
@@ -137,7 +138,7 @@ export const hashBundle = Effect.fn("hashBundle")(function* (root: string) {
 type FileSystemError = import("effect/PlatformError").PlatformError;
 
 // The development variant's IDs come from the Expo config, so installs find the fork's client.
-const developmentAppIdentifiers = resolveMobileAppIdentifiers("development");
+const developmentAppIdentifiers = resolveMobileAppIdentifiers("development", loadRepoEnv());
 
 /** The development client's app ID on this platform, matching `apps/mobile/app.config.ts`. */
 export const nativeClientBundleId = (platform: NativePlatform): string =>

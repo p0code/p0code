@@ -30,7 +30,8 @@ import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 import { RpcClient, RpcSerialization } from "effect/rpc";
 import { Socket } from "effect/socket";
 
-import { resolveMobileAppIdentifiers } from "../app.config.ts";
+import { resolveMobileAppIdentifiers } from "../../../scripts/lib/mobile-app-identifiers.ts";
+import { loadRepoEnv } from "../../../scripts/lib/public-config.ts";
 
 const RenderReport = Schema.Struct({
   commits: Schema.Number,
@@ -63,7 +64,10 @@ const STREAM_PROMPT =
   "Think it through step by step, then write a 3000-word essay on the history of typesetting in plain paragraphs with a few headings. Do not use any tools.";
 
 // The dev client this measures; the Personal Team override flows through the Expo config.
-const DEFAULT_APP_ID = resolveMobileAppIdentifiers("development").iosBundleIdentifier;
+const DEFAULT_APP_ID = resolveMobileAppIdentifiers(
+  "development",
+  loadRepoEnv(),
+).iosBundleIdentifier;
 
 interface Options {
   readonly server: string;

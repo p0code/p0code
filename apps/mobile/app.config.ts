@@ -1,14 +1,14 @@
 import type { ExpoConfig } from "expo/config";
 
 import { BRAND_ASSET_PATHS } from "../../scripts/lib/brand-assets.ts";
+import {
+  MOBILE_APP_IDENTIFIERS,
+  type MobileAppVariant,
+  resolveMobileAppIdentifiers,
+} from "../../scripts/lib/mobile-app-identifiers.ts";
 import { loadRepoEnv } from "../../scripts/lib/public-config.ts";
 
-export type AppVariant = "development" | "preview" | "production";
-
-export interface MobileAppIdentifiers {
-  readonly iosBundleIdentifier: string;
-  readonly androidPackage: string;
-}
+type AppVariant = MobileAppVariant;
 
 const repoEnv = loadRepoEnv();
 Object.assign(process.env, repoEnv);
@@ -166,22 +166,19 @@ const VARIANT_CONFIG = {
   development: {
     appName: "p0code Dev",
     scheme: "t3code-dev",
-    iosBundleIdentifier: "com.p0code.p0code.dev",
-    androidPackage: "com.p0code.p0code.dev",
+    ...MOBILE_APP_IDENTIFIERS.development,
     assets: DEVELOPMENT_ASSETS,
   },
   preview: {
     appName: "p0code Preview",
     scheme: "t3code-preview",
-    iosBundleIdentifier: "com.p0code.p0code.preview",
-    androidPackage: "com.p0code.p0code.preview",
+    ...MOBILE_APP_IDENTIFIERS.preview,
     assets: PREVIEW_ASSETS,
   },
   production: {
     appName: "p0code",
     scheme: "t3code",
-    iosBundleIdentifier: "com.p0code.p0code",
-    androidPackage: "com.p0code.p0code",
+    ...MOBILE_APP_IDENTIFIERS.production,
     assets: RELEASE_ASSETS,
   },
 } as const;
@@ -199,24 +196,9 @@ function resolveAppVariant(value: string | undefined): AppVariant {
   }
 }
 
-/**
- * The identifiers a variant's native project installs under, as Expo resolves them here. Scripts
- * (native client installs, showcase captures, render metrics) read this instead of hardcoding IDs.
- * The Personal Team override applies only to the variant this checkout is configured to build.
- */
-export function resolveMobileAppIdentifiers(variant: AppVariant): MobileAppIdentifiers {
-  const selected = VARIANT_CONFIG[variant];
-  return {
-    iosBundleIdentifier:
-      isIosPersonalTeamBuild && variant === APP_VARIANT
-        ? personalTeamBundleIdentifier!
-        : selected.iosBundleIdentifier,
-    androidPackage: selected.androidPackage,
-  };
-}
-
 const variant = VARIANT_CONFIG[APP_VARIANT];
-const appIdentifiers = resolveMobileAppIdentifiers(APP_VARIANT);
+// Host scripts resolve through the same helper, so an install finds the app this config builds.
+const appIdentifiers = resolveMobileAppIdentifiers(APP_VARIANT, repoEnv);
 const iosBundleIdentifier = appIdentifiers.iosBundleIdentifier;
 
 const dmSansFonts = {

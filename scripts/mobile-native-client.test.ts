@@ -13,7 +13,8 @@ import {
   prebuildAndroid,
   remoteBuildState,
 } from "./mobile-native-client.ts";
-import { resolveMobileAppIdentifiers } from "../apps/mobile/app.config.ts";
+import { resolveMobileAppIdentifiers } from "./lib/mobile-app-identifiers.ts";
+import { loadRepoEnv } from "./lib/public-config.ts";
 
 const caches = [".gradle/history", "app/.cxx/object"];
 
@@ -155,7 +156,7 @@ it("finds a Blacksmith build by its run title and reads its state", () => {
 });
 
 it("targets the fork's development client resolved from the Expo config", () => {
-  const identifiers = resolveMobileAppIdentifiers("development");
+  const identifiers = resolveMobileAppIdentifiers("development", loadRepoEnv());
   assert.strictEqual(nativeClientBundleId("ios"), identifiers.iosBundleIdentifier);
   assert.strictEqual(nativeClientBundleId("android"), identifiers.androidPackage);
   assert.notStrictEqual(nativeClientBundleId("android"), "com.t3tools.t3code.dev");
