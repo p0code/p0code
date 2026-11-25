@@ -479,6 +479,10 @@
       "types": "./src/hostClassification.ts",
       "import": "./src/hostClassification.ts"
     },
+    "./appRepository": {
+      "types": "./src/appRepository.ts",
+      "import": "./src/appRepository.ts"
+    },
     "./cliRelease": {
       "types": "./src/cliRelease.ts",
       "import": "./src/cliRelease.ts"

@@ -16,9 +16,14 @@
 $ErrorActionPreference = "Stop"
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-$repo = "pingdotgg/t3code"
+$repo = "jsserve-org/hhhcode"
 $baseUrl = if ($env:T3CODE_RELEASE_BASE_URL) { $env:T3CODE_RELEASE_BASE_URL.TrimEnd("/") } else { "https://github.com/$repo/releases/download" }
-$t3Home = if ($env:P0CODE_HOME) { $env:P0CODE_HOME } elseif ($env:T3CODE_HOME) { $env:T3CODE_HOME } else { Join-Path $HOME ".p0code" }
+# Carry a home from before the rename to p0code over, as the app does on launch.
+$previousHome = Join-Path $HOME ".hhh"
+if (-not ($env:P0CODE_HOME -or $env:HHHCODE_HOME -or $env:T3CODE_HOME) -and -not (Test-Path (Join-Path $HOME ".p0code")) -and (Test-Path $previousHome)) {
+  try { Move-Item $previousHome (Join-Path $HOME ".p0code") } catch {}
+}
+$t3Home = if ($env:P0CODE_HOME) { $env:P0CODE_HOME } elseif ($env:HHHCODE_HOME) { $env:HHHCODE_HOME } elseif ($env:T3CODE_HOME) { $env:T3CODE_HOME } else { Join-Path $HOME ".p0code" }
 $binDir = if ($env:T3CODE_INSTALL_BIN_DIR) { $env:T3CODE_INSTALL_BIN_DIR } else { Join-Path $HOME ".local\bin" }
 # Absolute, so PATH never gets a folder that changes with the working directory.
 $binDir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($binDir)

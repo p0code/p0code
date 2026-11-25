@@ -43,7 +43,7 @@ It works with Claude Code, Codex, Cursor, OpenCode, Grok Build, Antigravity, Kir
 | Windows        | `winget install T3Tools.T3Code` or `scoop install extras/t3code`     |
 | Arch Linux     | `yay -S t3code-bin`                                                  |
 | Nix            | `nix profile add github:NixOS/nixpkgs/nixos-unstable#t3code`         |
-| Debian, Ubuntu | `.deb` from [Releases](https://github.com/pingdotgg/t3code/releases) |
+| Debian, Ubuntu | `.deb` from [Releases](https://github.com/jsserve-org/hhhcode/releases) |
 
 ### Command line
 
@@ -93,7 +93,7 @@ We wanted something performant, remote-ready, and truly open. If we ever go the 
 We have limited review capacity. Small, focused fixes are the most likely to be merged. Features need an approved discussion first.
 
 - Read [CONTRIBUTING.md](./CONTRIBUTING.md) before you report a bug or open a pull request.
-- Put feature requests in [Ideas](https://github.com/pingdotgg/t3code/discussions/categories/ideas).
+- Put feature requests in [Ideas](https://github.com/jsserve-org/hhhcode/discussions/categories/ideas).
 - Build from source with the [development runbook](./docs/operations/00_development.md#first-checkout). The [architecture overview](./docs/internals/01_architecture.md) explains how it works.
 - Get help in [Discord](https://discord.gg/jn4EGJjrvv).
 
