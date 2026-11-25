@@ -15,7 +15,7 @@ import { RelayTunnelClient } from "@t3tools/relay-tunnel/client";
 import { HttpChallengeStore } from "@t3tools/relay-tunnel/certificates";
 import { testCertificate } from "../../../packages/relay-tunnel/src/testing/certificate.ts";
 import { RelayState } from "./state.ts";
-import { RelayServer } from "./server.ts";
+import { RelayServer, sourceKey } from "./server.ts";
 
 const lookup: NodeNet.LookupFunction = (_hostname, options, callback) => {
   if (options.all) callback(null, [{ address: "127.0.0.1", family: 4 }]);
@@ -266,6 +266,15 @@ it("persists one-time hashed tokens and transactional slug reservations across a
     }
     other.revoke("abcdef");
     expect(state.get("abcdef")).toBeUndefined();
+    // Blocking is a public-name takedown only; a bare slug or port label would take down the
+    // environment's own host without revoking it.
+    expect(() => state.block("abcdef")).toThrow("public tunnel names");
+    expect(() => state.block("3000-abcdef")).toThrow("public tunnel names");
+    expect(() => state.unblock("abcdef")).toThrow("public tunnel names");
+    expect(state.block("docs-abcdef")).toBe(true);
+    expect(state.block("docs-abcdef")).toBe(false);
+    expect(state.blockedLabels()).toEqual(["docs-abcdef"]);
+    expect(state.unblock("docs-abcdef")).toBe(true);
   } finally {
     other.close();
     state.close();
@@ -319,6 +328,44 @@ it("rate limits enrollment and tunnel attempts by source IP", async () => {
   } finally {
     ws?.terminate();
     await relay.close();
+    state.close();
+    await NodeFSP.rm(directory, { recursive: true, force: true });
+  }
+});
+
+it("keys visitor buckets by IPv6 /64 and evicts the oldest bucket instead of refusing new visitors", async () => {
+  const directory = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "hhh-relay-buckets-"));
+  const state = new RelayState(NodePath.join(directory, "state.sqlite"));
+  const relay = new RelayServer({
+    relayHost: "relay.test",
+    state,
+    // Two open connections per /64, so rotating the address inside one /64 is refused.
+    visitorLimits: { concurrent: 2 },
+    getSecureContext: async () => {
+      throw new Error("unused");
+    },
+  });
+  const fake = (remoteAddress: string): NodeNet.Socket =>
+    ({ remoteAddress, once: () => undefined }) as unknown as NodeNet.Socket;
+  const address = (index: number): string =>
+    `2001:${(index >>> 16).toString(16)}:${(index & 0xffff).toString(16)}:1::1`;
+  try {
+    expect(sourceKey("2001:db8:1:2::1")).toBe(sourceKey("2001:db8:1:2:ffff:9:9:9"));
+    expect(sourceKey("2001:db8:1:3::1")).not.toBe(sourceKey("2001:db8:1:2::1"));
+    expect(sourceKey("::ffff:127.0.0.1")).toBe("127.0.0.1");
+    expect(sourceKey(undefined)).toBe("unknown");
+    // Rotating source addresses inside one /64 shares the concurrent cap.
+    expect(relay["admitVisitor"](fake("2001:db8:1:2::1"))).toBe(true);
+    expect(relay["admitVisitor"](fake("2001:db8:1:2::2"))).toBe(true);
+    expect(relay["admitVisitor"](fake("2001:db8:1:2::3"))).toBe(false);
+    expect(relay["admitVisitor"](fake("2001:db8:1:3::1"))).toBe(true);
+    // At the bucket cap a first-seen address evicts the oldest bucket instead of being refused.
+    for (let index = 0; index < 10_000; index++)
+      if (!relay["admitVisitor"](fake(address(index)))) throw new Error(`refused ${index}`);
+    expect(relay["visitorBuckets"].size).toBe(10_000);
+    expect(relay["admitVisitor"](fake("2001:feed:1:1::1"))).toBe(true);
+    expect(relay["visitorBuckets"].size).toBe(10_000);
+  } finally {
     state.close();
     await NodeFSP.rm(directory, { recursive: true, force: true });
   }
@@ -451,13 +498,90 @@ it("routes public names under the public domain only, keeps owner headroom, caps
     expect(state.unblock("docs-abcdef")).toBe(true);
     await expect.poll(() => relay["bridged"].size).toBe(0);
 
-    // Headroom: two owner connections plus one visitor fill the visitor share (6 - 3), so the
-    // next visitor is refused while the owner can still connect.
-    sockets.push(await openTls(ports.tlsPort, "abcdef.relay.test"));
-    sockets.push(await openTls(ports.tlsPort, "abcdef.relay.test"));
+    // Headroom: one owner and two visitors fill the visitor share (6 - 3). A main-label flood is
+    // capped at the same headroom, so it cannot fill the mux; the owner connects again as soon as
+    // a stream frees, with the reserved streams still untouched.
+    const owner = await openTls(ports.tlsPort, "abcdef.relay.test");
+    sockets.push(owner);
+    sockets.push(await openTls(ports.tlsPort, "docs-abcdef.usercontent.test"));
     sockets.push(await openTls(ports.tlsPort, "docs-abcdef.usercontent.test"));
     await expect(openTls(ports.tlsPort, "docs-abcdef.usercontent.test")).rejects.toThrow();
+    for (let attempt = 0; attempt < 3; attempt++)
+      await expect(openTls(ports.tlsPort, "abcdef.relay.test")).rejects.toThrow();
+    const mux = relay["tunnels"].get("abcdef")?.mux;
+    expect(mux?.streamCount).toBe(3);
+    expect(owner.destroyed).toBe(false);
+    const freed = sockets.splice(sockets.length - 1, 1)[0]!;
+    freed.destroy();
+    await expect.poll(() => mux?.streamCount).toBe(2);
     sockets.push(await openTls(ports.tlsPort, "abcdef.relay.test"));
+    expect(mux?.streamCount).toBe(3);
+  } finally {
+    for (const socket of sockets) socket.destroy();
+    client?.stop();
+    app.closeAllConnections();
+    app.close();
+    await relay.close();
+    state.close();
+    await NodeFSP.rm(directory, { recursive: true, force: true });
+  }
+});
+
+it("reaps quiet visitor streams at the visitor idle timeout and frees their slots", async () => {
+  const directory = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "hhh-relay-idle-"));
+  const relayCert = testCertificate(directory, "relay.test");
+  const envCert = testCertificate(directory, "*.relay.test", "env");
+  const state = new RelayState(NodePath.join(directory, "state.sqlite"));
+  const relay = new RelayServer({
+    relayHost: "relay.test",
+    state,
+    publicHosts: true,
+    maxStreams: 6,
+    // 6 streams, 3 kept for the owner; at most 2 open connections per visitor IP.
+    visitorLimits: { concurrent: 2 },
+    visitorIdleTimeoutMs: 400,
+    bindHost: "127.0.0.1",
+    tlsPort: 0,
+    httpPort: 0,
+    getSecureContext: async () => NodeTls.createSecureContext(relayCert),
+  });
+  const app = NodeHttp.createServer((_req, res) => res.end("environment"));
+  const sockets: NodeTls.TLSSocket[] = [];
+  let client: RelayTunnelClient | undefined;
+  try {
+    const ports = await relay.start();
+    const keys = generateEnvironmentKeyPair();
+    state.enroll(state.issueToken(), keys.publicKey, "abcdef");
+    client = new RelayTunnelClient({
+      relayUrl: `https://relay.test:${ports.tlsPort}`,
+      slug: "abcdef",
+      privateKey: keys.privateKey,
+      challenges: new HttpChallengeStore(),
+      maxStreams: 6,
+      webSocketOptions: { rejectUnauthorized: false, lookup },
+      allowLabel: (label) => "name" in label && label.name === "docs",
+      getSecureContext: async () => NodeTls.createSecureContext(envCert),
+      onSecureConnection: (socket) => app.emit("connection", socket),
+    });
+    const connected = NodeEvents.EventEmitter.once(client, "connected");
+    client.start();
+    await connected;
+    const quiet = [
+      await openTls(ports.tlsPort, "docs-abcdef.relay.test"),
+      await openTls(ports.tlsPort, "docs-abcdef.relay.test"),
+    ];
+    sockets.push(...quiet);
+    await expect(openTls(ports.tlsPort, "docs-abcdef.relay.test")).rejects.toThrow();
+    const owner = await openTls(ports.tlsPort, "abcdef.relay.test");
+    sockets.push(owner);
+    // A silent drop has no FIN and no frames, so the visitor idle timer is the only reaper.
+    await expect.poll(() => quiet.every((socket) => socket.destroyed)).toBe(true);
+    const mux = relay["tunnels"].get("abcdef")?.mux;
+    await expect.poll(() => mux?.streamCount).toBe(1);
+    expect(owner.destroyed).toBe(false);
+    // The freed visitor slots admit a new visitor while the owner's idle timeout is untouched.
+    sockets.push(await openTls(ports.tlsPort, "docs-abcdef.relay.test"));
+    expect(mux?.streamCount).toBe(2);
   } finally {
     for (const socket of sockets) socket.destroy();
     client?.stop();

@@ -65,10 +65,12 @@ with the environment's own origin. With a public domain, names are routed only u
 
 Hosting public content is an abuse and phishing liability on a shared relay. Visitor connections
 (every label but an environment's own `<slug>`) are capped per source IP (burst 100, 20 new
-connections a second, 64 open) and never take the last 16 streams of a tunnel, which stay free for
-the owner's own clients. `block <label>` refuses one hostname label (for example `docs-abcdef`) and
-cuts its live connections within a second, without revoking the environment; `unblock <label>`
-lifts it and `blocked` lists them.
+connections a second, 64 open; IPv6 clients share a /64) and quiet visitor streams are reaped after
+15s. Every label is refused once a tunnel has `min(16, maxStreams/2)` streams left, which stay free
+for the owner's own clients. `block <name-label>` refuses one public tunnel name (for example
+`docs-abcdef`) and cuts its live connections within a second, without revoking the environment;
+`unblock <name-label>` lifts it and `blocked` lists them. Bare `<slug>` and `<port>-<slug>` labels
+cannot be blocked; use `revoke <slug>` to cut an environment's own host.
 
 ## Environment integration
 

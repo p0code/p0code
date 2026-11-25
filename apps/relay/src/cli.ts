@@ -42,7 +42,7 @@ if (command === "enroll") {
   state.close();
 } else if (command === "block" || command === "unblock") {
   const label = positionals[1];
-  if (!label) throw new Error(`Usage: hhh-relay ${command} <label>`);
+  if (!label) throw new Error(`Usage: hhh-relay ${command} <name-label>`);
   try {
     if (command === "block")
       console.log(state.block(label) ? `Blocked ${label}` : `Already blocked: ${label}`);
@@ -79,7 +79,8 @@ if (command === "enroll") {
     return result;
   };
   const publicHosts =
-    values["public-hosts"] ?? ["1", "true"].includes(process.env.RELAY_PUBLIC_HOSTS ?? "");
+    values["public-hosts"] ??
+    /^(1|true|yes|on)$/i.test((process.env.RELAY_PUBLIC_HOSTS ?? "").trim());
   const publicDomain = values["public-domain"] || process.env.RELAY_PUBLIC_DOMAIN || undefined;
   const relay = new RelayServer({
     relayHost,

@@ -67,16 +67,27 @@ export class RelayState {
   revoke(slug: string): boolean {
     return this.db.prepare("DELETE FROM environments WHERE slug = ?").run(slug).changes === 1;
   }
-  /** Operator takedown of one hostname label (e.g. `docs-abcdef`) without revoking its environment. */
+  /** Operator takedown of one public tunnel name (`docs-abcdef`) without revoking its environment. */
   block(label: string): boolean {
-    if (!parseHostLabel(label)) throw new Error(`Not a relay hostname label: ${label}`);
+    this.requireNameLabel(label);
     return (
       this.db.prepare("INSERT OR IGNORE INTO blocked_labels VALUES (?, ?)").run(label, Date.now())
         .changes === 1
     );
   }
   unblock(label: string): boolean {
+    this.requireNameLabel(label);
     return this.db.prepare("DELETE FROM blocked_labels WHERE label = ?").run(label).changes === 1;
+  }
+  /**
+   * Blocking a bare `<slug>` or `<port>-<slug>` label would take down the environment's own host
+   * without revoking it; those are `revoke`'s job, and ports are not public takedown units.
+   */
+  private requireNameLabel(label: string): void {
+    const parsed = parseHostLabel(label);
+    if (!parsed) throw new Error(`Not a relay hostname label: ${label}`);
+    if (parsed.name === undefined)
+      throw new Error(`Blocked labels are public tunnel names like docs-abcdef, not: ${label}`);
   }
   isBlocked(label: string): boolean {
     return this.db.prepare("SELECT 1 FROM blocked_labels WHERE label = ?").get(label) !== undefined;

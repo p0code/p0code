@@ -176,7 +176,11 @@ export class MuxStream extends NodeStream.Duplex {
 export interface MultiplexerOptions {
   initiator: boolean;
   maxStreams?: number;
-  idleTimeoutMs?: number;
+  /**
+   * Idle timeout per stream. A function receives the stream's label, so a caller can reap visitor
+   * streams sooner than the owner's own.
+   */
+  idleTimeoutMs?: number | ((metadata: StreamLabel) => number);
 }
 export class StreamMultiplexer extends NodeEvents.EventEmitter {
   private readonly streams = new Map<number, MuxStream>();
@@ -238,10 +242,15 @@ export class StreamMultiplexer extends NodeEvents.EventEmitter {
   private touch(id: number): void {
     const prior = this.idleTimers.get(id);
     if (prior) clearTimeout(prior);
-    const timer = setTimeout(
-      () => this.streams.get(id)?.destroy(new Error("Stream idle timeout")),
-      this.options.idleTimeoutMs ?? 120_000,
-    );
+    const configured = this.options.idleTimeoutMs;
+    const metadata = this.streams.get(id)?.metadata;
+    const timeout =
+      typeof configured === "function"
+        ? metadata
+          ? configured(metadata)
+          : 120_000
+        : (configured ?? 120_000);
+    const timer = setTimeout(() => this.streams.get(id)?.destroy(), timeout);
     timer.unref();
     this.idleTimers.set(id, timer);
   }

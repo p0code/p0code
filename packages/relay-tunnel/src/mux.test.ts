@@ -6,12 +6,13 @@ import {
   parseHostLabel,
   parseStreamLabel,
   StreamMultiplexer,
+  type MultiplexerOptions,
   type MuxStream,
   websocketBytes,
 } from "./mux.ts";
 import { decodeFrame, FrameType } from "./codec.ts";
 
-async function pair(maxStreams = 128) {
+async function pair(maxStreams = 128, idleTimeoutMs?: MultiplexerOptions["idleTimeoutMs"]) {
   const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
   await NodeEvents.EventEmitter.once(server, "listening");
   const address = server.address();
@@ -20,7 +21,11 @@ async function pair(maxStreams = 128) {
   const ws = new WebSocket(`ws://127.0.0.1:${address.port}`);
   await NodeEvents.EventEmitter.once(ws, "open");
   const [peer] = (await accepted) as [WebSocket];
-  const relay = new StreamMultiplexer(ws, { initiator: true, maxStreams });
+  const relay = new StreamMultiplexer(ws, {
+    initiator: true,
+    maxStreams,
+    ...(idleTimeoutMs === undefined ? {} : { idleTimeoutMs }),
+  });
   const env = new StreamMultiplexer(peer, { initiator: false, maxStreams });
   return {
     relay,
@@ -187,6 +192,25 @@ it("exposes the open stream count and limit", async () => {
     expect(connection.env.streamCount).toBe(1);
     stream.destroy();
     expect(connection.relay.streamCount).toBe(0);
+  } finally {
+    await connection.close();
+  }
+});
+
+it("reaps an idle visitor stream while the owner's own stream stays open", async () => {
+  // Visitor streams (port/name labels) get a short idle timeout; the bare slug keeps the owner's.
+  const connection = await pair(8, (metadata) => (metadata.name === undefined ? 5_000 : 100));
+  try {
+    const visitorIncoming = NodeEvents.EventEmitter.once(connection.env, "stream");
+    const visitor = connection.relay.open({ label: "docs-abcdef", kind: "tls", name: "docs" });
+    await visitorIncoming;
+    const ownerIncoming = NodeEvents.EventEmitter.once(connection.env, "stream");
+    const owner = connection.relay.open({ label: "abcdef", kind: "tls" });
+    await ownerIncoming;
+    await NodeEvents.EventEmitter.once(visitor, "close");
+    expect(visitor.destroyed).toBe(true);
+    expect(connection.relay.streamCount).toBe(1);
+    expect(owner.destroyed).toBe(false);
   } finally {
     await connection.close();
   }

@@ -27,6 +27,8 @@ export interface RelayServerOptions {
   httpPort?: number;
   maxStreams?: number;
   idleTimeoutMs?: number;
+  /** Idle timeout for visitor streams (port/name labels); the owner's `<slug>` keeps `idleTimeoutMs`. */
+  visitorIdleTimeoutMs?: number;
   /** Route `<name>-<slug>` public tunnel hostnames. Off by default: they are refused at SNI. */
   publicHosts?: boolean;
   /** Separate domain for `<name>-<slug>` hostnames instead of the relay host. Needs publicHosts. */
@@ -45,7 +47,69 @@ export interface VisitorLimits {
 const DEFAULT_VISITOR_LIMITS: VisitorLimits = { burst: 100, perSecond: 20, concurrent: 64 };
 /** Mux streams kept free for the owner's own `<slug>` clients when visitors are busy. */
 const OWNER_RESERVED_STREAMS = 16;
+/** Quiet visitor streams are reaped after 15s; a silent drop has no FIN, only this timer. */
+const VISITOR_IDLE_TIMEOUT_MS = 15_000;
+/** Source-address buckets kept before the least recently used one is evicted. */
+const BUCKET_LIMIT = 10_000;
 const HOSTNAME = /^[a-z0-9][a-z0-9.-]*[a-z0-9]$/;
+
+/** Eight 16-bit groups of an IPv6 address, or undefined when it is not one. */
+function ipv6Words(address: string): number[] | undefined {
+  const value = address.split("%")[0] ?? "";
+  const halves = value.split("::");
+  if (halves.length > 2) return undefined;
+  const parts = (part: string): string[] => (part ? part.split(":") : []);
+  const left = parts(halves[0] ?? "");
+  const right = parts(halves[1] ?? "");
+  // A trailing dotted IPv4 tail is the last two groups.
+  const dotted = right.at(-1)?.includes(".")
+    ? right
+    : left.at(-1)?.includes(".")
+      ? left
+      : undefined;
+  if (dotted) {
+    const last = dotted[dotted.length - 1];
+    if (last === undefined || !NodeNet.isIPv4(last)) return undefined;
+    const octets = last.split(".").map(Number);
+    dotted.splice(
+      dotted.length - 1,
+      1,
+      ((octets[0]! << 8) | octets[1]!).toString(16),
+      ((octets[2]! << 8) | octets[3]!).toString(16),
+    );
+  }
+  const missing = 8 - left.length - right.length;
+  if (halves.length === 2 ? missing < 0 : missing !== 0) return undefined;
+  const groups = [...left, ...Array<string>(Math.max(0, missing)).fill("0"), ...right];
+  const words = groups.map((group) =>
+    /^[0-9a-f]{1,4}$/i.test(group) ? Number.parseInt(group, 16) : Number.NaN,
+  );
+  return words.length === 8 && words.every((word) => Number.isInteger(word)) ? words : undefined;
+}
+
+/**
+ * Bucket key for a source address: IPv6 clients are keyed by /64, so rotating the low bits buys no
+ * extra budget. IPv4-mapped peers (`::ffff:a.b.c.d`) keep their IPv4 key.
+ */
+export function sourceKey(address: string | undefined): string {
+  if (!address) return "unknown";
+  if (!NodeNet.isIPv6(address)) return address;
+  const words = ipv6Words(address);
+  if (!words) return address;
+  if (words.slice(0, 5).every((word) => word === 0) && words[5] === 0xffff) {
+    const [high, low] = [words[6]!, words[7]!];
+    return `${high >> 8}.${high & 0xff}.${low >> 8}.${low & 0xff}`;
+  }
+  return `${words
+    .slice(0, 4)
+    .map((word) => word.toString(16))
+    .join(":")}::/64`;
+}
+
+/** Port and public-name labels are visitors; the bare `<slug>` carries the owner's own clients. */
+function isVisitorLabel(metadata: StreamLabel): boolean {
+  return metadata.port !== undefined || metadata.name !== undefined;
+}
 interface Tunnel {
   ws: WebSocket;
   mux: StreamMultiplexer;
@@ -92,35 +156,51 @@ export class RelayServer {
     this.routeHttp(socket);
   });
   private readonly buckets = new Map<string, { tokens: number; at: number }>();
-  private allowAttempt(ip: string): boolean {
+  /**
+   * Stores a bucket and keeps the map bounded. Re-insertion keeps Map order least-recently-used
+   * first, so a first-seen address evicts the oldest bucket instead of being refused.
+   */
+  private rememberBucket(
+    map: Map<string, { tokens: number; at: number }>,
+    key: string,
+    bucket: { tokens: number; at: number },
+  ): void {
+    map.delete(key);
+    map.set(key, bucket);
+    while (map.size > BUCKET_LIMIT) {
+      const oldest = map.keys().next();
+      if (oldest.done) break;
+      map.delete(oldest.value);
+    }
+  }
+  private allowAttempt(address: string | undefined): boolean {
+    const key = sourceKey(address);
     const now = Date.now();
-    const prior = this.buckets.get(ip) ?? { tokens: 10, at: now };
+    const prior = this.buckets.get(key) ?? { tokens: 10, at: now };
     const tokens = Math.min(10, prior.tokens + (now - prior.at) / 6000);
-    if (!this.buckets.has(ip) && this.buckets.size >= 10000) return false;
-    this.buckets.set(ip, { tokens: Math.max(0, tokens - 1), at: now });
+    this.rememberBucket(this.buckets, key, { tokens: Math.max(0, tokens - 1), at: now });
     return tokens >= 1;
   }
   private readonly visitorBuckets = new Map<string, { tokens: number; at: number }>();
   private readonly visitorConnections = new Map<string, number>();
   private admitVisitor(socket: NodeNet.Socket): boolean {
     const limits = { ...DEFAULT_VISITOR_LIMITS, ...this.options.visitorLimits };
-    const ip = socket.remoteAddress ?? "unknown";
-    const open = this.visitorConnections.get(ip) ?? 0;
+    const key = sourceKey(socket.remoteAddress);
+    const open = this.visitorConnections.get(key) ?? 0;
     if (open >= limits.concurrent) return false;
     const now = Date.now();
-    const prior = this.visitorBuckets.get(ip);
-    if (!prior && this.visitorBuckets.size >= 10000) return false;
+    const prior = this.visitorBuckets.get(key);
     const tokens = Math.min(
       limits.burst,
       (prior?.tokens ?? limits.burst) + ((now - (prior?.at ?? now)) / 1000) * limits.perSecond,
     );
-    this.visitorBuckets.set(ip, { tokens: Math.max(0, tokens - 1), at: now });
+    this.rememberBucket(this.visitorBuckets, key, { tokens: Math.max(0, tokens - 1), at: now });
     if (tokens < 1) return false;
-    this.visitorConnections.set(ip, open + 1);
+    this.visitorConnections.set(key, open + 1);
     socket.once("close", () => {
-      const left = (this.visitorConnections.get(ip) ?? 1) - 1;
-      if (left > 0) this.visitorConnections.set(ip, left);
-      else this.visitorConnections.delete(ip);
+      const left = (this.visitorConnections.get(key) ?? 1) - 1;
+      if (left > 0) this.visitorConnections.set(key, left);
+      else this.visitorConnections.delete(key);
     });
     return true;
   }
@@ -324,7 +404,10 @@ export class RelayServer {
         const mux = new StreamMultiplexer(ws, {
           initiator: true,
           maxStreams,
-          ...(this.options.idleTimeoutMs ? { idleTimeoutMs: this.options.idleTimeoutMs } : {}),
+          idleTimeoutMs: (metadata) =>
+            isVisitorLabel(metadata)
+              ? (this.options.visitorIdleTimeoutMs ?? VISITOR_IDLE_TIMEOUT_MS)
+              : (this.options.idleTimeoutMs ?? 120_000),
         });
         this.tunnels.get(body.slug)?.mux.close();
         const tunnel = { ws, mux, publicKey: env.publicKey };
@@ -377,18 +460,18 @@ export class RelayServer {
     };
   }
   /**
-   * Opens the mux stream for a routed socket. Visitors (any label but the environment's own
-   * `<slug>`) are admitted per IP and never take the streams reserved for the owner.
+   * Opens the mux stream for a routed socket. Every label keeps the owner's reserved streams free;
+   * port/name visitors are also admitted per IP. The relay cannot tell owner from visitor on a
+   * bare `<slug>`, so that label gets the same headroom cap without the per-IP visitor budget.
    */
   private openStream(
     socket: NodeNet.Socket,
     { tunnel, metadata }: { tunnel: Tunnel; metadata: StreamLabel },
   ): MuxStream | undefined {
-    if (metadata.port !== undefined || metadata.name !== undefined) {
-      const { maxStreams, streamCount } = tunnel.mux;
-      const reserved = Math.min(OWNER_RESERVED_STREAMS, Math.floor(maxStreams / 2));
-      if (streamCount >= maxStreams - reserved || !this.admitVisitor(socket)) return undefined;
-    }
+    const { maxStreams, streamCount } = tunnel.mux;
+    const reserved = Math.min(OWNER_RESERVED_STREAMS, Math.floor(maxStreams / 2));
+    if (streamCount >= maxStreams - reserved) return undefined;
+    if (isVisitorLabel(metadata) && !this.admitVisitor(socket)) return undefined;
     let stream: MuxStream;
     try {
       stream = tunnel.mux.open(metadata);

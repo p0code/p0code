@@ -66,9 +66,10 @@ replaces the old one.
 - `ls` — list enrolled environments (slug, public key, creation time) as JSON.
 - `revoke <slug>` — remove an environment: its live tunnel closes and it can no longer
   authenticate.
-- `block <label>` — refuse one hostname label, such as an abusive public tunnel `docs-abcdef`,
-  without unlinking its environment. Live connections to it close within about a second.
-  `unblock <label>` lifts it; `blocked` lists blocked labels as JSON.
+- `block <name-label>` — refuse one public tunnel name label, such as an abusive public tunnel
+  `docs-abcdef`, without unlinking its environment. Live connections to it close within about a
+  second. `unblock <name-label>` lifts it; `blocked` lists blocked labels as JSON. Bare `<slug>` and
+  `<port>-<slug>` labels are refused here: use `revoke <slug>` to cut an environment's own host.
 
 Slugs are 6–32 lowercase letters/digits starting with a letter. The database stores public keys
 only, never environment private keys, and an enrollment cannot overwrite an enrolled slug.
@@ -99,7 +100,8 @@ host: TLS still terminates on the environment, so the relay sees the hostname, t
 and byte counts, never paths, headers or bodies. Names are owned by the environment and namespaced
 by its slug; the relay keeps no registry.
 
-- **Off by default.** Start with `--public-hosts` (or `RELAY_PUBLIC_HOSTS=1`). Off, name hostnames
+- **Off by default.** Start with `--public-hosts` (or `RELAY_PUBLIC_HOSTS` set to `1`, `true`, `yes`
+  or `on`, case-insensitive). Off, name hostnames
   are refused at SNI, and environments are told so when they connect. Hosting public content on
   your domain is an abuse and phishing liability, so think before enabling it on a shared relay.
 - **Separate domain (recommended).** `--public-domain usercontent.example` puts names under that
@@ -108,9 +110,12 @@ by its slug; the relay keeps no registry.
   The domain needs wildcard DNS to the relay and must not overlap `--host`. Without it, names live
   under `--host`.
 - **Visitor limits.** Every label except an environment's own `<slug>` is a visitor: each source IP
-  gets a burst of 100 new connections, refilled at 20 a second, with at most 64 open. Visitors never take the
-  last 16 streams of a tunnel, so the owner's own clients still connect when a tunnel is busy.
-- **Takedown.** `block <label>` kills one hostname; `revoke <slug>` kills the whole environment.
+  (IPv6 clients share a /64) gets a burst of 100 new connections, refilled at 20 a second, with at
+  most 64 open. Quiet visitor streams are reaped after 15s. Every label is refused once a tunnel has
+  `min(16, floor(maxStreams/2))` streams left, so the owner's own clients still connect when a
+  tunnel is busy.
+- **Takedown.** `block <name-label>` kills one public tunnel name; `revoke <slug>` kills the whole
+  environment.
 
 Public tunnel certificates are issued by the environment over HTTP-01 through port 80, the same way
 as port hosts. Each name hostname appears in Certificate Transparency logs once its certificate is
