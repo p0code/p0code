@@ -1498,6 +1498,67 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       ),
   );
 
+  it.effect.each([
+    ["macOS", "mac-arm64/T3 Code.app/Contents/Resources"],
+    ["Linux", "linux-arm64-unpacked/resources"],
+  ] as const)("validates only the requested %s target architecture", ([platform, resourcesPath]) =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fixture = yield* makePackagedAppFixture({ resourcesPath });
+        const validate = Effect.fn(function* (
+          input: Parameters<typeof validateMacPackagedPayload>[0],
+        ) {
+          if (platform === "macOS") yield* validateMacPackagedPayload(input);
+          else yield* validateLinuxPackagedPayload(input);
+        });
+        yield* validate({
+          stageDistDir: fixture.stageDistDir,
+          arch: "arm64",
+          verifyRuntime: false,
+        });
+        const error = yield* validate({
+          stageDistDir: fixture.stageDistDir,
+          arch: "x64",
+          verifyRuntime: false,
+        }).pipe(Effect.flip);
+        assert.include(error.message, "Expected electron-builder");
+      }),
+    ),
+  );
+
+  it.effect.each([
+    ["macOS", "x64", "mac/Test.app/Contents/Resources", "mac/Test.app/Contents/MacOS/Test"],
+    [
+      "macOS",
+      "arm64",
+      "mac-arm64/Test.app/Contents/Resources",
+      "mac-arm64/Test.app/Contents/MacOS/Test",
+    ],
+    ["Linux", "x64", "linux-unpacked/resources", "linux-unpacked/p0code"],
+    ["Linux", "arm64", "linux-arm64-unpacked/resources", "linux-arm64-unpacked/p0code"],
+  ] as const)(
+    "probes the packaged %s %s executable",
+    ([platform, arch, resourcesPath, executable]) => {
+      const commands: string[] = [];
+      const spawner = Layer.succeed(
+        ChildProcessSpawner.ChildProcessSpawner,
+        ChildProcessSpawner.make((command) => {
+          commands.push((command as unknown as { readonly command: string }).command);
+          return Effect.succeed(mockProcess(0));
+        }),
+      );
+      return Effect.scoped(
+        Effect.gen(function* () {
+          const fixture = yield* makePackagedAppFixture({ resourcesPath });
+          const input = { stageDistDir: fixture.stageDistDir, arch };
+          if (platform === "macOS") yield* validateMacPackagedPayload(input);
+          else yield* validateLinuxPackagedPayload(input);
+          assert.deepEqual(commands, [NodePath.join(fixture.stageDistDir, executable)]);
+        }),
+      ).pipe(Effect.provide(spawner));
+    },
+  );
+
   it.effect("accepts a macOS app whose packaged server bundle resolves", () =>
     Effect.scoped(
       Effect.gen(function* () {

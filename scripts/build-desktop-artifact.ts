@@ -2146,7 +2146,11 @@ export const copyDirectoryPreservingSymlinks = Effect.fn("copyDirectoryPreservin
 );
 
 export const verifyPackagedBundleIsSelfContained = Effect.fn("verifyPackagedBundleIsSelfContained")(
-  function* (input: { readonly asarPath: string; readonly verbose: boolean }) {
+  function* (input: {
+    readonly asarPath: string;
+    readonly verbose: boolean;
+    readonly executablePath?: string;
+  }) {
     // A PR preview's bundle is untrusted and this job may hold signing secrets, so never run it.
     if (yield* Config.Boolean("T3CODE_DESKTOP_UNTRUSTED_BUNDLE").pipe(Config.withDefault(false))) {
       yield* Effect.log(
@@ -2192,14 +2196,14 @@ export const verifyPackagedBundleIsSelfContained = Effect.fn("verifyPackagedBund
 
     yield* runCommand(
       ChildProcess.make(
-        process.execPath,
+        input.executablePath ?? process.execPath,
         // Clearing NODE_PATH leaves CommonJS global fallbacks; disable them so host packages cannot satisfy missing dependencies.
         ["--no-global-search-paths", entryPoint, "--version"],
         {
           cwd: probeApp,
           stdout: "pipe",
           stderr: "pipe",
-          env: { ...process.env, NODE_PATH: "" },
+          env: { ...process.env, NODE_PATH: "", ELECTRON_RUN_AS_NODE: "1" },
         },
       ),
       {
@@ -2220,7 +2224,8 @@ export const verifyPackagedBundleIsSelfContained = Effect.fn("verifyPackagedBund
           Effect.fail(
             new BundleNotSelfContainedError({
               exitCode: error.exitCode,
-              output: `${error.stderrTail ?? ""}${error.stdoutTail ?? ""}`.trim(),
+              output:
+                `Target backend runtime ${input.executablePath ?? process.execPath} failed: ${error.stderrTail ?? ""}${error.stdoutTail ?? ""}`.trim(),
             }),
           ),
       }),
@@ -3578,12 +3583,18 @@ export const validateMacPackagedPayload = Effect.fn("desktopArtifact.validateMac
     readonly stageDistDir: string;
     readonly verbose?: boolean;
     readonly verifyRuntime?: boolean;
+    readonly arch?: typeof BuildArch.Type;
   }) {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const asarPaths: string[] = [];
     for (const entry of yield* fs.readDirectory(input.stageDistDir)) {
-      if (!entry.startsWith("mac")) continue;
+      if (
+        input.arch
+          ? entry !== (input.arch === "x64" ? "mac" : `mac-${input.arch}`)
+          : !entry.startsWith("mac")
+      )
+        continue;
       const outputDir = path.join(input.stageDistDir, entry);
       const apps = yield* fs.readDirectory(outputDir).pipe(Effect.orElseSucceed(() => []));
       for (const app of apps) {
@@ -3598,7 +3609,20 @@ export const validateMacPackagedPayload = Effect.fn("desktopArtifact.validateMac
     for (const asarPath of asarPaths) {
       yield* validatePackagedEmbeddedServer(asarPath);
       if (input.verifyRuntime !== false) {
-        yield* verifyPackagedBundleIsSelfContained({ asarPath, verbose: input.verbose ?? false });
+        yield* verifyPackagedBundleIsSelfContained({
+          asarPath,
+          verbose: input.verbose ?? false,
+          ...(input.arch
+            ? {
+                executablePath: path.join(
+                  path.dirname(asarPath),
+                  "..",
+                  "MacOS",
+                  path.basename(path.dirname(path.dirname(path.dirname(asarPath))), ".app"),
+                ),
+              }
+            : {}),
+        });
       }
     }
     yield* Effect.log(
@@ -3622,11 +3646,16 @@ export const validateLinuxPackagedPayload = Effect.fn(
   readonly stageDistDir: string;
   readonly verbose?: boolean;
   readonly verifyRuntime?: boolean;
+  readonly arch?: typeof BuildArch.Type;
 }) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const asarPaths = (yield* fs.readDirectory(input.stageDistDir))
-    .filter((entry) => entry.startsWith("linux") && entry.endsWith("-unpacked"))
+    .filter((entry) =>
+      input.arch
+        ? entry === (input.arch === "x64" ? "linux-unpacked" : `linux-${input.arch}-unpacked`)
+        : entry.startsWith("linux") && entry.endsWith("-unpacked"),
+    )
     .map((entry) => path.join(input.stageDistDir, entry, "resources/app.asar"));
   if (asarPaths.length === 0) {
     return yield* new LinuxPackagedAppMissingError({ stageDistDir: input.stageDistDir });
@@ -3634,7 +3663,13 @@ export const validateLinuxPackagedPayload = Effect.fn(
   for (const asarPath of asarPaths) {
     yield* validatePackagedEmbeddedServer(asarPath);
     if (input.verifyRuntime !== false) {
-      yield* verifyPackagedBundleIsSelfContained({ asarPath, verbose: input.verbose ?? false });
+      yield* verifyPackagedBundleIsSelfContained({
+        asarPath,
+        verbose: input.verbose ?? false,
+        ...(input.arch
+          ? { executablePath: path.join(path.dirname(asarPath), "..", "p0code") }
+          : {}),
+      });
     }
   }
   yield* Effect.log(
@@ -4567,20 +4602,21 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
       verbose: options.verbose,
     });
   }
-  // Archive validation also runs for GUI-only and cross-arch builds; only the runtime probe needs a matching host.
+  // Probe the target Electron runtime, including x64 macOS under Rosetta.
+  // An unsupported target must fail validation rather than silently skipping it.
   if (options.platform === "linux") {
     yield* validateLinuxPackagedPayload({
       stageDistDir,
       verbose: options.verbose,
-      verifyRuntime: hostPlatform === "linux" && options.arch === (yield* HostProcess.Architecture),
+      arch: options.arch,
     });
   }
-  // x64 builds on arm64 runners; the arm64 check covers the shared JS bundle.
+  // Validate the actual macOS architecture produced, not the host Node runtime.
   if (options.platform === "mac") {
     yield* validateMacPackagedPayload({
       stageDistDir,
       verbose: options.verbose,
-      verifyRuntime: options.arch === "arm64" && hostPlatform === "darwin",
+      arch: options.arch,
     });
   }
 
