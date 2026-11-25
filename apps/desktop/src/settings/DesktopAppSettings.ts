@@ -172,6 +172,7 @@ export class DesktopAppSettings extends Context.Service<
     ) => Effect.Effect<DesktopSettingsChange, DesktopSettingsWriteError>;
     readonly setBackendConfig: (input: {
       readonly mode?: DesktopBackendMode;
+      readonly modeConfiguredByUser?: boolean;
       readonly remoteUrl?: string | null;
       readonly binaryPath?: string | null;
     }) => Effect.Effect<DesktopSettingsChange, DesktopSettingsWriteError>;
@@ -265,8 +266,11 @@ function normalizeDesktopSettingsDocument(
     (parsed.wslBackendEnabled === undefined && parsed.wslMode === "wsl");
 
   const parsedBackendMode = parsed.backendMode;
+  // A recorded mode is not an explicit choice on its own: older documents stored the
+  // default, and only the flag distinguishes that from a mode the user picked.
   const backendModeConfiguredByUser =
-    parsed.backendModeConfiguredByUser === true || parsedBackendMode !== undefined;
+    parsed.backendModeConfiguredByUser === true ||
+    (parsed.backendModeConfiguredByUser === undefined && parsedBackendMode === "remote");
 
   return {
     backendBinaryPath: normalizeBackendBinaryPath(parsed.backendBinaryPath),
@@ -446,13 +450,16 @@ function setBackendConfig(
   settings: DesktopSettings,
   input: {
     readonly mode?: DesktopBackendMode;
+    readonly modeConfiguredByUser?: boolean;
     readonly remoteUrl?: string | null;
     readonly binaryPath?: string | null;
   },
 ): DesktopSettings {
   const nextMode = input.mode ?? settings.backendMode;
   const nextModeConfiguredByUser =
-    input.mode !== undefined ? true : settings.backendModeConfiguredByUser;
+    input.mode !== undefined
+      ? (input.modeConfiguredByUser ?? true)
+      : settings.backendModeConfiguredByUser;
   const nextRemoteUrl =
     input.remoteUrl === undefined
       ? settings.backendRemoteUrl
@@ -481,7 +488,10 @@ function setBackendConfig(
 }
 
 const applyBuiltInBackendFallback = (settings: DesktopSettings): DesktopSettings =>
-  setBackendConfig(settings, { mode: "legacy-embedded" });
+  setBackendConfig(settings, {
+    mode: "legacy-embedded",
+    modeConfiguredByUser: settings.backendModeConfiguredByUser,
+  });
 
 function applyWslWindowsFallback(settings: DesktopSettings): DesktopSettings {
   return setWslOnly(setWslBackendEnabled(settings, false), false);
@@ -703,6 +713,7 @@ export const make = Effect.gen(function* () {
     setBackendConfig: Effect.fn("desktop.settings.setBackendConfig")(function* (input) {
       yield* Effect.annotateCurrentSpan({
         mode: input.mode ?? null,
+        modeConfiguredByUser: input.modeConfiguredByUser ?? null,
         hasRemoteUrl: input.remoteUrl !== undefined,
         hasBinaryPath: input.binaryPath !== undefined,
       });

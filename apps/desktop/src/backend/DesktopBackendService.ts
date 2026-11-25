@@ -21,6 +21,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
+import * as Ref from "effect/Ref";
 import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
@@ -43,7 +44,7 @@ const P0D_READY_FILE_NAME = "p0d-ready.json";
 const LEGACY_SERVICE_READY_FILE_NAME = "p0d-legacy-service.json";
 const LEGACY_SERVICE_SECRETS_FILE_NAME = "p0d-legacy-service-secrets.json";
 
-const { logWarning: logServiceWarning } =
+const { logInfo: logServiceInfo, logWarning: logServiceWarning } =
   DesktopObservability.makeComponentLogger("desktop-backend-service");
 
 export class BackendServiceDriverError extends Schema.TaggedError<BackendServiceDriverError>()(
@@ -127,14 +128,19 @@ export function isExternalBackendMode(mode: DesktopBackendMode): boolean {
   return mode === "local-service" || mode === "remote";
 }
 
+/**
+ * The auto default follows p0d availability instead of the stored mode. A document that
+ * recorded the old legacy-embedded default (no explicit choice) moves to local-service as
+ * soon as p0d resolves, and moves back if it disappears.
+ */
 export function resolveEffectiveBackendMode(
   settings: Pick<DesktopAppSettings.DesktopSettings, "backendMode" | "backendModeConfiguredByUser">,
-  hasPackagedP0d: boolean,
+  hasP0d: boolean,
 ): DesktopBackendMode {
   if (settings.backendModeConfiguredByUser) {
     return settings.backendMode;
   }
-  return hasPackagedP0d ? "local-service" : "legacy-embedded";
+  return hasP0d ? "local-service" : "legacy-embedded";
 }
 
 function p0dBinaryName(platform: NodeJS.Platform): string {
@@ -974,7 +980,7 @@ export function makeLegacyNodeServiceDriver(
 export class DesktopBackendService extends Context.Service<
   DesktopBackendService,
   {
-    readonly hasPackagedP0d: Effect.Effect<boolean>;
+    readonly hasP0d: Effect.Effect<boolean>;
     readonly resolveEffectiveMode: Effect.Effect<DesktopBackendMode>;
     readonly findP0dBinary: Effect.Effect<Option.Option<string>>;
     readonly resolveServiceDriver: Effect.Effect<BackendServiceDriver>;
@@ -1031,15 +1037,9 @@ export const make = Effect.gen(function* () {
     return Option.none<string>();
   });
 
-  // Checked once: sync IPC handlers read the backend label and cannot wait on the filesystem.
-  const packagedP0d = yield* firstExistingPath(
-    packagedP0dBinaryCandidates({
-      path: environment.path,
-      platform: environment.platform,
-      resourcesPath: environment.resourcesPath,
-    }),
-  ).pipe(Effect.map(Option.isSome));
-  const hasPackagedP0d = Effect.succeed(packagedP0d);
+  // Sync IPC handlers read the backend label and cannot wait on the filesystem, so the
+  // resolution is cached here and refreshed before startup and whenever status is read.
+  const p0dAvailableRef = yield* Ref.make(false);
 
   const findP0dBinary = Effect.gen(function* () {
     const settings = yield* appSettings.get;
@@ -1058,16 +1058,26 @@ export const make = Effect.gen(function* () {
     return yield* firstExistingPath(candidates);
   });
 
+  const refreshP0dAvailability = Effect.gen(function* () {
+    const p0dBinary = yield* findP0dBinary;
+    const available = Option.isSome(p0dBinary);
+    yield* Ref.set(p0dAvailableRef, available);
+    return available;
+  });
+
+  yield* refreshP0dAvailability;
+  const hasP0d = Ref.get(p0dAvailableRef);
+
   const resolveEffectiveMode = Effect.gen(function* () {
     const settings = yield* appSettings.get;
-    const packaged = yield* hasPackagedP0d;
+    const p0dAvailable = yield* hasP0d;
     return resolveEffectiveBackendMode(
       {
         backendMode:
           settings.backendMode ?? DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS.backendMode,
         backendModeConfiguredByUser: settings.backendModeConfiguredByUser ?? false,
       },
-      packaged,
+      p0dAvailable,
     );
   });
 
@@ -1145,20 +1155,39 @@ export const make = Effect.gen(function* () {
 
   const prepareSelectedBackend: DesktopBackendService["Service"]["prepareSelectedBackend"] =
     Effect.gen(function* () {
-      const mode = yield* resolveEffectiveMode;
+      const settings = yield* appSettings.get;
+      // Runs after settings load, so this sees a configured p0d override from disk.
+      const p0dAvailable = yield* refreshP0dAvailability;
+      const mode = resolveEffectiveBackendMode(settings, p0dAvailable);
+      if (!settings.backendModeConfiguredByUser && settings.backendMode !== mode) {
+        // Record what the auto default resolved to without claiming the user picked it.
+        yield* appSettings.setBackendConfig({ mode, modeConfiguredByUser: false }).pipe(
+          Effect.tap(() => logServiceInfo("recorded the resolved auto backend mode", { mode })),
+          Effect.catch((error) =>
+            logServiceWarning("failed to record the resolved backend mode", {
+              error: error.message,
+            }),
+          ),
+        );
+      }
       const fallbackReason = yield* externalBackendFailure(mode);
       if (fallbackReason === null) return { mode, fallbackReason };
       yield* logServiceWarning("selected backend mode failed; falling back to legacy-embedded", {
         mode,
         reason: fallbackReason,
       });
-      yield* appSettings.setBackendConfig({ mode: "legacy-embedded" }).pipe(
-        Effect.catch((error) =>
-          logServiceWarning("failed to persist the legacy-embedded fallback", {
-            error: error.message,
-          }).pipe(Effect.andThen(appSettings.applyBuiltInBackendFallbackInMemory)),
-        ),
-      );
+      yield* appSettings
+        .setBackendConfig({
+          mode: "legacy-embedded",
+          modeConfiguredByUser: settings.backendModeConfiguredByUser,
+        })
+        .pipe(
+          Effect.catch((error) =>
+            logServiceWarning("failed to persist the legacy-embedded fallback", {
+              error: error.message,
+            }).pipe(Effect.andThen(appSettings.applyBuiltInBackendFallbackInMemory)),
+          ),
+        );
       return { mode: "legacy-embedded" as const, fallbackReason };
     }).pipe(Effect.withSpan("desktop.backendService.prepareSelectedBackend"));
 
@@ -1166,6 +1195,7 @@ export const make = Effect.gen(function* () {
     "desktop.backendService.getStatus",
   )(function* (embedded) {
     const settings = yield* appSettings.get;
+    yield* refreshP0dAvailability;
     const mode = yield* resolveEffectiveMode;
     const p0dBinary = yield* findP0dBinary;
     const resolvedBinaryPath = Option.getOrNull(p0dBinary);
@@ -1275,7 +1305,7 @@ export const make = Effect.gen(function* () {
   });
 
   return DesktopBackendService.of({
-    hasPackagedP0d,
+    hasP0d,
     resolveEffectiveMode,
     findP0dBinary,
     resolveServiceDriver,
@@ -1294,7 +1324,7 @@ export const layerTest = (
   Layer.succeed(
     DesktopBackendService,
     DesktopBackendService.of({
-      hasPackagedP0d: Effect.succeed(false),
+      hasP0d: Effect.succeed(false),
       resolveEffectiveMode: Effect.succeed("legacy-embedded"),
       findP0dBinary: Effect.succeedNone,
       resolveServiceDriver: Effect.die("DesktopBackendService.layerTest resolveServiceDriver"),

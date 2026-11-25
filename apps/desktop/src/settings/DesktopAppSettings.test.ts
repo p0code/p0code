@@ -244,6 +244,42 @@ describe("DesktopSettings", () => {
     ),
   );
 
+  it.effect("treats a recorded backend mode as the default unless the user flag is set", () =>
+    withSettings(
+      Effect.gen(function* () {
+        const environment = yield* DesktopEnvironment.DesktopEnvironment;
+        const fileSystem = yield* FileSystem.FileSystem;
+        const settings = yield* DesktopAppSettings.DesktopAppSettings;
+        yield* fileSystem.makeDirectory(environment.stateDir, { recursive: true });
+
+        yield* fileSystem.writeFileString(
+          environment.desktopSettingsPath,
+          `{ "backendMode": "legacy-embedded" }\n`,
+        );
+        const legacyDefault = yield* settings.load;
+        assert.equal(legacyDefault.backendMode, "legacy-embedded");
+        assert.isFalse(legacyDefault.backendModeConfiguredByUser);
+
+        yield* fileSystem.writeFileString(
+          environment.desktopSettingsPath,
+          `{ "backendMode": "legacy-embedded", "backendModeConfiguredByUser": true }\n`,
+        );
+        const explicitEmbedded = yield* settings.load;
+        assert.equal(explicitEmbedded.backendMode, "legacy-embedded");
+        assert.isTrue(explicitEmbedded.backendModeConfiguredByUser);
+
+        // Remote was never a default, so an older document without the flag still counts as a choice.
+        yield* fileSystem.writeFileString(
+          environment.desktopSettingsPath,
+          `{ "backendMode": "remote" }\n`,
+        );
+        const legacyRemote = yield* settings.load;
+        assert.equal(legacyRemote.backendMode, "remote");
+        assert.isTrue(legacyRemote.backendModeConfiguredByUser);
+      }),
+    ),
+  );
+
   it.effect("keeps Local environment off when another value in the file is unreadable", () =>
     withSettings(
       Effect.gen(function* () {

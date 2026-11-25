@@ -34,6 +34,7 @@ export function DesktopBackendSettings() {
 
   const [status, setStatus] = useState<DesktopBackendStatus | null>(null);
   const [draftMode, setDraftMode] = useState<DesktopBackendMode>("legacy-embedded");
+  const [modeTouched, setModeTouched] = useState(false);
   const [draftRemoteUrl, setDraftRemoteUrl] = useState("");
   const [draftBinaryPath, setDraftBinaryPath] = useState("");
   const [busyAction, setBusyAction] = useState<DesktopBackendAction | "save" | "refresh" | null>(
@@ -44,6 +45,7 @@ export function DesktopBackendSettings() {
   const syncFromStatus = (next: DesktopBackendStatus) => {
     setStatus(next);
     setDraftMode(next.mode);
+    setModeTouched(false);
     setDraftRemoteUrl(next.remoteUrl ?? "");
     setDraftBinaryPath(next.binaryPath ?? "");
   };
@@ -111,7 +113,8 @@ export function DesktopBackendSettings() {
   const normalizedDraftBinaryPath = draftBinaryPath.trim() || null;
   const hasUnsavedChanges =
     status !== null &&
-    (draftMode !== status.mode ||
+    (modeTouched ||
+      draftMode !== status.mode ||
       normalizedDraftRemoteUrl !== (status.remoteUrl ?? null) ||
       normalizedDraftBinaryPath !== (status.binaryPath ?? null));
 
@@ -122,8 +125,10 @@ export function DesktopBackendSettings() {
     setBusyAction("save");
     setError(null);
     try {
+      // Only send the mode when the user actually picked one, so editing the binary path
+      // leaves the auto default (p0d when available) in place.
       const next = await bridge.updateConfig({
-        mode: draftMode,
+        ...(modeTouched || draftMode !== status?.mode ? { mode: draftMode } : {}),
         remoteUrl: normalizedDraftRemoteUrl,
         binaryPath: normalizedDraftBinaryPath,
       });
@@ -174,7 +179,9 @@ export function DesktopBackendSettings() {
         )
       : draftMode === "remote"
         ? gt("Connects directly to a remote or self-hosted backend URL with no local process.")
-        : gt("Spawns the legacy Node server inside the desktop app.");
+        : gt(
+            "Spawns the legacy Node server inside the desktop app. Used only when p0d is not available.",
+          );
 
   const statusMetaParts: string[] = [];
   if (status?.url) statusMetaParts.push(status.url);
@@ -185,6 +192,20 @@ export function DesktopBackendSettings() {
 
   return (
     <SettingsSection {...searchableSetting("desktop-backend")} title={gt("Backend")}>
+      <p className="px-3 text-sm leading-relaxed text-muted-foreground sm:px-4">
+        <T>
+          Local service (p0d) is the default. Quitting the app window leaves the backend running in
+          the background.
+        </T>
+      </p>
+      {status !== null && !status.resolvedBinaryPath ? (
+        <p className="px-3 text-sm leading-relaxed text-muted-foreground sm:px-4">
+          <T>
+            p0d was not found, so the app is using the embedded backend. Install p0d on PATH
+            (/usr/local/bin or /opt/homebrew/bin), or choose Local service (p0d) to set its path.
+          </T>
+        </p>
+      ) : null}
       <SettingsRow
         title={gt("Backend mode")}
         description={modeDescription}
@@ -194,6 +215,7 @@ export function DesktopBackendSettings() {
             onValueChange={(value) => {
               if (value === "local-service" || value === "remote" || value === "legacy-embedded") {
                 setDraftMode(value);
+                setModeTouched(true);
               }
             }}
           >

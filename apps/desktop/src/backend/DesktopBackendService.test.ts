@@ -57,32 +57,44 @@ function makeProcessHandle(options: {
 }
 
 describe("DesktopBackendService helpers", () => {
-  it("defaults to local-service when p0d is packaged and user has not overridden mode", () => {
-    const modePackaged = DesktopBackendService.resolveEffectiveBackendMode(
-      {
-        backendMode: DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS.backendMode,
-        backendModeConfiguredByUser: false,
-      },
-      true,
-    );
-    const modeUnpackaged = DesktopBackendService.resolveEffectiveBackendMode(
-      {
-        backendMode: DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS.backendMode,
-        backendModeConfiguredByUser: false,
-      },
-      false,
-    );
-    const modeExplicit = DesktopBackendService.resolveEffectiveBackendMode(
-      {
-        backendMode: "legacy-embedded",
-        backendModeConfiguredByUser: true,
-      },
-      true,
-    );
+  it("defaults to local-service whenever a p0d binary resolves", () => {
+    const autoSettings = {
+      backendMode: DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS.backendMode,
+      backendModeConfiguredByUser: false,
+    };
 
-    assert.equal(modePackaged, "local-service");
-    assert.equal(modeUnpackaged, "legacy-embedded");
-    assert.equal(modeExplicit, "legacy-embedded");
+    assert.equal(
+      DesktopBackendService.resolveEffectiveBackendMode(autoSettings, true),
+      "local-service",
+    );
+    assert.equal(
+      DesktopBackendService.resolveEffectiveBackendMode(autoSettings, false),
+      "legacy-embedded",
+    );
+  });
+
+  it("never overrides an explicit backend mode", () => {
+    assert.equal(
+      DesktopBackendService.resolveEffectiveBackendMode(
+        { backendMode: "remote", backendModeConfiguredByUser: true },
+        true,
+      ),
+      "remote",
+    );
+    assert.equal(
+      DesktopBackendService.resolveEffectiveBackendMode(
+        { backendMode: "remote", backendModeConfiguredByUser: true },
+        false,
+      ),
+      "remote",
+    );
+    assert.equal(
+      DesktopBackendService.resolveEffectiveBackendMode(
+        { backendMode: "legacy-embedded", backendModeConfiguredByUser: true },
+        true,
+      ),
+      "legacy-embedded",
+    );
   });
 
   it("orders p0d binary candidates with user override first, then packaged and dev paths", () => {
@@ -104,6 +116,8 @@ describe("DesktopBackendService helpers", () => {
     assert.equal(candidates[1], "/App/Contents/Resources/p0d/p0d");
     assert.include(candidates, "/repo/apps/p0d/dist/darwin-arm64/p0d");
     assert.include(candidates, "/Users/test/.p0code/bin/p0d");
+    assert.include(candidates, "/opt/homebrew/bin/p0d");
+    assert.include(candidates, "/usr/local/bin/p0d");
   });
 
   it("uses p0d.exe on Windows", () => {
@@ -583,6 +597,47 @@ describe("DesktopBackendService.layer", () => {
       const baseDir = yield* fileSystem.makeTempDirectoryScoped();
       const service = yield* DesktopBackendService.DesktopBackendService.pipe(
         Effect.provide(layerService(baseDir, DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS)),
+      );
+      assert.deepEqual(
+        runLikeSyncIpc(service.resolveEffectiveMode),
+        Exit.succeed("legacy-embedded"),
+      );
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("adopts local-service for a legacy default settings document when p0d resolves", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const baseDir = yield* fileSystem.makeTempDirectoryScoped();
+      yield* fileSystem.makeDirectory(`${baseDir}/bin`, { recursive: true });
+      yield* fileSystem.writeFileString(`${baseDir}/bin/p0d`, "#!/bin/sh\nexit 0\n");
+      const service = yield* DesktopBackendService.DesktopBackendService.pipe(
+        Effect.provide(
+          layerService(baseDir, {
+            ...DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS,
+            backendMode: "legacy-embedded",
+            backendModeConfiguredByUser: false,
+          }),
+        ),
+      );
+      assert.deepEqual(runLikeSyncIpc(service.resolveEffectiveMode), Exit.succeed("local-service"));
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("keeps an explicit embedded choice even when p0d resolves", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const baseDir = yield* fileSystem.makeTempDirectoryScoped();
+      yield* fileSystem.makeDirectory(`${baseDir}/bin`, { recursive: true });
+      yield* fileSystem.writeFileString(`${baseDir}/bin/p0d`, "#!/bin/sh\nexit 0\n");
+      const service = yield* DesktopBackendService.DesktopBackendService.pipe(
+        Effect.provide(
+          layerService(baseDir, {
+            ...DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS,
+            backendMode: "legacy-embedded",
+            backendModeConfiguredByUser: true,
+          }),
+        ),
       );
       assert.deepEqual(
         runLikeSyncIpc(service.resolveEffectiveMode),
