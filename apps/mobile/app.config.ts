@@ -2,7 +2,6 @@ import type { ExpoConfig } from "expo/config";
 
 import { BRAND_ASSET_PATHS } from "../../scripts/lib/brand-assets.ts";
 import {
-  MOBILE_APP_IDENTIFIERS,
   type MobileAppVariant,
   resolveMobileAppIdentifiers,
 } from "../../scripts/lib/mobile-app-identifiers.ts";
@@ -166,19 +165,16 @@ const VARIANT_CONFIG = {
   development: {
     appName: "p0code Dev",
     scheme: "t3code-dev",
-    ...MOBILE_APP_IDENTIFIERS.development,
     assets: DEVELOPMENT_ASSETS,
   },
   preview: {
     appName: "p0code Preview",
     scheme: "t3code-preview",
-    ...MOBILE_APP_IDENTIFIERS.preview,
     assets: PREVIEW_ASSETS,
   },
   production: {
     appName: "p0code",
     scheme: "t3code",
-    ...MOBILE_APP_IDENTIFIERS.production,
     assets: RELEASE_ASSETS,
   },
 } as const;
