@@ -11755,6 +11755,7 @@
   "2632f324dc2d9c48": "Agents",
   "58058320796d28f6": "Code",
   "1a07e4d043f5df4e": "Connections",
+  "eafcb353b1e1e824": "unavailable: saved connections did not load",
   "d8cd577c915539bd": "{label} accounts and token",
   "a5ea998202be1fbc": "{label} credentials",
   "8f636f473e42e657": "any local files uncommitted changes edited tracked files ignored env build output cleanup",

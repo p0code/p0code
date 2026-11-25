@@ -11751,6 +11751,7 @@
   "2632f324dc2d9c48": "Agenter",
   "58058320796d28f6": "Kod",
   "1a07e4d043f5df4e": "Anslutningar",
+  "eafcb353b1e1e824": "otillgängligt: sparade anslutningar lästes inte in",
   "d8cd577c915539bd": "{label}-konton och token",
   "a5ea998202be1fbc": "Autentiseringsuppgifter för {label}",
   "8f636f473e42e657": "alla lokala filer ocommittade ändringar redigerade spårade filer ignorerade env byggutdata rensning uncommitted cleanup",

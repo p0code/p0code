@@ -31,6 +31,11 @@ export function useHasPluginsEnvironment() {
   );
 }
 
+/** The saved connection catalog could not be read, so no environment's capabilities are known. */
+export function useSettingsCatalogUnavailable() {
+  return useEnvironments().catalogError !== null;
+}
+
 export function useAvailableSettingsSearchItems() {
   const { environments } = useEnvironments();
   // Explicit booleans keep flags out of the filter cache so environment updates do not rebuild the list.
@@ -59,6 +64,7 @@ export function useAvailableSettingsSearchItems() {
     ) === true;
   const hasSecretProvidersEnvironment = useHasSecretProvidersEnvironment();
   const hasPluginsEnvironment = useHasPluginsEnvironment();
+  const catalogUnavailable = useSettingsCatalogUnavailable();
   const hasThreadAutoSettlement =
     getThreadAutoSettlementSearchAvailability(environments).eligibleEnvironmentIds.length > 0;
   const primaryEnvironmentId = usePrimaryEnvironmentId();
@@ -90,5 +96,6 @@ export function useAvailableSettingsSearchItems() {
     hasPrimaryEnvironment: primaryEnvironmentId !== null,
     hasSecretProvidersEnvironment,
     hasPluginsEnvironment,
+    catalogUnavailable,
   });
 }

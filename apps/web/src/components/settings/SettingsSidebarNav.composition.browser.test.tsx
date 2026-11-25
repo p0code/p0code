@@ -13,6 +13,7 @@ vi.mock("./useAvailableSettingsSearchItems", () => ({
   ],
   useHasSecretProvidersEnvironment: () => false,
   useHasPluginsEnvironment: () => false,
+  useSettingsCatalogUnavailable: () => false,
 }));
 vi.mock("../chat/GlobalVoiceInputIndicator", () => ({ GlobalVoiceInputIndicator: () => null }));
 

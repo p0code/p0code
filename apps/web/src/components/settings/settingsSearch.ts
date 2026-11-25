@@ -96,6 +96,8 @@ export interface SettingsSearchAvailability {
   readonly hasPrimaryEnvironment?: boolean;
   readonly hasSecretProvidersEnvironment?: boolean;
   readonly hasPluginsEnvironment?: boolean;
+  /** The saved catalog could not be read, so capabilities are unknown; keep the rows, disabled. */
+  readonly catalogUnavailable?: boolean;
 }
 
 export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
@@ -196,11 +198,28 @@ const NAV_GROUPS = {
 export function settingsNavGroups(
   hasSecretProvidersEnvironment: boolean,
   hasPluginsEnvironment = false,
+  catalogUnavailable = false,
 ) {
+  // An unreadable catalog tells us nothing about capabilities, so keep the rows and say why they
+  // are disabled instead of making settings the user used before vanish.
+  if (catalogUnavailable) {
+    return NAV_GROUPS.all;
+  }
   if (hasSecretProvidersEnvironment) {
     return hasPluginsEnvironment ? NAV_GROUPS.all : NAV_GROUPS.withoutPlugins;
   }
   return hasPluginsEnvironment ? NAV_GROUPS.withoutSecrets : NAV_GROUPS.withoutBoth;
+}
+
+/** Why a settings section is visible but disabled, when the saved catalog did not load. */
+const SETTINGS_CATALOG_UNAVAILABLE_REASON = msg("unavailable: saved connections did not load");
+export function settingsSectionDisabledReason(
+  to: SettingsPath,
+  catalogUnavailable: boolean,
+): string | null {
+  return catalogUnavailable && (to === "/settings/secrets" || to === "/settings/plugins")
+    ? SETTINGS_CATALOG_UNAVAILABLE_REASON
+    : null;
 }
 
 export function keybindingSearchAnchorId<Command extends KeybindingCommand>(command: Command) {
@@ -1717,8 +1736,12 @@ export function filterAvailableSettingsSearchItems(
       (!item.fastWorktreeCheckoutOnly ||
         availability.hasFastWorktreeCheckoutEnvironment === true) &&
       (!item.textGeneratorsOnly || availability.hasTextGeneratorsEnvironment === true) &&
-      (!item.secretProvidersOnly || availability.hasSecretProvidersEnvironment === true) &&
-      (!item.pluginsOnly || availability.hasPluginsEnvironment === true),
+      (!item.secretProvidersOnly ||
+        availability.hasSecretProvidersEnvironment === true ||
+        availability.catalogUnavailable === true) &&
+      (!item.pluginsOnly ||
+        availability.hasPluginsEnvironment === true ||
+        availability.catalogUnavailable === true),
   );
 }
 
