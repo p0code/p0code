@@ -11,7 +11,7 @@ import {
   type ProviderInstanceId,
   type SidebarProjectGroupingMode,
 } from "@t3tools/contracts";
-import { ToolCallVisibility } from "@t3tools/contracts/settings";
+import { ToolCallVisibility, UsageDisplayMode } from "@t3tools/contracts/settings";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -168,6 +168,7 @@ export interface Preferences {
   readonly projectGroupingEnabled?: boolean;
   readonly projectGroupingMode?: SidebarProjectGroupingMode;
   readonly toolCallVisibility?: ToolCallVisibility;
+  readonly usageDisplayMode?: UsageDisplayMode;
   readonly workingShelfEnabled?: boolean;
   /** The kind of question the Workflows tab's Needs you list was last narrowed to. */
   readonly workflowQuestionKind?: string;
@@ -228,6 +229,7 @@ export class MobilePreferencesStore extends Context.Service<
 >()("@t3tools/mobile/persistence/mobile-preferences/MobilePreferencesStore") {}
 
 const isToolCallVisibility = Schema.is(ToolCallVisibility);
+const isUsageDisplayMode = Schema.is(UsageDisplayMode);
 const isPullRequestMergeMethod = Schema.is(PullRequestMergeMethod);
 
 function sanitizePreferences(parsed: Preferences): Preferences {
@@ -261,6 +263,7 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     projectGroupingEnabled?: boolean;
     projectGroupingMode?: SidebarProjectGroupingMode;
     toolCallVisibility?: ToolCallVisibility;
+    usageDisplayMode?: UsageDisplayMode;
     workingShelfEnabled?: boolean;
     workflowQuestionKind?: string;
     useLastProjectForNewThreads?: boolean;
@@ -393,6 +396,9 @@ function sanitizePreferences(parsed: Preferences): Preferences {
   }
   if (isToolCallVisibility(parsed.toolCallVisibility)) {
     preferences.toolCallVisibility = parsed.toolCallVisibility;
+  }
+  if (isUsageDisplayMode(parsed.usageDisplayMode)) {
+    preferences.usageDisplayMode = parsed.usageDisplayMode;
   }
   if (typeof parsed.workingShelfEnabled === "boolean") {
     preferences.workingShelfEnabled = parsed.workingShelfEnabled;

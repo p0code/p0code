@@ -24,6 +24,7 @@ import { ListSection } from "../../components/ui/ListSection";
 import { RowPressable } from "../../components/ui/RowPressable";
 import { cn } from "../../lib/cn";
 import { useEnvironmentServerConfig, useThreadShell } from "../../state/entities";
+import { SubagentContextRing } from "./ContextUsageRing";
 import { SUBAGENT_TONE_TEXT_CLASS, SubagentStatusDot } from "./SubagentStatusDot";
 import { SubagentStopButton } from "./SubagentStopButton";
 import {
@@ -233,6 +234,7 @@ function WorkflowMemberRow(props: {
               {presentation.statusLabel}
             </Text>
           </View>
+          <SubagentContextRing usage={shell?.source.contextUsage ?? member.contextUsage} />
           <WorkflowElapsed timing={member} />
           {canOpen ? (
             <SymbolView name="chevron.right" size={12} tintColorClassName="accent-icon-subtle" />

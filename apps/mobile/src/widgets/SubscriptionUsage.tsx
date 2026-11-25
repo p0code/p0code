@@ -55,21 +55,25 @@ function SubscriptionUsage(
       : undefined;
   const primary = palette?.foreground ?? "primary";
   const secondary = palette?.secondary ?? "secondary";
+  const usedMode = props.displayMode === "used";
+  const displayPercent = (remaining: number) => (usedMode ? 100 - remaining : remaining);
   // English until the app publishes its first snapshot in the UI language.
   const text = props.text ?? {
     refresh: "Open p0code to refresh",
     noSessionLimit: "No session limit reported",
     noWeeklyLimit: "No weekly limit reported",
-    subscriptionRemaining: "Subscription remaining",
-    percentLeft: "{remaining}% left",
-    windowPercentLeft: "{window} · {remaining}% left",
+    subscriptionRemaining: usedMode ? "Subscription used" : "Subscription remaining",
+    percentLeft: usedMode ? "{remaining}% used" : "{remaining}% left",
+    windowPercentLeft: usedMode ? "{window} · {remaining}% used" : "{window} · {remaining}% left",
     notApplicable: "N/A",
     openApp: "Open p0code",
     noLimits: "No subscription limits available.",
     asOf: "As of {time}",
     tapToConnect: "Tap to connect in p0code",
     providerAccessibility: "{provider}. {detail}.",
-    windowAccessibility: "{provider}, {window}, {remaining} percent remaining. {reset}. {detail}.",
+    windowAccessibility: usedMode
+      ? "{provider}, {window}, {remaining} percent used. {reset}. {detail}."
+      : "{provider}, {window}, {remaining} percent remaining. {reset}. {detail}.",
     moreInApp: {} as Record<string, string>,
   };
   const providers = props.providers ?? [
@@ -123,6 +127,7 @@ function SubscriptionUsage(
       ...(monochrome ? [] : [tint(provider.name === "Claude" ? "#d97757" : "#8e8e93")]),
     ];
     if (accessory) {
+      const tightestDisplayed = tightest ? displayPercent(tightest.remaining) : 0;
       return (
         <VStack
           key={provider.name}
@@ -135,7 +140,7 @@ function SubscriptionUsage(
                 ? text.windowAccessibility
                     .replace("{provider}", provider.name)
                     .replace("{window}", tightest.label)
-                    .replace("{remaining}", String(tightest.remaining))
+                    .replace("{remaining}", String(tightestDisplayed))
                     .replace("{reset}", tightest.reset)
                     .replace("{detail}", provider.detail)
                 : text.providerAccessibility
@@ -165,14 +170,14 @@ function SubscriptionUsage(
               ]}
             >
               {tightest
-                ? text.percentLeft.replace("{remaining}", String(tightest.remaining))
+                ? text.percentLeft.replace("{remaining}", String(tightestDisplayed))
                 : period !== "auto" && !stale && provider.windows.length > 0
                   ? text.notApplicable
                   : text.openApp}
             </Text>
           </HStack>
           {tightest ? (
-            <ProgressView value={tightest.remaining / 100} modifiers={barModifiers} />
+            <ProgressView value={tightestDisplayed / 100} modifiers={barModifiers} />
           ) : null}
         </VStack>
       );
@@ -203,61 +208,64 @@ function SubscriptionUsage(
             {detail === text.subscriptionRemaining ? " " : detail}
           </Text>
         ) : null}
-        {shown.map((window) => (
-          <VStack
-            key={window.label}
-            alignment="leading"
-            spacing={dense ? 1 : 2}
-            modifiers={[
-              accessibilityElement("ignore"),
-              accessibilityLabel(
-                text.windowAccessibility
-                  .replace("{provider}", provider.name)
-                  .replace("{window}", window.label)
-                  .replace("{remaining}", String(window.remaining))
-                  .replace("{reset}", window.reset)
-                  .replace("{detail}", provider.detail),
-              ),
-            ]}
-          >
-            <HStack spacing={4}>
-              <Text
-                modifiers={[
-                  font({ textStyle: compact || dense ? "caption2" : "caption" }),
-                  foregroundStyle(secondary),
-                  lineLimit(1),
-                ]}
-              >
-                {window.label}
-              </Text>
-              <Spacer />
-              <Text
-                modifiers={[
-                  font({
-                    textStyle: compact || dense ? "caption2" : "caption",
-                    weight: "semibold",
-                  }),
-                  lineLimit(1),
-                  layoutPriority(1),
-                  foregroundStyle(
-                    window.remaining <= 10 && !monochrome
-                      ? (palette?.danger ??
-                          (widgetEnvironment.colorScheme === "light" ? "#dc2626" : "#fca5a5"))
-                      : primary,
-                  ),
-                ]}
-              >
-                {text.percentLeft.replace("{remaining}", String(window.remaining))}
-              </Text>
-            </HStack>
-            <ProgressView value={window.remaining / 100} modifiers={barModifiers} />
-            {!compact ? (
-              <Text modifiers={[font({ size: 10 }), foregroundStyle(secondary), lineLimit(1)]}>
-                {window.reset}
-              </Text>
-            ) : null}
-          </VStack>
-        ))}
+        {shown.map((window) => {
+          const displayed = displayPercent(window.remaining);
+          return (
+            <VStack
+              key={window.label}
+              alignment="leading"
+              spacing={dense ? 1 : 2}
+              modifiers={[
+                accessibilityElement("ignore"),
+                accessibilityLabel(
+                  text.windowAccessibility
+                    .replace("{provider}", provider.name)
+                    .replace("{window}", window.label)
+                    .replace("{remaining}", String(displayed))
+                    .replace("{reset}", window.reset)
+                    .replace("{detail}", provider.detail),
+                ),
+              ]}
+            >
+              <HStack spacing={4}>
+                <Text
+                  modifiers={[
+                    font({ textStyle: compact || dense ? "caption2" : "caption" }),
+                    foregroundStyle(secondary),
+                    lineLimit(1),
+                  ]}
+                >
+                  {window.label}
+                </Text>
+                <Spacer />
+                <Text
+                  modifiers={[
+                    font({
+                      textStyle: compact || dense ? "caption2" : "caption",
+                      weight: "semibold",
+                    }),
+                    lineLimit(1),
+                    layoutPriority(1),
+                    foregroundStyle(
+                      window.remaining <= 10 && !monochrome
+                        ? (palette?.danger ??
+                            (widgetEnvironment.colorScheme === "light" ? "#dc2626" : "#fca5a5"))
+                        : primary,
+                    ),
+                  ]}
+                >
+                  {text.percentLeft.replace("{remaining}", String(displayed))}
+                </Text>
+              </HStack>
+              <ProgressView value={displayed / 100} modifiers={barModifiers} />
+              {!compact ? (
+                <Text modifiers={[font({ size: 10 }), foregroundStyle(secondary), lineLimit(1)]}>
+                  {window.reset}
+                </Text>
+              ) : null}
+            </VStack>
+          );
+        })}
         {!compact && !stale && hiddenCount > 0 ? (
           <Text
             modifiers={[font({ textStyle: "caption2" }), foregroundStyle(secondary), lineLimit(1)]}

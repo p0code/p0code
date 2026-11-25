@@ -54,10 +54,12 @@ export function SubscriptionUsage(props: SubscriptionUsageProps, environment: Wi
         track: material.surfaceVariant,
         error: material.error,
       };
+  const usedMode = props.displayMode === "used";
+  const displayPercent = (remaining: number) => (usedMode ? 100 - remaining : remaining);
   // English until the app publishes its first snapshot in the UI language.
   const text = props.text ?? {
     refresh: "Open p0code to refresh",
-    left: "left",
+    left: usedMode ? "used" : "left",
     asOf: "As of {time}",
     tapToConnect: "Tap to connect in p0code",
     moreInApp: {} as Record<string, string>,
@@ -164,11 +166,15 @@ export function SubscriptionUsage(props: SubscriptionUsageProps, environment: Wi
   ) => {
     if (account.remaining === undefined)
       return <Spacer key={account.name} modifiers={[size(segmentWidth, barHeight)]} />;
-    const fill = (segmentWidth * account.remaining) / 100;
+    const displayed = displayPercent(account.remaining);
+    const fill = (segmentWidth * displayed) / 100;
     const refill = (segmentWidth * Math.min(100 - account.remaining, account.refill ?? 0)) / 100;
     const left = timeLeft(account);
+    const paceFraction = left === null ? null : usedMode ? 1 - left : left;
     const tick =
-      left === null ? null : Math.max(0, Math.min(segmentWidth - 5, segmentWidth * left - 2.5));
+      paceFraction === null
+        ? null
+        : Math.max(0, Math.min(segmentWidth - 5, segmentWidth * paceFraction - 2.5));
     return (
       <Box
         key={account.name}
@@ -179,13 +185,15 @@ export function SubscriptionUsage(props: SubscriptionUsageProps, environment: Wi
         ) : null}
         {refill > 0 ? (
           <Row modifiers={[size(segmentWidth, barHeight)]}>
-            <Spacer modifiers={[width(segmentWidth - refill)]} />
+            <Spacer
+              modifiers={[width(usedMode ? Math.max(0, fill - refill) : segmentWidth - refill)]}
+            />
             <Image
               source={{ uri: "t3_widget_hatch" }}
               tint={color}
               alpha={0.22}
               contentScale="fillBounds"
-              modifiers={[size(refill, barHeight)]}
+              modifiers={[size(usedMode ? Math.min(fill, refill) : refill, barHeight)]}
             />
           </Row>
         ) : null}
@@ -221,7 +229,7 @@ export function SubscriptionUsage(props: SubscriptionUsageProps, environment: Wi
               maxLines={1}
               style={{ fontSize: 10, fontWeight: "bold" }}
             >
-              {`${account.remaining}%`}
+              {`${displayed}% ${text.left}`}
             </Text>
           </Row>
         ) : null}
@@ -254,8 +262,8 @@ export function SubscriptionUsage(props: SubscriptionUsageProps, environment: Wi
         {accounts.flatMap((account, index) => [
           index > 0 ? <Spacer key={`gap-${account.name}`} modifiers={[width(gap)]} /> : null,
           segment(account, account.color ?? line.color, segmentWidth, barHeight, {
-            percent: barHeight >= 16 && multi && segmentWidth >= 34,
-            name: multi && segmentWidth >= 76,
+            percent: barHeight >= 16 && multi && segmentWidth >= 52,
+            name: multi && segmentWidth >= 92,
             reset: barHeight >= 16 && !multi && segmentWidth >= 120,
           }),
         ])}
@@ -263,13 +271,13 @@ export function SubscriptionUsage(props: SubscriptionUsageProps, environment: Wi
     );
   };
 
-  const percentText = (remaining: number, fontSize: number) => (
+  const percentText = (remaining: number, fontSize: number, withWord = false) => (
     <Text
       color={low(remaining) ? colors.error : colors.onSurface}
       maxLines={1}
       style={{ fontSize, fontWeight: "bold" }}
     >
-      {`${remaining}%`}
+      {withWord ? `${displayPercent(remaining)}% ${text.left}` : `${displayPercent(remaining)}%`}
     </Text>
   );
 
@@ -301,9 +309,9 @@ export function SubscriptionUsage(props: SubscriptionUsageProps, environment: Wi
           >
             {label}
           </Text>
-          {bar(line, contentWidth - labelWidth - 40, 6)}
-          <Box contentAlignment="centerEnd" modifiers={[width(40)]}>
-            {percentText(line.window.remaining, 10)}
+          {bar(line, contentWidth - labelWidth - 58, 6)}
+          <Box contentAlignment="centerEnd" modifiers={[width(58)]}>
+            {percentText(line.window.remaining, 10, true)}
           </Box>
         </Row>
       );

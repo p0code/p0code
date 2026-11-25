@@ -11,23 +11,31 @@ import {
   type ServerProviderResetCredits,
   type ServerProviderUsageWindow,
 } from "@t3tools/contracts";
+import { DEFAULT_USAGE_DISPLAY_MODE } from "@t3tools/contracts/settings";
 import {
   type ResetCreditChoice,
+  displayUsagePercent,
+  paceDisplayPercent,
   paceOf,
-  paceRemainingPercent,
   remainingPercent,
   resetCountdown,
 } from "@t3tools/shared/usageLimits";
-import { formatDuration, limitsNotice, resetCreditChoices } from "@t3tools/shared/usageLimitsCopy";
-import { msg, T, useGT, useMessages, Var } from "gt-react-native";
+import {
+  formatDuration,
+  formatUsagePercent,
+  limitsNotice,
+  resetCreditChoices,
+} from "@t3tools/shared/usageLimitsCopy";
+import { msg, T, useGT, useMessages } from "gt-react-native";
 import { type ReactNode, useContext, useRef, useState } from "react";
-import { Atom } from "effect/reactivity";
+import { AsyncResult, Atom } from "effect/reactivity";
 import { Pressable, View } from "react-native";
 import { tryOpenExternalUrl } from "../../lib/openExternalUrl";
 
 import { AppText as Text } from "../../components/ui/AppText";
 import { ProviderIcon } from "../../components/ProviderIcon";
 import { m as resolveNow, type MessageResolver } from "../../i18n/messages";
+import { mobilePreferencesAtom } from "../../state/preferences";
 import { environmentPresentations } from "../../state/presentation";
 import { serverEnvironment } from "../../state/server";
 import { readEnvironmentScope, useEnvironmentScope } from "../../state/session";
@@ -61,16 +69,21 @@ function WindowRow(props: {
   readonly now: number;
 }) {
   const { window, now } = props;
+  const preferencesResult = useAtomValue(mobilePreferencesAtom);
+  const usageDisplayMode = AsyncResult.isSuccess(preferencesResult)
+    ? (preferencesResult.value.usageDisplayMode ?? DEFAULT_USAGE_DISPLAY_MODE)
+    : DEFAULT_USAGE_DISPLAY_MODE;
   const remaining = remainingPercent(window);
-  const timeLeft = paceRemainingPercent(window, now);
+  const displayed = displayUsagePercent(window, usageDisplayMode);
+  const pacePosition = paceDisplayPercent(window, now, usageDisplayMode);
   const pace = paceOf(window, now);
   const m = useMessages();
   const resetsIn = resetLabels(window, now, m)?.full;
   const [barWidth, setBarWidth] = useState(0);
   const tickX =
-    timeLeft === null || barWidth < 6
+    pacePosition === null || barWidth < 6
       ? null
-      : Math.min(Math.max((barWidth * timeLeft) / 100, 3), barWidth - 3);
+      : Math.min(Math.max((barWidth * pacePosition) / 100, 3), barWidth - 3);
   const bar = (
     <View
       className="h-1.5 flex-row overflow-hidden rounded-full bg-subtle"
@@ -85,11 +98,11 @@ function WindowRow(props: {
               : "h-full rounded-full bg-foreground"
         }
         style={[
-          { flex: remaining },
+          { flex: displayed },
           remaining > 30 && props.color ? { backgroundColor: props.color } : null,
         ]}
       />
-      <View style={{ flex: 100 - remaining }} />
+      <View style={{ flex: 100 - displayed }} />
     </View>
   );
   return (
@@ -97,9 +110,7 @@ function WindowRow(props: {
       <View className="flex-row items-baseline justify-between gap-3">
         <Text className="text-sm text-foreground">{window.label}</Text>
         <Text className="text-sm font-t3-medium tabular-nums text-foreground">
-          <T>
-            <Var>{remaining}</Var>% left
-          </T>
+          {formatUsagePercent(displayed, usageDisplayMode, m)}
         </Text>
       </View>
       <View
