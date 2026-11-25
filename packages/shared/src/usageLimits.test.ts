@@ -555,7 +555,190 @@ describe("pools", () => {
     }
   });
 
-  it("keeps plans without a stable id apart when their reset times differ", () => {
+  it("shows one bar when two reads of the same OpenCode Go plan drift apart", () => {
+    const goLimits = (rollingResetsAt: string): ServerProviderUsageLimits => ({
+      checkedAt,
+      windows: [
+        {
+          id: "go_rolling",
+          kind: "session",
+          label: "Go · Session",
+          usedPercent: 0,
+          windowDurationMins: 300,
+          resetsAt: rollingResetsAt,
+        },
+        {
+          id: "go_weekly",
+          kind: "weekly",
+          label: "Go · Weekly",
+          usedPercent: 36,
+          windowDurationMins: 7 * 24 * 60,
+          resetsAt: "2026-09-08T00:00:00.000Z",
+        },
+        {
+          id: "go_monthly",
+          kind: "monthly",
+          label: "Go · Monthly",
+          usedPercent: 64,
+          resetsAt: "2026-10-01T00:00:00.000Z",
+        },
+      ],
+    });
+    const instance = (instanceId: string, displayName: string, rollingResetsAt: string) =>
+      provider({
+        driver: ProviderDriverKind.make("opencode"),
+        instanceId: ProviderInstanceId.make(instanceId),
+        displayName,
+        usageLimits: goLimits(rollingResetsAt),
+      });
+    // The rolling window resets five hours after each read, so every environment moves it.
+    const accounts = collectLimitAccounts(
+      new Map([
+        [
+          EnvironmentId.make("env-a"),
+          {
+            ...laptop,
+            serverConfig: {
+              providers: [instance("opencode", "OpenCode", "2026-09-03T17:00:00.862Z")],
+            },
+          },
+        ],
+        [
+          EnvironmentId.make("env-b"),
+          {
+            entry: { target: { label: "Desktop" } },
+            serverConfig: {
+              providers: [instance("opencode_remote", "OpenCode Go", "2026-09-03T17:00:07.451Z")],
+            },
+          },
+        ],
+      ]),
+    );
+    expect(accounts).toHaveLength(1);
+    expect(
+      collectLimitPools(accounts, now)[0]?.windows.map((window) => window.members.length),
+    ).toEqual([1, 1, 1]);
+  });
+
+  it("shows one bar when a hub and an instance read the same OpenCode Go plan", () => {
+    const goWindows = (rollingResetsAt: string): ServerProviderUsageLimits["windows"] => [
+      {
+        id: "go_rolling",
+        kind: "session",
+        label: "Go · Session",
+        usedPercent: 0,
+        windowDurationMins: 300,
+        resetsAt: rollingResetsAt,
+      },
+      {
+        id: "go_weekly",
+        kind: "weekly",
+        label: "Go · Weekly",
+        usedPercent: 36,
+        windowDurationMins: 7 * 24 * 60,
+        resetsAt: "2026-09-08T00:00:00.000Z",
+      },
+      {
+        id: "go_monthly",
+        kind: "monthly",
+        label: "Go · Monthly",
+        usedPercent: 64,
+        resetsAt: "2026-10-01T00:00:00.000Z",
+      },
+    ];
+    const accounts = collectLimitAccounts(
+      new Map([
+        [
+          EnvironmentId.make("env-a"),
+          {
+            ...laptop,
+            serverConfig: {
+              providers: [
+                provider({
+                  driver: ProviderDriverKind.make("opencode"),
+                  instanceId: ProviderInstanceId.make("opencode"),
+                  usageLimits: { checkedAt, windows: goWindows("2026-09-03T17:00:00.862Z") },
+                }),
+              ],
+              usageLimitSources: [
+                {
+                  ...source,
+                  accounts: [
+                    {
+                      id: "opencode-go.json",
+                      driver: ProviderDriverKind.make("opencode"),
+                      usageLimits: {
+                        checkedAt: "2026-09-03T11:30:00.000Z",
+                        windows: goWindows("2026-09-03T17:00:07.451Z"),
+                      },
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        ],
+      ]),
+    );
+    expect(accounts).toHaveLength(1);
+    expect(collectLimitPools(accounts, now)[0]?.windows[0]?.members).toHaveLength(1);
+  });
+
+  it("keeps two genuinely different OpenCode Go accounts apart", () => {
+    const go = (instanceId: string, weeklyResetsAt: string, monthlyResetsAt: string) =>
+      provider({
+        driver: ProviderDriverKind.make("opencode"),
+        instanceId: ProviderInstanceId.make(instanceId),
+        usageLimits: {
+          checkedAt,
+          windows: [
+            {
+              id: "go_rolling",
+              kind: "session",
+              label: "Go · Session",
+              usedPercent: 0,
+              windowDurationMins: 300,
+              resetsAt: "2026-09-03T17:00:00.862Z",
+            },
+            {
+              id: "go_weekly",
+              kind: "weekly",
+              label: "Go · Weekly",
+              usedPercent: 36,
+              windowDurationMins: 7 * 24 * 60,
+              resetsAt: weeklyResetsAt,
+            },
+            {
+              id: "go_monthly",
+              kind: "monthly",
+              label: "Go · Monthly",
+              usedPercent: 64,
+              resetsAt: monthlyResetsAt,
+            },
+          ],
+        },
+      });
+    const accounts = collectLimitAccounts(
+      new Map([
+        [
+          EnvironmentId.make("env-a"),
+          {
+            ...laptop,
+            serverConfig: {
+              providers: [
+                go("opencode_a", "2026-09-08T00:00:00.000Z", "2026-10-01T00:00:00.000Z"),
+                go("opencode_b", "2026-09-09T00:00:00.000Z", "2026-10-02T00:00:00.000Z"),
+              ],
+            },
+          },
+        ],
+      ]),
+    );
+    expect(accounts).toHaveLength(2);
+    expect(collectLimitPools(accounts, now)[0]?.windows[0]?.members).toHaveLength(2);
+  });
+
+  it("keeps plans without a stable id apart when their fixed reset times differ", () => {
     const go = (usedPercent: number, resetsAt: string) =>
       provider({
         driver: ProviderDriverKind.make("opencode"),
@@ -564,9 +747,9 @@ describe("pools", () => {
           checkedAt,
           windows: [
             {
-              id: "go_rolling",
-              kind: "session",
-              label: "Go · Session",
+              id: "go_weekly",
+              kind: "weekly",
+              label: "Go · Weekly",
               usedPercent,
               resetsAt,
             },
@@ -580,7 +763,7 @@ describe("pools", () => {
           {
             ...laptop,
             serverConfig: {
-              providers: [go(51, "2026-09-03T12:30:00.000Z"), go(51, "2026-09-03T13:00:00.000Z")],
+              providers: [go(51, "2026-09-08T00:00:00.000Z"), go(51, "2026-09-09T00:00:00.000Z")],
             },
           },
         ],
