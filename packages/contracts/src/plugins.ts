@@ -15,6 +15,7 @@ export const PluginCapability = Schema.Literals([
   "http:routes",
   "auth:issue-device-credentials",
   "orchestration:read-activity",
+  "agent:instructions",
 ]);
 export type PluginCapability = typeof PluginCapability.Type;
 

@@ -19,6 +19,8 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Ref from "effect/Ref";
 import * as Scope from "effect/Scope";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
@@ -36,6 +38,9 @@ export class PluginHostBindings extends Context.Service<
     ) => Effect.Effect<PluginContext["Service"]>;
     /** Ends the sessions and pairing links a plugin minted. */
     readonly revokeIssued: (pluginId: string) => Effect.Effect<void>;
+    readonly migrateLegacyData: (
+      settings: ServerSettings.ServerSettingsService["Service"],
+    ) => Effect.Effect<void>;
     readonly platform: Context.Context<Exclude<PluginServices, PluginContext>>;
   }
 >()("t3/plugins/PluginHost/PluginHostBindings") {}
@@ -43,6 +48,31 @@ export class PluginHostBindings extends Context.Service<
 export class BundledPlugins extends Context.Service<BundledPlugins, ReadonlyArray<Plugin>>()(
   "t3/plugins/PluginHost/BundledPlugins",
 ) {}
+
+/**
+ * Late-bound reader for active plugin instructions so orchestration layers built before
+ * `PluginHost` can still query running plugins on every turn without a layer cycle.
+ */
+export class PluginAgentInstructions extends Context.Service<
+  PluginAgentInstructions,
+  {
+    readonly read: Effect.Effect<ReadonlyArray<string>>;
+    readonly attach: (read: Effect.Effect<ReadonlyArray<string>>) => Effect.Effect<void>;
+  }
+>()("t3/plugins/PluginHost/PluginAgentInstructions") {}
+
+export const layerAgentInstructions = Layer.effect(
+  PluginAgentInstructions,
+  Effect.gen(function* () {
+    const reader = yield* Ref.make<Effect.Effect<ReadonlyArray<string>>>(Effect.succeed([]));
+    return PluginAgentInstructions.of({
+      read: Effect.flatten(Ref.get(reader)),
+      attach: Effect.fn("PluginAgentInstructions.attach")(function* (next) {
+        yield* Ref.set(reader, next);
+      }),
+    });
+  }),
+);
 
 export class PluginHost extends Context.Service<
   PluginHost,
@@ -54,6 +84,8 @@ export class PluginHost extends Context.Service<
     readonly invoke: (input: PluginInvokeInput) => Effect.Effect<unknown, PluginOperationError>;
     /** The handler a running plugin serves at `path`, if any. */
     readonly route: (path: string) => Effect.Effect<PluginRouteHandler | null>;
+    /** Instruction blocks from running plugins that declared `agent:instructions`. */
+    readonly agentInstructions: Effect.Effect<ReadonlyArray<string>>;
   }
 >()("t3/plugins/PluginHost") {}
 
@@ -222,6 +254,36 @@ const make = Effect.gen(function* () {
       return null;
     });
 
+  const agentInstructions: PluginHost["Service"]["agentInstructions"] = Effect.gen(function* () {
+    const blocks: Array<string> = [];
+    for (const plugin of plugins) {
+      if (!plugin.manifest.capabilities.includes("agent:instructions")) continue;
+      const reader = running.get(plugin.manifest.id)?.started.agentInstructions;
+      if (reader === undefined) continue;
+      const text = yield* reader.pipe(
+        Effect.timeout("5 seconds"),
+        Effect.catchCause((cause) =>
+          Effect.logWarning("Plugin agentInstructions failed", {
+            plugin: plugin.manifest.id,
+            cause,
+          }).pipe(Effect.as(null)),
+        ),
+      );
+      if (typeof text === "string" && text.trim().length > 0) {
+        blocks.push(text);
+      }
+    }
+    return blocks;
+  });
+
+  const instructionsSlot = yield* Effect.serviceOption(PluginAgentInstructions);
+  if (Option.isSome(instructionsSlot)) {
+    yield* instructionsSlot.value.attach(agentInstructions);
+    yield* Effect.addFinalizer(() => instructionsSlot.value.attach(Effect.succeed([])));
+  }
+
+  yield* bindings.migrateLegacyData(settingsService);
+
   // A plugin turned off while the server was down may have left sessions behind.
   const initial = yield* settingsService.getSettings.pipe(
     Effect.map((settings) => settings.plugins),
@@ -269,6 +331,7 @@ const make = Effect.gen(function* () {
     setEnabled,
     invoke,
     route,
+    agentInstructions,
   });
 });
 

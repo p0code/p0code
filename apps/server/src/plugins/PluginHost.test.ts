@@ -5,6 +5,7 @@ import {
   WS_METHODS,
 } from "@t3tools/contracts";
 import { definePlugin, PluginContext, PluginError, type PluginServices } from "@t3tools/plugin-api";
+import * as PtyAdapter from "@t3tools/shared/PtyAdapter";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
@@ -20,6 +21,8 @@ import * as ServerSettings from "../serverSettings.ts";
 import {
   BundledPlugins,
   layer as pluginHostLayer,
+  layerAgentInstructions,
+  PluginAgentInstructions,
   PluginHost,
   PluginHostBindings,
 } from "./PluginHost.ts";
@@ -60,7 +63,31 @@ const broken = definePlugin({
   start: Effect.fail(new PluginError({ message: "No network today." })),
 });
 
+const advisor = definePlugin({
+  manifest: manifest("advisor", ["agent:instructions"]),
+  actions: {},
+  start: Effect.succeed({
+    actions: {},
+    agentInstructions: Effect.succeed("<plugin_note>remember this</plugin_note>"),
+  }),
+});
+
+const undeclaredAdvisor = definePlugin({
+  manifest: manifest("undeclared-advisor", []),
+  actions: {},
+  start: Effect.succeed({
+    actions: {},
+    agentInstructions: Effect.succeed("<forbidden>nope</forbidden>"),
+  }),
+});
+
 const unusedContext = Effect.fail(new PluginError({ message: "unused" }));
+const stubPtyLayer = Layer.succeed(
+  PtyAdapter.PtyAdapter,
+  PtyAdapter.PtyAdapter.of({
+    spawn: () => Effect.die("unused"),
+  }),
+);
 
 const layerBindings = Layer.effect(
   PluginHostBindings,
@@ -69,6 +96,7 @@ const layerBindings = Layer.effect(
     return PluginHostBindings.of({
       platform,
       revokeIssued: (pluginId) => Effect.sync(() => revoked.push(pluginId)),
+      migrateLegacyData: () => Effect.void,
       contextFor: (pluginManifest, reportStatus) =>
         Effect.succeed(
           PluginContext.of({
@@ -95,11 +123,16 @@ const layerBindings = Layer.effect(
         ),
     });
   }),
-).pipe(Layer.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer, FetchHttpClient.layer)));
+).pipe(
+  Layer.provide(
+    Layer.mergeAll(NodeServices.layer, NodeCrypto.layer, FetchHttpClient.layer, stubPtyLayer),
+  ),
+);
 
 const layerHost = pluginHostLayer.pipe(
-  Layer.provide(Layer.succeed(BundledPlugins, [echo, broken])),
+  Layer.provide(Layer.succeed(BundledPlugins, [echo, broken, advisor, undeclaredAdvisor])),
   Layer.provide(layerBindings),
+  Layer.provideMerge(layerAgentInstructions),
   Layer.provideMerge(ServerSettings.ServerSettingsService.layerTest()),
 );
 
@@ -177,6 +210,34 @@ describe("PluginHost", () => {
           );
         assert.strictEqual(error, "Unknown plugin.");
       }),
+    );
+
+    it.effect(
+      "exposes agentInstructions only for running plugins declaring agent:instructions",
+      () =>
+        Effect.gen(function* () {
+          const host = yield* PluginHost;
+          const slot = yield* PluginAgentInstructions;
+          assert.deepStrictEqual(yield* host.agentInstructions, []);
+          assert.deepStrictEqual(yield* slot.read, []);
+
+          yield* host.setEnabled({ pluginId: "advisor", enabled: true });
+          assert.deepStrictEqual(yield* host.agentInstructions, [
+            "<plugin_note>remember this</plugin_note>",
+          ]);
+          assert.deepStrictEqual(yield* slot.read, ["<plugin_note>remember this</plugin_note>"]);
+
+          yield* host.setEnabled({ pluginId: "undeclared-advisor", enabled: true });
+          assert.strictEqual((yield* snapshotOf("undeclared-advisor"))?.state, "failed");
+          assert.deepStrictEqual(yield* host.agentInstructions, [
+            "<plugin_note>remember this</plugin_note>",
+          ]);
+
+          yield* host.setEnabled({ pluginId: "advisor", enabled: false });
+          yield* host.setEnabled({ pluginId: "undeclared-advisor", enabled: false });
+          assert.deepStrictEqual(yield* host.agentInstructions, []);
+          assert.deepStrictEqual(yield* slot.read, []);
+        }),
     );
   });
 

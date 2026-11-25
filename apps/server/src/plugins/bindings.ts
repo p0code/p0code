@@ -29,7 +29,9 @@ import * as ServerConfig from "../config.ts";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.ts";
 import * as ProjectService from "../project/ProjectService.ts";
+import type * as ServerSettings from "../serverSettings.ts";
 import { loopbackUrlHostForAddress } from "../startupAccess.ts";
+import { migrateObsidianSharedMemory } from "./migrateObsidianSharedMemory.ts";
 import { PluginHostBindings } from "./PluginHost.ts";
 
 /** Sessions and links a plugin mints carry this subject, so disabling it can end them. */
@@ -220,9 +222,22 @@ export const layer = Layer.effect(
       });
     });
 
+    const migrateLegacyData = Effect.fn("PluginHostBindings.migrateLegacyData")(function* (
+      settings: ServerSettings.ServerSettingsService["Service"],
+    ) {
+      yield* migrateObsidianSharedMemory({
+        stateDir: config.stateDir,
+        fileSystem,
+        path,
+        secrets,
+        settings,
+      });
+    });
+
     return PluginHostBindings.of({
       contextFor,
       revokeIssued,
+      migrateLegacyData,
       platform,
     });
   }),

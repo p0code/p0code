@@ -5,6 +5,7 @@ import type {
   ThreadId,
 } from "@t3tools/contracts";
 import type { AgentAwarenessState } from "@t3tools/shared/agentAwareness";
+import type * as PtyAdapter from "@t3tools/shared/PtyAdapter";
 import * as Context from "effect/Context";
 import type * as Digest from "effect/crypto/Digest";
 import type * as SecureRandom from "effect/crypto/SecureRandom";
@@ -81,6 +82,7 @@ export type PluginServices =
   | FileSystem.FileSystem
   | Path.Path
   | ChildProcessSpawner.ChildProcessSpawner
+  | PtyAdapter.PtyAdapter
   | Digest.Digest
   | SecureRandom.SecureRandom
   | Signature.Signature;
@@ -103,6 +105,8 @@ export interface PluginInstance<Actions extends PluginActionSchemas> {
     ) => Effect.Effect<Actions[K]["output"]["Type"], PluginError>;
   };
   readonly routes?: Readonly<Record<string, PluginRouteHandler>>;
+  /** Optional text appended to every agent turn; requires `agent:instructions`. */
+  readonly agentInstructions?: Effect.Effect<string | null>;
 }
 
 /** What the host runs. Built by `definePlugin`, which owns decoding at the wire. */
@@ -115,6 +119,7 @@ export interface Plugin {
 export interface StartedPlugin {
   readonly invoke: (action: string, input: unknown) => Effect.Effect<unknown, PluginError>;
   readonly routes: ReadonlyMap<string, PluginRouteHandler>;
+  readonly agentInstructions?: Effect.Effect<string | null>;
 }
 
 export function definePlugin<Actions extends PluginActionSchemas>(definition: {
@@ -142,6 +147,14 @@ export function definePlugin<Actions extends PluginActionSchemas>(definition: {
             return Effect.fail(new PluginError({ message: `Route ${path} is not declared.` }));
           }
         }
+        if (
+          instance.agentInstructions !== undefined &&
+          !definition.manifest.capabilities.includes("agent:instructions")
+        ) {
+          return Effect.fail(
+            new PluginError({ message: "Capability agent:instructions is not declared." }),
+          );
+        }
         const invoke = (action: string, input: unknown) => {
           const codec = codecs.get(action);
           const handler = Object.hasOwn(instance.actions, action)
@@ -166,7 +179,13 @@ export function definePlugin<Actions extends PluginActionSchemas>(definition: {
             ),
           );
         };
-        return Effect.succeed({ invoke, routes } satisfies StartedPlugin);
+        return Effect.succeed({
+          invoke,
+          routes,
+          ...(instance.agentInstructions === undefined
+            ? {}
+            : { agentInstructions: instance.agentInstructions }),
+        } satisfies StartedPlugin);
       }),
     ),
   };
