@@ -120,13 +120,14 @@ export const readT3ImportStatus = async (input: T3ImportStatusInput): Promise<T3
   return { available, stockHome, appHome, fresh, reason };
 };
 
+// @effect-diagnostics-next-line extendsNativeError:off -- the RPC handler throws this before any Effect failure channel sees it.
 export class T3ImportUnavailableError extends Error {
-  constructor(
-    readonly reason: T3ImportStatusReason,
-    detail: string,
-  ) {
+  readonly reason: T3ImportStatusReason;
+
+  constructor(reason: T3ImportStatusReason, detail: string) {
     super(detail);
     this.name = "T3ImportUnavailableError";
+    this.reason = reason;
   }
 }
 
@@ -143,7 +144,7 @@ export const acceptT3Import = async (input: AcceptT3ImportInput): Promise<T3Impo
       `This p0code home cannot import T3 Code data (${status.reason}).`,
     );
   }
-  const requestedAt = DateTime.formatIso(DateTime.makeUnsafe(input.nowMs ?? Date.now()));
+  const requestedAt = DateTime.formatIso(DateTime.makeUnsafe(input.nowMs ?? Date.now())); // @effect-diagnostics globalDate:off -- plain-Promise path, no Clock in scope.
   const marker = { requestedAt, source: input.stockHome, appVersion: input.appVersion };
   const markerPath = userdataPath(input.appHome, PENDING_T3_IMPORT_FILE);
   await NodeFSP.mkdir(NodePath.dirname(markerPath), { recursive: true, mode: 0o700 });
@@ -191,6 +192,7 @@ const removePendingT3Import = (appHome: string) =>
   NodeFSP.rm(userdataPath(appHome, PENDING_T3_IMPORT_FILE), { force: true });
 
 /** A destination moved aside by the migrator whose restore also failed. */
+// @effect-diagnostics-next-line extendsNativeError:off -- thrown from the plain-Promise import path, never returned in an Effect channel.
 class T3ImportRestoreFailedError extends Error {
   constructor(detail: string) {
     super(detail);
@@ -325,6 +327,7 @@ export const applyPendingT3ImportAtStartup = Effect.fn("server.t3Import.applyPen
     readonly stockHome: string;
     readonly platform: NodeJS.Platform;
   }) {
+    // @effect-diagnostics-next-line processEnvInEffect:off -- read once at startup, before the config layers exist.
     const requested = (process.env.P0CODE_SECRET_BACKEND ?? "auto").trim().toLowerCase();
     const result = yield* Effect.promise(() =>
       applyPendingT3Import({
