@@ -87,6 +87,13 @@ interface StubbedDesktop {
   readonly flushRendererHistory?: Effect.Effect<void>;
   readonly tokenRequested?: Deferred.Deferred<void>;
   readonly activationStarted?: Deferred.Deferred<void>;
+  readonly catalogRecovery?: DesktopConnectionCatalogStore.DesktopConnectionCatalogRecovery;
+  readonly reattachedLocalEnvironment?: boolean;
+  readonly messages?: Array<{
+    readonly title?: string;
+    readonly message: string;
+    readonly detail?: string;
+  }>;
 }
 
 const runStubbedDesktop = (stub: StubbedDesktop) =>
@@ -105,6 +112,11 @@ const runStubbedDesktop = (stub: StubbedDesktop) =>
         } as unknown as ElectronApp.ElectronApp["Service"]),
         Effect.provideService(ElectronDialog.ElectronDialog, {
           showErrorBox: () => Effect.die("unexpected fatal startup error"),
+          showMessageBox: (options: { title?: string; message: string; detail?: string }) =>
+            Effect.sync(() => {
+              stub.messages?.push(options);
+              return { response: 0, checkboxChecked: false };
+            }),
         } as unknown as ElectronDialog.ElectronDialog["Service"]),
         Effect.provideService(DesktopEnvironment.DesktopEnvironment, {
           platform: "linux",
@@ -205,10 +217,22 @@ const runStubbedDesktop = (stub: StubbedDesktop) =>
           Layer.mock(BrowserImport.BrowserImport, {}),
           Layer.mock(ChildProcessSpawner.ChildProcessSpawner, {}),
           Layer.mock(DesktopBackendConfiguration.DesktopBackendConfiguration, {}),
-          DesktopBackendService.layerTest(),
+          DesktopBackendService.layerTest({
+            reattachLocalEnvironment: Effect.succeed(stub.reattachedLocalEnvironment ?? false),
+          }),
           Layer.mock(DesktopCliCommand.DesktopCliCommand, {}),
           Layer.mock(DesktopClientSettings.DesktopClientSettings, {}),
-          Layer.mock(DesktopConnectionCatalogStore.DesktopConnectionCatalogStore, {}),
+          Layer.succeed(
+            DesktopConnectionCatalogStore.DesktopConnectionCatalogStore,
+            DesktopConnectionCatalogStore.DesktopConnectionCatalogStore.of({
+              get: Effect.succeedNone,
+              set: () => Effect.succeed(false),
+              recovery:
+                stub.catalogRecovery === undefined
+                  ? Effect.succeedNone
+                  : Effect.succeedSome(stub.catalogRecovery),
+            }),
+          ),
           Layer.mock(DesktopIpc.DesktopIpc, {}),
           Layer.mock(DesktopLocalEnvironmentAuth.DesktopLocalEnvironmentAuth, {
             getBearerToken: stub
@@ -328,6 +352,38 @@ it.effect.each([false, true])(
       assert.isTrue(yield* shutdown.isComplete);
       assert.isTrue(yield* Deferred.isDone(registrationStopped));
     }).pipe(Effect.provide(DesktopShutdown.layer)),
+);
+
+it.effect("explains a recovered connection catalog and reconnects this machine", () =>
+  Effect.gen(function* () {
+    const windowStarted = yield* Deferred.make<void>();
+    const messages: Array<{ title?: string; message: string; detail?: string }> = [];
+    const app = yield* runStubbedDesktop({
+      localEnvironmentEnabled: true,
+      environment: {},
+      fileSystem: FileSystem.layerNoop({}),
+      record: () => Effect.void,
+      windowStarted,
+      registerLinuxUrlHandler: Effect.void,
+      reattachedLocalEnvironment: true,
+      catalogRecovery: {
+        reason: "decrypt-catalog",
+        catalogPath: "/isolated/userdata/connection-catalog.json",
+        keptPath: "/isolated/userdata/connection-catalog.json.broken-1760000000000",
+      },
+      messages,
+    });
+    yield* Deferred.await(windowStarted);
+    yield* (yield* DesktopShutdown.DesktopShutdown).request;
+    yield* Fiber.join(app);
+
+    assert.equal(messages.length, 1);
+    assert.equal(messages[0]?.title, "Saved connections couldn't be read");
+    assert.include(messages[0]?.message ?? "", "Your projects and threads are untouched.");
+    assert.include(messages[0]?.detail ?? "", "connection-catalog.json.broken-1760000000000");
+    assert.include(messages[0]?.detail ?? "", "signature changed between versions");
+    assert.include(messages[0]?.detail ?? "", "reconnected automatically");
+  }).pipe(Effect.provide(DesktopShutdown.layer)),
 );
 
 it.effect(

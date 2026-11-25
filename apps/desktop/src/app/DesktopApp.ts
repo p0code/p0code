@@ -37,6 +37,7 @@ import * as DesktopWindow from "../window/DesktopWindow.ts";
 import * as DesktopWslBackend from "../wsl/DesktopWslBackend.ts";
 import * as DesktopCliCommand from "./DesktopCliCommand.ts";
 import * as DesktopCliShim from "./DesktopCliShim.ts";
+import * as DesktopConnectionCatalogStore from "./DesktopConnectionCatalogStore.ts";
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
 import * as DesktopLegacyLocalStorage from "./DesktopLegacyLocalStorage.ts";
 import * as DesktopLifecycle from "./DesktopLifecycle.ts";
@@ -163,6 +164,56 @@ const handleFatalStartupError = Effect.fn("desktop.startup.handleFatalStartupErr
 const fatalStartupCause = <E>(stage: string, cause: Cause.Cause<E>) =>
   handleFatalStartupError(stage, Cause.pretty(cause)).pipe(Effect.andThen(Effect.failCause(cause)));
 
+/** A recovered catalog must never look like a fresh install, and must say where its file went. */
+const showCatalogRecoveryNotice = Effect.fn("desktop.app.showCatalogRecoveryNotice")(function* (
+  recovery: DesktopConnectionCatalogStore.DesktopConnectionCatalogRecovery,
+  reattached: boolean,
+) {
+  const electronDialog = yield* ElectronDialog.ElectronDialog;
+  const reconnect = reattached
+    ? m(msg("This machine was reconnected automatically."))
+    : m(
+        msg(
+          "Reconnect this machine from Settings > Connections once its local service is running.",
+        ),
+      );
+  const detail = m(
+    msg(
+      "This usually happens when the app's signature changed between versions, so macOS refuses to decrypt the saved connection list. The unreadable file was kept at {keptPath}. Pairing or remote environments may need to be added again. {reconnect}",
+      {
+        keptPath: recovery.keptPath,
+        reconnect,
+      },
+    ),
+  );
+  yield* electronDialog
+    .showMessageBox({
+      type: "warning",
+      title: m(msg("Saved connections couldn't be read")),
+      message: m(
+        msg(
+          "p0code couldn't read your saved connection list, so it started with a fresh one. Your projects and threads are untouched.",
+        ),
+      ),
+      detail,
+      buttons: [m(msg("OK"))],
+      defaultId: 0,
+      noLink: true,
+    })
+    .pipe(
+      Effect.catch((error) =>
+        logBootstrapWarning("failed to show the connection catalog recovery notice", {
+          error: error.message,
+        }),
+      ),
+    );
+  yield* logBootstrapWarning("saved connections could not be read; started from a fresh catalog", {
+    reason: recovery.reason,
+    keptPath: recovery.keptPath,
+    reattached,
+  });
+});
+
 const stopAllPoolInstances = Effect.fn("desktop.app.stopAllPoolInstances")(
   function* (): Effect.fn.Return<void, never, DesktopBackendPool.DesktopBackendPool> {
     const pool = yield* DesktopBackendPool.DesktopBackendPool;
@@ -223,6 +274,25 @@ const startLocalBackend = Effect.gen(function* () {
     yield* (yield* DesktopAppIdentity.DesktopAppIdentity).resolveUserDataPath,
   );
 
+  const backendService = yield* DesktopBackendService.DesktopBackendService;
+  // Read the catalog before the renderer does, so an unreadable one is explained and replaced
+  // once, and a running local service is chosen before the first window paints an empty list.
+  const catalogStore = yield* DesktopConnectionCatalogStore.DesktopConnectionCatalogStore;
+  yield* catalogStore.get.pipe(
+    Effect.catch((error) =>
+      logBootstrapWarning("failed to read the connection catalog during startup", {
+        error: error.message,
+      }),
+    ),
+  );
+  const catalogRecovery = yield* catalogStore.recovery;
+  if (Option.isSome(catalogRecovery)) {
+    const reattached = settings.localEnvironmentEnabled
+      ? yield* backendService.reattachLocalEnvironment
+      : false;
+    yield* showCatalogRecoveryNotice(catalogRecovery.value, reattached);
+  }
+
   if (!settings.localEnvironmentEnabled) {
     yield* logBootstrapInfo("bootstrap skipping local environment (disabled in settings)");
     return false;
@@ -230,7 +300,6 @@ const startLocalBackend = Effect.gen(function* () {
 
   const primaryBackend = yield* (yield* DesktopBackendPool.DesktopBackendPool).primary;
   const serverExposure = yield* DesktopServerExposure.DesktopServerExposure;
-  const backendService = yield* DesktopBackendService.DesktopBackendService;
   if (yield* offerT3Import()) return false;
   // Before any window: an external backend the app can't use would only show a dead-end error.
   const selectedBackend = yield* backendService.prepareSelectedBackend;
