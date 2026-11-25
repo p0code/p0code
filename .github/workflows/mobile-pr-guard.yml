@@ -30,7 +30,7 @@ jobs:
     name: Close the mobile PR
     if: >-
       !contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.pull_request.author_association)
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     concurrency:
       group: mobile-pr-guard-${{ github.event.pull_request.number }}
       cancel-in-progress: true
