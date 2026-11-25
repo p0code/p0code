@@ -1128,6 +1128,48 @@ export const DesktopT3ImportRunResultSchema = Schema.Struct({
 });
 export type DesktopT3ImportRunResult = typeof DesktopT3ImportRunResultSchema.Type;
 
+export type DesktopBackendMode = "local-service" | "remote" | "legacy-embedded";
+
+export const DesktopBackendModeSchema = Schema.Literals([
+  "local-service",
+  "remote",
+  "legacy-embedded",
+]);
+
+const DesktopBackendRuntimeStatusSchema = Schema.Literals([
+  "running",
+  "stopped",
+  "starting",
+  "unreachable",
+]);
+
+export const DesktopBackendStatusSchema = Schema.Struct({
+  mode: DesktopBackendModeSchema,
+  status: DesktopBackendRuntimeStatusSchema,
+  running: Schema.Boolean,
+  url: Schema.NullOr(Schema.String),
+  remoteUrl: Schema.NullOr(Schema.String),
+  binaryPath: Schema.NullOr(Schema.String),
+  resolvedBinaryPath: Schema.NullOr(Schema.String),
+  driverKind: Schema.Literals(["hhhd", "legacy-node", "remote", "embedded"]),
+  version: Schema.NullOr(Schema.String),
+  pid: Schema.NullOr(Schema.Int),
+  serviceInstalled: Schema.Boolean,
+  managedByService: Schema.Boolean,
+  error: Schema.NullOr(Schema.String),
+});
+export type DesktopBackendStatus = typeof DesktopBackendStatusSchema.Type;
+
+export const DesktopBackendConfigUpdateSchema = Schema.Struct({
+  mode: Schema.optionalKey(DesktopBackendModeSchema),
+  remoteUrl: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  binaryPath: Schema.optionalKey(Schema.NullOr(Schema.String)),
+});
+export type DesktopBackendConfigUpdate = typeof DesktopBackendConfigUpdateSchema.Type;
+
+export const DesktopBackendActionSchema = Schema.Literals(["start", "stop", "restart"]);
+export type DesktopBackendAction = typeof DesktopBackendActionSchema.Type;
+
 export interface DesktopBridge {
   getAppBranding: () => DesktopAppBranding | null;
   /** `null` until the desktop host has read the login shell's environment; ask again later. */
@@ -1258,6 +1300,11 @@ export interface DesktopBridge {
   t3Import?: {
     getState: () => Promise<DesktopT3ImportState>;
     run: (input: DesktopT3ImportRunInput) => Promise<DesktopT3ImportRunResult>;
+  };
+  backend?: {
+    getStatus: () => Promise<DesktopBackendStatus>;
+    updateConfig: (input: DesktopBackendConfigUpdate) => Promise<DesktopBackendStatus>;
+    control: (action: DesktopBackendAction) => Promise<DesktopBackendStatus>;
   };
   webLinks: {
     setReady: (ready: boolean) => Promise<void>;

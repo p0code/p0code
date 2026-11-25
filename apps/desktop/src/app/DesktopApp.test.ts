@@ -29,6 +29,7 @@ import * as DesktopAppActivation from "./DesktopAppActivation.ts";
 import * as DesktopAppIdentity from "./DesktopAppIdentity.ts";
 
 import * as DesktopBackendPool from "../backend/DesktopBackendPool.ts";
+import * as DesktopBackendService from "../backend/DesktopBackendService.ts";
 import * as DesktopServerExposure from "../backend/DesktopServerExposure.ts";
 import * as ElectronApp from "../electron/ElectronApp.ts";
 import * as ElectronDialog from "../electron/ElectronDialog.ts";
@@ -204,6 +205,7 @@ const runStubbedDesktop = (stub: StubbedDesktop) =>
           Layer.mock(BrowserImport.BrowserImport, {}),
           Layer.mock(ChildProcessSpawner.ChildProcessSpawner, {}),
           Layer.mock(DesktopBackendConfiguration.DesktopBackendConfiguration, {}),
+          DesktopBackendService.layerTest(),
           Layer.mock(DesktopCliCommand.DesktopCliCommand, {}),
           Layer.mock(DesktopClientSettings.DesktopClientSettings, {}),
           Layer.mock(DesktopConnectionCatalogStore.DesktopConnectionCatalogStore, {}),

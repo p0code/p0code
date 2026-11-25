@@ -20,6 +20,7 @@ import * as HostProcess from "@t3tools/shared/HostProcess";
 import { msg } from "gt-i18n";
 import * as DesktopBackendManager from "../backend/DesktopBackendManager.ts";
 import * as DesktopBackendPool from "../backend/DesktopBackendPool.ts";
+import * as DesktopBackendService from "../backend/DesktopBackendService.ts";
 import * as DesktopHomeOwner from "../backend/DesktopHomeOwner.ts";
 import * as DesktopLocalEnvironmentAuth from "../backend/DesktopLocalEnvironmentAuth.ts";
 import * as DesktopServerExposure from "../backend/DesktopServerExposure.ts";
@@ -229,74 +230,104 @@ const startLocalBackend = Effect.gen(function* () {
 
   const primaryBackend = yield* (yield* DesktopBackendPool.DesktopBackendPool).primary;
   const serverExposure = yield* DesktopServerExposure.DesktopServerExposure;
+  const backendService = yield* DesktopBackendService.DesktopBackendService;
+  const effectiveBackendMode = yield* backendService.resolveEffectiveMode;
+  const isExternalMode = DesktopBackendService.isExternalBackendMode(effectiveBackendMode);
 
-  if (environment.isDevelopment && Option.isNone(environment.configuredBackendPort)) {
+  if (
+    !isExternalMode &&
+    environment.isDevelopment &&
+    Option.isNone(environment.configuredBackendPort)
+  ) {
     return yield* new DesktopDevelopmentBackendPortRequiredError();
   }
 
   if (yield* offerT3Import()) return false;
-  yield* DesktopBackendPool.recoverLocalBackend;
-  // A backend started while another server holds this home's lock can only exit with code 78.
-  if (
-    !(settings.wslOnly && settings.wslBackendEnabled) &&
-    !(yield* DesktopHomeOwner.awaitHomeOwnershipRelease())
-  ) {
-    const owner = yield* DesktopHomeOwner.readLiveHomeOwner();
-    yield* logBootstrapWarning("bootstrap found another server owning the T3 home", {
-      owner: Option.getOrNull(owner),
-    });
-    yield* (yield* ElectronDialog.ElectronDialog).showErrorBox(
-      m(msg("This T3 home is unavailable")),
-      DesktopHomeOwner.homeOwnedMessage(owner),
-    );
-    yield* (yield* ElectronApp.ElectronApp).quit;
-    return false;
+  if (!isExternalMode) {
+    yield* DesktopBackendPool.recoverLocalBackend;
+    // A backend started while another server holds this home's lock can only exit with code 78.
+    if (
+      !(settings.wslOnly && settings.wslBackendEnabled) &&
+      !(yield* DesktopHomeOwner.awaitHomeOwnershipRelease())
+    ) {
+      const owner = yield* DesktopHomeOwner.readLiveHomeOwner();
+      yield* logBootstrapWarning("bootstrap found another server owning the T3 home", {
+        owner: Option.getOrNull(owner),
+      });
+      yield* (yield* ElectronDialog.ElectronDialog).showErrorBox(
+        m(msg("This T3 home is unavailable")),
+        DesktopHomeOwner.homeOwnedMessage(owner),
+      );
+      yield* (yield* ElectronApp.ElectronApp).quit;
+      return false;
+    }
   }
 
-  const backendPortSelection = yield* resolveDesktopBackendPort(environment.configuredBackendPort);
-  const backendPort = backendPortSelection.port;
-  yield* logBootstrapInfo(
-    backendPortSelection.selectedByScan
-      ? "selected backend port via sequential scan"
-      : "using configured backend port",
-    {
-      port: backendPort,
-      ...(backendPortSelection.selectedByScan ? { startPort: DEFAULT_DESKTOP_BACKEND_PORT } : {}),
-    },
-  );
-
-  if (settings.serverExposureMode !== environment.defaultDesktopSettings.serverExposureMode) {
-    yield* logBootstrapInfo("bootstrap restoring persisted server exposure mode", {
-      mode: settings.serverExposureMode,
-    });
-  }
-  const serverExposureState = yield* serverExposure.configureFromSettings({ port: backendPort });
-  const backendConfig = yield* serverExposure.backendConfig;
-  yield* logBootstrapInfo("bootstrap resolved backend endpoint", {
-    baseUrl: backendConfig.httpBaseUrl.href,
-  });
-  if (serverExposureState.endpointUrl) {
-    yield* logBootstrapInfo("bootstrap enabled network access", {
-      endpointUrl: serverExposureState.endpointUrl,
-    });
-  } else if (
-    settings.serverExposureMode === "network-accessible" &&
-    serverExposureState.mode === "local-only"
-  ) {
-    yield* logBootstrapWarning(
-      "bootstrap fell back to local-only because no advertised network host was available",
+  if (effectiveBackendMode === "legacy-embedded") {
+    const backendPortSelection = yield* resolveDesktopBackendPort(
+      environment.configuredBackendPort,
     );
+    const backendPort = backendPortSelection.port;
+    yield* logBootstrapInfo(
+      backendPortSelection.selectedByScan
+        ? "selected backend port via sequential scan"
+        : "using configured backend port",
+      {
+        port: backendPort,
+        ...(backendPortSelection.selectedByScan ? { startPort: DEFAULT_DESKTOP_BACKEND_PORT } : {}),
+      },
+    );
+
+    if (settings.serverExposureMode !== environment.defaultDesktopSettings.serverExposureMode) {
+      yield* logBootstrapInfo("bootstrap restoring persisted server exposure mode", {
+        mode: settings.serverExposureMode,
+      });
+    }
+    const serverExposureState = yield* serverExposure.configureFromSettings({ port: backendPort });
+    const backendConfig = yield* serverExposure.backendConfig;
+    yield* logBootstrapInfo("bootstrap resolved backend endpoint", {
+      baseUrl: backendConfig.httpBaseUrl.href,
+    });
+    if (serverExposureState.endpointUrl) {
+      yield* logBootstrapInfo("bootstrap enabled network access", {
+        endpointUrl: serverExposureState.endpointUrl,
+      });
+    } else if (
+      settings.serverExposureMode === "network-accessible" &&
+      serverExposureState.mode === "local-only"
+    ) {
+      yield* logBootstrapWarning(
+        "bootstrap fell back to local-only because no advertised network host was available",
+      );
+    }
+  } else if (effectiveBackendMode === "local-service") {
+    const servicePort = Option.getOrElse(
+      environment.configuredBackendPort,
+      () => DEFAULT_DESKTOP_BACKEND_PORT,
+    );
+    yield* serverExposure.configureFromSettings({ port: servicePort });
+    yield* logBootstrapInfo("bootstrap using local-service backend mode", { port: servicePort });
+  } else {
+    yield* logBootstrapInfo("bootstrap using remote backend mode", {
+      remoteUrl: settings.backendRemoteUrl ?? null,
+    });
   }
 
   if (yield* Ref.get(state.quitting)) {
     return false;
   }
-  if (settings.wslOnly === true && settings.wslBackendEnabled === true) {
+  if (
+    effectiveBackendMode === "legacy-embedded" &&
+    settings.wslOnly === true &&
+    settings.wslBackendEnabled === true
+  ) {
     yield* desktopWindow.showConnectingSplash;
   }
   yield* primaryBackend.start;
   yield* logBootstrapInfo("bootstrap backend start requested");
-  yield* Effect.forkScoped(restartOnFeatureFlagChange(primaryBackend));
+  if (!isExternalMode) {
+    yield* Effect.forkScoped(restartOnFeatureFlagChange(primaryBackend));
+  }
   // The renderer asks for this token first; minting it at readiness saves a round trip.
   yield* Effect.forkScoped(
     (yield* DesktopLocalEnvironmentAuth.DesktopLocalEnvironmentAuth).getBearerToken.pipe(
@@ -349,10 +380,12 @@ const bootstrap = Effect.fn("desktop.bootstrap")(function* (backendStarted: bool
 
   const primaryBackend = yield* (yield* DesktopBackendPool.DesktopBackendPool).primary;
   const config = yield* primaryBackend.currentConfig;
+  const isExternalMode =
+    Option.isSome(config) &&
+    DesktopBackendService.isExternalBackendMode(config.value.backendMode ?? "legacy-embedded");
   if (
     !environment.isDevelopment &&
-    Option.isSome(config) &&
-    Option.isNone(config.value.preflightFailure)
+    (isExternalMode || (Option.isSome(config) && Option.isNone(config.value.preflightFailure)))
   ) {
     yield* desktopWindow.ensureMain;
   }

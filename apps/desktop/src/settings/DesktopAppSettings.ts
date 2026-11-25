@@ -1,6 +1,8 @@
 import {
+  DesktopBackendModeSchema,
   DesktopServerExposureModeSchema,
   DesktopUpdateChannelSchema,
+  type DesktopBackendMode,
   type DesktopServerExposureMode,
   type DesktopUpdateChannel,
 } from "@t3tools/contracts";
@@ -28,6 +30,10 @@ import { desktopUpdateChannelOf } from "@t3tools/shared/cliRelease";
 import { isValidDistroName } from "../wsl/wslPathParsing.ts";
 
 export interface DesktopSettings {
+  readonly backendBinaryPath: string | null;
+  readonly backendMode: DesktopBackendMode;
+  readonly backendModeConfiguredByUser: boolean;
+  readonly backendRemoteUrl: string | null;
   readonly localEnvironmentEnabled: boolean;
   readonly linuxPasswordStore: LinuxPasswordStorePreference;
   readonly mainWindowBounds: DesktopWindowBounds | null;
@@ -69,6 +75,10 @@ export const DEFAULT_MAIN_WINDOW_SIZE = {
 } as const;
 
 export const DEFAULT_DESKTOP_SETTINGS: DesktopSettings = {
+  backendBinaryPath: null,
+  backendMode: "legacy-embedded",
+  backendModeConfiguredByUser: false,
+  backendRemoteUrl: null,
   localEnvironmentEnabled: true,
   linuxPasswordStore: DEFAULT_LINUX_PASSWORD_STORE,
   mainWindowBounds: null,
@@ -96,6 +106,10 @@ const optionalReadableKey = <S extends Schema.Top>(schema: S) =>
   Schema.optionalKey(schema.pipe(Schema.catchDecoding(() => Effect.succeedNone)));
 
 const DesktopSettingsDocument = Schema.Struct({
+  backendBinaryPath: optionalReadableKey(Schema.NullOr(Schema.String)),
+  backendMode: optionalReadableKey(DesktopBackendModeSchema),
+  backendModeConfiguredByUser: optionalReadableKey(Schema.Boolean),
+  backendRemoteUrl: optionalReadableKey(Schema.NullOr(Schema.String)),
   localEnvironmentEnabled: optionalReadableKey(Schema.Boolean),
   linuxPasswordStore: optionalReadableKey(Schema.Unknown),
   mainWindowBounds: optionalReadableKey(Schema.NullOr(DesktopWindowBoundsDocument)),
@@ -156,6 +170,11 @@ export class DesktopAppSettings extends Context.Service<
     readonly setLocalEnvironmentEnabled: (
       enabled: boolean,
     ) => Effect.Effect<DesktopSettingsChange, DesktopSettingsWriteError>;
+    readonly setBackendConfig: (input: {
+      readonly mode?: DesktopBackendMode;
+      readonly remoteUrl?: string | null;
+      readonly binaryPath?: string | null;
+    }) => Effect.Effect<DesktopSettingsChange, DesktopSettingsWriteError>;
     readonly setMainWindowBounds: (
       bounds: DesktopWindowBounds,
       isMaximized: boolean,
@@ -204,6 +223,26 @@ function normalizeWslDistro(value: unknown): string | null {
   return typeof value === "string" && isValidDistroName(value) ? value : null;
 }
 
+export function normalizeBackendRemoteUrl(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return null;
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
+  return parsed.href.replace(/\/+$/, "");
+}
+
+function normalizeBackendBinaryPath(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 export function normalizeMainWindowBounds(value: unknown): DesktopWindowBounds | null {
   return Option.getOrNull(decodeDesktopWindowBounds(value));
 }
@@ -224,7 +263,15 @@ function normalizeDesktopSettingsDocument(
     parsed.wslBackendEnabled === true ||
     (parsed.wslBackendEnabled === undefined && parsed.wslMode === "wsl");
 
+  const parsedBackendMode = parsed.backendMode;
+  const backendModeConfiguredByUser =
+    parsed.backendModeConfiguredByUser === true || parsedBackendMode !== undefined;
+
   return {
+    backendBinaryPath: normalizeBackendBinaryPath(parsed.backendBinaryPath),
+    backendMode: parsedBackendMode ?? defaultSettings.backendMode,
+    backendModeConfiguredByUser,
+    backendRemoteUrl: normalizeBackendRemoteUrl(parsed.backendRemoteUrl),
     localEnvironmentEnabled: parsed.localEnvironmentEnabled !== false,
     linuxPasswordStore: normalizeLinuxPasswordStorePreference(parsed.linuxPasswordStore),
     mainWindowBounds,
@@ -249,6 +296,18 @@ function toDesktopSettingsDocument(
 ): DesktopSettingsDocument {
   const document: Mutable<DesktopSettingsDocument> = {};
 
+  if (settings.backendBinaryPath !== defaults.backendBinaryPath) {
+    document.backendBinaryPath = settings.backendBinaryPath;
+  }
+  if (settings.backendMode !== defaults.backendMode || settings.backendModeConfiguredByUser) {
+    document.backendMode = settings.backendMode;
+  }
+  if (settings.backendModeConfiguredByUser !== defaults.backendModeConfiguredByUser) {
+    document.backendModeConfiguredByUser = settings.backendModeConfiguredByUser;
+  }
+  if (settings.backendRemoteUrl !== defaults.backendRemoteUrl) {
+    document.backendRemoteUrl = settings.backendRemoteUrl;
+  }
   if (settings.localEnvironmentEnabled !== defaults.localEnvironmentEnabled) {
     document.localEnvironmentEnabled = settings.localEnvironmentEnabled;
   }
@@ -380,6 +439,44 @@ function setLocalEnvironmentEnabled(settings: DesktopSettings, enabled: boolean)
   return settings.localEnvironmentEnabled === enabled
     ? settings
     : { ...settings, localEnvironmentEnabled: enabled };
+}
+
+function setBackendConfig(
+  settings: DesktopSettings,
+  input: {
+    readonly mode?: DesktopBackendMode;
+    readonly remoteUrl?: string | null;
+    readonly binaryPath?: string | null;
+  },
+): DesktopSettings {
+  const nextMode = input.mode ?? settings.backendMode;
+  const nextModeConfiguredByUser =
+    input.mode !== undefined ? true : settings.backendModeConfiguredByUser;
+  const nextRemoteUrl =
+    input.remoteUrl === undefined
+      ? settings.backendRemoteUrl
+      : normalizeBackendRemoteUrl(input.remoteUrl);
+  const nextBinaryPath =
+    input.binaryPath === undefined
+      ? settings.backendBinaryPath
+      : normalizeBackendBinaryPath(input.binaryPath);
+
+  if (
+    settings.backendMode === nextMode &&
+    settings.backendModeConfiguredByUser === nextModeConfiguredByUser &&
+    settings.backendRemoteUrl === nextRemoteUrl &&
+    settings.backendBinaryPath === nextBinaryPath
+  ) {
+    return settings;
+  }
+
+  return {
+    ...settings,
+    backendMode: nextMode,
+    backendModeConfiguredByUser: nextModeConfiguredByUser,
+    backendRemoteUrl: nextRemoteUrl,
+    backendBinaryPath: nextBinaryPath,
+  };
 }
 
 function applyWslWindowsFallback(settings: DesktopSettings): DesktopSettings {
@@ -599,6 +696,15 @@ export const make = Effect.gen(function* () {
         return yield* persist((settings) => setLocalEnvironmentEnabled(settings, enabled));
       },
     ),
+    setBackendConfig: Effect.fn("desktop.settings.setBackendConfig")(function* (input) {
+      yield* Effect.annotateCurrentSpan({
+        mode: input.mode ?? null,
+        hasRemoteUrl: input.remoteUrl !== undefined,
+        hasBinaryPath: input.binaryPath !== undefined,
+      });
+
+      return yield* persist((settings) => setBackendConfig(settings, input));
+    }),
     applyWslWindowsFallback: persist(applyWslWindowsFallback).pipe(
       Effect.withSpan("desktop.settings.applyWslWindowsFallback"),
     ),
@@ -662,6 +768,9 @@ export const layerTest = (initialSettings: DesktopSettings = DEFAULT_DESKTOP_SET
             return update((settings) => setLocalEnvironmentEnabled(settings, enabled));
           },
         ),
+        setBackendConfig: Effect.fn("DesktopAppSettings.setBackendConfig")(function (input) {
+          return update((settings) => setBackendConfig(settings, input));
+        }),
         applyWslWindowsFallback: update(applyWslWindowsFallback),
         applyWslWindowsFallbackInMemory: update(applyWslWindowsFallback),
       });

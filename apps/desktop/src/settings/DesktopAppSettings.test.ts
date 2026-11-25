@@ -223,6 +223,10 @@ describe("DesktopSettings", () => {
         );
 
         assert.deepEqual(yield* settings.load, {
+          backendBinaryPath: null,
+          backendMode: "legacy-embedded",
+          backendModeConfiguredByUser: false,
+          backendRemoteUrl: null,
           linuxPasswordStore: "auto",
           localEnvironmentEnabled: true,
           mainWindowBounds: { x: 120, y: 80, width: 1280, height: 900 },
@@ -376,6 +380,10 @@ describe("DesktopSettings", () => {
         });
 
         assert.deepEqual(yield* settings.load, {
+          backendBinaryPath: null,
+          backendMode: "legacy-embedded",
+          backendModeConfiguredByUser: false,
+          backendRemoteUrl: null,
           linuxPasswordStore: "auto",
           localEnvironmentEnabled: true,
           mainWindowBounds: null,
@@ -405,6 +413,10 @@ describe("DesktopSettings", () => {
         });
 
         assert.deepEqual(yield* settings.load, {
+          backendBinaryPath: null,
+          backendMode: "legacy-embedded",
+          backendModeConfiguredByUser: false,
+          backendRemoteUrl: null,
           linuxPasswordStore: "auto",
           localEnvironmentEnabled: true,
           mainWindowBounds: null,
@@ -494,6 +506,36 @@ describe("DesktopSettings", () => {
         const loaded = yield* settings.load;
         assert.equal(loaded.wslBackendEnabled, true);
         assert.equal(loaded.wslDistro, "Ubuntu-22.04");
+      }),
+    ),
+  );
+
+  it.effect("persists and reloads backend mode, remote URL, and custom binary path", () =>
+    withSettings(
+      Effect.gen(function* () {
+        const settings = yield* DesktopAppSettings.DesktopAppSettings;
+        const initial = yield* settings.get;
+        assert.equal(initial.backendMode, "legacy-embedded");
+        assert.equal(initial.backendModeConfiguredByUser, false);
+        assert.equal(initial.backendRemoteUrl, null);
+        assert.equal(initial.backendBinaryPath, null);
+
+        const updated = yield* settings.setBackendConfig({
+          mode: "remote",
+          remoteUrl: "https://backend.example.com:3773/",
+          binaryPath: "  /opt/hhh/bin/hhhd  ",
+        });
+        assert.isTrue(updated.changed);
+        assert.equal(updated.settings.backendMode, "remote");
+        assert.equal(updated.settings.backendModeConfiguredByUser, true);
+        assert.equal(updated.settings.backendRemoteUrl, "https://backend.example.com:3773");
+        assert.equal(updated.settings.backendBinaryPath, "/opt/hhh/bin/hhhd");
+
+        const reloaded = yield* settings.load;
+        assert.equal(reloaded.backendMode, "remote");
+        assert.equal(reloaded.backendModeConfiguredByUser, true);
+        assert.equal(reloaded.backendRemoteUrl, "https://backend.example.com:3773");
+        assert.equal(reloaded.backendBinaryPath, "/opt/hhh/bin/hhhd");
       }),
     ),
   );

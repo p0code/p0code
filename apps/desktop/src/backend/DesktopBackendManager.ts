@@ -22,6 +22,7 @@ import {
   SERVER_EXIT_CODE_STATE_DIR_OWNED,
   DesktopBackendBootstrap,
   type DesktopBackendBootstrap as DesktopBackendBootstrapValue,
+  type DesktopBackendMode,
   PRIMARY_LOCAL_ENVIRONMENT_ID,
   DesktopTelemetryControlMessage,
   type DesktopTelemetryControlMessage as DesktopTelemetryControlMessageValue,
@@ -33,6 +34,7 @@ import * as DesktopObservability from "../app/DesktopObservability.ts";
 import * as DesktopTelemetryPublisher from "../telemetry/DesktopTelemetryPublisher.ts";
 import * as DesktopBrowserHost from "../preview/DesktopBrowserHost.ts";
 import * as DesktopWslEnvironment from "../wsl/DesktopWslEnvironment.ts";
+import * as DesktopBackendService from "./DesktopBackendService.ts";
 
 const INITIAL_RESTART_DELAY = Duration.millis(500);
 const MAX_RESTART_DELAY = Duration.seconds(10);
@@ -79,6 +81,8 @@ export interface BackendReadinessProbe {
 }
 
 export interface DesktopBackendStartConfig extends BackendProcessContext {
+  readonly backendMode?: DesktopBackendMode;
+  readonly serviceDriver?: DesktopBackendService.BackendServiceDriver;
   readonly args: ReadonlyArray<string>;
   readonly env: Record<string, string | undefined>;
   /** False passes env verbatim, preventing the Windows T3CODE_HOME from leaking into WSL. */
@@ -282,6 +286,8 @@ interface ActiveBackendRun {
   readonly pid: Option.Option<number>;
   readonly exitObserved: boolean;
   readonly stopRequested: boolean;
+  /** True for service/remote runs: quitting the GUI detaches without stopping the backend. */
+  readonly detached: boolean;
 }
 
 interface BackendManagerState {
@@ -326,7 +332,10 @@ const closeRun = (
 ) => {
   const waitForFiber = Option.match(run.fiber, {
     onNone: () => Effect.void,
-    onSome: (fiber) => Fiber.await(fiber).pipe(Effect.asVoid),
+    onSome: (fiber) =>
+      run.detached
+        ? Fiber.interrupt(fiber).pipe(Effect.asVoid)
+        : Fiber.await(fiber).pipe(Effect.asVoid),
   });
   const close = Scope.close(run.scope, Exit.void).pipe(
     Effect.withSpan("desktop.backendInstance.closeScope"),
@@ -813,9 +822,13 @@ export const makeBackendInstance = Effect.fn("makeBackendInstance")(function* (
           }
           return;
         }
-        const entryExists = yield* fileSystem
-          .exists(config.value.entryPath)
-          .pipe(Effect.orElseSucceed(() => false));
+        const backendMode = config.value.backendMode ?? "legacy-embedded";
+        const isExternalMode = DesktopBackendService.isExternalBackendMode(backendMode);
+        const entryExists = isExternalMode
+          ? true
+          : yield* fileSystem
+              .exists(config.value.entryPath)
+              .pipe(Effect.orElseSucceed(() => false));
 
         const resetFatalPreflightCounter =
           !current.desiredRunning && current.preflightFailureAttempt > 0;
@@ -900,6 +913,7 @@ export const makeBackendInstance = Effect.fn("makeBackendInstance")(function* (
               pid: Option.none(),
               exitObserved: false,
               stopRequested: false,
+              detached: isExternalMode,
             } satisfies ActiveBackendRun),
             nextRunId: latest.nextRunId + 1,
           },
@@ -993,96 +1007,172 @@ export const makeBackendInstance = Effect.fn("makeBackendInstance")(function* (
           );
         });
 
-        const program = runBackendProcess({
-          ...config.value,
-          ...(spec.trackProcess === undefined ? {} : { trackProcess: spec.trackProcess }),
-          desktopTelemetryStream: desktopTelemetryPublisher.encoded,
-          desktopBrowserStream: desktopBrowserHost.events,
-          onDesktopBrowserCommand: desktopBrowserHost.handleCommandLine,
-          onDesktopTelemetryControl: (message) =>
-            desktopTelemetryPublisher.handleControlForSource(spec.id, message),
-          onStarted: Effect.fn("desktop.backendInstance.onStarted")(function* (pid) {
-            yield* updateActiveRun(runId, (run) => ({
-              ...run,
-              pid: Option.some(pid),
+        const markRunReady = Effect.fn("desktop.backendInstance.markRunReady")(function* (
+          resolvedUrl: URL,
+          pid: number | null,
+        ) {
+          const isCurrentRun = yield* SubscriptionRef.modify(state, (latest) => {
+            const activeRun = Option.getOrUndefined(latest.active);
+            if (activeRun?.id !== runId) {
+              return [false, latest] as const;
+            }
+            const nextConfig = Option.map(latest.config, (currentConfig) => ({
+              ...currentConfig,
+              httpBaseUrl: resolvedUrl,
             }));
-            yield* Ref.set(outputTail, "");
-            outputDecoders = makeOutputDecoders();
-            yield* backendOutputLog.beginSession({
-              details: `pid=${pid} port=${config.value.bootstrap.port} cwd=${config.value.cwd}`,
-            });
-          }),
-          onExitObserved: () =>
-            updateActiveRun(runId, (run) => ({
-              ...run,
-              exitObserved: true,
-            })),
-          onReady: Effect.fn("desktop.backendInstance.onReady")(function* (pid) {
-            const isCurrentRun = yield* SubscriptionRef.modify(state, (latest) => {
-              const activeRun = Option.getOrUndefined(latest.active);
-              if (activeRun?.id !== runId) {
-                return [false, latest] as const;
+            return [
+              true,
+              {
+                ...latest,
+                config: nextConfig,
+                active: Option.some({
+                  ...activeRun,
+                  pid: Option.fromNullishOr(pid),
+                }),
+                restartAttempt: 0,
+                ready: true,
+              },
+            ] as const;
+          });
+          if (!isCurrentRun) {
+            return;
+          }
+          yield* spec.onReady?.(resolvedUrl, pid ?? 0) ?? Effect.void;
+        });
+
+        const program = isExternalMode
+          ? Effect.gen(function* () {
+              if (backendMode === "local-service") {
+                const driver = config.value.serviceDriver;
+                if (driver === undefined) {
+                  yield* finalizeRun("local-service driver is not configured");
+                  return;
+                }
+                const info = yield* driver.ensureRunning.pipe(
+                  Effect.matchEffect({
+                    onFailure: (error) => finalizeRun(error.message).pipe(Effect.as(Option.none())),
+                    onSuccess: (resolved) => Effect.succeedSome(resolved),
+                  }),
+                );
+                if (Option.isNone(info)) {
+                  return;
+                }
+                const resolvedUrl = info.value.url ?? config.value.httpBaseUrl;
+                yield* markRunReady(resolvedUrl, info.value.pid);
+                // Keep the attached run alive until GUI quit/stop interrupts it;
+                // stopping this fiber detaches without killing the user service.
+                return yield* Effect.never;
               }
 
-              return [
-                true,
-                {
-                  ...latest,
-                  restartAttempt: 0,
-                  ready: true,
-                },
-              ] as const;
-            });
-            if (!isCurrentRun) {
-              return;
-            }
-
-            yield* spec.onReady?.(config.value.httpBaseUrl, pid) ?? Effect.void;
-            if (
-              config.value.runningDistro !== undefined &&
-              config.value.wslRuntimeId !== undefined
-            ) {
-              yield* wslEnvironment.pruneRuntimes(
-                config.value.runningDistro,
-                config.value.wslRuntimeId,
-                config.value.wslT3Home ?? null,
+              const reachable = yield* DesktopBackendService.probeBackendHealth(
+                httpClient,
+                config.value.httpBaseUrl,
+                { allowLegacyWellKnown: true },
               );
-            }
-          }),
-          onReadinessFailure: Effect.fn("desktop.backendInstance.onReadinessFailure")(
-            function* (error) {
-              if (isRunningDatabaseMigrations(yield* Ref.get(outputTail))) {
-                yield* logInstanceWarning("backend is still migrating its database; waiting", {
-                  error: error.message,
-                });
+              if (!reachable) {
+                yield* finalizeRun(
+                  `Remote backend at ${config.value.httpBaseUrl.href} is unreachable`,
+                );
                 return;
               }
-              yield* logInstanceWarning("backend readiness check failed during bootstrap", {
-                error: error.message,
-              });
-              yield* backendOutputLog.persistFailureSnapshot({
-                details: error.message,
-              });
-              yield* reportStartupFailure("The server started but did not become ready in time.");
-            },
-          ),
-          onOutput: (streamName, chunk) =>
-            Ref.update(outputTail, (tail) =>
-              // A cut through a surrogate pair would make encodeURIComponent throw when rendering.
-              (tail + outputDecoders[streamName].decode(chunk, { stream: true }))
-                .slice(-STARTUP_FAILURE_OUTPUT_CHARS)
-                .toWellFormed(),
-            ).pipe(Effect.andThen(backendOutputLog.writeOutputChunk(streamName, chunk))),
-        }).pipe(
-          Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
-          Effect.provideService(HttpClient.HttpClient, httpClient),
-          Scope.provide(runScope),
-          Effect.matchEffect({
-            onFailure: (error) => finalizeRun(error.message),
-            onSuccess: (exit) => finalizeRun(exit.reason, Option.getOrUndefined(exit.code)),
-          }),
-          Effect.ensuring(Scope.close(runScope, Exit.void).pipe(Effect.ignore)),
-        );
+              yield* markRunReady(config.value.httpBaseUrl, null);
+              return yield* Effect.never;
+            }).pipe(
+              Scope.provide(runScope),
+              Effect.ensuring(Scope.close(runScope, Exit.void).pipe(Effect.ignore)),
+            )
+          : runBackendProcess({
+              ...config.value,
+              ...(spec.trackProcess === undefined ? {} : { trackProcess: spec.trackProcess }),
+              desktopTelemetryStream: desktopTelemetryPublisher.encoded,
+              desktopBrowserStream: desktopBrowserHost.events,
+              onDesktopBrowserCommand: desktopBrowserHost.handleCommandLine,
+              onDesktopTelemetryControl: (message) =>
+                desktopTelemetryPublisher.handleControlForSource(spec.id, message),
+              onStarted: Effect.fn("desktop.backendInstance.onStarted")(function* (pid) {
+                yield* updateActiveRun(runId, (run) => ({
+                  ...run,
+                  pid: Option.some(pid),
+                }));
+                yield* Ref.set(outputTail, "");
+                outputDecoders = makeOutputDecoders();
+                yield* backendOutputLog.beginSession({
+                  details: `pid=${pid} port=${config.value.bootstrap.port} cwd=${config.value.cwd}`,
+                });
+              }),
+              onExitObserved: () =>
+                updateActiveRun(runId, (run) => ({
+                  ...run,
+                  exitObserved: true,
+                })),
+              onReady: Effect.fn("desktop.backendInstance.onReady")(function* (pid) {
+                const isCurrentRun = yield* SubscriptionRef.modify(state, (latest) => {
+                  const activeRun = Option.getOrUndefined(latest.active);
+                  if (activeRun?.id !== runId) {
+                    return [false, latest] as const;
+                  }
+
+                  return [
+                    true,
+                    {
+                      ...latest,
+                      restartAttempt: 0,
+                      ready: true,
+                    },
+                  ] as const;
+                });
+                if (!isCurrentRun) {
+                  return;
+                }
+
+                yield* spec.onReady?.(config.value.httpBaseUrl, pid) ?? Effect.void;
+                if (
+                  config.value.runningDistro !== undefined &&
+                  config.value.wslRuntimeId !== undefined
+                ) {
+                  yield* wslEnvironment.pruneRuntimes(
+                    config.value.runningDistro,
+                    config.value.wslRuntimeId,
+                    config.value.wslT3Home ?? null,
+                  );
+                }
+              }),
+              onReadinessFailure: Effect.fn("desktop.backendInstance.onReadinessFailure")(
+                function* (error) {
+                  if (isRunningDatabaseMigrations(yield* Ref.get(outputTail))) {
+                    yield* logInstanceWarning("backend is still migrating its database; waiting", {
+                      error: error.message,
+                    });
+                    return;
+                  }
+                  yield* logInstanceWarning("backend readiness check failed during bootstrap", {
+                    error: error.message,
+                  });
+                  yield* backendOutputLog.persistFailureSnapshot({
+                    details: error.message,
+                  });
+                  yield* reportStartupFailure(
+                    "The server started but did not become ready in time.",
+                  );
+                },
+              ),
+              onOutput: (streamName, chunk) =>
+                Ref.update(outputTail, (tail) =>
+                  // A cut through a surrogate pair would make encodeURIComponent throw when rendering.
+                  (tail + outputDecoders[streamName].decode(chunk, { stream: true }))
+                    .slice(-STARTUP_FAILURE_OUTPUT_CHARS)
+                    .toWellFormed(),
+                ).pipe(Effect.andThen(backendOutputLog.writeOutputChunk(streamName, chunk))),
+            }).pipe(
+              Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+              Effect.provideService(HttpClient.HttpClient, httpClient),
+              Scope.provide(runScope),
+              Effect.matchEffect({
+                onFailure: (error) => finalizeRun(error.message),
+                onSuccess: (exit) => finalizeRun(exit.reason, Option.getOrUndefined(exit.code)),
+              }),
+              Effect.ensuring(Scope.close(runScope, Exit.void).pipe(Effect.ignore)),
+            );
 
         const fiber = yield* Effect.forkIn(program, parentScope);
         yield* updateActiveRun(runId, (run) => ({

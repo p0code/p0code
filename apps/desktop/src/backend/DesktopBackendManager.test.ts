@@ -981,4 +981,117 @@ describe("DesktopBackendManager", () => {
       assert.isTrue(yield* Deferred.isDone(teardownFinished));
     }).pipe(Effect.provide(TestClock.layer())),
   );
+
+  it.effect("local-service mode attaches to service driver and does not stop it on GUI quit", () =>
+    Effect.gen(function* () {
+      const readyDeferred = yield* Deferred.make<void>();
+      let ensureRunningCalls = 0;
+      let stopCalls = 0;
+      const serviceUrl = new URL("http://127.0.0.1:4123");
+      const serviceConfig: DesktopBackendManager.DesktopBackendStartConfig = {
+        ...baseConfig,
+        backendMode: "local-service",
+        entryPath: "/nonexistent/not-checked-in-service-mode",
+        httpBaseUrl: new URL("http://127.0.0.1:3773"),
+        serviceDriver: {
+          kind: "hhhd",
+          binaryPath: "/usr/local/bin/hhhd",
+          status: Effect.succeed({
+            running: true,
+            installed: true,
+            pid: 7788,
+            version: "0.1.0",
+            url: serviceUrl,
+            binaryPath: "/usr/local/bin/hhhd",
+            managedByService: true,
+            driverKind: "hhhd",
+          }),
+          ensureRunning: Effect.sync(() => {
+            ensureRunningCalls += 1;
+            return {
+              running: true,
+              installed: true,
+              pid: 7788,
+              version: "0.1.0",
+              url: serviceUrl,
+              binaryPath: "/usr/local/bin/hhhd",
+              managedByService: true,
+              driverKind: "hhhd" as const,
+            };
+          }),
+          start: Effect.die("unexpected direct start"),
+          stop: Effect.sync(() => {
+            stopCalls += 1;
+          }),
+          restart: Effect.die("unexpected direct restart"),
+        },
+      };
+
+      const instance = yield* makeTestInstance({
+        config: serviceConfig,
+        spawnerLayer: Layer.succeed(
+          ChildProcessSpawner.ChildProcessSpawner,
+          ChildProcessSpawner.make(() => Effect.die("must not spawn embedded child")),
+        ),
+        onReady: Deferred.succeed(readyDeferred, undefined).pipe(Effect.asVoid),
+      });
+
+      yield* instance.start;
+      yield* Deferred.await(readyDeferred);
+
+      const snapshot = yield* instance.snapshot;
+      assert.equal(snapshot.ready, true);
+      assert.equal(Option.getOrNull(snapshot.activePid), 7788);
+      const currentConfig = yield* instance.currentConfig;
+      assert.equal(Option.getOrThrow(currentConfig).httpBaseUrl.href, serviceUrl.href);
+      assert.equal(ensureRunningCalls, 1);
+
+      // Quitting the GUI calls stop() on pool instances; it must NOT stop the user service.
+      yield* instance.stop({ timeout: DesktopBackendManager.BACKEND_QUIT_STOP_TIMEOUT });
+      assert.equal(stopCalls, 0);
+      const afterQuit = yield* instance.snapshot;
+      assert.equal(afterQuit.ready, false);
+      assert.equal(afterQuit.desiredRunning, false);
+    }),
+  );
+
+  it.effect("remote mode connects to a remote URL without spawning any local process", () =>
+    Effect.gen(function* () {
+      const readyDeferred = yield* Deferred.make<void>();
+      const probedUrls: string[] = [];
+      const remoteUrl = new URL("https://hhh.example.com:8443");
+      const remoteConfig: DesktopBackendManager.DesktopBackendStartConfig = {
+        ...baseConfig,
+        backendMode: "remote",
+        executablePath: "",
+        entryPath: "",
+        httpBaseUrl: remoteUrl,
+      };
+
+      const instance = yield* makeTestInstance({
+        config: remoteConfig,
+        spawnerLayer: Layer.succeed(
+          ChildProcessSpawner.ChildProcessSpawner,
+          ChildProcessSpawner.make(() => Effect.die("remote mode must never spawn a process")),
+        ),
+        httpClientLayer: layerHttpClient((request) => {
+          probedUrls.push(request.url);
+          return Effect.succeed(responseForRequest(request, 200));
+        }),
+        onReady: Deferred.succeed(readyDeferred, undefined).pipe(Effect.asVoid),
+      });
+
+      yield* instance.start;
+      yield* Deferred.await(readyDeferred);
+
+      assert.include(probedUrls, "https://hhh.example.com:8443/healthz");
+      const snapshot = yield* instance.snapshot;
+      assert.equal(snapshot.ready, true);
+      assert.isTrue(Option.isNone(snapshot.activePid));
+
+      yield* instance.stop();
+      const afterStop = yield* instance.snapshot;
+      assert.equal(afterStop.ready, false);
+    }),
+  );
 });

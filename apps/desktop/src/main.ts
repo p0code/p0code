@@ -53,6 +53,7 @@ import * as DesktopShutdown from "./app/DesktopShutdown.ts";
 import * as DesktopState from "./app/DesktopState.ts";
 import * as DesktopBackendConfiguration from "./backend/DesktopBackendConfiguration.ts";
 import * as DesktopBackendPool from "./backend/DesktopBackendPool.ts";
+import * as DesktopBackendService from "./backend/DesktopBackendService.ts";
 import * as DesktopLocalEnvironmentAuth from "./backend/DesktopLocalEnvironmentAuth.ts";
 import * as DesktopNetworkInterfaces from "./backend/DesktopNetworkInterfaces.ts";
 import * as DesktopServerExposure from "./backend/DesktopServerExposure.ts";
@@ -194,6 +195,7 @@ const layerDesktopAppActivation = DesktopAppActivation.layer.pipe(
 const layerDesktopBackend = DesktopBackendPool.layer.pipe(
   Layer.provideMerge(DesktopAppIdentity.layer),
   Layer.provideMerge(DesktopBackendConfiguration.layer),
+  Layer.provideMerge(DesktopBackendService.layer),
   Layer.provideMerge(DesktopWslEnvironment.layer),
   Layer.provideMerge(DesktopWslServerTree.layer),
   Layer.provideMerge(DesktopTelemetryPublisher.layer),

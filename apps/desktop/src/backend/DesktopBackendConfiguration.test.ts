@@ -27,6 +27,7 @@ import * as DesktopShellEnvironment from "../shell/DesktopShellEnvironment.ts";
 import * as DesktopWslEnvironment from "../wsl/DesktopWslEnvironment.ts";
 import * as DesktopWslServerTree from "../wsl/DesktopWslServerTree.ts";
 import * as DesktopBackendConfiguration from "./DesktopBackendConfiguration.ts";
+import * as DesktopBackendService from "./DesktopBackendService.ts";
 import * as DesktopServerExposure from "./DesktopServerExposure.ts";
 
 const layerShellEnvironment = (prepared = true) =>
@@ -42,6 +43,7 @@ const layerBackendConfiguration = (prepared = true) =>
   DesktopBackendConfiguration.layer.pipe(
     Layer.provide(layerShellEnvironment(prepared)),
     Layer.provide(DesktopState.layer),
+    Layer.provide(DesktopBackendService.layerTest()),
   );
 
 const layerServerExposure = Layer.succeed(DesktopServerExposure.DesktopServerExposure, {

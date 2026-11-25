@@ -343,6 +343,11 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     getState: () => ipcRenderer.invoke(IpcChannels.T3_IMPORT_GET_STATE_CHANNEL),
     run: (input) => ipcRenderer.invoke(IpcChannels.T3_IMPORT_RUN_CHANNEL, input),
   },
+  backend: {
+    getStatus: () => ipcRenderer.invoke(IpcChannels.BACKEND_GET_STATUS_CHANNEL),
+    updateConfig: (input) => ipcRenderer.invoke(IpcChannels.BACKEND_UPDATE_CONFIG_CHANNEL, input),
+    control: (action) => ipcRenderer.invoke(IpcChannels.BACKEND_CONTROL_CHANNEL, action),
+  },
   onUpdateState: (listener) => {
     const wrappedListener = (_event: Electron.IpcRendererEvent, state: unknown) => {
       if (typeof state !== "object" || state === null) return;

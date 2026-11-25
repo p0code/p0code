@@ -33,6 +33,7 @@ import * as DesktopShellEnvironment from "../shell/DesktopShellEnvironment.ts";
 import * as DesktopWslEnvironment from "../wsl/DesktopWslEnvironment.ts";
 import * as DesktopWslServerTree from "../wsl/DesktopWslServerTree.ts";
 import * as DesktopBackendManager from "./DesktopBackendManager.ts";
+import * as DesktopBackendService from "./DesktopBackendService.ts";
 import * as DesktopServerExposure from "./DesktopServerExposure.ts";
 
 export class DesktopBackendObservabilitySettingsReadError extends Schema.TaggedError<DesktopBackendObservabilitySettingsReadError>()(
@@ -785,6 +786,7 @@ export const make = Effect.gen(function* () {
   const wslEnvironment = yield* DesktopWslEnvironment.DesktopWslEnvironment;
   const wslServerTree = yield* DesktopWslServerTree.DesktopWslServerTree;
   const settings = yield* DesktopAppSettings.DesktopAppSettings;
+  const backendService = yield* DesktopBackendService.DesktopBackendService;
   const desktopState = yield* DesktopState.DesktopState;
   const mac = yield* Mac.Mac;
   const random = yield* SecureRandom.SecureRandom;
@@ -885,13 +887,93 @@ export const make = Effect.gen(function* () {
     );
   });
 
-  // Resolve on each restart so toggling wsl-only takes effect without recreating the pool.
+  const buildRemotePrimaryConfig = Effect.gen(function* () {
+    const persistedSettings = yield* settings.get;
+    const rawUrl = persistedSettings.backendRemoteUrl ?? null;
+    const normalizedUrl = DesktopAppSettings.normalizeBackendRemoteUrl(rawUrl);
+    const httpBaseUrl = new URL(normalizedUrl ?? "http://127.0.0.1:3773");
+    const port =
+      httpBaseUrl.port.length > 0
+        ? Number.parseInt(httpBaseUrl.port, 10)
+        : httpBaseUrl.protocol === "https:"
+          ? 443
+          : 80;
+    const config: DesktopBackendManager.DesktopBackendStartConfig = {
+      backendMode: "remote",
+      executablePath: "",
+      args: [],
+      entryPath: "",
+      cwd: environment.backendCwd,
+      env: {},
+      extendEnv: true,
+      bootstrap: {
+        mode: "desktop",
+        noBrowser: true,
+        port,
+        t3Home: environment.baseDir,
+        host: httpBaseUrl.hostname,
+        desktopBootstrapToken: "",
+        tailscaleServeEnabled: false,
+        tailscaleServePort: 443,
+      },
+      bootstrapDelivery: "fd3",
+      httpBaseUrl,
+      captureOutput: false,
+      preflightFailure:
+        normalizedUrl === null
+          ? Option.some({
+              reason: "No valid remote backend URL is configured.",
+              fatal: true,
+            })
+          : Option.none(),
+    };
+    return config;
+  });
+
+  const buildLocalServicePrimaryConfig = Effect.gen(function* () {
+    const driver = yield* backendService.resolveServiceDriver;
+    const backendExposure = yield* serverExposure.backendConfig;
+    const port = backendExposure.port > 0 ? backendExposure.port : 3773;
+    const httpBaseUrl =
+      backendExposure.port > 0 ? backendExposure.httpBaseUrl : new URL(`http://127.0.0.1:${port}`);
+    const config: DesktopBackendManager.DesktopBackendStartConfig = {
+      backendMode: "local-service",
+      serviceDriver: driver,
+      executablePath: driver.binaryPath ?? process.execPath,
+      args: [],
+      entryPath: driver.binaryPath ?? environment.backendEntryPath,
+      cwd: environment.backendCwd,
+      env: {},
+      extendEnv: true,
+      bootstrap: {
+        mode: "desktop",
+        noBrowser: true,
+        port,
+        t3Home: environment.baseDir,
+        host: backendExposure.bindHost,
+        desktopBootstrapToken: "",
+        tailscaleServeEnabled: backendExposure.tailscaleServeEnabled,
+        tailscaleServePort: backendExposure.tailscaleServePort,
+      },
+      bootstrapDelivery: "fd3",
+      httpBaseUrl,
+      captureOutput: false,
+      preflightFailure: Option.none(),
+    };
+    return config;
+  });
+
+  // Resolve on each restart so toggling wsl-only or backend mode takes effect without recreating the pool.
   const describePrimary = Effect.gen(function* () {
     const persistedSettings = yield* settings.get;
-    const wslRequested = persistedSettings.wslOnly && persistedSettings.wslBackendEnabled;
+    const backendMode = yield* backendService.resolveEffectiveMode;
+    const wslRequested =
+      backendMode === "legacy-embedded" &&
+      persistedSettings.wslOnly &&
+      persistedSettings.wslBackendEnabled;
     // When WSL is unavailable its controls are hidden; fall back to Windows to keep recovery possible.
     const useWsl = wslRequested && (yield* wslEnvironment.isAvailable);
-    return { useWsl, wslRequested, distro: persistedSettings.wslDistro };
+    return { backendMode, useWsl, wslRequested, distro: persistedSettings.wslDistro };
   });
 
   const currentBootstrapToken = Effect.gen(function* () {
@@ -904,7 +986,13 @@ export const make = Effect.gen(function* () {
   return DesktopBackendConfiguration.of({
     currentBootstrapToken,
     resolvePrimary: Effect.gen(function* () {
-      const { useWsl, wslRequested } = yield* describePrimary;
+      const { backendMode, useWsl, wslRequested } = yield* describePrimary;
+      if (backendMode === "remote") {
+        return yield* buildRemotePrimaryConfig;
+      }
+      if (backendMode === "local-service") {
+        return yield* buildLocalServicePrimaryConfig;
+      }
       if (useWsl) {
         return yield* buildWslPrimaryConfig;
       }
@@ -916,7 +1004,13 @@ export const make = Effect.gen(function* () {
       return yield* buildWindowsPrimaryConfig;
     }).pipe(Effect.withSpan("desktop.backendConfiguration.resolvePrimary")),
     resolvePrimaryLabel: Effect.gen(function* () {
-      const { useWsl, distro } = yield* describePrimary;
+      const { backendMode, useWsl, distro } = yield* describePrimary;
+      if (backendMode === "remote") {
+        return "Remote backend";
+      }
+      if (backendMode === "local-service") {
+        return "Local service";
+      }
       if (!useWsl) {
         return environment.platform === "win32" ? "Windows" : "Local environment";
       }
