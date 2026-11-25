@@ -119,8 +119,34 @@ describe("DesktopConnectionCatalogStore", () => {
     withStore(
       Effect.gen(function* () {
         const store = yield* DesktopConnectionCatalogStore.DesktopConnectionCatalogStore;
-        assert.isFalse(yield* store.set("{}"));
+        assert.equal(
+          (yield* Effect.flip(store.set("{}")))._tag,
+          "DesktopConnectionCatalogEncryptionUnavailableError",
+        );
         assert.deepStrictEqual(yield* store.get, Option.none());
+      }),
+      false,
+    ),
+  );
+
+  it.effect("reports unavailable encryption for an existing catalog without moving it aside", () =>
+    withStore(
+      Effect.gen(function* () {
+        const store = yield* DesktopConnectionCatalogStore.DesktopConnectionCatalogStore;
+        const environment = yield* DesktopEnvironment.DesktopEnvironment;
+        const fileSystem = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        yield* fileSystem.makeDirectory(environment.stateDir, { recursive: true });
+        const file = path.join(environment.stateDir, "connection-catalog.json");
+        const raw = JSON.stringify({ version: 1, encryptedCatalog: "a2VlcA==" });
+        yield* fileSystem.writeFileString(file, raw);
+        assert.equal(
+          (yield* Effect.flip(store.get))._tag,
+          "DesktopConnectionCatalogEncryptionUnavailableError",
+        );
+        assert.equal((yield* store.read).catalogError?.reason, "encryption-unavailable");
+        assert.equal(yield* fileSystem.readFileString(file), raw);
+        assert.deepStrictEqual(yield* store.recovery, Option.none());
       }),
       false,
     ),

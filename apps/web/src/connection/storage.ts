@@ -632,7 +632,9 @@ export const makeCatalogStore = Effect.fn("web.connectionStorage.makeCatalogStor
       yield* lock.withPermits(1)(
         Effect.gen(function* () {
           const next = transform(yield* loadUnlocked());
-          yield* backend.write(yield* encodeCatalog(next));
+          if ((yield* Ref.get(errorState))?.reason !== "encryption-unavailable") {
+            yield* backend.write(yield* encodeCatalog(next));
+          }
           yield* Ref.set(state, Option.some(next));
         }),
       );

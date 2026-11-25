@@ -31,6 +31,27 @@ afterEach(() => {
 });
 
 describe("ConnectionStorage.makeCatalogStore", () => {
+  it.effect(
+    "keeps an in-memory catalog usable without overwriting unavailable secure storage",
+    () =>
+      Effect.gen(function* () {
+        const write = vi.fn(() => Effect.void);
+        const store = yield* ConnectionStorage.makeCatalogStore({
+          read: Effect.succeed({
+            catalog: null,
+            catalogError: { reason: "encryption-unavailable", message: "Unlock keychain" },
+          }),
+          write,
+        });
+        yield* store.update((catalog) => ({
+          ...catalog,
+          disabledEnvironmentIds: [EnvironmentId.make("memory")],
+        }));
+        expect((yield* store.read).disabledEnvironmentIds).toEqual(["memory"]);
+        expect(write).not.toHaveBeenCalled();
+        expect((yield* store.catalogError)?.reason).toBe("encryption-unavailable");
+      }),
+  );
   it.effect("propagates desktop recovery with the preserved copy path", () =>
     Effect.gen(function* () {
       const error = {

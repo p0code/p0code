@@ -22,6 +22,10 @@ export const setConnectionCatalog = DesktopIpc.makeIpcMethod({
   result: Schema.Boolean,
   handler: Effect.fn("desktop.ipc.connectionCatalog.set")(function* (catalog) {
     const store = yield* DesktopConnectionCatalogStore.DesktopConnectionCatalogStore;
-    return yield* store.set(catalog);
+    return yield* store.set(catalog).pipe(
+      Effect.catchTags({
+        DesktopConnectionCatalogEncryptionUnavailableError: () => Effect.succeed(false),
+      }),
+    );
   }),
 });

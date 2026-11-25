@@ -152,6 +152,15 @@ export class DesktopConnectionCatalogStoreProtectionError extends Schema.TaggedE
   }
 }
 
+export class DesktopConnectionCatalogEncryptionUnavailableError extends Schema.TaggedError<DesktopConnectionCatalogEncryptionUnavailableError>()(
+  "DesktopConnectionCatalogEncryptionUnavailableError",
+  { catalogPath: Schema.String },
+) {
+  override get message(): string {
+    return "Desktop secure storage is unavailable. Unlock your system keychain and retry secure storage.";
+  }
+}
+
 export const DesktopConnectionCatalogRecoveryReason = Schema.Literals([
   "decrypt-catalog",
   "decode-catalog",
@@ -172,6 +181,7 @@ export class DesktopConnectionCatalogStore extends Context.Service<
   {
     readonly get: Effect.Effect<
       Option.Option<string>,
+      | DesktopConnectionCatalogEncryptionUnavailableError
       | DesktopConnectionCatalogStoreReadError
       | DesktopConnectionCatalogStoreDocumentDecodeError
       | DesktopConnectionCatalogStoreDecodeError
@@ -181,6 +191,7 @@ export class DesktopConnectionCatalogStore extends Context.Service<
     >;
     readonly read: Effect.Effect<
       DesktopConnectionCatalogReadResult,
+      | DesktopConnectionCatalogEncryptionUnavailableError
       | DesktopConnectionCatalogStoreReadError
       | DesktopConnectionCatalogStoreDocumentDecodeError
       | DesktopConnectionCatalogStoreDecodeError
@@ -192,7 +203,9 @@ export class DesktopConnectionCatalogStore extends Context.Service<
       catalog: string,
     ) => Effect.Effect<
       boolean,
-      DesktopConnectionCatalogStoreWriteError | DesktopConnectionCatalogStoreProtectionError
+      | DesktopConnectionCatalogStoreWriteError
+      | DesktopConnectionCatalogStoreProtectionError
+      | DesktopConnectionCatalogEncryptionUnavailableError
     >;
     /** Why the last read replaced an unreadable catalog, so startup can say so instead of looking fresh. */
     readonly recovery: Effect.Effect<Option.Option<DesktopConnectionCatalogRecovery>>;
@@ -424,6 +437,12 @@ export const make = Effect.gen(function* () {
     ),
   );
 
+  const requireEncryption = Effect.gen(function* () {
+    if (!(yield* encryptionAvailable)) {
+      return yield* new DesktopConnectionCatalogEncryptionUnavailableError({ catalogPath });
+    }
+  });
+
   const decryptDocument = (document: EncryptedConnectionCatalogDocument) =>
     decodeSecretBytes(catalogPath, document.encryptedCatalog).pipe(
       Effect.flatMap((encryptedCatalog) =>
@@ -563,9 +582,6 @@ export const make = Effect.gen(function* () {
   });
 
   const migrateLegacyCatalog = Effect.gen(function* () {
-    if (!(yield* encryptionAvailable)) {
-      return Option.none<string>();
-    }
     const records = yield* savedEnvironments.getRegistry.pipe(
       Effect.mapError(
         (cause) =>
@@ -579,6 +595,7 @@ export const make = Effect.gen(function* () {
     if (records.length === 0) {
       return Option.none<string>();
     }
+    yield* requireEncryption;
     const catalog = yield* migrateSavedEnvironmentRecords(records, savedEnvironments, catalogPath);
     const encoded = yield* encodeRuntimeConnectionCatalogDocumentJson(catalog).pipe(
       Effect.mapError(
@@ -616,18 +633,13 @@ export const make = Effect.gen(function* () {
       }),
     );
     if (read._tag === "Unreadable") {
-      // Without secure storage there is nowhere to write a fresh catalog, so keep reporting it.
-      if (!(yield* encryptionAvailable)) {
-        return yield* read.error;
-      }
+      yield* requireEncryption;
       return Option.some(yield* recoverFromUnreadableCatalog(read.reason));
     }
     if (Option.isNone(read.document)) {
       return yield* migrateLegacyCatalog;
     }
-    if (!(yield* encryptionAvailable)) {
-      return Option.none<string>();
-    }
+    yield* requireEncryption;
     return yield* decryptDocument(read.document.value).pipe(
       Effect.tap((raw) =>
         decodeRuntimeConnectionCatalogDocumentJson(raw).pipe(
@@ -665,11 +677,17 @@ export const make = Effect.gen(function* () {
             }
           : null,
       };
-    }),
+    }).pipe(
+      Effect.catchTags({
+        DesktopConnectionCatalogEncryptionUnavailableError: (error) =>
+          Effect.succeed({
+            catalog: null,
+            catalogError: { reason: "encryption-unavailable" as const, message: error.message },
+          }),
+      }),
+    ),
     set: Effect.fn("desktop.connectionCatalogStore.set")(function* (catalog) {
-      if (!(yield* encryptionAvailable)) {
-        return false;
-      }
+      yield* requireEncryption;
       yield* keepUnreadableCatalog;
       yield* writeCatalog(catalog);
       if (Option.isSome(yield* Ref.get(recoveryRef)))
