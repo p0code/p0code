@@ -830,7 +830,7 @@ export const makeBackendInstance = Effect.fn("makeBackendInstance")(function* (
           }
           return;
         }
-        const backendMode = config.value.backendMode ?? "legacy-embedded";
+        const backendMode = config.value.backendMode ?? "embedded";
         const isExternalMode = DesktopBackendService.isExternalBackendMode(backendMode);
         const entryExists = isExternalMode
           ? true

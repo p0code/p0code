@@ -76,7 +76,7 @@ export const DEFAULT_MAIN_WINDOW_SIZE = {
 
 export const DEFAULT_DESKTOP_SETTINGS: DesktopSettings = {
   backendBinaryPath: null,
-  backendMode: "legacy-embedded",
+  backendMode: "embedded",
   backendModeConfiguredByUser: false,
   backendRemoteUrl: null,
   localEnvironmentEnabled: true,
@@ -105,9 +105,16 @@ const DesktopWindowBoundsDocument = Schema.Struct({
 const optionalReadableKey = <S extends Schema.Top>(schema: S) =>
   Schema.optionalKey(schema.pipe(Schema.catchDecoding(() => Effect.succeedNone)));
 
+// The embedded mode was once persisted as `legacy-embedded`; documents that still carry
+// the old id decode here and are normalised to `embedded` in memory.
+const DesktopBackendModeDocumentSchema = Schema.Union([
+  DesktopBackendModeSchema,
+  Schema.Literal("legacy-embedded"),
+]);
+
 const DesktopSettingsDocument = Schema.Struct({
   backendBinaryPath: optionalReadableKey(Schema.NullOr(Schema.String)),
-  backendMode: optionalReadableKey(DesktopBackendModeSchema),
+  backendMode: optionalReadableKey(DesktopBackendModeDocumentSchema),
   backendModeConfiguredByUser: optionalReadableKey(Schema.Boolean),
   backendRemoteUrl: optionalReadableKey(Schema.NullOr(Schema.String)),
   localEnvironmentEnabled: optionalReadableKey(Schema.Boolean),
@@ -172,6 +179,7 @@ export class DesktopAppSettings extends Context.Service<
     ) => Effect.Effect<DesktopSettingsChange, DesktopSettingsWriteError>;
     readonly setBackendConfig: (input: {
       readonly mode?: DesktopBackendMode;
+      readonly modeConfiguredByUser?: boolean;
       readonly remoteUrl?: string | null;
       readonly binaryPath?: string | null;
     }) => Effect.Effect<DesktopSettingsChange, DesktopSettingsWriteError>;
@@ -264,9 +272,13 @@ function normalizeDesktopSettingsDocument(
     parsed.wslBackendEnabled === true ||
     (parsed.wslBackendEnabled === undefined && parsed.wslMode === "wsl");
 
-  const parsedBackendMode = parsed.backendMode;
+  const parsedBackendMode =
+    parsed.backendMode === "legacy-embedded" ? "embedded" : parsed.backendMode;
+  // A recorded mode is not an explicit choice on its own: older documents stored the
+  // default, and only the flag distinguishes that from a mode the user picked.
   const backendModeConfiguredByUser =
-    parsed.backendModeConfiguredByUser === true || parsedBackendMode !== undefined;
+    parsed.backendModeConfiguredByUser === true ||
+    (parsed.backendModeConfiguredByUser === undefined && parsedBackendMode === "remote");
 
   return {
     backendBinaryPath: normalizeBackendBinaryPath(parsed.backendBinaryPath),
@@ -446,13 +458,16 @@ function setBackendConfig(
   settings: DesktopSettings,
   input: {
     readonly mode?: DesktopBackendMode;
+    readonly modeConfiguredByUser?: boolean;
     readonly remoteUrl?: string | null;
     readonly binaryPath?: string | null;
   },
 ): DesktopSettings {
   const nextMode = input.mode ?? settings.backendMode;
   const nextModeConfiguredByUser =
-    input.mode !== undefined ? true : settings.backendModeConfiguredByUser;
+    input.mode !== undefined
+      ? (input.modeConfiguredByUser ?? true)
+      : settings.backendModeConfiguredByUser;
   const nextRemoteUrl =
     input.remoteUrl === undefined
       ? settings.backendRemoteUrl
@@ -481,7 +496,10 @@ function setBackendConfig(
 }
 
 const applyBuiltInBackendFallback = (settings: DesktopSettings): DesktopSettings =>
-  setBackendConfig(settings, { mode: "legacy-embedded" });
+  setBackendConfig(settings, {
+    mode: "embedded",
+    modeConfiguredByUser: settings.backendModeConfiguredByUser,
+  });
 
 function applyWslWindowsFallback(settings: DesktopSettings): DesktopSettings {
   return setWslOnly(setWslBackendEnabled(settings, false), false);
@@ -703,6 +721,7 @@ export const make = Effect.gen(function* () {
     setBackendConfig: Effect.fn("desktop.settings.setBackendConfig")(function* (input) {
       yield* Effect.annotateCurrentSpan({
         mode: input.mode ?? null,
+        modeConfiguredByUser: input.modeConfiguredByUser ?? null,
         hasRemoteUrl: input.remoteUrl !== undefined,
         hasBinaryPath: input.binaryPath !== undefined,
       });

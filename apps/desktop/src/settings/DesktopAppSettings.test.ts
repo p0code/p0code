@@ -224,7 +224,7 @@ describe("DesktopSettings", () => {
 
         assert.deepEqual(yield* settings.load, {
           backendBinaryPath: null,
-          backendMode: "legacy-embedded",
+          backendMode: "embedded",
           backendModeConfiguredByUser: false,
           backendRemoteUrl: null,
           linuxPasswordStore: "auto",
@@ -240,6 +240,61 @@ describe("DesktopSettings", () => {
           wslOnly: false,
           wslDistro: null,
         } satisfies DesktopAppSettings.DesktopSettings);
+      }),
+    ),
+  );
+
+  it.effect("treats a recorded backend mode as the default unless the user flag is set", () =>
+    withSettings(
+      Effect.gen(function* () {
+        const environment = yield* DesktopEnvironment.DesktopEnvironment;
+        const fileSystem = yield* FileSystem.FileSystem;
+        const settings = yield* DesktopAppSettings.DesktopAppSettings;
+        yield* fileSystem.makeDirectory(environment.stateDir, { recursive: true });
+
+        yield* fileSystem.writeFileString(
+          environment.desktopSettingsPath,
+          `{ "backendMode": "embedded" }\n`,
+        );
+        const legacyDefault = yield* settings.load;
+        assert.equal(legacyDefault.backendMode, "embedded");
+        assert.isFalse(legacyDefault.backendModeConfiguredByUser);
+
+        yield* fileSystem.writeFileString(
+          environment.desktopSettingsPath,
+          `{ "backendMode": "embedded", "backendModeConfiguredByUser": true }\n`,
+        );
+        const explicitEmbedded = yield* settings.load;
+        assert.equal(explicitEmbedded.backendMode, "embedded");
+        assert.isTrue(explicitEmbedded.backendModeConfiguredByUser);
+
+        // Remote was never a default, so an older document without the flag still counts as a choice.
+        yield* fileSystem.writeFileString(
+          environment.desktopSettingsPath,
+          `{ "backendMode": "remote" }\n`,
+        );
+        const legacyRemote = yield* settings.load;
+        assert.equal(legacyRemote.backendMode, "remote");
+        assert.isTrue(legacyRemote.backendModeConfiguredByUser);
+      }),
+    ),
+  );
+
+  it.effect("reads a document with the old legacy-embedded id as the embedded mode", () =>
+    withSettings(
+      Effect.gen(function* () {
+        const environment = yield* DesktopEnvironment.DesktopEnvironment;
+        const fileSystem = yield* FileSystem.FileSystem;
+        const settings = yield* DesktopAppSettings.DesktopAppSettings;
+        yield* fileSystem.makeDirectory(environment.stateDir, { recursive: true });
+        const document = `{ "backendMode": "legacy-embedded" }\n`;
+        yield* fileSystem.writeFileString(environment.desktopSettingsPath, document);
+
+        const loaded = yield* settings.load;
+        assert.equal(loaded.backendMode, "embedded");
+        assert.isFalse(loaded.backendModeConfiguredByUser);
+        // Reading normalises in memory without rewriting the file.
+        assert.equal(yield* fileSystem.readFileString(environment.desktopSettingsPath), document);
       }),
     ),
   );
@@ -381,7 +436,7 @@ describe("DesktopSettings", () => {
 
         assert.deepEqual(yield* settings.load, {
           backendBinaryPath: null,
-          backendMode: "legacy-embedded",
+          backendMode: "embedded",
           backendModeConfiguredByUser: false,
           backendRemoteUrl: null,
           linuxPasswordStore: "auto",
@@ -414,7 +469,7 @@ describe("DesktopSettings", () => {
 
         assert.deepEqual(yield* settings.load, {
           backendBinaryPath: null,
-          backendMode: "legacy-embedded",
+          backendMode: "embedded",
           backendModeConfiguredByUser: false,
           backendRemoteUrl: null,
           linuxPasswordStore: "auto",
@@ -515,7 +570,7 @@ describe("DesktopSettings", () => {
       Effect.gen(function* () {
         const settings = yield* DesktopAppSettings.DesktopAppSettings;
         const initial = yield* settings.get;
-        assert.equal(initial.backendMode, "legacy-embedded");
+        assert.equal(initial.backendMode, "embedded");
         assert.equal(initial.backendModeConfiguredByUser, false);
         assert.equal(initial.backendRemoteUrl, null);
         assert.equal(initial.backendBinaryPath, null);
