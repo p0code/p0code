@@ -4821,7 +4821,6 @@
   "6364a8974d4a9434": "{title}. View machines",
   "6365146db77a8dac": "{organization} limits threads to Supervised.",
   "63691126fe3aa03a": "The environment is not connected.",
-  "636bf623f12ed827": "Profile: {name}",
   "636eb97a97862aef": [
     "Merge conflicts with ",
     {
@@ -6695,7 +6694,7 @@
   "8a871fc676f9fc5d": "Forget a linked environment",
   "8a883c4fbc127b68": "Enabling stack auto-merge...",
   "8a9ca8a0f2139799": "Workflows approved",
-  "8aa6404c8018ea67": "T3 Code home",
+  "6e76b04a6c577967": "HHHCode home",
   "8ab1235557b08956": "Choose what to show",
   "8ab693ae67cd5e86": "Reset default workspace to default",
   "8ab83a75cae667a2": "Could not refresh this issue",

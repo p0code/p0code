@@ -1,10 +1,7 @@
 import { type AccountProfileId, type EnvironmentId } from "@t3tools/contracts";
 import { runAtomCommand } from "@t3tools/client-runtime/state/runtime";
 import { nextAccountProfile } from "@t3tools/shared/accountProfiles";
-import { msg } from "gt-react";
 
-import { toastManager } from "../components/ui/toast";
-import { m } from "../i18n/messages";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { readPrimaryEnvironmentId } from "./environments";
 import { serverEnvironment } from "./server";
@@ -27,19 +24,12 @@ export async function setActiveAccountProfile(
   activeAccountProfileId: AccountProfileId,
   name: string,
 ) {
-  const result = await runAtomCommand(
+  await runAtomCommand(
     appAtomRegistry,
     serverEnvironment.updateSettings,
     { environmentId, input: { patch: { activeAccountProfileId } } },
     { label: "switch account profile", reportFailure: true },
   );
-  if (result._tag === "Success") {
-    toastManager.add({
-      id: "account-profile-switch",
-      title: m(msg("Profile: {name}", { name })),
-      timeout: 1500,
-    });
-  }
 }
 
 export function cycleAccountProfile() {

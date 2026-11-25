@@ -4812,7 +4812,6 @@
   "6364a8974d4a9434": "{title}. Voir les machines",
   "6365146db77a8dac": "{organization} limite les fils au mode Supervisé.",
   "63691126fe3aa03a": "L’environnement n’est pas connecté.",
-  "636bf623f12ed827": "Profil : {name}",
   "636eb97a97862aef": [
     "Conflits de fusion avec ",
     {
@@ -6686,7 +6685,7 @@
   "8a871fc676f9fc5d": "Oublier un environnement associé",
   "8a883c4fbc127b68": "Activation de la fusion automatique de la pile...",
   "8a9ca8a0f2139799": "Workflows approuvés",
-  "8aa6404c8018ea67": "Accueil T3 Code",
+  "6e76b04a6c577967": "Accueil HHHCode",
   "8ab1235557b08956": "Choisir ce qui s’affiche",
   "8ab693ae67cd5e86": "Réinitialiser l’espace de travail par défaut à la valeur par défaut",
   "8ab83a75cae667a2": "Impossible d’actualiser ce ticket",
