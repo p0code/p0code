@@ -238,7 +238,6 @@ export const makeCodexChatGptAuth = Effect.fn("makeCodexChatGptAuth")(function* 
         saved.sessions.find((session) => session.clientId === saved.activeClientId),
       ),
     ),
-    // The OpenAI account is the person, so it marks who owns this install.
   );
   const writeSessions = (saved: typeof Sessions.Type) =>
     encodeSessions(saved).pipe(

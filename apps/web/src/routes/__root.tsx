@@ -21,6 +21,7 @@ import { GuestShareDialogHost } from "../components/chat/GuestShareControls";
 import { CommandPalette } from "../components/CommandPalette";
 import { ConfirmDialogHost } from "../components/ConfirmDialogHost";
 import { CustomSnoozeDialogHost } from "../components/CustomSnoozeDialog";
+import { WorktreeLayoutApprovalDialogHost } from "../components/WorktreeLayoutApprovalDialogHost";
 import { DevReplayHost } from "../components/DevReplayHost";
 import { UseInAnotherAppDialogHost } from "../components/mcp/UseInAnotherAppDialog";
 import { FirstRunGate } from "../components/onboarding/FirstRunGate";
@@ -198,6 +199,7 @@ function RootRouteBranch() {
       <SnapShotCoordinator />
       <ReopenClosedViewShortcut />
       <ConfirmDialogHost />
+      <WorktreeLayoutApprovalDialogHost />
       <CustomSnoozeDialogHost />
       <GuestShareDialogHost />
       <ProjectCloneToastCoordinator />
