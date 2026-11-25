@@ -8,7 +8,7 @@ import { AcmeCertificateManager, HttpChallengeStore } from "./certificates.ts";
 import { testCertificate } from "./testing/certificate.ts";
 
 it("issues HTTP-01 certificates once per host, persists keys, reuses them after restart and renews at two thirds", async () => {
-  const directory = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "hhh-certs-"));
+  const directory = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "p0code-certs-"));
   const fixture = testCertificate(directory, "abcdef.relay.test");
   const challenges = new HttpChallengeStore();
   const certificateDirectory = NodePath.join(directory, "managed");
@@ -101,7 +101,7 @@ it("issues HTTP-01 certificates once per host, persists keys, reuses them after 
 });
 
 it("loads BYO certificates and rejects names outside their coverage", async () => {
-  const directory = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "hhh-byo-"));
+  const directory = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "p0code-byo-"));
   const fixture = testCertificate(directory, "*.relay.test", "wildcard");
   const manager = new AcmeCertificateManager({
     directory,
@@ -120,7 +120,7 @@ it("loads BYO certificates and rejects names outside their coverage", async () =
 });
 
 it("keeps private keys in the key store and moves keys earlier versions wrote to files", async () => {
-  const directory = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "hhh-cert-keys-"));
+  const directory = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "p0code-cert-keys-"));
   const fixture = testCertificate(directory, "abcdef.relay.test");
   const certificateDirectory = NodePath.join(directory, "managed");
   await NodeFSP.mkdir(certificateDirectory, { recursive: true });

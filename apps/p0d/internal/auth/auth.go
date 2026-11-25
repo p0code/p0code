@@ -32,7 +32,7 @@ const (
 )
 
 // desktopRendererOrigins mirrors DESKTOP_RENDERER_ORIGINS in apps/server/src/httpCors.ts.
-var desktopRendererOrigins = []string{"hhhcode://app", "hhhcode-dev://app", "t3code://app", "t3code-dev://app"}
+var desktopRendererOrigins = []string{"p0code://app", "p0code-dev://app", "t3code://app", "t3code-dev://app"}
 
 // Session is an authenticated client session.
 type Session struct {
@@ -262,7 +262,7 @@ func (a *Authenticator) VerifyWebSocketTicket(ticket string) (*Session, string, 
 		return nil, "", invalid("Invalid WebSocket ticket payload.")
 	}
 	if strings.HasPrefix(claims.Sid, devSessionPrefix) {
-		return nil, "", invalid("Reusable dev sessions are not supported by hhhd.")
+		return nil, "", invalid("Reusable dev sessions are not supported by p0d.")
 	}
 	if *claims.Exp <= a.nowMillis() {
 		return nil, "", invalid("WebSocket ticket expired.")

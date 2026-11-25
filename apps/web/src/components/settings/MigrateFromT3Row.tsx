@@ -104,10 +104,10 @@ export function MigrateFromT3Row() {
             </AlertDialogTitle>
             <AlertDialogDescription>
               <T>
-                HHHCode will stop its local server, copy your threads, settings, and providers from{" "}
+                p0code will stop its local server, copy your threads, settings, and providers from{" "}
                 <Var>{state.stockHome}</Var> into <Var>{state.appHome}</Var>, import credentials
                 into the OS keychain, and restart. Your T3 Code folder is never modified, and your
-                current HHHCode folder is moved aside as a backup.
+                current p0code folder is moved aside as a backup.
               </T>
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -118,7 +118,7 @@ export function MigrateFromT3Row() {
               </div>
               <p className="text-xs text-muted-foreground">
                 <T>
-                  Keep paired devices working without re-pairing. Do not run T3 Code and HHHCode at
+                  Keep paired devices working without re-pairing. Do not run T3 Code and p0code at
                   the same time if enabled.
                 </T>
               </p>

@@ -1151,7 +1151,7 @@ export const DesktopBackendStatusSchema = Schema.Struct({
   remoteUrl: Schema.NullOr(Schema.String),
   binaryPath: Schema.NullOr(Schema.String),
   resolvedBinaryPath: Schema.NullOr(Schema.String),
-  driverKind: Schema.Literals(["hhhd", "legacy-node", "remote", "embedded"]),
+  driverKind: Schema.Literals(["p0d", "legacy-node", "remote", "embedded"]),
   version: Schema.NullOr(Schema.String),
   pid: Schema.NullOr(Schema.Int),
   serviceInstalled: Schema.Boolean,

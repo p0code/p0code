@@ -19,7 +19,7 @@ import (
 // the secrets folder (see packages/shared/src/credentialKeychain.ts), otherwise as
 // <secretsDir>/<name>.bin.
 const (
-	keychainService    = "hhhcode"
+	keychainService    = "hhhcode" // kept from before the rename to p0code
 	keychainMarkerFile = "keychain-backend"
 )
 
@@ -34,7 +34,7 @@ func readSecret(secretsDir, name string) ([]byte, error) {
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, err
 	}
-	if os.Getenv("HHHCODE_SECRET_BACKEND") == "file" {
+	if os.Getenv("P0CODE_SECRET_BACKEND") == "file" || os.Getenv("HHHCODE_SECRET_BACKEND") == "file" {
 		return nil, errSecretMissing
 	}
 	if _, err := os.Stat(filepath.Join(secretsDir, keychainMarkerFile)); err != nil {
@@ -44,16 +44,30 @@ func readSecret(secretsDir, name string) ([]byte, error) {
 }
 
 // credentialNamespace mirrors credentialNamespace(): sha256 of the resolved secrets
-// folder, first 16 hex chars.
+// folder, first 16 hex chars. A folder under ~/.p0code hashes as its pre-rename ~/.hhh
+// path so moved homes keep their keychain entries (see previousAppHomePath()).
 func credentialNamespace(secretsDir string) string {
-	abs, err := filepath.Abs(secretsDir)
-	if err == nil {
-		if real, err := filepath.EvalSymlinks(abs); err == nil {
-			abs = real
+	abs := resolvePath(secretsDir)
+	if home, err := os.UserHomeDir(); err == nil {
+		home = resolvePath(home)
+		next := filepath.Join(home, ".p0code")
+		if abs == next || strings.HasPrefix(abs, next+string(filepath.Separator)) {
+			abs = filepath.Join(home, ".hhh", strings.TrimPrefix(abs, next))
 		}
 	}
 	sum := sha256.Sum256([]byte(abs))
 	return hex.EncodeToString(sum[:])[:16]
+}
+
+func resolvePath(path string) string {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return path
+	}
+	if real, err := filepath.EvalSymlinks(abs); err == nil {
+		return real
+	}
+	return abs
 }
 
 var chunkedHead = regexp.MustCompile(`^c:([0-9a-f]+):(\d+)$`)

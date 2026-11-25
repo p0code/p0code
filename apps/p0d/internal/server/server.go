@@ -1,5 +1,5 @@
-// Package server is hhhd's HTTP front: /healthz, the /ws RPC socket, and a proxy that
-// forwards every route hhhd has not ported to the legacy server.
+// Package server is p0d's HTTP front: /healthz, the /ws RPC socket, and a proxy that
+// forwards every route p0d has not ported to the legacy server.
 package server
 
 import (
@@ -20,9 +20,9 @@ import (
 
 	"github.com/coder/websocket"
 
-	"hhhd/internal/auth"
-	"hhhd/internal/rpc"
-	"hhhd/internal/sidecar"
+	"p0d/internal/auth"
+	"p0d/internal/rpc"
+	"p0d/internal/sidecar"
 )
 
 // orchestrationProtocolVersion is ORCHESTRATION_PROTOCOL_VERSION in packages/contracts.
@@ -35,7 +35,7 @@ var (
 	upstreamIdle = 30 * time.Second
 )
 
-// Config is `hhhd serve`'s flags.
+// Config is `p0d serve`'s flags.
 type Config struct {
 	Home       string
 	Host       string
@@ -47,7 +47,7 @@ type Config struct {
 	Logger     *log.Logger
 }
 
-// Server is a running hhhd.
+// Server is a running p0d.
 type Server struct {
 	cfg      Config
 	auth     *auth.Authenticator
@@ -60,7 +60,7 @@ type Server struct {
 // Start listens and serves in the background.
 func Start(cfg Config) (*Server, error) {
 	if cfg.Logger == nil {
-		cfg.Logger = log.New(os.Stderr, "hhhd: ", log.LstdFlags)
+		cfg.Logger = log.New(os.Stderr, "p0d: ", log.LstdFlags)
 	}
 	home, err := filepath.Abs(cfg.Home)
 	if err != nil {
@@ -281,18 +281,18 @@ func clientIP(r *http.Request) string {
 	return host
 }
 
-// serveProxy forwards any route hhhd has not ported. A request whose credential hhhd
+// serveProxy forwards any route p0d has not ported. A request whose credential p0d
 // verifies reaches the legacy server as that session (credentials stripped, internal
 // token added). Anything else goes through untouched and the legacy server applies its
 // own checks, which keeps pairing, OAuth, MCP and token renewal working.
 func (s *Server) serveProxy(w http.ResponseWriter, r *http.Request) {
 	for key := range r.Header {
-		if strings.HasPrefix(strings.ToLower(key), "x-hhhd-") {
+		if strings.HasPrefix(strings.ToLower(key), "x-p0d-") {
 			r.Header.Del(key)
 		}
 	}
 	if s.legacy == nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"code": "not_found", "message": "hhhd has no legacy server for this route."})
+		writeJSON(w, http.StatusNotFound, map[string]string{"code": "not_found", "message": "p0d has no legacy server for this route."})
 		return
 	}
 	var session *auth.Session
@@ -369,7 +369,7 @@ func stripCredentials(r *http.Request, a *auth.Authenticator) {
 	}
 }
 
-// renameSessionCookies gives session cookies the legacy server sets hhhd's cookie name:
+// renameSessionCookies gives session cookies the legacy server sets p0d's cookie name:
 // its own name embeds its private loopback port, which changes every time it starts.
 func renameSessionCookies(h http.Header, name string) {
 	cookies := h.Values("Set-Cookie")

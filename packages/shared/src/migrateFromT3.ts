@@ -19,7 +19,7 @@ import {
 } from "./credentialKeychain.ts";
 
 /**
- * One-shot import of a stock T3 Code home (`~/.t3`) into an hhhcode home (`~/.hhh`).
+ * One-shot import of a stock T3 Code home (`~/.t3`) into an p0code home (`~/.p0code`).
  *
  * The source is read-only: files are read, SQLite databases are snapshotted with
  * `VACUUM INTO` from a read-only connection (which includes committed WAL content),
@@ -935,7 +935,7 @@ export async function migrateFromT3(options: MigrateFromT3Options): Promise<Migr
   return report("migrated", replacedDestination === undefined ? {} : { replacedDestination });
 }
 
-/** True when a fresh hhhcode home should offer to import a stock T3 Code home. */
+/** True when a fresh p0code home should offer to import a stock T3 Code home. */
 export async function shouldOfferT3Import(input: {
   readonly appHome: string;
   readonly stockHome: string;

@@ -755,14 +755,14 @@ export const make = Effect.gen(function* () {
     ...config.devAllowedOrigins,
   ]);
 
-  // hhhd (apps/hhhd) authenticates its clients itself and reaches this server over
+  // p0d (apps/p0d) authenticates its clients itself and reaches this server over
   // loopback as their session. Unset keeps today's behavior. Removed from the
   // environment so agent processes started later never inherit it.
   // @effect-diagnostics-next-line processEnvInEffect:off -- read once, then removed below.
-  const hhhdToken = process.env.HHHD_INTERNAL_TOKEN;
+  const p0dToken = process.env.P0D_INTERNAL_TOKEN;
   // @effect-diagnostics-next-line processEnvInEffect:off -- Config cannot unset a variable.
-  delete process.env.HHHD_INTERNAL_TOKEN;
-  const authenticateHhhdUpstream = (
+  delete process.env.P0D_INTERNAL_TOKEN;
+  const authenticateP0dUpstream = (
     request: HttpServerRequest.HttpServerRequest,
   ):
     | Effect.Effect<
@@ -770,17 +770,17 @@ export const make = Effect.gen(function* () {
         ServerAuthInvalidCredentialError | ServerAuthInternalError
       >
     | undefined => {
-    const token = request.headers["x-hhhd-internal-token"];
+    const token = request.headers["x-p0d-internal-token"];
     if (token === undefined) return undefined;
-    const sessionId = request.headers["x-hhhd-session-id"];
+    const sessionId = request.headers["x-p0d-session-id"];
     const encoder = new TextEncoder();
     if (
-      !hhhdToken ||
+      !p0dToken ||
       !sessionId ||
-      !Mac.timingSafeEqual(encoder.encode(token), encoder.encode(hhhdToken))
+      !Mac.timingSafeEqual(encoder.encode(token), encoder.encode(p0dToken))
     ) {
       return Effect.fail(
-        new ServerAuthInvalidCredentialError({ diagnostic: "Invalid hhhd upstream credential." }),
+        new ServerAuthInvalidCredentialError({ diagnostic: "Invalid p0d upstream credential." }),
       );
     }
     return sessions.listActive().pipe(
@@ -791,7 +791,7 @@ export const make = Effect.gen(function* () {
           ? Effect.succeed(session)
           : Effect.fail(
               new ServerAuthInvalidCredentialError({
-                diagnostic: "hhhd forwarded an inactive session.",
+                diagnostic: "p0d forwarded an inactive session.",
               }),
             );
       }),
@@ -817,7 +817,7 @@ export const make = Effect.gen(function* () {
   const authenticateRequest = (
     request: HttpServerRequest.HttpServerRequest,
   ): Effect.Effect<AuthenticatedSession, ServerAuthCredentialError | ServerAuthInternalError> => {
-    const upstream = authenticateHhhdUpstream(request);
+    const upstream = authenticateP0dUpstream(request);
     if (upstream !== undefined) return upstream;
     const dpopToken = parseDpopToken(request);
     const credential = resolveRequestCredential(request);
@@ -1445,7 +1445,7 @@ export const make = Effect.gen(function* () {
 
   const authenticateWebSocketUpgrade: EnvironmentAuth["Service"]["authenticateWebSocketUpgrade"] =
     Effect.fn("EnvironmentAuth.authenticateWebSocketUpgrade")(function* (request, use) {
-      const upstream = authenticateHhhdUpstream(request);
+      const upstream = authenticateP0dUpstream(request);
       if (upstream !== undefined) return yield* upstream;
       const url = requestUrl(request);
       if (Option.isSome(url)) {

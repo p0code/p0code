@@ -48,7 +48,7 @@ const hostFlag = Flag.String("host").pipe(
 );
 export const baseDirFlag = Flag.String("base-dir").pipe(
   Flag.withDescription(
-    "Explicit T3 Code data directory; runtime state is stored under userdata (equivalent to HHHCODE_HOME).",
+    "Explicit T3 Code data directory; runtime state is stored under userdata (equivalent to P0CODE_HOME).",
   ),
   Flag.optional,
 );
@@ -368,7 +368,7 @@ export const resolveServerConfig = Effect.fn("config.resolveServerConfig")(funct
     const stockHome = path.join(yield* HostProcess.HomeDirectory, STOCK_T3_HOME_DIRECTORY_NAME);
     if (yield* Effect.promise(() => shouldOfferT3Import({ appHome: baseDir, stockHome }))) {
       yield* Effect.logWarning(
-        `Found T3 Code data in ${stockHome}. hhhcode keeps its own data in ${baseDir} and has not imported anything. To bring threads, settings and providers over, stop this server and run \`t3 migrate from-t3 --force\` (the new, empty ${baseDir} is moved aside, not deleted).`,
+        `Found T3 Code data in ${stockHome}. p0code keeps its own data in ${baseDir} and has not imported anything. To bring threads, settings and providers over, stop this server and run \`t3 migrate from-t3 --force\` (the new, empty ${baseDir} is moved aside, not deleted).`,
       );
     }
   }

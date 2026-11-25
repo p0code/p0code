@@ -16,7 +16,7 @@ import {
 
 const roots: Array<string> = [];
 const makeSecretsDir = () => {
-  const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "hhh-keychain-test-"));
+  const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "p0code-keychain-test-"));
   roots.push(root);
   const secretsDir = NodePath.join(root, "userdata", "secrets");
   NodeFS.mkdirSync(secretsDir, { recursive: true });

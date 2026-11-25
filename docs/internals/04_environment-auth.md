@@ -104,7 +104,7 @@ Credential Manager's 2.5 KiB limit are chunked transparently.
   written to the keychain, verified by read-back, and then deleted. A `keychain-backend` marker file
   prevents silently falling back to files if a keychain-backed home starts with a locked keychain.
   On headless hosts with no keychain, the server logs a warning and falls back to `0600` files
-  (override with `HHHCODE_SECRET_BACKEND=keychain|file`).
+  (override with `P0CODE_SECRET_BACKEND=keychain|file`).
 - **Desktop and mobile.** Desktop seals its saved environment and catalog secrets with Electron
   `safeStorage` (keychain-backed key); mobile uses `expo-secure-store` (iOS Keychain / Android
   Keystore).

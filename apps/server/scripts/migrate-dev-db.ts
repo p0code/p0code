@@ -36,7 +36,7 @@ export class MigrateDevDbSharedHomeError extends Schema.TaggedError<MigrateDevDb
   {},
 ) {
   override get message(): string {
-    return "Refusing to rebuild the shared ~/.hhh (or stock ~/.t3) database. Use an isolated --base-dir.";
+    return "Refusing to rebuild the shared ~/.p0code (or stock ~/.t3) database. Use an isolated --base-dir.";
   }
 }
 
@@ -769,7 +769,7 @@ export const migrateDevDbCommand = Command.make(
     ),
     source: Flag.String("source").pipe(
       Flag.optional,
-      Flag.withDescription("Source database. Defaults to ~/.hhh/userdata/statev2.sqlite."),
+      Flag.withDescription("Source database. Defaults to ~/.p0code/userdata/statev2.sqlite."),
     ),
     dropResumable: Flag.String("drop-resumable").pipe(
       Flag.optional,
@@ -807,7 +807,7 @@ export const migrateDevDbCommand = Command.make(
     }),
 ).pipe(
   Command.withDescription(
-    "Rebuild the worktree dev database from a pruned snapshot of the real ~/.hhh data, then run migrations.",
+    "Rebuild the worktree dev database from a pruned snapshot of the real ~/.p0code data, then run migrations.",
   ),
 );
 

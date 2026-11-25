@@ -13,21 +13,21 @@ import (
 	"time"
 )
 
-// TestRealLegacyServer runs hhhd in front of the real Node server (apps/server). It is
+// TestRealLegacyServer runs p0d in front of the real Node server (apps/server). It is
 // slow and needs node plus installed workspace deps, so it only runs with
-// HHHD_NODE_INTEGRATION=1.
+// P0D_NODE_INTEGRATION=1.
 func TestRealLegacyServer(t *testing.T) {
-	if os.Getenv("HHHD_NODE_INTEGRATION") != "1" {
-		t.Skip("set HHHD_NODE_INTEGRATION=1 to run against apps/server")
+	if os.Getenv("P0D_NODE_INTEGRATION") != "1" {
+		t.Skip("set P0D_NODE_INTEGRATION=1 to run against apps/server")
 	}
 	bin, err := filepath.Abs("../../../server/src/bin.ts")
 	if err != nil {
 		t.Fatal(err)
 	}
 	base := t.TempDir()
-	// Keep the Node server away from the real ~/.hhh and the OS keychain.
+	// Keep the Node server away from the real ~/.p0code and the OS keychain.
 	t.Setenv("HOME", filepath.Join(base, "home"))
-	t.Setenv("HHHCODE_SECRET_BACKEND", "file")
+	t.Setenv("P0CODE_SECRET_BACKEND", "file")
 	issue := exec.Command("node", bin, "auth", "session", "issue", "--base-dir", base, "--token-only")
 	out, err := issue.Output()
 	if err != nil {
@@ -59,7 +59,7 @@ func TestRealLegacyServer(t *testing.T) {
 		t.Fatalf("legacy started for a native call: %+v", st)
 	}
 
-	// Proxied over the same socket: Node answers as the hhhd-verified session.
+	// Proxied over the same socket: Node answers as the p0d-verified session.
 	c.send(`{"_tag":"Request","id":1,"tag":"server.getSettings","payload":{},"headers":[]}`)
 	msg := c.next()
 	if exit := exitOf(t, msg); exit["_tag"] != "Success" {

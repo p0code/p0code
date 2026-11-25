@@ -66,13 +66,13 @@ from local clocks or PR caches.
 
 ## Home directory and stock T3 Code
 
-hhhcode defaults to `~/.hhh` (`HHHCODE_HOME`) so it never opens a stock T3 Code database in
+p0code defaults to `~/.p0code` (`P0CODE_HOME`) so it never opens a stock T3 Code database in
 `~/.t3`; two servers on one home would fight over its lock and migrate its schema. `T3CODE_HOME`
-stays honored when set and is still how hhhcode's own launchers (service units, desktop backend,
+stays honored when set and is still how p0code's own launchers (service units, desktop backend,
 CLI shim, WSL) hand the resolved home to a child, because those set it explicitly; anything that
-sets it for a child must also drop an inherited `HHHCODE_HOME`, which wins. Wire identifiers, the
+sets it for a child must also drop an inherited `P0CODE_HOME`, which wins. Wire identifiers, the
 `t3` command and the background service names are unchanged for compatibility, so installing
-hhhcode's background service replaces stock T3 Code's.
+p0code's background service replaces stock T3 Code's.
 
 `t3 migrate from-t3` ([migrateFromT3.ts](../../packages/shared/src/migrateFromT3.ts)) imports a
 stock home. The source is strictly read-only: databases are snapshotted with `VACUUM INTO` from a

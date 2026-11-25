@@ -29,8 +29,8 @@ const HEALTH_PROBE_TIMEOUT = Duration.seconds(1);
 const SERVICE_START_WAIT_TIMEOUT = Duration.seconds(30);
 const SERVICE_START_POLL_INTERVAL = Duration.millis(200);
 const COMMAND_TIMEOUT = Duration.seconds(15);
-const HHHD_READY_FILE_NAME = "hhhd-ready.json";
-const LEGACY_SERVICE_READY_FILE_NAME = "hhhd-legacy-service.json";
+const P0D_READY_FILE_NAME = "p0d-ready.json";
+const LEGACY_SERVICE_READY_FILE_NAME = "p0d-legacy-service.json";
 
 const { logWarning: logServiceWarning } =
   DesktopObservability.makeComponentLogger("desktop-backend-service");
@@ -51,7 +51,7 @@ export interface BackendReadyFileData {
   readonly version?: string | null;
 }
 
-export interface ParsedHhhdServiceStatus {
+export interface ParsedP0dServiceStatus {
   readonly running: boolean;
   readonly installed: boolean;
   readonly pid: number | null;
@@ -68,16 +68,16 @@ export interface BackendServiceInfo {
   readonly url: URL | null;
   readonly binaryPath: string | null;
   readonly managedByService: boolean;
-  readonly driverKind: "hhhd" | "legacy-node";
+  readonly driverKind: "p0d" | "legacy-node";
 }
 
 /**
  * Pluggable interface for running a decoupled local backend service.
- * Implemented by `hhhd` (user service via launchd/systemd/Task Scheduler) and by the
+ * Implemented by `p0d` (user service via launchd/systemd/Task Scheduler) and by the
  * legacy Node server fallback so both share the exact same attach/start/stop/restart lifecycle.
  */
 export interface BackendServiceDriver {
-  readonly kind: "hhhd" | "legacy-node";
+  readonly kind: "p0d" | "legacy-node";
   readonly binaryPath: string | null;
   readonly status: Effect.Effect<BackendServiceInfo>;
   readonly ensureRunning: Effect.Effect<BackendServiceInfo, BackendServiceDriverError>;
@@ -93,7 +93,7 @@ const ReadyFileSchema = Schema.Struct({
   version: Schema.optional(Schema.NullOr(Schema.String)),
 });
 
-const HhhdServiceStatusJsonSchema = Schema.Struct({
+const P0dServiceStatusJsonSchema = Schema.Struct({
   running: Schema.optional(Schema.Boolean),
   installed: Schema.optional(Schema.Boolean),
   status: Schema.optional(Schema.String),
@@ -107,7 +107,7 @@ const HhhdServiceStatusJsonSchema = Schema.Struct({
 const decodeReadyFileJson = Schema.decodeUnknownOption(Schema.fromJsonString(ReadyFileSchema));
 const encodeReadyFileJson = Schema.encodeEffect(Schema.fromJsonString(ReadyFileSchema));
 const decodeStatusJson = Schema.decodeUnknownOption(
-  Schema.fromJsonString(HhhdServiceStatusJsonSchema),
+  Schema.fromJsonString(P0dServiceStatusJsonSchema),
 );
 
 export function isExternalBackendMode(mode: DesktopBackendMode): boolean {
@@ -116,19 +116,19 @@ export function isExternalBackendMode(mode: DesktopBackendMode): boolean {
 
 export function resolveEffectiveBackendMode(
   settings: Pick<DesktopAppSettings.DesktopSettings, "backendMode" | "backendModeConfiguredByUser">,
-  hasPackagedHhhd: boolean,
+  hasPackagedP0d: boolean,
 ): DesktopBackendMode {
   if (settings.backendModeConfiguredByUser) {
     return settings.backendMode;
   }
-  return hasPackagedHhhd ? "local-service" : "legacy-embedded";
+  return hasPackagedP0d ? "local-service" : "legacy-embedded";
 }
 
-function hhhdBinaryName(platform: NodeJS.Platform): string {
-  return platform === "win32" ? "hhhd.exe" : "hhhd";
+function p0dBinaryName(platform: NodeJS.Platform): string {
+  return platform === "win32" ? "p0d.exe" : "p0d";
 }
 
-function hhhdDistSubdirs(platform: NodeJS.Platform, arch: string): readonly string[] {
+function p0dDistSubdirs(platform: NodeJS.Platform, arch: string): readonly string[] {
   const osNames =
     platform === "darwin"
       ? ["darwin", "mac"]
@@ -145,19 +145,19 @@ function hhhdDistSubdirs(platform: NodeJS.Platform, arch: string): readonly stri
   return subdirs;
 }
 
-function packagedHhhdBinaryCandidates(input: {
+function packagedP0dBinaryCandidates(input: {
   readonly path: Pick<Path.Path, "join">;
   readonly platform: NodeJS.Platform;
   readonly resourcesPath: string;
 }): readonly string[] {
-  const binaryName = hhhdBinaryName(input.platform);
+  const binaryName = p0dBinaryName(input.platform);
   return [
-    input.path.join(input.resourcesPath, "hhhd", binaryName),
+    input.path.join(input.resourcesPath, "p0d", binaryName),
     input.path.join(input.resourcesPath, "bin", binaryName),
   ];
 }
 
-export function hhhdBinaryCandidates(input: {
+export function p0dBinaryCandidates(input: {
   readonly path: Pick<Path.Path, "join">;
   readonly platform: NodeJS.Platform;
   readonly arch: string;
@@ -169,7 +169,7 @@ export function hhhdBinaryCandidates(input: {
   readonly appDataDirectory: string;
   readonly configuredBinaryPath: string | null;
 }): readonly string[] {
-  const binaryName = hhhdBinaryName(input.platform);
+  const binaryName = p0dBinaryName(input.platform);
   const candidates: string[] = [];
   const pushUnique = (candidate: string) => {
     const trimmed = candidate.trim();
@@ -181,29 +181,29 @@ export function hhhdBinaryCandidates(input: {
   if (input.configuredBinaryPath) {
     pushUnique(input.configuredBinaryPath);
   }
-  for (const packaged of packagedHhhdBinaryCandidates(input)) {
+  for (const packaged of packagedP0dBinaryCandidates(input)) {
     pushUnique(packaged);
   }
   if (!input.isPackaged) {
-    for (const subdir of hhhdDistSubdirs(input.platform, input.arch)) {
-      pushUnique(input.path.join(input.rootDir, "apps", "hhhd", "dist", subdir, binaryName));
+    for (const subdir of p0dDistSubdirs(input.platform, input.arch)) {
+      pushUnique(input.path.join(input.rootDir, "apps", "p0d", "dist", subdir, binaryName));
     }
   }
   pushUnique(input.path.join(input.baseDir, "bin", binaryName));
-  pushUnique(input.path.join(input.baseDir, "hhhd", "bin", binaryName));
-  pushUnique(input.path.join(input.homeDirectory, ".hhh", "bin", binaryName));
+  pushUnique(input.path.join(input.baseDir, "p0d", "bin", binaryName));
+  pushUnique(input.path.join(input.homeDirectory, ".p0code", "bin", binaryName));
   if (input.platform === "win32") {
     pushUnique(
-      input.path.join(input.appDataDirectory, "..", "Local", "HHHCode", "hhhd", "bin", binaryName),
+      input.path.join(input.appDataDirectory, "..", "Local", "p0code", "p0d", "bin", binaryName),
     );
   } else if (input.platform === "linux") {
     pushUnique(
-      input.path.join(input.homeDirectory, ".local", "share", "hhhcode", "hhhd", "bin", binaryName),
+      input.path.join(input.homeDirectory, ".local", "share", "p0code", "p0d", "bin", binaryName),
     );
-    pushUnique("/usr/local/bin/hhhd");
+    pushUnique("/usr/local/bin/p0d");
   } else if (input.platform === "darwin") {
-    pushUnique("/opt/homebrew/bin/hhhd");
-    pushUnique("/usr/local/bin/hhhd");
+    pushUnique("/opt/homebrew/bin/p0d");
+    pushUnique("/usr/local/bin/p0d");
   }
   return candidates;
 }
@@ -237,16 +237,16 @@ export function parseReadyFile(raw: string): BackendReadyFileData | null {
   return { pid, port, url, version };
 }
 
-export function parseHhhdVersion(output: string): string | null {
+export function parseP0dVersion(output: string): string | null {
   const firstLine = output
     .split(/\r?\n/)
     .map((line) => line.trim())
     .find((line) => line.length > 0);
   if (!firstLine) return null;
-  return firstLine.replace(/^hhhd\s+/i, "").trim() || null;
+  return firstLine.replace(/^p0d\s+/i, "").trim() || null;
 }
 
-export function parseHhhdServiceStatus(output: string): ParsedHhhdServiceStatus {
+export function parseP0dServiceStatus(output: string): ParsedP0dServiceStatus {
   const trimmed = output.trim();
   const decodedJson = decodeStatusJson(trimmed);
   if (Option.isSome(decodedJson)) {
@@ -426,7 +426,7 @@ const parseUrlOrNull = (value: string | null): URL | null => {
   }
 };
 
-export interface MakeHhhdServiceDriverInput {
+export interface MakeP0dServiceDriverInput {
   readonly binaryPath: string;
   readonly stateDir: string;
   readonly readyFilePath: string;
@@ -440,13 +440,13 @@ export interface MakeHhhdServiceDriverInput {
   readonly pollInterval?: Duration.Duration;
 }
 
-export function makeHhhdServiceDriver(input: MakeHhhdServiceDriverInput): BackendServiceDriver {
+export function makeP0dServiceDriver(input: MakeP0dServiceDriverInput): BackendServiceDriver {
   const defaultUrl = new URL(`http://${input.host}:${input.defaultPort}`);
   const waitTimeout = input.waitTimeout ?? SERVICE_START_WAIT_TIMEOUT;
   const pollInterval = input.pollInterval ?? SERVICE_START_POLL_INTERVAL;
 
   const readVersion = runShortCommand(input.spawner, input.binaryPath, ["version"]).pipe(
-    Effect.map((output) => (output.exitCode === 0 ? parseHhhdVersion(output.stdout) : null)),
+    Effect.map((output) => (output.exitCode === 0 ? parseP0dVersion(output.stdout) : null)),
     Effect.orElseSucceed(() => null),
   );
 
@@ -454,8 +454,8 @@ export function makeHhhdServiceDriver(input: MakeHhhdServiceDriverInput): Backen
     "service",
     "status",
   ]).pipe(
-    Effect.map((output) => parseHhhdServiceStatus(`${output.stdout}\n${output.stderr}`)),
-    Effect.orElseSucceed((): ParsedHhhdServiceStatus => ({
+    Effect.map((output) => parseP0dServiceStatus(`${output.stdout}\n${output.stderr}`)),
+    Effect.orElseSucceed((): ParsedP0dServiceStatus => ({
       running: false,
       installed: false,
       pid: null,
@@ -485,7 +485,7 @@ export function makeHhhdServiceDriver(input: MakeHhhdServiceDriverInput): Backen
       url: healthy ? candidateUrl : parseUrlOrNull(serviceStatus.url ?? readyFile?.url ?? null),
       binaryPath: input.binaryPath,
       managedByService: true,
-      driverKind: "hhhd",
+      driverKind: "p0d",
     };
   });
 
@@ -508,7 +508,7 @@ export function makeHhhdServiceDriver(input: MakeHhhdServiceDriverInput): Backen
         url: candidateUrl,
         binaryPath: input.binaryPath,
         managedByService: true,
-        driverKind: "hhhd",
+        driverKind: "p0d",
       });
     });
 
@@ -522,7 +522,7 @@ export function makeHhhdServiceDriver(input: MakeHhhdServiceDriverInput): Backen
     if (Option.isNone(result) || Option.isNone(result.value)) {
       return yield* new BackendServiceDriverError({
         operation: "waitForHealthz",
-        message: `Timed out waiting for hhhd to respond on ${HEALTHZ_PATH}.`,
+        message: `Timed out waiting for p0d to respond on ${HEALTHZ_PATH}.`,
       });
     }
     return result.value.value;
@@ -552,7 +552,7 @@ export function makeHhhdServiceDriver(input: MakeHhhdServiceDriverInput): Backen
         operation: "service install",
         message:
           (bare.stderr || bare.stdout || withFlags.stderr || withFlags.stdout).trim() ||
-          `hhhd service install exited with code ${bare.exitCode}`,
+          `p0d service install exited with code ${bare.exitCode}`,
       });
     }
   });
@@ -569,7 +569,7 @@ export function makeHhhdServiceDriver(input: MakeHhhdServiceDriverInput): Backen
           operation: "service start",
           message:
             (started.stderr || started.stdout).trim() ||
-            `hhhd service start exited with code ${started.exitCode}`,
+            `p0d service start exited with code ${started.exitCode}`,
         });
       }
       return yield* waitUntilHealthy;
@@ -593,7 +593,7 @@ export function makeHhhdServiceDriver(input: MakeHhhdServiceDriverInput): Backen
         operation: "service stop",
         message:
           (result.stderr || result.stdout).trim() ||
-          `hhhd service stop exited with code ${result.exitCode}`,
+          `p0d service stop exited with code ${result.exitCode}`,
       });
     }
   });
@@ -606,7 +606,7 @@ export function makeHhhdServiceDriver(input: MakeHhhdServiceDriverInput): Backen
   );
 
   return {
-    kind: "hhhd",
+    kind: "p0d",
     binaryPath: input.binaryPath,
     status: probeStatus,
     ensureRunning,
@@ -646,7 +646,7 @@ const defaultKillProcess = (pid: number): Effect.Effect<void> =>
 /**
  * Pluggable Node-server implementation of `BackendServiceDriver`.
  * Allows `local-service` mode to run today's Node server as a detached process that survives
- * GUI quit and can be reattached on relaunch until the native `hhhd` binary ships.
+ * GUI quit and can be reattached on relaunch until the native `p0d` binary ships.
  */
 export function makeLegacyNodeServiceDriver(
   input: MakeLegacyNodeServiceDriverInput,
@@ -707,7 +707,7 @@ export function makeLegacyNodeServiceDriver(
                   detached: true,
                   env: {
                     ELECTRON_RUN_AS_NODE: "1",
-                    HHH_HOME: input.baseDir,
+                    P0D_HOME: input.baseDir,
                     T3CODE_HOME: input.baseDir,
                   },
                   extendEnv: true,
@@ -816,9 +816,9 @@ export function makeLegacyNodeServiceDriver(
 export class DesktopBackendService extends Context.Service<
   DesktopBackendService,
   {
-    readonly hasPackagedHhhd: Effect.Effect<boolean>;
+    readonly hasPackagedP0d: Effect.Effect<boolean>;
     readonly resolveEffectiveMode: Effect.Effect<DesktopBackendMode>;
-    readonly findHhhdBinary: Effect.Effect<Option.Option<string>>;
+    readonly findP0dBinary: Effect.Effect<Option.Option<string>>;
     readonly resolveServiceDriver: Effect.Effect<BackendServiceDriver>;
     readonly getStatus: (input: {
       readonly embeddedReady: boolean;
@@ -854,17 +854,17 @@ export const make = Effect.gen(function* () {
     return Option.none<string>();
   });
 
-  const hasPackagedHhhd = firstExistingPath(
-    packagedHhhdBinaryCandidates({
+  const hasPackagedP0d = firstExistingPath(
+    packagedP0dBinaryCandidates({
       path: environment.path,
       platform: environment.platform,
       resourcesPath: environment.resourcesPath,
     }),
   ).pipe(Effect.map(Option.isSome));
 
-  const findHhhdBinary = Effect.gen(function* () {
+  const findP0dBinary = Effect.gen(function* () {
     const settings = yield* appSettings.get;
-    const candidates = hhhdBinaryCandidates({
+    const candidates = p0dBinaryCandidates({
       path: environment.path,
       platform: environment.platform,
       arch: environment.processArch,
@@ -881,7 +881,7 @@ export const make = Effect.gen(function* () {
 
   const resolveEffectiveMode = Effect.gen(function* () {
     const settings = yield* appSettings.get;
-    const packaged = yield* hasPackagedHhhd;
+    const packaged = yield* hasPackagedP0d;
     return resolveEffectiveBackendMode(
       {
         backendMode:
@@ -893,7 +893,7 @@ export const make = Effect.gen(function* () {
   });
 
   const resolveServiceDriver: Effect.Effect<BackendServiceDriver> = Effect.gen(function* () {
-    const hhhdBinary = yield* findHhhdBinary;
+    const p0dBinary = yield* findP0dBinary;
     const defaultPort = Option.getOrElse(
       environment.configuredBackendPort,
       () => DEFAULT_SERVICE_PORT,
@@ -901,14 +901,14 @@ export const make = Effect.gen(function* () {
     const legacyEntryExists = yield* fileSystem
       .exists(environment.backendEntryPath)
       .pipe(Effect.orElseSucceed(() => false));
-    if (Option.isSome(hhhdBinary)) {
+    if (Option.isSome(p0dBinary)) {
       const legacyServerCommand = legacyEntryExists
         ? `${process.execPath} ${environment.backendEntryPath}`
         : null;
-      return makeHhhdServiceDriver({
-        binaryPath: hhhdBinary.value,
+      return makeP0dServiceDriver({
+        binaryPath: p0dBinary.value,
         stateDir: environment.stateDir,
-        readyFilePath: environment.path.join(environment.stateDir, HHHD_READY_FILE_NAME),
+        readyFilePath: environment.path.join(environment.stateDir, P0D_READY_FILE_NAME),
         legacyServerCommand,
         host: DEFAULT_SERVICE_HOST,
         defaultPort,
@@ -938,8 +938,8 @@ export const make = Effect.gen(function* () {
   )(function* (embedded) {
     const settings = yield* appSettings.get;
     const mode = yield* resolveEffectiveMode;
-    const hhhdBinary = yield* findHhhdBinary;
-    const resolvedBinaryPath = Option.getOrNull(hhhdBinary);
+    const p0dBinary = yield* findP0dBinary;
+    const resolvedBinaryPath = Option.getOrNull(p0dBinary);
     const binaryPath = settings.backendBinaryPath ?? null;
     const remoteUrl = settings.backendRemoteUrl ?? null;
 
@@ -1046,9 +1046,9 @@ export const make = Effect.gen(function* () {
   });
 
   return DesktopBackendService.of({
-    hasPackagedHhhd,
+    hasPackagedP0d,
     resolveEffectiveMode,
-    findHhhdBinary,
+    findP0dBinary,
     resolveServiceDriver,
     getStatus,
     updateConfig,
@@ -1064,9 +1064,9 @@ export const layerTest = (
   Layer.succeed(
     DesktopBackendService,
     DesktopBackendService.of({
-      hasPackagedHhhd: Effect.succeed(false),
+      hasPackagedP0d: Effect.succeed(false),
       resolveEffectiveMode: Effect.succeed("legacy-embedded"),
-      findHhhdBinary: Effect.succeedNone,
+      findP0dBinary: Effect.succeedNone,
       resolveServiceDriver: Effect.die("DesktopBackendService.layerTest resolveServiceDriver"),
       getStatus: Effect.fn("DesktopBackendService.getStatus")(function () {
         return Effect.succeed({

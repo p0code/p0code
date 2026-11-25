@@ -119,7 +119,7 @@ it.effect(
         JSON.stringify({ ...raw, expiresAt: raw.expiresAt + 60_000 }),
       ).toString("base64url");
       const key = Buffer.from(
-        NodeCrypto.hkdfSync("sha256", privateKey, "hhhcode-self-relay", "port-link-v1", 32),
+        NodeCrypto.hkdfSync("sha256", privateKey, "p0code-self-relay", "port-link-v1", 32),
       );
       const signature = NodeCrypto.createHmac("sha256", key)
         .update(`port:${payload}`)

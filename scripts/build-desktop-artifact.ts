@@ -62,7 +62,7 @@ import { Command, Flag } from "effect/cli";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 const LINUX_ICON_SIZES = [16, 22, 24, 32, 48, 64, 128, 256, 512] as const;
-const DESKTOP_APP_ID = "tw.yhw.hhhcode";
+const DESKTOP_APP_ID = "tw.yhw.p0code";
 const APPLE_TEAM_ID_PATTERN = /^[A-Z0-9]{10}$/u;
 
 const BuildPlatform = Schema.Literals(["mac", "linux", "win"]);
@@ -2709,8 +2709,8 @@ export function resolvePackageManagerUserAgent(packageManager: string): string {
 
 export function resolveDesktopProductName(version: string): string {
   return resolveDesktopUpdateChannel(version) === "nightly"
-    ? "HHHCode (Nightly)"
-    : (desktopPackageJson.productName ?? "HHHCode");
+    ? "p0code (Nightly)"
+    : (desktopPackageJson.productName ?? "p0code");
 }
 
 export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
@@ -2741,7 +2741,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       : {}),
     appId: DESKTOP_APP_ID,
     productName: resolveDesktopProductName(version),
-    artifactName: "HHHCode-${version}-${arch}.${ext}",
+    artifactName: "p0code-${version}-${arch}.${ext}",
     electronLanguages: [...DESKTOP_ELECTRON_LANGUAGES],
     files: [
       ...DESKTOP_FILE_EXCLUSIONS,
@@ -2795,23 +2795,23 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
         // macOS 26 offers Messages/Mail codes in every text field unless opted out.
         NSAutoFillRequiresTextContentTypeForOneTimeCodeOnMac: true,
         NSLocalNetworkUsageDescription:
-          "HHHCode connects to devices on your local network for remote environments and commands run by terminals and coding agents.",
+          "p0code connects to devices on your local network for remote environments and commands run by terminals and coding agents.",
         NSCalendarsUsageDescription:
-          "Commands you run in HHHCode may need access to your calendars.",
+          "Commands you run in p0code may need access to your calendars.",
         NSCalendarsFullAccessUsageDescription:
-          "Commands you run in HHHCode may need to read and write your calendar events.",
+          "Commands you run in p0code may need to read and write your calendar events.",
         NSCalendarsWriteOnlyAccessUsageDescription:
-          "Commands you run in HHHCode may need to add events to your calendars.",
+          "Commands you run in p0code may need to add events to your calendars.",
         NSScreenCaptureUsageDescription:
-          "HHHCode captures the active window when you use the window capture shortcut.",
+          "p0code captures the active window when you use the window capture shortcut.",
         NSCameraUsageDescription:
-          "HHHCode lets commands run by terminals and coding agents use the camera.",
+          "p0code lets commands run by terminals and coding agents use the camera.",
         NSMicrophoneUsageDescription:
-          "HHHCode lets commands run by terminals and coding agents use the microphone.",
+          "p0code lets commands run by terminals and coding agents use the microphone.",
         NSAppleEventsUsageDescription:
-          "HHHCode lets commands run by terminals and coding agents control other apps.",
+          "p0code lets commands run by terminals and coding agents control other apps.",
         NSSpeechRecognitionUsageDescription:
-          "HHHCode transcribes your dictation on this Mac when you choose Apple Speech.",
+          "p0code transcribes your dictation on this Mac when you choose Apple Speech.",
         // macOS lists an app under Default web browser only when it opens web
         // pages as documents as well as http and https links (see protocols).
         CFBundleDocumentTypes: [
@@ -2825,8 +2825,8 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       },
       protocols: [
         {
-          name: "HHHCode",
-          schemes: ["hhhcode", "hhhcode-dev", "t3code"],
+          name: "p0code",
+          schemes: ["p0code", "p0code-dev", "t3code"],
         },
         {
           name: "Web site URL",
@@ -2871,21 +2871,21 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     buildConfig.afterPack = path.join(repoRoot, "scripts/linux-after-pack.ts");
     buildConfig.linux = {
       target: target === "AppImage" ? [target, "deb"] : [target],
-      executableName: "hhhcode",
+      executableName: "p0code",
       icon: "icons",
       category: "Development",
       synopsis: "Desktop GUI for coding agents",
-      maintainer: "HHHCode",
+      maintainer: "p0code",
       protocols: [
         {
-          name: "HHHCode",
-          schemes: ["hhhcode", "hhhcode-dev", "t3code"],
+          name: "p0code",
+          schemes: ["p0code", "p0code-dev", "t3code"],
         },
       ],
       desktop: {
         entry: {
           // Match Electron's WM_CLASS from setDesktopName so docks use this launcher.
-          StartupWMClass: "tw.yhw.hhhcode",
+          StartupWMClass: "tw.yhw.p0code",
         },
       },
     };
@@ -2893,7 +2893,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     if (buildConfig.publish) {
       buildConfig.appImage = {
         artifactName:
-          updateChannel === "nightly" ? "HHHCode-Nightly-${arch}.${ext}" : "HHHCode-${arch}.${ext}",
+          updateChannel === "nightly" ? "p0code-Nightly-${arch}.${ext}" : "p0code-${arch}.${ext}",
       };
     }
     buildConfig.deb = {
@@ -3573,21 +3573,21 @@ export const validateLinuxPackagedPayload = Effect.fn(
   );
 });
 
-export const HHHD_LAUNCHD_LABEL = "tw.yhw.hhhcode.hhhd";
-export const HHHD_SYSTEMD_UNIT_NAME = "hhhd.service";
-export const HHHD_WINDOWS_TASK_NAME = "HHHCodeBackend";
+export const P0D_LAUNCHD_LABEL = "tw.yhw.p0code.p0d";
+export const P0D_SYSTEMD_UNIT_NAME = "p0d.service";
+export const P0D_WINDOWS_TASK_NAME = "p0codeBackend";
 
-export function hhhdArtifactExecutableName(platform: typeof BuildPlatform.Type): string {
-  return platform === "win" ? "hhhd.exe" : "hhhd";
+export function p0dArtifactExecutableName(platform: typeof BuildPlatform.Type): string {
+  return platform === "win" ? "p0d.exe" : "p0d";
 }
 
-export function resolveHhhdDistCandidates(
+export function resolveP0dDistCandidates(
   repoRoot: string,
   platform: typeof BuildPlatform.Type,
   arch: typeof BuildArch.Type,
   joinPath: (...segments: string[]) => string = (...segments) => segments.join("/"),
 ): ReadonlyArray<string> {
-  const executable = hhhdArtifactExecutableName(platform);
+  const executable = p0dArtifactExecutableName(platform);
   const osNames =
     platform === "mac" ? ["darwin", "mac"] : platform === "win" ? ["windows", "win"] : ["linux"];
   const archNames =
@@ -3600,21 +3600,21 @@ export function resolveHhhdDistCandidates(
   for (const osName of osNames) {
     for (const archName of archNames) {
       candidates.push(
-        joinPath(repoRoot, "apps", "hhhd", "dist", `${osName}-${archName}`, executable),
+        joinPath(repoRoot, "apps", "p0d", "dist", `${osName}-${archName}`, executable),
       );
     }
   }
   return candidates;
 }
 
-export const findHhhdBinary = Effect.fn("findHhhdBinary")(function* (
+export const findP0dBinary = Effect.fn("findP0dBinary")(function* (
   repoRoot: string,
   platform: typeof BuildPlatform.Type,
   arch: typeof BuildArch.Type,
 ) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  for (const candidate of resolveHhhdDistCandidates(repoRoot, platform, arch, path.join)) {
+  for (const candidate of resolveP0dDistCandidates(repoRoot, platform, arch, path.join)) {
     if (yield* fs.exists(candidate).pipe(Effect.orElseSucceed(() => false))) {
       return Option.some(candidate);
     }
@@ -3628,7 +3628,7 @@ export function backendArchiveStem(
   arch: typeof BuildArch.Type,
 ): string {
   const osSlug = platform === "mac" ? "darwin" : platform === "win" ? "windows" : "linux";
-  return `hhhd-${version}-${osSlug}-${arch}`;
+  return `p0d-${version}-${osSlug}-${arch}`;
 }
 
 export function backendArchiveFileName(
@@ -3656,11 +3656,11 @@ export function renderMacLaunchdPlist(input?: {
   readonly legacyServerCmd?: string;
   readonly logDir?: string;
 }): string {
-  const binaryPath = input?.binaryPath ?? "__HHHD_BIN__";
-  const homeDir = input?.homeDir ?? "__HHHD_HOME__";
-  const readyFilePath = input?.readyFilePath ?? "__HHHD_READY_FILE__";
+  const binaryPath = input?.binaryPath ?? "__P0D_BIN__";
+  const homeDir = input?.homeDir ?? "__P0D_HOME__";
+  const readyFilePath = input?.readyFilePath ?? "__P0D_READY_FILE__";
   const legacyServerCmd = input?.legacyServerCmd ?? "__LEGACY_SERVER_CMD__";
-  const logDir = input?.logDir ?? "__HHHD_LOG_DIR__";
+  const logDir = input?.logDir ?? "__P0D_LOG_DIR__";
   const args = [
     binaryPath,
     "serve",
@@ -3680,7 +3680,7 @@ export function renderMacLaunchdPlist(input?: {
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>${HHHD_LAUNCHD_LABEL}</string>
+  <string>${P0D_LAUNCHD_LABEL}</string>
   <key>ProgramArguments</key>
   <array>
 ${programArgsXml}
@@ -3690,9 +3690,9 @@ ${programArgsXml}
   <key>KeepAlive</key>
   <true/>
   <key>StandardOutPath</key>
-  <string>${escapeXmlText(logDir)}/hhhd.stdout.log</string>
+  <string>${escapeXmlText(logDir)}/p0d.stdout.log</string>
   <key>StandardErrorPath</key>
-  <string>${escapeXmlText(logDir)}/hhhd.stderr.log</string>
+  <string>${escapeXmlText(logDir)}/p0d.stderr.log</string>
 </dict>
 </plist>
 `;
@@ -3703,35 +3703,35 @@ export function renderMacBackendInstallScript(): string {
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
-INSTALL_DIR="\${HHHD_INSTALL_DIR:-$HOME/.hhh/hhhd}"
-HOME_DIR="\${HHH_HOME:-$HOME/.hhh/userdata}"
-READY_FILE="$HOME_DIR/hhhd-ready.json"
+INSTALL_DIR="\${P0D_INSTALL_DIR:-$HOME/.p0code/p0d}"
+HOME_DIR="\${P0D_HOME:-$HOME/.p0code/userdata}"
+READY_FILE="$HOME_DIR/p0d-ready.json"
 LOG_DIR="$HOME_DIR/logs"
 LAUNCH_AGENTS_DIR="$HOME/Library/LaunchAgents"
-PLIST_PATH="$LAUNCH_AGENTS_DIR/${HHHD_LAUNCHD_LABEL}.plist"
+PLIST_PATH="$LAUNCH_AGENTS_DIR/${P0D_LAUNCHD_LABEL}.plist"
 
-mkdir -p "$INSTALL_DIR" "$HOME/.hhh/bin" "$HOME_DIR" "$LOG_DIR" "$LAUNCH_AGENTS_DIR"
+mkdir -p "$INSTALL_DIR" "$HOME/.p0code/bin" "$HOME_DIR" "$LOG_DIR" "$LAUNCH_AGENTS_DIR"
 cp -R "$SCRIPT_DIR/." "$INSTALL_DIR/"
 
 LEGACY_CMD="node $INSTALL_DIR/sidecar/apps/server/dist/bin.mjs"
-if [ -x "$INSTALL_DIR/bin/hhhd" ]; then
-  ln -sf "$INSTALL_DIR/bin/hhhd" "$HOME/.hhh/bin/hhhd"
-  "$INSTALL_DIR/bin/hhhd" service install --home "$HOME_DIR" --host 127.0.0.1 --port 3773 --ready-file "$READY_FILE" --legacy-server "$LEGACY_CMD" || true
+if [ -x "$INSTALL_DIR/bin/p0d" ]; then
+  ln -sf "$INSTALL_DIR/bin/p0d" "$HOME/.p0code/bin/p0d"
+  "$INSTALL_DIR/bin/p0d" service install --home "$HOME_DIR" --host 127.0.0.1 --port 3773 --ready-file "$READY_FILE" --legacy-server "$LEGACY_CMD" || true
   if [ ! -f "$PLIST_PATH" ]; then
     sed \\
-      -e "s|__HHHD_BIN__|$INSTALL_DIR/bin/hhhd|g" \\
-      -e "s|__HHHD_HOME__|$HOME_DIR|g" \\
-      -e "s|__HHHD_READY_FILE__|$READY_FILE|g" \\
+      -e "s|__P0D_BIN__|$INSTALL_DIR/bin/p0d|g" \\
+      -e "s|__P0D_HOME__|$HOME_DIR|g" \\
+      -e "s|__P0D_READY_FILE__|$READY_FILE|g" \\
       -e "s|__LEGACY_SERVER_CMD__|$LEGACY_CMD|g" \\
-      -e "s|__HHHD_LOG_DIR__|$LOG_DIR|g" \\
-      "$INSTALL_DIR/service/${HHHD_LAUNCHD_LABEL}.plist" > "$PLIST_PATH"
+      -e "s|__P0D_LOG_DIR__|$LOG_DIR|g" \\
+      "$INSTALL_DIR/service/${P0D_LAUNCHD_LABEL}.plist" > "$PLIST_PATH"
   fi
-  launchctl bootout "gui/$(id -u)/${HHHD_LAUNCHD_LABEL}" >/dev/null 2>&1 || true
+  launchctl bootout "gui/$(id -u)/${P0D_LAUNCHD_LABEL}" >/dev/null 2>&1 || true
   launchctl bootstrap "gui/$(id -u)" "$PLIST_PATH"
-  launchctl kickstart -k "gui/$(id -u)/${HHHD_LAUNCHD_LABEL}"
-  echo "Installed and started hhhd launchd agent ($PLIST_PATH)."
+  launchctl kickstart -k "gui/$(id -u)/${P0D_LAUNCHD_LABEL}"
+  echo "Installed and started p0d launchd agent ($PLIST_PATH)."
 else
-  echo "hhhd binary not included in this package; legacy Node sidecar installed at $INSTALL_DIR/sidecar."
+  echo "p0d binary not included in this package; legacy Node sidecar installed at $INSTALL_DIR/sidecar."
 fi
 `;
 }
@@ -3740,10 +3740,10 @@ export function renderMacBackendUninstallScript(): string {
   return `#!/usr/bin/env bash
 set -euo pipefail
 
-PLIST_PATH="$HOME/Library/LaunchAgents/${HHHD_LAUNCHD_LABEL}.plist"
-launchctl bootout "gui/$(id -u)/${HHHD_LAUNCHD_LABEL}" >/dev/null 2>&1 || true
-rm -f "$PLIST_PATH" "$HOME/.hhh/bin/hhhd"
-echo "Uninstalled ${HHHD_LAUNCHD_LABEL}."
+PLIST_PATH="$HOME/Library/LaunchAgents/${P0D_LAUNCHD_LABEL}.plist"
+launchctl bootout "gui/$(id -u)/${P0D_LAUNCHD_LABEL}" >/dev/null 2>&1 || true
+rm -f "$PLIST_PATH" "$HOME/.p0code/bin/p0d"
+echo "Uninstalled ${P0D_LAUNCHD_LABEL}."
 `;
 }
 
@@ -3753,13 +3753,13 @@ export function renderLinuxSystemdUnit(input?: {
   readonly readyFilePath?: string;
   readonly legacyServerCmd?: string;
 }): string {
-  const binaryPath = input?.binaryPath ?? "__HHHD_BIN__";
-  const homeDir = input?.homeDir ?? "__HHHD_HOME__";
-  const readyFilePath = input?.readyFilePath ?? "__HHHD_READY_FILE__";
+  const binaryPath = input?.binaryPath ?? "__P0D_BIN__";
+  const homeDir = input?.homeDir ?? "__P0D_HOME__";
+  const readyFilePath = input?.readyFilePath ?? "__P0D_READY_FILE__";
   const legacyServerCmd = input?.legacyServerCmd ?? "__LEGACY_SERVER_CMD__";
   const legacyArg = legacyServerCmd ? ` --legacy-server "${legacyServerCmd}"` : "";
   return `[Unit]
-Description=HHHCode Backend Daemon (hhhd)
+Description=p0code Backend Daemon (p0d)
 After=network.target
 
 [Service]
@@ -3778,29 +3778,29 @@ export function renderLinuxBackendInstallScript(): string {
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
-INSTALL_DIR="\${HHHD_INSTALL_DIR:-\${XDG_DATA_HOME:-$HOME/.local/share}/hhhcode/hhhd}"
-HOME_DIR="\${HHH_HOME:-$HOME/.hhh/userdata}"
-READY_FILE="$HOME_DIR/hhhd-ready.json"
+INSTALL_DIR="\${P0D_INSTALL_DIR:-\${XDG_DATA_HOME:-$HOME/.local/share}/p0code/p0d}"
+HOME_DIR="\${P0D_HOME:-$HOME/.p0code/userdata}"
+READY_FILE="$HOME_DIR/p0d-ready.json"
 SYSTEMD_USER_DIR="\${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
-UNIT_PATH="$SYSTEMD_USER_DIR/${HHHD_SYSTEMD_UNIT_NAME}"
+UNIT_PATH="$SYSTEMD_USER_DIR/${P0D_SYSTEMD_UNIT_NAME}"
 
-mkdir -p "$INSTALL_DIR" "$HOME/.hhh/bin" "$HOME_DIR" "$SYSTEMD_USER_DIR"
+mkdir -p "$INSTALL_DIR" "$HOME/.p0code/bin" "$HOME_DIR" "$SYSTEMD_USER_DIR"
 cp -R "$SCRIPT_DIR/." "$INSTALL_DIR/"
 
 LEGACY_CMD="node $INSTALL_DIR/sidecar/apps/server/dist/bin.mjs"
-if [ -x "$INSTALL_DIR/bin/hhhd" ]; then
-  ln -sf "$INSTALL_DIR/bin/hhhd" "$HOME/.hhh/bin/hhhd"
+if [ -x "$INSTALL_DIR/bin/p0d" ]; then
+  ln -sf "$INSTALL_DIR/bin/p0d" "$HOME/.p0code/bin/p0d"
   sed \\
-    -e "s|__HHHD_BIN__|$INSTALL_DIR/bin/hhhd|g" \\
-    -e "s|__HHHD_HOME__|$HOME_DIR|g" \\
-    -e "s|__HHHD_READY_FILE__|$READY_FILE|g" \\
+    -e "s|__P0D_BIN__|$INSTALL_DIR/bin/p0d|g" \\
+    -e "s|__P0D_HOME__|$HOME_DIR|g" \\
+    -e "s|__P0D_READY_FILE__|$READY_FILE|g" \\
     -e "s|__LEGACY_SERVER_CMD__|$LEGACY_CMD|g" \\
-    "$INSTALL_DIR/service/${HHHD_SYSTEMD_UNIT_NAME}" > "$UNIT_PATH"
+    "$INSTALL_DIR/service/${P0D_SYSTEMD_UNIT_NAME}" > "$UNIT_PATH"
   systemctl --user daemon-reload
-  systemctl --user enable --now "${HHHD_SYSTEMD_UNIT_NAME}"
+  systemctl --user enable --now "${P0D_SYSTEMD_UNIT_NAME}"
   echo "Installed and started systemd user service ($UNIT_PATH)."
 else
-  echo "hhhd binary not included in this package; legacy Node sidecar installed at $INSTALL_DIR/sidecar."
+  echo "p0d binary not included in this package; legacy Node sidecar installed at $INSTALL_DIR/sidecar."
 fi
 `;
 }
@@ -3809,11 +3809,11 @@ export function renderLinuxBackendUninstallScript(): string {
   return `#!/usr/bin/env bash
 set -euo pipefail
 
-UNIT_PATH="\${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/${HHHD_SYSTEMD_UNIT_NAME}"
-systemctl --user disable --now "${HHHD_SYSTEMD_UNIT_NAME}" >/dev/null 2>&1 || true
-rm -f "$UNIT_PATH" "$HOME/.hhh/bin/hhhd"
+UNIT_PATH="\${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/${P0D_SYSTEMD_UNIT_NAME}"
+systemctl --user disable --now "${P0D_SYSTEMD_UNIT_NAME}" >/dev/null 2>&1 || true
+rm -f "$UNIT_PATH" "$HOME/.p0code/bin/p0d"
 systemctl --user daemon-reload >/dev/null 2>&1 || true
-echo "Uninstalled ${HHHD_SYSTEMD_UNIT_NAME}."
+echo "Uninstalled ${P0D_SYSTEMD_UNIT_NAME}."
 `;
 }
 
@@ -3822,22 +3822,22 @@ export function renderWindowsBackendInstallScript(): string {
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $PackageRoot = Split-Path -Parent $ScriptDir
-$InstallDir = if ($env:HHHD_INSTALL_DIR) { $env:HHHD_INSTALL_DIR } else { Join-Path $env:LOCALAPPDATA "HHHCode\\hhhd" }
-$HomeDir = if ($env:HHH_HOME) { $env:HHH_HOME } else { Join-Path $env:USERPROFILE ".hhh\\userdata" }
-$BinDir = Join-Path $env:USERPROFILE ".hhh\\bin"
-$ReadyFile = Join-Path $HomeDir "hhhd-ready.json"
-$TaskName = "${HHHD_WINDOWS_TASK_NAME}"
+$InstallDir = if ($env:P0D_INSTALL_DIR) { $env:P0D_INSTALL_DIR } else { Join-Path $env:LOCALAPPDATA "p0code\\p0d" }
+$HomeDir = if ($env:P0D_HOME) { $env:P0D_HOME } else { Join-Path $env:USERPROFILE ".p0code\\userdata" }
+$BinDir = Join-Path $env:USERPROFILE ".p0code\\bin"
+$ReadyFile = Join-Path $HomeDir "p0d-ready.json"
+$TaskName = "${P0D_WINDOWS_TASK_NAME}"
 
 New-Item -ItemType Directory -Force -Path $InstallDir, $HomeDir, $BinDir | Out-Null
 Copy-Item -Recurse -Force (Join-Path $PackageRoot "*") $InstallDir
 
-$HhhdExe = Join-Path $InstallDir "bin\\hhhd.exe"
+$P0dExe = Join-Path $InstallDir "bin\\p0d.exe"
 $SidecarEntry = Join-Path $InstallDir "sidecar\\apps\\server\\dist\\bin.mjs"
 $LegacyCmd = "node \`"$SidecarEntry\`""
 
-if (Test-Path $HhhdExe) {
-  Copy-Item -Force $HhhdExe (Join-Path $BinDir "hhhd.exe")
-  $Action = New-ScheduledTaskAction -Execute $HhhdExe -Argument "serve --home \`"$HomeDir\`" --host 127.0.0.1 --port 3773 --ready-file \`"$ReadyFile\`" --legacy-server \`"$LegacyCmd\`""
+if (Test-Path $P0dExe) {
+  Copy-Item -Force $P0dExe (Join-Path $BinDir "p0d.exe")
+  $Action = New-ScheduledTaskAction -Execute $P0dExe -Argument "serve --home \`"$HomeDir\`" --host 127.0.0.1 --port 3773 --ready-file \`"$ReadyFile\`" --legacy-server \`"$LegacyCmd\`""
 } else {
   $Action = New-ScheduledTaskAction -Execute "node.exe" -Argument "\`"$SidecarEntry\`" --no-browser --host 127.0.0.1 --port 3773"
 }
@@ -3854,12 +3854,12 @@ Write-Host "Installed and started Windows Task Scheduler job '$TaskName'."
 export function renderWindowsBackendUninstallScript(): string {
   return `$ErrorActionPreference = "Stop"
 
-$TaskName = "${HHHD_WINDOWS_TASK_NAME}"
+$TaskName = "${P0D_WINDOWS_TASK_NAME}"
 if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {
   Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
   Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
 }
-Remove-Item -Force -ErrorAction SilentlyContinue (Join-Path $env:USERPROFILE ".hhh\\bin\\hhhd.exe")
+Remove-Item -Force -ErrorAction SilentlyContinue (Join-Path $env:USERPROFILE ".p0code\\bin\\p0d.exe")
 Write-Host "Uninstalled Windows Task Scheduler job '$TaskName'."
 `;
 }
@@ -3872,7 +3872,7 @@ export const buildBackendArtifact = Effect.fn("buildBackendArtifact")(function* 
   readonly arch: typeof BuildArch.Type;
   readonly appVersion: string;
   readonly outputDir: string;
-  readonly hhhdBinaryPath?: Option.Option<string>;
+  readonly p0dBinaryPath?: Option.Option<string>;
   readonly verbose: boolean;
 }) {
   const fs = yield* FileSystem.FileSystem;
@@ -3882,7 +3882,7 @@ export const buildBackendArtifact = Effect.fn("buildBackendArtifact")(function* 
   const stem = backendArchiveStem(input.appVersion, input.platform, input.arch);
   const archiveFileName = backendArchiveFileName(input.appVersion, input.platform, input.arch);
   const stageRoot = yield* fs.makeTempDirectoryScoped({
-    prefix: `hhhcode-backend-${input.platform}-stage-`,
+    prefix: `p0code-backend-${input.platform}-stage-`,
   });
   const packageRoot = path.join(stageRoot, stem);
   const binDir = path.join(packageRoot, "bin");
@@ -3893,12 +3893,12 @@ export const buildBackendArtifact = Effect.fn("buildBackendArtifact")(function* 
   yield* fs.makeDirectory(path.join(sidecarDir, "apps/server"), { recursive: true });
   yield* fs.makeDirectory(serviceDir, { recursive: true });
 
-  const hhhdBinary =
-    input.hhhdBinaryPath ?? (yield* findHhhdBinary(input.repoRoot, input.platform, input.arch));
-  const executableName = hhhdArtifactExecutableName(input.platform);
-  if (Option.isSome(hhhdBinary)) {
+  const p0dBinary =
+    input.p0dBinaryPath ?? (yield* findP0dBinary(input.repoRoot, input.platform, input.arch));
+  const executableName = p0dArtifactExecutableName(input.platform);
+  if (Option.isSome(p0dBinary)) {
     const destBinary = path.join(binDir, executableName);
-    yield* fs.copyFile(hhhdBinary.value, destBinary);
+    yield* fs.copyFile(p0dBinary.value, destBinary);
     if (input.platform !== "win") {
       yield* fs.chmod(destBinary, 0o755).pipe(Effect.ignore);
     }
@@ -3906,7 +3906,7 @@ export const buildBackendArtifact = Effect.fn("buildBackendArtifact")(function* 
 
   yield* fs.copy(input.serverDistDir, path.join(sidecarDir, "apps/server/dist"));
   const sidecarManifest = yield* encodeJsonString({
-    name: "hhhcode-backend-sidecar",
+    name: "p0code-backend-sidecar",
     version: input.appVersion,
     private: true,
     type: "module",
@@ -3916,7 +3916,7 @@ export const buildBackendArtifact = Effect.fn("buildBackendArtifact")(function* 
 
   if (input.platform === "mac") {
     yield* fs.writeFileString(
-      path.join(serviceDir, `${HHHD_LAUNCHD_LABEL}.plist`),
+      path.join(serviceDir, `${P0D_LAUNCHD_LABEL}.plist`),
       renderMacLaunchdPlist(),
     );
     const installPath = path.join(packageRoot, "install.sh");
@@ -3927,7 +3927,7 @@ export const buildBackendArtifact = Effect.fn("buildBackendArtifact")(function* 
     yield* fs.chmod(uninstallPath, 0o755).pipe(Effect.ignore);
   } else if (input.platform === "linux") {
     yield* fs.writeFileString(
-      path.join(serviceDir, HHHD_SYSTEMD_UNIT_NAME),
+      path.join(serviceDir, P0D_SYSTEMD_UNIT_NAME),
       renderLinuxSystemdUnit(),
     );
     const installPath = path.join(packageRoot, "install.sh");
@@ -3950,11 +3950,11 @@ export const buildBackendArtifact = Effect.fn("buildBackendArtifact")(function* 
   yield* fs.writeFileString(
     path.join(packageRoot, "README.txt"),
     [
-      `HHHCode Backend Package (${stem})`,
+      `p0code Backend Package (${stem})`,
       "",
-      Option.isSome(hhhdBinary)
-        ? `Includes native hhhd binary (bin/${executableName}) and the legacy Node server sidecar (sidecar/).`
-        : "Includes the legacy Node server sidecar (sidecar/). Place the native hhhd binary in bin/ once built.",
+      Option.isSome(p0dBinary)
+        ? `Includes native p0d binary (bin/${executableName}) and the legacy Node server sidecar (sidecar/).`
+        : "Includes the legacy Node server sidecar (sidecar/). Place the native p0d binary in bin/ once built.",
       "",
       input.platform === "win"
         ? "Install as a user background task: powershell -ExecutionPolicy Bypass -File service\\install-service.ps1"
@@ -4163,12 +4163,12 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
   yield* Effect.log(`[desktop-artifact] Applied ${webAssetBrand} web client branding.`);
   yield* validateBundledClientAssets(path.dirname(bundledClientEntry));
 
-  const hhhdBinary = yield* findHhhdBinary(repoRoot, options.platform, options.arch);
-  const bundleEmbeddedServer = options.bundleServer ?? Option.isNone(hhhdBinary);
+  const p0dBinary = yield* findP0dBinary(repoRoot, options.platform, options.arch);
+  const bundleEmbeddedServer = options.bundleServer ?? Option.isNone(p0dBinary);
   yield* Effect.log(
     bundleEmbeddedServer
       ? "[desktop-artifact] GUI artifact will bundle the embedded legacy Node server."
-      : `[desktop-artifact] GUI-only artifact: omitting embedded Node server (hhhd binary at ${Option.getOrElse(hhhdBinary, () => "external")}).`,
+      : `[desktop-artifact] GUI-only artifact: omitting embedded Node server (p0d binary at ${Option.getOrElse(p0dBinary, () => "external")}).`,
   );
 
   yield* fs.makeDirectory(path.join(stageAppDir, "apps/desktop"), { recursive: true });
@@ -4550,7 +4550,7 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
   }
 
   yield* Effect.log(
-    `[desktop-artifact] Packaging separate hhhd backend artifact for ${options.platform}/${options.arch}...`,
+    `[desktop-artifact] Packaging separate p0d backend artifact for ${options.platform}/${options.arch}...`,
   );
   const backendArchivePath = yield* buildBackendArtifact({
     repoRoot,
@@ -4560,7 +4560,7 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
     arch: options.arch,
     appVersion,
     outputDir: options.outputDir,
-    hhhdBinaryPath: hhhdBinary,
+    p0dBinaryPath: p0dBinary,
     verbose: options.verbose,
   });
 
@@ -4675,7 +4675,7 @@ const buildDesktopArtifactCli = Command.make("build-desktop-artifact", {
   ),
   bundleServer: Flag.Boolean("bundle-server").pipe(
     Flag.withDescription(
-      "Bundle the embedded legacy Node server inside the GUI app; defaults to false when an hhhd binary is present (env: T3CODE_DESKTOP_BUNDLE_SERVER).",
+      "Bundle the embedded legacy Node server inside the GUI app; defaults to false when an p0d binary is present (env: T3CODE_DESKTOP_BUNDLE_SERVER).",
     ),
     Flag.optional,
   ),

@@ -15,8 +15,21 @@ const SUPPORTED = ["darwin-arm64", "linux-arm64", "linux-x64", "win32-arm64", "w
 const TERMINATE_GRACE_MS = 5_000;
 
 function t3Home() {
-  const raw = (process.env.HHHCODE_HOME || "").trim() || (process.env.T3CODE_HOME || "").trim();
-  if (raw === "") return path.join(os.homedir(), ".hhh");
+  const raw =
+    (process.env.P0CODE_HOME || "").trim() ||
+    (process.env.HHHCODE_HOME || "").trim() ||
+    (process.env.T3CODE_HOME || "").trim();
+  if (raw === "") {
+    const home = path.join(os.homedir(), ".p0code");
+    const previous = path.join(os.homedir(), ".hhh");
+    // Carry a home from before the rename to p0code over, as the app does on launch.
+    if (!fs.existsSync(home) && fs.existsSync(previous)) {
+      try {
+        fs.renameSync(previous, home);
+      } catch {}
+    }
+    return home;
+  }
   if (raw === "~") return os.homedir();
   if (raw.startsWith("~/") || raw.startsWith("~\\")) return path.join(os.homedir(), raw.slice(2));
   return path.resolve(raw);

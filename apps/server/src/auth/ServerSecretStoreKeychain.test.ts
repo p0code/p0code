@@ -246,7 +246,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))(
       ),
     );
 
-    it.effect("honors HHHCODE_SECRET_BACKEND", () => {
+    it.effect("honors P0CODE_SECRET_BACKEND", () => {
       const keychain = memoryKeychainStore();
       return Effect.gen(function* () {
         yield* withStore(
@@ -258,14 +258,14 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))(
               assert.include(yield* files(secretsDir), "server-signing-key.bin");
               assert.equal(keychain.entries.size, 0);
             }),
-          { env: { HHHCODE_SECRET_BACKEND: "file" } },
+          { env: { P0CODE_SECRET_BACKEND: "file" } },
         );
         const required = yield* withStore("unavailable", () => Effect.void, {
-          env: { HHHCODE_SECRET_BACKEND: "keychain" },
+          env: { P0CODE_SECRET_BACKEND: "keychain" },
         }).pipe(Effect.flip);
         assert.equal(required._tag, "SecretStoreBackendError");
         const invalid = yield* withStore(keychain, () => Effect.void, {
-          env: { HHHCODE_SECRET_BACKEND: "vault" },
+          env: { P0CODE_SECRET_BACKEND: "vault" },
         }).pipe(Effect.flip);
         assert.equal(invalid._tag, "SecretStoreBackendError");
       });

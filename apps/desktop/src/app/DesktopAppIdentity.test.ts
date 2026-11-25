@@ -148,13 +148,13 @@ const withIdentity = <A, E, R>(
 };
 
 describe("DesktopAppIdentity", () => {
-  it.effect("isolates the hhhcode profile even when a stock T3 Code profile exists", () =>
+  it.effect("isolates the p0code profile even when a stock T3 Code profile exists", () =>
     withIdentity(
       Effect.gen(function* () {
         const identity = yield* DesktopAppIdentity.DesktopAppIdentity;
         const userDataPath = yield* identity.resolveUserDataPath;
 
-        assert.equal(userDataPath, "/Users/alice/Library/Application Support/hhhcode");
+        assert.equal(userDataPath, "/Users/alice/Library/Application Support/p0code");
       }),
       { legacyPathExists: true },
     ),
@@ -166,7 +166,7 @@ describe("DesktopAppIdentity", () => {
         const identity = yield* DesktopAppIdentity.DesktopAppIdentity;
         assert.equal(
           yield* identity.resolveUserDataPath,
-          "/Users/alice/Library/Application Support/hhhcode-dev",
+          "/Users/alice/Library/Application Support/p0code-dev",
         );
       }),
       {

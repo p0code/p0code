@@ -228,7 +228,7 @@ describe("ssh tunnel scripts", () => {
       const fs = yield* FileSystem.FileSystem;
       const home = yield* fs.makeTempDirectoryScoped({ prefix: "t3-ssh-launch-log-" });
       const target = { alias: "devbox", hostname: "devbox", username: null, port: null };
-      const stateDir = NodePath.join(home, ".hhh", "ssh-launch", yield* remoteStateKey(target));
+      const stateDir = NodePath.join(home, ".p0code", "ssh-launch", yield* remoteStateKey(target));
       const bin = NodePath.join(home, "bin");
       yield* fs.makeDirectory(stateDir, { recursive: true });
       yield* fs.makeDirectory(bin);
@@ -1315,7 +1315,7 @@ describe("ssh tunnel scripts", () => {
 child.on("exit", (code) => process.exit(code ?? 1));`,
         );
         // A launch that died holding the lock must not block or double-admit later ones.
-        const launchLock = path.join(home, ".hhh", "ssh-launch", ".launch.lock");
+        const launchLock = path.join(home, ".p0code", "ssh-launch", ".launch.lock");
         yield* fs.makeDirectory(path.dirname(launchLock), { recursive: true });
         yield* fs.writeFileString(launchLock, "999999999\n");
         const targets = [
@@ -1333,7 +1333,7 @@ child.on("exit", (code) => process.exit(code ?? 1));`,
         ).pipe(Effect.provide(localRemoteShellLayer(home)));
 
         const ownerPid = Number(
-          yield* fs.readFileString(path.join(home, ".hhh", "userdata", "server.lock")),
+          yield* fs.readFileString(path.join(home, ".p0code", "userdata", "server.lock")),
         );
         assert.sameMembers(
           launches.map((launch) => launch.remoteServerKind),
@@ -1347,7 +1347,7 @@ child.on("exit", (code) => process.exit(code ?? 1));`,
           if (launch.remoteServerKind !== "managed") continue;
           const stateKey = yield* remoteStateKey(targets[index]!);
           const recordedPid = yield* fs.readFileString(
-            path.join(home, ".hhh", "ssh-launch", stateKey, "pid"),
+            path.join(home, ".p0code", "ssh-launch", stateKey, "pid"),
           );
           assert.equal(
             Number(recordedPid.trim()),
@@ -1450,7 +1450,7 @@ server.listen(Number(flag("--port") ?? 0), "127.0.0.1", () => {
         holderPort,
         sshAsLocalShell,
         staleId: staleId === "an unrelated process" ? holder.pid : tid,
-        stateDir: `${home}/.hhh/ssh-launch/${yield* remoteStateKey(target)}`,
+        stateDir: `${home}/.p0code/ssh-launch/${yield* remoteStateKey(target)}`,
       };
     });
 
@@ -1484,7 +1484,7 @@ server.listen(Number(flag("--port") ?? 0), "127.0.0.1", () => {
       // Reboot: our server is gone and its recorded PID now names something that
       // answers on the recorded port.
       process.kill(firstPid, "SIGKILL");
-      yield* fs.remove(`${home}/.hhh/userdata/server-runtime.json`);
+      yield* fs.remove(`${home}/.p0code/userdata/server-runtime.json`);
       yield* fs.writeFileString(`${stateDir}/pid`, `${staleId}\n`);
       yield* fs.writeFileString(`${stateDir}/port`, `${holderPort}\n`);
 
@@ -1549,7 +1549,7 @@ server.listen(Number(flag("--port") ?? 0), "127.0.0.1", () => {
           launcherId,
         ).pipe(Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, sshAsLocalShell));
       const runtimePid = fs
-        .readFileString(`${home}/.hhh/userdata/server-runtime.json`)
+        .readFileString(`${home}/.p0code/userdata/server-runtime.json`)
         .pipe(Effect.map((runtime) => Number(JSON.parse(runtime).pid)));
       const launchedPids: Array<number> = [];
       yield* Effect.addFinalizer(() =>
@@ -1626,7 +1626,7 @@ server.listen(Number(flag("--port") ?? 0), "127.0.0.1", () => {
             launcherId,
           ).pipe(Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, sshAsLocalShell));
         const runtimePid = fs
-          .readFileString(`${home}/.hhh/userdata/server-runtime.json`)
+          .readFileString(`${home}/.p0code/userdata/server-runtime.json`)
           .pipe(Effect.map((runtime) => Number(JSON.parse(runtime).pid)));
 
         assert.equal((yield* launch("a".repeat(32))).remoteServerKind, "managed");
@@ -1813,13 +1813,13 @@ const canBind = (port) =>
       const fs = yield* FileSystem.FileSystem;
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-archive-launch-" });
       const home = `${root}/home`;
-      const stateDir = `${home}/.hhh/ssh-launch/test-state`;
+      const stateDir = `${home}/.p0code/ssh-launch/test-state`;
       const fakeT3 = `${root}/fake-t3.cjs`;
       yield* fs.makeDirectory(stateDir, { recursive: true });
       yield* fs.writeFileString(`${stateDir}/port`, `${yield* freeLoopbackPort}\n`);
       yield* fs.writeFileString(fakeT3, FAKE_T3);
       for (const version of versions) {
-        const runtimeDir = `${home}/.hhh/runtime/versions/${version}`;
+        const runtimeDir = `${home}/.p0code/runtime/versions/${version}`;
         yield* fs.makeDirectory(runtimeDir, { recursive: true });
         // The runner gets only HOME, so `node` would resolve on sh's default PATH, which may not have it.
         yield* fs.writeFileString(
@@ -1833,7 +1833,7 @@ const canBind = (port) =>
         .readFileString(`${stateDir}/pid`)
         .pipe(Effect.map((pid) => Number(pid.trim())));
       const readServerVersion = fs
-        .readFileString(`${home}/.hhh/userdata/server-runtime.json`)
+        .readFileString(`${home}/.p0code/userdata/server-runtime.json`)
         .pipe(Effect.map((raw) => (JSON.parse(raw) as { serverVersion: string }).serverVersion));
       // Launched servers outlive the script, so stop each PID it recorded.
       const launchedPids = new Set<number>();
@@ -1879,15 +1879,15 @@ const canBind = (port) =>
       }).pipe(Effect.provide(NodeServices.layer)),
   );
 
-  // An NFS home can carry a ~/.hhh symlink whose target exists only on another host.
-  it.live.skipIf(windowsHost)("launches through a ~/.hhh symlink whose target is missing", () =>
+  // An NFS home can carry a ~/.p0code symlink whose target exists only on another host.
+  it.live.skipIf(windowsHost)("launches through a ~/.p0code symlink whose target is missing", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-dangling-home-" });
       const home = `${root}/home`;
       const target = `${root}/shared/t3`;
       yield* fs.makeDirectory(home, { recursive: true });
-      yield* fs.symlink(target, `${home}/.hhh`);
+      yield* fs.symlink(target, `${home}/.p0code`);
       const launch = `${root}/launch.sh`;
       yield* fs.writeFileString(
         launch,

@@ -1,7 +1,7 @@
 # Client ↔ backend wire protocol
 
 What web, desktop and mobile clients speak to `apps/server` today, written so a second
-server (`apps/hhhd`) can implement it. Checked against `effect@4.1.5` (patched,
+server (`apps/p0d`) can implement it. Checked against `effect@4.1.5` (patched,
 `node_modules/.pnpm/effect@4.1.5*/node_modules/effect/src/rpc`) and the files linked
 below. When this page and the code disagree, the code wins; fix the page.
 
@@ -45,8 +45,8 @@ token = base64url(JSON claims) "." base64url(HMAC-SHA256(key, <the base64url cla
 
 base64url is unpadded. `key` is the 32 random bytes of the server secret
 `server-signing-key`: the file `<home>/secrets/server-signing-key.bin`, or, when
-`<home>/secrets/keychain-backend` exists (and `HHHCODE_SECRET_BACKEND` is not `file`),
-the OS keychain entry service `hhhcode`, account `<ns>:server-signing-key` where
+`<home>/secrets/keychain-backend` exists (and `P0CODE_SECRET_BACKEND` is not `file`),
+the OS keychain entry service `p0code`, account `<ns>:server-signing-key` where
 `ns = sha256(realpath(<home>/secrets)).hex[0:16]`. The entry value is `b:<base64>`, or
 `c:<gen>:<count>` with chunks at accounts `<ns>#<gen>.<i>:server-signing-key`
 (`packages/shared/src/credentialKeychain.ts`).
@@ -78,7 +78,7 @@ First match wins:
 4. Legacy cookie `t3_session` (web mode, remote-reachable host only).
 
 Cookie credentials are only accepted when `Origin` is absent, `Sec-Fetch-Site:
-same-origin`, a desktop renderer origin (`hhhcode://app`, `t3code://app`, and `-dev`
+same-origin`, a desktop renderer origin (`p0code://app`, `t3code://app`, and `-dev`
 variants), or `Origin`'s host equals `Host` / first `X-Forwarded-Host`.
 
 If the session has `jkt`, the request must use `Authorization: DPoP <same token>` and a
@@ -223,31 +223,31 @@ required scope: settings:write.","requiredScope":"orchestration:operate",
   pending request on that socket at the client. Avoid it for anything request-scoped.
 - **Never reuse an in-flight id.** In `apps/server` the duplicate interrupts the socket's
   read loop (`handleRequest` returns `Effect.interrupt`), which likely drops the socket;
-  hhhd ignores the duplicate.
+  p0d ignores the duplicate.
 - Closing the socket interrupts all of that client's requests.
 
-## 6. How hhhd implements it
+## 6. How p0d implements it
 
-- `apps/hhhd/internal/rpc` speaks §4–§5. `Registry.Unary`/`Registry.Stream` register
+- `apps/p0d/internal/rpc` speaks §4–§5. `Registry.Unary`/`Registry.Stream` register
   Go handlers with their scope; `emit` blocks until the client's `Ack`.
 - Methods without a Go handler are forwarded **per request** over one upstream socket per
   client socket, opened lazily and closed 30 s after its last request ends. Ids pass
   through unchanged; upstream `Chunk`/`Exit` frames are relayed byte for byte (re-split
   for `frameParts`); `Ack`/`Interrupt` for proxied ids go upstream. Upstream `Pong`s are
-  dropped (hhhd sends its own). An upstream `Defect` or disconnect becomes
+  dropped (p0d sends its own). An upstream `Defect` or disconnect becomes
   `Exit Die` for the proxied requests in flight only, so Go-handled requests survive.
 - The legacy server (`--legacy-server <cmd>`) starts on first use as
   `<cmd> --host 127.0.0.1 --port <free> --base-dir <dirname(home)>` with
-  `HHHD_INTERNAL_TOKEN` in its environment, and stops after `--legacy-idle-timeout`
+  `P0D_INTERNAL_TOKEN` in its environment, and stops after `--legacy-idle-timeout`
   (5 min) without users.
-- **Trust**: hhhd authenticates every client itself (§2). Toward the legacy server it
-  sends `X-Hhhd-Internal-Token` and `X-Hhhd-Session-Id` (the client's verified session)
+- **Trust**: p0d authenticates every client itself (§2). Toward the legacy server it
+  sends `X-P0d-Internal-Token` and `X-P0d-Session-Id` (the client's verified session)
   and strips the client's own credentials. The legacy server accepts that pair only when
-  `HHHD_INTERNAL_TOKEN` matches, loads the session from its own table (so revocation and
-  scopes stay authoritative), and otherwise behaves as before. hhhd drops any `X-Hhhd-*`
+  `P0D_INTERNAL_TOKEN` matches, loads the session from its own table (so revocation and
+  scopes stay authoritative), and otherwise behaves as before. p0d drops any `X-P0d-*`
   header a client sends.
-- **HTTP routes** hhhd has not ported are reverse-proxied with `Host` preserved. A
-  request whose credential hhhd verifies goes through as that session; any other request
+- **HTTP routes** p0d has not ported are reverse-proxied with `Host` preserved. A
+  request whose credential p0d verifies goes through as that session; any other request
   goes through untouched and the legacy server applies its own rules (pairing, OAuth,
   `/mcp`, token renewal with an expired DPoP token).
 
@@ -265,13 +265,13 @@ required scope: settings:write.","requiredScope":"orchestration:operate",
 - A DPoP proof is single-use across both servers: the replay marker files in
   `secrets/` are shared, so whichever server verifies a proof consumes it.
 - The legacy server names its session cookie after its own (random) loopback port, so
-  hhhd renames `t3_session_*` cookies in proxied `Set-Cookie` headers to its own name.
+  p0d renames `t3_session_*` cookies in proxied `Set-Cookie` headers to its own name.
   The `sessionCookieName` in `/api/auth/session`'s descriptor still shows the legacy
   name (no client reads it today), and the descriptor's `policy` reflects the legacy
-  server's loopback bind, not hhhd's.
-- Behind hhhd the legacy server sees every client as `127.0.0.1`; it takes the client
-  IP from the last `X-Forwarded-For` entry, which hhhd sets.
-- With the keychain backend on macOS, hhhd reads the signing key through
+  server's loopback bind, not p0d's.
+- Behind p0d the legacy server sees every client as `127.0.0.1`; it takes the client
+  IP from the last `X-Forwarded-For` entry, which p0d sets.
+- With the keychain backend on macOS, p0d reads the signing key through
   `/usr/bin/security`, which may show a keychain access prompt the first time.
 - `/ws` must not enforce `Origin` itself (cookie credentials already did); Go's
   `coder/websocket` rejects cross-origin upgrades unless `InsecureSkipVerify` is set.

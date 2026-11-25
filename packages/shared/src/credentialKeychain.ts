@@ -1,13 +1,15 @@
 // @effect-diagnostics nodeBuiltinImport:off -- Shared by the server, the CLI migration and the Electron main process, outside an Effect runtime.
 import * as NodeCrypto from "node:crypto";
+import * as NodeOS from "node:os";
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
 
+import { previousAppHomePath } from "./appHomeMigration.ts";
+
 /**
- * Credentials live in the OS keychain (macOS Keychain, Windows Credential Manager, Linux
- * Secret Service) under service `hhhcode`, one entry per secret, account
- * `<namespace>:<secret name>`. The namespace hashes the resolved secrets folder, so every
- * home (`~/.hhh`, `HHHCODE_HOME`, `--base-dir`, dev) keeps its own entries.
+ * OS keychain service `hhhcode` (pre-rename name, kept so stored credentials stay found), one
+ * entry per secret, account `<namespace>:<secret name>`. The namespace hashes the resolved
+ * secrets folder, so every home (`~/.p0code`, `P0CODE_HOME`, `--base-dir`, dev) keeps its own.
  */
 const KEYCHAIN_SERVICE = "hhhcode";
 
@@ -109,7 +111,12 @@ export const realpathLoose = async (target: string): Promise<string> => {
 
 export const credentialNamespace = async (secretsDir: string): Promise<string> =>
   NodeCrypto.createHash("sha256")
-    .update(await realpathLoose(NodePath.resolve(secretsDir)))
+    .update(
+      previousAppHomePath(
+        await realpathLoose(NodePath.resolve(secretsDir)),
+        await realpathLoose(NodeOS.homedir()),
+      ),
+    )
     .digest("hex")
     .slice(0, 16);
 

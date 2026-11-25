@@ -387,6 +387,10 @@
       "types": "./src/appHome.ts",
       "import": "./src/appHome.ts"
     },
+    "./appHomeMigration": {
+      "types": "./src/appHomeMigration.ts",
+      "import": "./src/appHomeMigration.ts"
+    },
     "./migrateFromT3": {
       "types": "./src/migrateFromT3.ts",
       "import": "./src/migrateFromT3.ts"

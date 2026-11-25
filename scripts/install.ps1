@@ -7,7 +7,7 @@
 #   T3CODE_CHANNEL           release train to follow: stable, nightly, or preview
 #                            (default: stable; preview is a maintainers' test train)
 #   T3CODE_VERSION           exact version to install (overrides T3CODE_CHANNEL)
-#   HHHCODE_HOME             hhhcode home directory (default: ~\.hhh; legacy T3CODE_HOME is honored)
+#   P0CODE_HOME             p0code home directory (default: ~\.p0code; legacy T3CODE_HOME is honored)
 #   T3CODE_INSTALL_BIN_DIR   where t3.exe is linked (default: ~\.local\bin)
 #   T3CODE_RELEASE_BASE_URL  mirror for releases/download (default: GitHub)
 #
@@ -18,7 +18,7 @@ $ErrorActionPreference = "Stop"
 
 $repo = "pingdotgg/t3code"
 $baseUrl = if ($env:T3CODE_RELEASE_BASE_URL) { $env:T3CODE_RELEASE_BASE_URL.TrimEnd("/") } else { "https://github.com/$repo/releases/download" }
-$t3Home = if ($env:HHHCODE_HOME) { $env:HHHCODE_HOME } elseif ($env:T3CODE_HOME) { $env:T3CODE_HOME } else { Join-Path $HOME ".hhh" }
+$t3Home = if ($env:P0CODE_HOME) { $env:P0CODE_HOME } elseif ($env:T3CODE_HOME) { $env:T3CODE_HOME } else { Join-Path $HOME ".p0code" }
 $binDir = if ($env:T3CODE_INSTALL_BIN_DIR) { $env:T3CODE_INSTALL_BIN_DIR } else { Join-Path $HOME ".local\bin" }
 # Absolute, so PATH never gets a folder that changes with the working directory.
 $binDir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($binDir)

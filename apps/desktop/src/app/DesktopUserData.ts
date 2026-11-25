@@ -43,7 +43,7 @@ export const resolveUserDataPath = Effect.fn("desktop.userData.resolveUserDataPa
     const path = yield* Path.Path;
     const destinationPath = path.join(
       input.appDataDirectory,
-      input.isDevelopment ? "hhhcode-dev" : "hhhcode",
+      input.isDevelopment ? "p0code-dev" : "p0code",
     );
     const inspect = (resourcePath: string) =>
       fs

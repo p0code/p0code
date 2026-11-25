@@ -1,4 +1,4 @@
-// hhhd is HHHCode's native backend. See docs/internals/backend-split/PLAN.md.
+// p0d is p0code's native backend. See docs/internals/backend-split/PLAN.md.
 package main
 
 import (
@@ -12,16 +12,16 @@ import (
 	"syscall"
 	"time"
 
-	"hhhd/internal/server"
+	"p0d/internal/server"
 )
 
 // version is set at build time with -ldflags "-X main.version=...".
 var version = "dev"
 
 const usage = `usage:
-  hhhd serve --home <dir> [--host 127.0.0.1] [--port 0] [--ready-file <path>] [--legacy-server <cmd>]
-  hhhd version
-  hhhd service install|uninstall|start|stop|status
+  p0d serve --home <dir> [--host 127.0.0.1] [--port 0] [--ready-file <path>] [--legacy-server <cmd>]
+  p0d version
+  p0d service install|uninstall|start|stop|status
 `
 
 func main() {
@@ -44,14 +44,14 @@ func main() {
 		os.Exit(2)
 	}
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "hhhd:", err)
+		fmt.Fprintln(os.Stderr, "p0d:", err)
 		os.Exit(1)
 	}
 }
 
 func serve(args []string) error {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
-	home := fs.String("home", "", "data directory the server uses (e.g. ~/.hhh/userdata)")
+	home := fs.String("home", "", "data directory the server uses (e.g. ~/.p0code/userdata)")
 	host := fs.String("host", "127.0.0.1", "interface to listen on")
 	port := fs.Int("port", 0, "port to listen on (0 picks a free one)")
 	readyFile := fs.String("ready-file", "", "write {pid,port,url} JSON here once listening")
@@ -67,7 +67,7 @@ func serve(args []string) error {
 	if err != nil {
 		return fmt.Errorf("--legacy-server: %w", err)
 	}
-	logger := log.New(os.Stderr, "hhhd: ", log.LstdFlags)
+	logger := log.New(os.Stderr, "p0d: ", log.LstdFlags)
 	s, err := server.Start(server.Config{
 		Home: *home, Host: *host, Port: *port, ReadyFile: *readyFile,
 		Legacy: command, LegacyIdle: *legacyIdle, Version: version, Logger: logger,
@@ -127,7 +127,7 @@ func splitCommand(line string) ([]string, error) {
 
 func service(args []string) error {
 	if len(args) != 1 {
-		return errors.New("usage: hhhd service install|uninstall|start|stop|status")
+		return errors.New("usage: p0d service install|uninstall|start|stop|status")
 	}
 	switch args[0] {
 	case "install", "uninstall", "start", "stop", "status":

@@ -224,7 +224,10 @@ const loadSystemKeychain: KeychainLoader = (platform) => {
   return keyringStore(keyring, platform);
 };
 
-const SecretBackendSetting = Config.String("HHHCODE_SECRET_BACKEND").pipe(Config.option);
+const SecretBackendSetting = Config.String("P0CODE_SECRET_BACKEND").pipe(
+  Config.orElse(() => Config.String("HHHCODE_SECRET_BACKEND")),
+  Config.option,
+);
 
 export const makeWith = Effect.fn("ServerSecretStore.makeWith")(function* (
   loadKeychain: KeychainLoader,
@@ -439,13 +442,13 @@ const resolveKeychain = Effect.fn("ServerSecretStore.resolveKeychain")(function*
     Effect.map(Option.map((value) => value.trim().toLowerCase())),
     Effect.mapError(
       (cause) =>
-        new SecretStoreBackendError({ detail: "Could not read HHHCODE_SECRET_BACKEND.", cause }),
+        new SecretStoreBackendError({ detail: "Could not read P0CODE_SECRET_BACKEND.", cause }),
     ),
   );
   const requested = Option.getOrElse(setting, () => "auto");
   if (requested !== "auto" && requested !== "keychain" && requested !== "file") {
     return yield* new SecretStoreBackendError({
-      detail: `HHHCODE_SECRET_BACKEND must be "keychain" or "file", got "${requested}".`,
+      detail: `P0CODE_SECRET_BACKEND must be "keychain" or "file", got "${requested}".`,
       cause: undefined,
     });
   }
@@ -454,12 +457,12 @@ const resolveKeychain = Effect.fn("ServerSecretStore.resolveKeychain")(function*
   if (requested === "file") {
     if (marked) {
       yield* Effect.logWarning(
-        "HHHCODE_SECRET_BACKEND=file: credentials this home keeps in the OS keychain are not used.",
+        "P0CODE_SECRET_BACKEND=file: credentials this home keeps in the OS keychain are not used.",
       );
     }
     return {
       keychain: undefined,
-      storage: { backend: "file", label: "files (HHHCODE_SECRET_BACKEND=file)" },
+      storage: { backend: "file", label: "files (P0CODE_SECRET_BACKEND=file)" },
     } as const;
   }
 
@@ -476,7 +479,7 @@ const resolveKeychain = Effect.fn("ServerSecretStore.resolveKeychain")(function*
       new SecretStoreBackendError({
         detail:
           requested === "keychain"
-            ? "HHHCODE_SECRET_BACKEND=keychain, but the OS keychain is not available."
+            ? "P0CODE_SECRET_BACKEND=keychain, but the OS keychain is not available."
             : "This home keeps its credentials in the OS keychain, which is not available. Unlock it (or start the Secret Service on Linux) and start again.",
         cause,
       }),
@@ -484,7 +487,7 @@ const resolveKeychain = Effect.fn("ServerSecretStore.resolveKeychain")(function*
   if (opened._tag === "Failure") {
     if (requested === "keychain" || marked) return yield* opened.failure;
     yield* Effect.logWarning(
-      "No OS keychain is available, so credentials are stored as owner-only files. Set HHHCODE_SECRET_BACKEND=file to silence this.",
+      "No OS keychain is available, so credentials are stored as owner-only files. Set P0CODE_SECRET_BACKEND=file to silence this.",
       { cause: opened.failure.cause },
     );
     return {

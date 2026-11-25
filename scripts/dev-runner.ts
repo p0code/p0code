@@ -331,11 +331,11 @@ export const createDevRunnerEnv = Effect.fn("dev-runner.createDevRunnerEnv")(fun
   };
 
   const path = yield* Path.Path;
-  // The server stores an explicit home's state in userdata, which for ~/.hhh is the live
-  // install. Left implicit, dev state goes to ~/.hhh/dev.
+  // The server stores an explicit home's state in userdata, which for ~/.p0code is the live
+  // install. Left implicit, dev state goes to ~/.p0code/dev.
   const isLiveHome =
     resolvedBaseDir === path.join(yield* HostProcess.HomeDirectory, APP_HOME_DIRECTORY_NAME);
-  // The server prefers HHHCODE_HOME, so an ambient one would override the home chosen here.
+  // The server prefers P0CODE_HOME, so an ambient one would override the home chosen here.
   delete output[APP_HOME_ENV];
   if (configuredBaseDir !== undefined && !isLiveHome) {
     output.T3CODE_HOME = resolvedBaseDir;
