@@ -639,8 +639,38 @@ it.layer(layerTest)("ProjectService", (it) => {
     Effect.gen(function* () {
       const service = yield* ProjectService.ProjectService;
       const settings = yield* ServerSettings.ServerSettingsService;
+      const unprofiledId = ProjectId.make("project:unprofiled");
+      yield* service.create({
+        commandId: CommandId.make("command:unprofiled:create"),
+        projectId: unprofiledId,
+        title: "Unprofiled",
+        workspaceRoot: "/work/unprofiled",
+      });
+      assert.strictEqual(
+        (yield* settings.getSettings).projectAccountProfileIds[unprofiledId],
+        undefined,
+      );
+
       const projectId = ProjectId.make("project:profile");
-      yield* settings.updateSettings({ activeAccountProfileId: AccountProfileId.make("work") });
+      yield* settings.updateSettings({
+        accountProfiles: [
+          {
+            id: AccountProfileId.make("personal"),
+            name: "Personal",
+            instanceOrder: [],
+            excludedInstanceIds: [],
+            autoSwitchOnLimit: false,
+          },
+          {
+            id: AccountProfileId.make("work"),
+            name: "Work",
+            instanceOrder: [],
+            excludedInstanceIds: [],
+            autoSwitchOnLimit: false,
+          },
+        ],
+        activeAccountProfileId: AccountProfileId.make("work"),
+      });
       yield* service.create({
         commandId: CommandId.make("command:profile:create"),
         projectId,

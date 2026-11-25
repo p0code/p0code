@@ -22,7 +22,7 @@ export const profileHiddenProjectKeysAtom = Atom.make((get) => {
   const hidden = new Set<string>();
   for (const project of get(environmentProjects.projectsAtom)) {
     const settings = get(serverEnvironment.settingsValueAtom(project.environmentId));
-    if (!isProjectInActiveAccountProfile(settings, project.id)) {
+    if (!isProjectInActiveAccountProfile(settings, project.id, { isScratch: project.isScratch })) {
       hidden.add(`${project.environmentId}:${project.id}`);
     }
   }

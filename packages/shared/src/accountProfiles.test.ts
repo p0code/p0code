@@ -10,6 +10,7 @@ import {
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  explicitProjectAccountProfile,
   isProjectInActiveAccountProfile,
   isThreadInActiveAccountProfile,
   limitFailoverSelection,
@@ -17,7 +18,9 @@ import {
   newProjectAccountProfilePatch,
   newThreadAccountProfilePatch,
   nextAccountProfile,
+  projectAccountProfile,
   routeSelectionToAccountProfile,
+  threadAccountProfile,
 } from "./accountProfiles.ts";
 
 const now = Date.parse("2026-11-25T12:00:00.000Z");
@@ -199,80 +202,153 @@ describe("profile editing", () => {
     expect(nextAccountProfile(settings("personal"))?.id).toBe("work");
     expect(nextAccountProfile(settings("work"))?.id).toBe("personal");
     expect(nextAccountProfile(settings(null))?.id).toBe("personal");
+    expect(nextAccountProfile(DEFAULT_SERVER_SETTINGS)).toBeUndefined();
   });
 });
 
 describe("project separation", () => {
+  const personalProfile = AccountProfileId.make("personal");
   const work = AccountProfileId.make("work");
   const workProject = ProjectId.make("project-work");
-  const sharedProject = ProjectId.make("project-shared");
+  const unassignedProject = ProjectId.make("project-unassigned");
+  const scratchProject = ProjectId.make("project-scratch");
   const orphanedProject = ProjectId.make("project-orphaned");
   const projectSettings = (activeAccountProfileId: string) => ({
-    ...DEFAULT_SERVER_SETTINGS,
-    activeAccountProfileId: AccountProfileId.make(activeAccountProfileId),
+    ...settings(activeAccountProfileId),
     projectAccountProfileIds: {
       [workProject]: work,
       [orphanedProject]: AccountProfileId.make("deleted"),
     },
   });
 
-  it("shows a project only under its profile, and unassigned ones everywhere", () => {
+  it("defaults to no profiles and hides nothing", () => {
+    expect(DEFAULT_SERVER_SETTINGS.accountProfiles).toEqual([]);
+    expect(DEFAULT_SERVER_SETTINGS.activeAccountProfileId).toBeNull();
+    expect(projectAccountProfile(DEFAULT_SERVER_SETTINGS, unassignedProject)).toBeUndefined();
+    expect(
+      threadAccountProfile(DEFAULT_SERVER_SETTINGS, {
+        id: ThreadId.make("thread-default"),
+        projectId: unassignedProject,
+      }),
+    ).toBeUndefined();
+    expect(isProjectInActiveAccountProfile(DEFAULT_SERVER_SETTINGS, unassignedProject)).toBe(true);
+    expect(
+      isThreadInActiveAccountProfile(DEFAULT_SERVER_SETTINGS, {
+        id: ThreadId.make("thread-default"),
+        projectId: unassignedProject,
+      }),
+    ).toBe(true);
+    expect(
+      newProjectAccountProfilePatch(DEFAULT_SERVER_SETTINGS, unassignedProject),
+    ).toBeUndefined();
+  });
+
+  it("assigns unassigned and orphaned projects to the first (home) profile, keeping scratch in every profile", () => {
+    expect(projectAccountProfile(projectSettings("work"), workProject)?.id).toBe(work);
+    expect(projectAccountProfile(projectSettings("work"), unassignedProject)?.id).toBe(
+      personalProfile,
+    );
+    expect(projectAccountProfile(projectSettings("work"), orphanedProject)?.id).toBe(
+      personalProfile,
+    );
+    expect(
+      explicitProjectAccountProfile(projectSettings("work"), unassignedProject),
+    ).toBeUndefined();
+
     expect(isProjectInActiveAccountProfile(projectSettings("work"), workProject)).toBe(true);
     expect(isProjectInActiveAccountProfile(projectSettings("personal"), workProject)).toBe(false);
-    expect(isProjectInActiveAccountProfile(projectSettings("personal"), sharedProject)).toBe(true);
+    expect(isProjectInActiveAccountProfile(projectSettings("personal"), unassignedProject)).toBe(
+      true,
+    );
+    expect(isProjectInActiveAccountProfile(projectSettings("work"), unassignedProject)).toBe(false);
     expect(isProjectInActiveAccountProfile(projectSettings("personal"), orphanedProject)).toBe(
       true,
     );
+    expect(isProjectInActiveAccountProfile(projectSettings("work"), orphanedProject)).toBe(false);
+    expect(
+      isProjectInActiveAccountProfile(projectSettings("personal"), scratchProject, {
+        isScratch: true,
+      }),
+    ).toBe(true);
+    expect(
+      isProjectInActiveAccountProfile(projectSettings("work"), scratchProject, { isScratch: true }),
+    ).toBe(true);
   });
 
   it("hides nothing with a single profile", () => {
     const single = {
       ...projectSettings("personal"),
-      accountProfiles: DEFAULT_SERVER_SETTINGS.accountProfiles.slice(0, 1),
+      accountProfiles: settings("personal").accountProfiles.slice(0, 1),
     };
     expect(isProjectInActiveAccountProfile(single, workProject)).toBe(true);
-    expect(newProjectAccountProfilePatch(single, sharedProject)).toBeUndefined();
+    expect(newProjectAccountProfilePatch(single, unassignedProject)).toBeUndefined();
   });
 
   it("files a new project under the active profile", () => {
-    expect(newProjectAccountProfilePatch(projectSettings("work"), sharedProject)).toEqual({
-      projectAccountProfileIds: { [sharedProject]: work },
+    expect(newProjectAccountProfilePatch(projectSettings("work"), unassignedProject)).toEqual({
+      projectAccountProfileIds: { [unassignedProject]: work },
     });
   });
 
-  it("files a thread by its project, else by its own profile, else everywhere", () => {
+  it("files a thread by its project's explicit profile, else its own profile, else the home profile", () => {
     const thread = ThreadId.make("thread-1");
+    const other = ThreadId.make("other");
     const filed = {
       ...projectSettings("personal"),
       threadAccountProfileIds: { [thread]: work },
     };
-    expect(isThreadInActiveAccountProfile(filed, { id: thread, projectId: sharedProject })).toBe(
+    // Explicit thread profile wins when project has no explicit assignment (e.g. scratch).
+    expect(threadAccountProfile(filed, { id: thread, projectId: scratchProject })?.id).toBe(work);
+    expect(isThreadInActiveAccountProfile(filed, { id: thread, projectId: scratchProject })).toBe(
       false,
     );
     expect(
       isThreadInActiveAccountProfile(
         { ...filed, activeAccountProfileId: work },
-        { id: thread, projectId: sharedProject },
+        { id: thread, projectId: scratchProject },
       ),
     ).toBe(true);
-    // The project's profile wins over the thread's own.
+    // The project's explicit profile wins over the thread's own.
+    expect(
+      threadAccountProfile(
+        { ...filed, threadAccountProfileIds: { [thread]: personalProfile } },
+        { id: thread, projectId: workProject },
+      )?.id,
+    ).toBe(work);
     expect(
       isThreadInActiveAccountProfile(
-        { ...filed, threadAccountProfileIds: { [thread]: AccountProfileId.make("personal") } },
+        { ...filed, threadAccountProfileIds: { [thread]: personalProfile } },
         { id: thread, projectId: workProject },
       ),
     ).toBe(false);
+    // Unassigned threads belong to the first (home) profile, not to all profiles.
+    expect(threadAccountProfile(filed, { id: other, projectId: scratchProject })?.id).toBe(
+      personalProfile,
+    );
+    expect(isThreadInActiveAccountProfile(filed, { id: other, projectId: scratchProject })).toBe(
+      true,
+    );
     expect(
-      isThreadInActiveAccountProfile(filed, { id: ThreadId.make("other"), projectId: null }),
-    ).toBe(true);
+      isThreadInActiveAccountProfile(
+        { ...filed, activeAccountProfileId: work },
+        { id: other, projectId: scratchProject },
+      ),
+    ).toBe(false);
+    expect(isThreadInActiveAccountProfile(filed, { id: other, projectId: null })).toBe(true);
+    expect(
+      isThreadInActiveAccountProfile(
+        { ...filed, activeAccountProfileId: work },
+        { id: other, projectId: null },
+      ),
+    ).toBe(false);
   });
 
-  it("files a new thread only when its project does not place it", () => {
+  it("files a new thread only when its project has no explicit profile", () => {
     const thread = ThreadId.make("thread-new");
     expect(
       newThreadAccountProfilePatch(projectSettings("work"), {
         id: thread,
-        projectId: sharedProject,
+        projectId: scratchProject,
       }),
     ).toEqual({ threadAccountProfileIds: { [thread]: work } });
     expect(

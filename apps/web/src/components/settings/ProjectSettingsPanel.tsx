@@ -160,8 +160,6 @@ function CheckoutGroupingSelect({ member }: { member: SidebarProjectGroupMember 
   );
 }
 
-const ALL_PROFILES = "all-profiles";
-
 function ProjectAccountProfileRow({
   members,
 }: {
@@ -171,7 +169,7 @@ function ProjectAccountProfileRow({
   const first = members[0]!;
   const settings = useAtomValue(serverEnvironment.settingsValueAtom(first.environmentId));
   const choices = projectAccountProfileChoices(settings, first.id);
-  if (choices === null) return null;
+  if (choices === null || members.every((member) => member.isScratch)) return null;
   const assigned = choices.profiles.find((profile) => profile.id === choices.assignedId);
   return (
     <SettingsRow
@@ -179,22 +177,19 @@ function ProjectAccountProfileRow({
       description={gt("Only this profile lists the project and its threads.")}
       control={
         <Select
-          value={choices.assignedId ?? ALL_PROFILES}
+          value={choices.assignedId}
           onValueChange={(value) => {
             if (typeof value !== "string") return;
             void setProjectAccountProfile(
               members.map((member) => scopeProjectRef(member.environmentId, member.id)),
-              value === ALL_PROFILES ? null : AccountProfileId.make(value),
+              AccountProfileId.make(value),
             );
           }}
         >
           <SelectTrigger size="sm" aria-label={gt("Account profile")}>
-            <SelectValue>{assigned?.name ?? gt("Show in all profiles")}</SelectValue>
+            <SelectValue>{assigned?.name}</SelectValue>
           </SelectTrigger>
           <SelectPopup align="end" alignItemWithTrigger={false}>
-            <SelectItem hideIndicator value={ALL_PROFILES}>
-              <T>Show in all profiles</T>
-            </SelectItem>
             {choices.profiles.map((profile) => (
               <SelectItem hideIndicator key={profile.id} value={profile.id}>
                 {profile.name}

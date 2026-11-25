@@ -140,6 +140,7 @@ export function moveProfileInstance(
 export function nextAccountProfile(
   settings: Pick<ServerSettings, "accountProfiles" | "activeAccountProfileId">,
 ): AccountProfile | undefined {
+  if (settings.accountProfiles.length === 0) return undefined;
   const index = settings.accountProfiles.findIndex(
     (profile) => profile.id === settings.activeAccountProfileId,
   );
@@ -166,22 +167,39 @@ function existingProfile(
     : settings.accountProfiles.find((profile) => profile.id === profileId);
 }
 
-/** The existing profile a project is assigned to; undefined means it shows in every profile. */
-export function projectAccountProfile(
+function homeAccountProfile(
+  settings: Pick<ServerSettings, "accountProfiles">,
+): AccountProfile | undefined {
+  return settings.accountProfiles[0];
+}
+
+/** The existing profile a project is explicitly assigned to, or undefined when unassigned. */
+export function explicitProjectAccountProfile(
   settings: ProjectProfileSettings,
   projectId: ProjectId,
 ): AccountProfile | undefined {
   return existingProfile(settings, settings.projectAccountProfileIds[projectId]);
 }
 
-/** A thread follows its project's profile; only a thread in an unassigned project uses its own. */
+/** The profile a project belongs to: its explicit assignment, else the first (home) profile. */
+export function projectAccountProfile(
+  settings: ProjectProfileSettings,
+  projectId: ProjectId,
+): AccountProfile | undefined {
+  return explicitProjectAccountProfile(settings, projectId) ?? homeAccountProfile(settings);
+}
+
+/** A thread follows its project's explicit profile, else its own profile, else the first (home) profile. */
 export function threadAccountProfile(
   settings: ThreadProfileSettings,
   thread: ProfiledThread,
 ): AccountProfile | undefined {
   return (
-    (thread.projectId === null ? undefined : projectAccountProfile(settings, thread.projectId)) ??
-    existingProfile(settings, settings.threadAccountProfileIds[thread.id])
+    (thread.projectId === null
+      ? undefined
+      : explicitProjectAccountProfile(settings, thread.projectId)) ??
+    existingProfile(settings, settings.threadAccountProfileIds[thread.id]) ??
+    homeAccountProfile(settings)
   );
 }
 
@@ -194,13 +212,15 @@ function shownUnderActiveProfile(
   return active === undefined || assigned === undefined || assigned.id === active.id;
 }
 
-/** Whether a project shows under the active profile. Never hides with fewer than two profiles. */
+/** Whether a project shows under the active profile. Scratch ("No project") stays in every profile. */
 export function isProjectInActiveAccountProfile(
   settings: ProjectProfileSettings | null | undefined,
   projectId: ProjectId,
+  options?: { readonly isScratch?: boolean | undefined },
 ): boolean {
   return (
     settings == null ||
+    options?.isScratch === true ||
     shownUnderActiveProfile(settings, projectAccountProfile(settings, projectId))
   );
 }
@@ -237,7 +257,7 @@ export function newThreadAccountProfilePatch(
 ): Pick<ServerSettingsPatch, "threadAccountProfileIds"> | undefined {
   const active = activeProfileWhenSeparating(settings);
   if (active === undefined) return undefined;
-  if (thread.projectId !== null && projectAccountProfile(settings, thread.projectId))
+  if (thread.projectId !== null && explicitProjectAccountProfile(settings, thread.projectId))
     return undefined;
   return { threadAccountProfileIds: { [thread.id]: active.id } };
 }

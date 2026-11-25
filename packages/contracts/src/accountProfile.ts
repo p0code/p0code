@@ -37,24 +37,9 @@ export const AccountProfile = Schema.Struct({
 });
 export type AccountProfile = typeof AccountProfile.Type;
 
-export const DEFAULT_ACCOUNT_PROFILES: ReadonlyArray<AccountProfile> = [
-  {
-    id: AccountProfileId.make("personal"),
-    name: "Personal",
-    instanceOrder: [],
-    excludedInstanceIds: [],
-    autoSwitchOnLimit: false,
-  },
-  {
-    id: AccountProfileId.make("work"),
-    name: "Work",
-    instanceOrder: [],
-    excludedInstanceIds: [],
-    autoSwitchOnLimit: false,
-  },
-];
+export const DEFAULT_ACCOUNT_PROFILES: ReadonlyArray<AccountProfile> = [];
 
-export const DEFAULT_ACTIVE_ACCOUNT_PROFILE_ID = AccountProfileId.make("personal");
+export const DEFAULT_ACTIVE_ACCOUNT_PROFILE_ID: AccountProfileId | null = null;
 
 export const resolveActiveAccountProfile = (settings: {
   readonly accountProfiles?: ReadonlyArray<AccountProfile> | undefined;

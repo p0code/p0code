@@ -1348,7 +1348,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       if (!api) return;
       const [firstProjectRef] = group.memberProjectRefs;
       const profileChoices =
-        firstProjectRef === undefined ? null : readProjectAccountProfileChoices(firstProjectRef);
+        group.isScratch || firstProjectRef === undefined
+          ? null
+          : readProjectAccountProfileChoices(firstProjectRef);
       void (async () => {
         const clicked = await settlePromise(() =>
           api.contextMenu.show(

@@ -10,6 +10,7 @@ import {
 import { runAtomCommand } from "@t3tools/client-runtime/state/runtime";
 import { msg } from "gt-react";
 import {
+  explicitProjectAccountProfile,
   nextAccountProfile,
   projectAccountProfile,
   threadAccountProfile,
@@ -18,6 +19,7 @@ import {
 import { m } from "../i18n/messages";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { readPrimaryEnvironmentId } from "./environments";
+import { environmentProjects } from "./projects";
 import { serverEnvironment } from "./server";
 
 /**
@@ -72,12 +74,12 @@ export function readProjectAccountProfileChoices(projectRef: ScopedProjectRef) {
 }
 
 /**
- * Files projects under a profile, or with null shows them in every profile again. Each
- * environment keeps its own profiles, so one lacking the profile leaves its projects alone.
+ * Files projects under a profile. Each environment keeps its own profiles, so one lacking the
+ * profile leaves its projects alone.
  */
 export async function setProjectAccountProfile(
   projectRefs: ReadonlyArray<ScopedProjectRef>,
-  profileId: AccountProfileId | null,
+  profileId: AccountProfileId,
 ) {
   const byEnvironment = new Map<EnvironmentId, ScopedProjectRef[]>();
   for (const projectRef of projectRefs) {
@@ -89,10 +91,7 @@ export async function setProjectAccountProfile(
   await Promise.all(
     [...byEnvironment].map(([environmentId, refs]) => {
       const settings = appAtomRegistry.get(serverEnvironment.settingsValueAtom(environmentId));
-      if (
-        profileId !== null &&
-        !settings?.accountProfiles.some((profile) => profile.id === profileId)
-      ) {
+      if (!settings?.accountProfiles.some((profile) => profile.id === profileId)) {
         return undefined;
       }
       return runAtomCommand(
@@ -117,8 +116,8 @@ export async function setProjectAccountProfile(
 type AccountProfileChoices = NonNullable<ReturnType<typeof projectAccountProfileChoices>>;
 
 /**
- * The thread's own profile choices; null when its project's profile places it, since that wins,
- * or when there is nothing to pick.
+ * The thread's own profile choices; offered only for "No project" (scratch) threads, since
+ * every other project belongs to one profile and places its threads.
  */
 export function readThreadAccountProfileChoices(
   threadRef: ScopedThreadRef,
@@ -128,7 +127,13 @@ export function readThreadAccountProfileChoices(
     serverEnvironment.settingsValueAtom(threadRef.environmentId),
   );
   if (settings == null || settings.accountProfiles.length < 2) return null;
-  if (projectId !== null && projectAccountProfile(settings, projectId) !== undefined) return null;
+  if (projectId !== null) {
+    const project = appAtomRegistry.get(
+      environmentProjects.projectAtom({ environmentId: threadRef.environmentId, projectId }),
+    );
+    if (!project?.isScratch) return null;
+    if (explicitProjectAccountProfile(settings, projectId) !== undefined) return null;
+  }
   return {
     profiles: settings.accountProfiles,
     assignedId: threadAccountProfile(settings, { id: threadRef.threadId, projectId })?.id ?? null,
@@ -137,7 +142,7 @@ export function readThreadAccountProfileChoices(
 
 export async function setThreadAccountProfile(
   threadRef: ScopedThreadRef,
-  profileId: AccountProfileId | null,
+  profileId: AccountProfileId,
 ) {
   await runAtomCommand(
     appAtomRegistry,
@@ -159,19 +164,11 @@ export function accountProfileMenuItem(
   return {
     id: "move-to-profile",
     label: m(msg("Move to profile")),
-    children: [
-      {
-        id: "profile:",
-        label: m(msg("Show in all profiles")),
-        checked: choices.assignedId === null,
-      },
-      ...choices.profiles.map((profile, index) => ({
-        id: `profile:${profile.id}` as const,
-        label: profile.name,
-        checked: choices.assignedId === profile.id,
-        separatorBefore: index === 0,
-      })),
-    ],
+    children: choices.profiles.map((profile) => ({
+      id: `profile:${profile.id}` as const,
+      label: profile.name,
+      checked: choices.assignedId === profile.id,
+    })),
   };
 }
 
@@ -190,11 +187,9 @@ export function isAccountProfileMenuId(id: string): id is AccountProfileMenuId {
   return id === "move-to-profile" || id.startsWith("profile:");
 }
 
-/** The profile a submenu pick chose; null means every profile, undefined the submenu itself. */
-export function pickedAccountProfile(
-  id: AccountProfileMenuId,
-): AccountProfileId | null | undefined {
+/** The profile a submenu pick chose, or undefined for the submenu itself. */
+export function pickedAccountProfile(id: AccountProfileMenuId): AccountProfileId | undefined {
   if (id === "move-to-profile") return undefined;
   const profileId = id.slice("profile:".length);
-  return profileId === "" ? null : AccountProfileId.make(profileId);
+  return profileId === "" ? undefined : AccountProfileId.make(profileId);
 }

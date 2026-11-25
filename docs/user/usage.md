@@ -181,18 +181,22 @@ using a proxy through `ANTHROPIC_AUTH_TOKEN`.
 ## Switch accounts with profiles
 
 If you run several accounts of one provider, such as a personal and a company Claude account,
-**Settings → Providers → Account profiles** orders them. Each environment starts with a
-**Personal** and a **Work** profile; drag an account up to make it that profile's first choice.
+create profiles in **Settings → Providers → Account profiles** to order them. Environments start
+with no profiles; choose **Add profile** to add one (the first profile becomes active) and drag an
+account up to make it that profile's first choice.
 
 New threads, including ones agents and workflows start, use the active profile's first account
 that is not at its usage limit for the model you chose. Picking an account in the model picker
-always wins. Switch profiles from the sidebar's profile button, the command palette
-(**Switch account profile**), `mod+alt+shift+p`, or **Settings → Providers** on mobile.
+always wins. Once an environment has two or more profiles, switch profiles from the sidebar's
+profile toggle, the command palette (**Switch account profile**), `mod+alt+shift+p`, or
+**Settings → Providers** on mobile.
 
-Profiles also separate projects. A project you add belongs to the active profile, and only that
-profile lists it and its threads. Projects from before stay in every profile until you move them:
-right-click a project folder and pick **Move to profile**, or set **Account profile** in the
-project's settings. **Show in all profiles** undoes it.
+With two or more profiles, profiles also separate projects and threads. Existing projects and
+threads belong to your first profile until you move them; a new project belongs to the active
+profile, and only that profile lists it and its threads. Right-click a project folder and pick
+**Move to profile**, or set **Account profile** in the project's settings, to move a project.
+**No project** stays available in every profile, and its threads can be moved individually with
+**Move to profile**.
 
 When a thread hits a usage limit, its notice offers **Continue on** the profile's next account.
 Turn on **Switch accounts at usage limits** for a profile to do that without asking; switching

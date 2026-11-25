@@ -72,7 +72,7 @@ export function AccountProfilesSettings({
     let index = profiles.length + 1;
     while (profiles.some((profile) => profile.id === `profile-${index}`)) index += 1;
     const id = AccountProfileId.make(`profile-${index}`);
-    saveProfiles([
+    const nextProfiles = [
       ...profiles,
       {
         id,
@@ -81,7 +81,12 @@ export function AccountProfilesSettings({
         excludedInstanceIds: [],
         autoSwitchOnLimit: false,
       },
-    ]);
+    ];
+    const hasActive = profiles.some((profile) => profile.id === settings.activeAccountProfileId);
+    updateSettings({
+      accountProfiles: nextProfiles,
+      ...(!hasActive ? { activeAccountProfileId: id } : {}),
+    });
     setEditingId(id);
   };
   const removeProfile = (id: AccountProfileId) => {
@@ -176,7 +181,6 @@ export function AccountProfilesSettings({
                   <Button
                     size="icon-sm"
                     variant="ghost-muted"
-                    disabled={profiles.length === 1}
                     aria-label={gt("Remove {name}", { name: editing.name })}
                     onClick={() => removeProfile(editing.id)}
                   >

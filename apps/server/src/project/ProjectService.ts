@@ -586,7 +586,7 @@ export const make = Effect.gen(function* () {
 
   const createProject = Effect.fn("ProjectService.create")(function* (
     input: Parameters<ProjectService["Service"]["create"]>[0],
-    // Bootstrapped projects, like the shared "No project", stay in every account profile.
+    // Bootstrapped projects, like "No project", stay unassigned so their threads file individually.
     fileUnderProfile: boolean,
   ) {
     yield* rejectWslSharePath(input.projectId, input.workspaceRoot);

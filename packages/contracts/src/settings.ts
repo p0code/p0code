@@ -1531,11 +1531,11 @@ export const ServerSettings = Schema.Struct({
   activeAccountProfileId: Schema.NullOr(AccountProfileId).pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_ACTIVE_ACCOUNT_PROFILE_ID)),
   ),
-  /** A project shows only under its profile; an unassigned project (or a deleted profile's) shows in every one. */
+  /** A project shows only under its profile; an unassigned project (or a deleted profile's) belongs to the first profile. */
   projectAccountProfileIds: Schema.Record(ProjectId, AccountProfileId).pipe(
     Schema.withDecodingDefault(Effect.succeed({})),
   ),
-  /** Used only while the thread's project is unassigned, e.g. "No project" threads. */
+  /** Used while the thread's project has no explicit profile, e.g. "No project" threads. */
   threadAccountProfileIds: Schema.Record(ThreadId, AccountProfileId).pipe(
     Schema.withDecodingDefault(Effect.succeed({})),
   ),
@@ -2007,7 +2007,7 @@ export const ServerSettingsPatch = Schema.Struct({
   fallbackModelSelection: Schema.optionalKey(Schema.NullOr(ModelSelection)),
   accountProfiles: Schema.optionalKey(Schema.Array(AccountProfile)),
   activeAccountProfileId: Schema.optionalKey(Schema.NullOr(AccountProfileId)),
-  /** Merges per project; null shows the project in every profile again. */
+  /** Merges per project; null clears the explicit assignment. */
   projectAccountProfileIds: Schema.optionalKey(
     Schema.Record(ProjectId, Schema.NullOr(AccountProfileId)),
   ),

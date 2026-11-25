@@ -1,25 +1,23 @@
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import type { AccountProfileId } from "@t3tools/contracts";
 import { projectAccountProfile } from "@t3tools/shared/accountProfiles";
-import { useGT } from "gt-react-native";
 
 import { ListChoiceRow } from "../../components/ui/ListChoiceRow";
 import { SettingsSection } from "./components/SettingsSection";
 import type { SettingsTarget } from "./settings-environment-filter";
 import { useSettingsWriter } from "./useSettingsWriter";
 
-/** Files a project under one of its environment's account profiles, or shows it in all of them. */
+/** Files a project under one of its environment's account profiles. */
 export function ProjectAccountProfileSection(props: {
   readonly member: EnvironmentProject;
   readonly environment: SettingsTarget;
   readonly title: string;
 }) {
-  const gt = useGT();
   const writeSettings = useSettingsWriter();
   const { settings } = props.environment.serverConfig;
-  if (settings.accountProfiles.length < 2) return null;
+  if (props.member.isScratch || settings.accountProfiles.length < 2) return null;
   const assigned = projectAccountProfile(settings, props.member.id)?.id ?? null;
-  const assign = (profileId: AccountProfileId | null) =>
+  const assign = (profileId: AccountProfileId) =>
     void writeSettings(
       [],
       [
@@ -32,17 +30,12 @@ export function ProjectAccountProfileSection(props: {
 
   return (
     <SettingsSection title={props.title}>
-      <ListChoiceRow
-        label={gt("Show in all profiles")}
-        selected={assigned === null}
-        onPress={() => assign(null)}
-      />
-      {settings.accountProfiles.map((profile) => (
+      {settings.accountProfiles.map((profile, index) => (
         <ListChoiceRow
           key={profile.id}
           label={profile.name}
           selected={profile.id === assigned}
-          separated
+          separated={index > 0}
           onPress={() => assign(profile.id)}
         />
       ))}

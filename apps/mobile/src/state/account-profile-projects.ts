@@ -32,7 +32,8 @@ function inActiveProfileAtom<A extends { readonly environmentId: EnvironmentId }
 export const profileProjectsAtom = inActiveProfileAtom(
   "mobile-profile-projects",
   environmentProjects.projectsAtom,
-  (settings, project) => isProjectInActiveAccountProfile(settings, project.id),
+  (settings, project) =>
+    isProjectInActiveAccountProfile(settings, project.id, { isScratch: project.isScratch }),
 );
 
 export const profileNavigationThreadShellsAtom = inActiveProfileAtom(
