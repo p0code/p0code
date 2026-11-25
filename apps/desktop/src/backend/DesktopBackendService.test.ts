@@ -57,18 +57,18 @@ function makeProcessHandle(options: {
 }
 
 describe("DesktopBackendService helpers", () => {
-  it("defaults to local-service whenever a p0d binary resolves", () => {
+  it("keeps the in-app backend as the default even when a p0d binary resolves", () => {
     const autoSettings = {
       backendMode: DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS.backendMode,
       backendModeConfiguredByUser: false,
     };
 
+    assert.equal(DesktopBackendService.resolveEffectiveBackendMode(autoSettings), "embedded");
     assert.equal(
-      DesktopBackendService.resolveEffectiveBackendMode(autoSettings, true),
-      "local-service",
-    );
-    assert.equal(
-      DesktopBackendService.resolveEffectiveBackendMode(autoSettings, false),
+      DesktopBackendService.resolveEffectiveBackendMode({
+        backendMode: "local-service",
+        backendModeConfiguredByUser: false,
+      }),
       "embedded",
     );
   });
@@ -151,29 +151,29 @@ describe("DesktopBackendService helpers", () => {
 
   it("never overrides an explicit backend mode", () => {
     assert.equal(
-      DesktopBackendService.resolveEffectiveBackendMode(
-        { backendMode: "remote", backendModeConfiguredByUser: true },
-        true,
-      ),
+      DesktopBackendService.resolveEffectiveBackendMode({
+        backendMode: "remote",
+        backendModeConfiguredByUser: true,
+      }),
       "remote",
     );
     assert.equal(
-      DesktopBackendService.resolveEffectiveBackendMode(
-        { backendMode: "remote", backendModeConfiguredByUser: true },
-        false,
-      ),
-      "remote",
-    );
-    assert.equal(
-      DesktopBackendService.resolveEffectiveBackendMode(
-        { backendMode: "embedded", backendModeConfiguredByUser: true },
-        true,
-      ),
+      DesktopBackendService.resolveEffectiveBackendMode({
+        backendMode: "embedded",
+        backendModeConfiguredByUser: true,
+      }),
       "embedded",
+    );
+    assert.equal(
+      DesktopBackendService.resolveEffectiveBackendMode({
+        backendMode: "local-service",
+        backendModeConfiguredByUser: true,
+      }),
+      "local-service",
     );
   });
 
-  it("orders p0d binary candidates with user override first, then packaged and dev paths", () => {
+  it("only trusts an explicit override or a bundled p0d, not PATH", () => {
     const posixPath = { join: (...parts: string[]) => parts.join("/") };
     const candidates = DesktopBackendService.p0dBinaryCandidates({
       path: posixPath,
@@ -191,9 +191,30 @@ describe("DesktopBackendService helpers", () => {
     assert.equal(candidates[0], "/custom/bin/p0d");
     assert.equal(candidates[1], "/App/Contents/Resources/p0d/p0d");
     assert.include(candidates, "/repo/apps/p0d/dist/darwin-arm64/p0d");
-    assert.include(candidates, "/Users/test/.p0code/bin/p0d");
-    assert.include(candidates, "/opt/homebrew/bin/p0d");
-    assert.include(candidates, "/usr/local/bin/p0d");
+    assert.notInclude(candidates, "/Users/test/.p0code/bin/p0d");
+    assert.notInclude(candidates, "/opt/homebrew/bin/p0d");
+    assert.notInclude(candidates, "/usr/local/bin/p0d");
+  });
+
+  it("ignores a p0d installed outside the app when packaged", () => {
+    const posixPath = { join: (...parts: string[]) => parts.join("/") };
+    const candidates = DesktopBackendService.p0dBinaryCandidates({
+      path: posixPath,
+      platform: "darwin",
+      arch: "arm64",
+      isPackaged: true,
+      resourcesPath: "/App/Contents/Resources",
+      rootDir: "/repo",
+      homeDirectory: "/Users/test",
+      baseDir: "/Users/test/.p0code",
+      appDataDirectory: "/Users/test/Library/Application Support",
+      configuredBinaryPath: null,
+    });
+
+    assert.deepEqual(candidates, [
+      "/App/Contents/Resources/p0d/p0d",
+      "/App/Contents/Resources/bin/p0d",
+    ]);
   });
 
   it("uses p0d.exe on Windows", () => {
@@ -678,32 +699,133 @@ describe("DesktopBackendService.layer", () => {
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
 
-  it.effect("adopts local-service for a legacy default settings document when p0d resolves", () =>
+  it.effect("ignores a p0d installed outside the app and stays on the in-app backend", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const baseDir = yield* fileSystem.makeTempDirectoryScoped();
       yield* fileSystem.makeDirectory(`${baseDir}/bin`, { recursive: true });
       yield* fileSystem.writeFileString(`${baseDir}/bin/p0d`, "#!/bin/sh\nexit 0\n");
-      const service = yield* DesktopBackendService.DesktopBackendService.pipe(
+      const { service, result, binary } = yield* Effect.gen(function* () {
+        const service = yield* DesktopBackendService.DesktopBackendService;
+        const result = yield* service.prepareSelectedBackend;
+        const binary = yield* service.findP0dBinary;
+        return { service, result, binary };
+      }).pipe(
         Effect.provide(
           layerService(baseDir, {
             ...DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS,
-            backendMode: "embedded",
+            backendMode: "local-service",
             backendModeConfiguredByUser: false,
           }),
         ),
       );
-      assert.deepEqual(runLikeSyncIpc(service.resolveEffectiveMode), Exit.succeed("local-service"));
+      assert.deepEqual(runLikeSyncIpc(service.resolveEffectiveMode), Exit.succeed("embedded"));
+      assert.deepEqual(binary, Option.none());
+      assert.deepEqual(result, {
+        mode: "embedded",
+        requestedMode: "embedded",
+        fallbackReason: null,
+      });
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
 
-  it.effect("keeps an explicit embedded choice even when p0d resolves", () =>
+  it.effect("keeps an explicit embedded choice even when a p0d override resolves", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const baseDir = yield* fileSystem.makeTempDirectoryScoped();
-      yield* fileSystem.makeDirectory(`${baseDir}/bin`, { recursive: true });
-      yield* fileSystem.writeFileString(`${baseDir}/bin/p0d`, "#!/bin/sh\nexit 0\n");
-      const service = yield* DesktopBackendService.DesktopBackendService.pipe(
+      const p0dPath = `${baseDir}/custom-p0d`;
+      yield* fileSystem.writeFileString(p0dPath, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+      const { service, result, binary } = yield* Effect.gen(function* () {
+        const service = yield* DesktopBackendService.DesktopBackendService;
+        const result = yield* service.prepareSelectedBackend;
+        const binary = yield* service.findP0dBinary;
+        return { service, result, binary };
+      }).pipe(
+        Effect.provide(
+          layerService(baseDir, {
+            ...DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS,
+            backendMode: "embedded",
+            backendModeConfiguredByUser: true,
+            backendBinaryPath: p0dPath,
+          }),
+        ),
+      );
+      assert.deepEqual(runLikeSyncIpc(service.resolveEffectiveMode), Exit.succeed("embedded"));
+      assert.deepEqual(binary, Option.some(p0dPath));
+      assert.deepEqual(result, {
+        mode: "embedded",
+        requestedMode: "embedded",
+        fallbackReason: null,
+      });
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("keeps a saved local-service choice when p0d cannot prove its identity", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const baseDir = yield* fileSystem.makeTempDirectoryScoped();
+      const p0dPath = `${baseDir}/custom-p0d`;
+      yield* fileSystem.writeFileString(p0dPath, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+      const { result, settings } = yield* Effect.gen(function* () {
+        const service = yield* DesktopBackendService.DesktopBackendService;
+        const result = yield* service.prepareSelectedBackend;
+        const settings = yield* (yield* DesktopAppSettings.DesktopAppSettings).get;
+        return { result, settings };
+      }).pipe(
+        Effect.provide(
+          layerService(baseDir, {
+            ...DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS,
+            backendMode: "local-service",
+            backendModeConfiguredByUser: true,
+            backendBinaryPath: p0dPath,
+          }),
+        ),
+      );
+      assert.equal(result.mode, "embedded");
+      assert.equal(result.requestedMode, "local-service");
+      assert.include(result.fallbackReason ?? "", "can't prove its identity");
+      assert.equal(settings.backendMode, "local-service");
+      assert.isTrue(settings.backendModeConfiguredByUser);
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("refuses to save local-service when p0d cannot prove its identity", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const baseDir = yield* fileSystem.makeTempDirectoryScoped();
+      const p0dPath = `${baseDir}/custom-p0d`;
+      yield* fileSystem.writeFileString(p0dPath, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+      const { result, settings } = yield* Effect.gen(function* () {
+        const service = yield* DesktopBackendService.DesktopBackendService;
+        const result = yield* service.updateConfig({ mode: "local-service" });
+        const settings = yield* (yield* DesktopAppSettings.DesktopAppSettings).get;
+        return { result, settings };
+      }).pipe(
+        Effect.provide(
+          layerService(baseDir, {
+            ...DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS,
+            backendMode: "embedded",
+            backendModeConfiguredByUser: true,
+            backendBinaryPath: p0dPath,
+          }),
+        ),
+      );
+      assert.isFalse(result.changed);
+      assert.include(result.error ?? "", "can't prove its identity");
+      assert.equal(settings.backendMode, "embedded");
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("refuses remote mode without rewriting the stored choice", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const baseDir = yield* fileSystem.makeTempDirectoryScoped();
+      const { result, settings } = yield* Effect.gen(function* () {
+        const service = yield* DesktopBackendService.DesktopBackendService;
+        const result = yield* service.updateConfig({ mode: "remote" });
+        const settings = yield* (yield* DesktopAppSettings.DesktopAppSettings).get;
+        return { result, settings };
+      }).pipe(
         Effect.provide(
           layerService(baseDir, {
             ...DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS,
@@ -712,11 +834,13 @@ describe("DesktopBackendService.layer", () => {
           }),
         ),
       );
-      assert.deepEqual(runLikeSyncIpc(service.resolveEffectiveMode), Exit.succeed("embedded"));
+      assert.isFalse(result.changed);
+      assert.include(result.error ?? "", "experimental");
+      assert.equal(settings.backendMode, "embedded");
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
 
-  it.effect("falls back to the in-app backend when the local service cannot start", () =>
+  it.effect("falls back in memory without rewriting a stored local-service choice", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const baseDir = yield* fileSystem.makeTempDirectoryScoped();
@@ -736,29 +860,36 @@ describe("DesktopBackendService.layer", () => {
       );
       // No server bundle in this environment, so the service can never come up.
       assert.equal(result.mode, "embedded");
+      assert.equal(result.requestedMode, "local-service");
       assert.include(result.fallbackReason ?? "", "Legacy server bundle not found");
-      assert.equal(settings.backendMode, "embedded");
+      assert.equal(settings.backendMode, "local-service");
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
 
-  it.effect("refuses remote mode, which has no credential to sign the desktop in", () =>
+  it.effect("reports remote mode as unsupported rather than reachable", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const baseDir = yield* fileSystem.makeTempDirectoryScoped();
-      const result = yield* Effect.gen(function* () {
-        return yield* (yield* DesktopBackendService.DesktopBackendService).prepareSelectedBackend;
+      const status = yield* Effect.gen(function* () {
+        return yield* (yield* DesktopBackendService.DesktopBackendService).getStatus({
+          embeddedReady: false,
+          embeddedDesiredRunning: false,
+          embeddedPid: null,
+          embeddedUrl: null,
+        });
       }).pipe(
         Effect.provide(
           layerService(baseDir, {
             ...DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS,
             backendMode: "remote",
             backendModeConfiguredByUser: true,
-            backendRemoteUrl: "http://127.0.0.1:1",
+            backendRemoteUrl: "http://127.0.0.1:3773",
           }),
         ),
       );
-      assert.equal(result.mode, "embedded");
-      assert.isNotNull(result.fallbackReason);
+      assert.equal(status.mode, "remote");
+      assert.isFalse(status.running);
+      assert.include(status.error ?? "", "experimental");
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
 
@@ -769,7 +900,11 @@ describe("DesktopBackendService.layer", () => {
       const result = yield* Effect.gen(function* () {
         return yield* (yield* DesktopBackendService.DesktopBackendService).prepareSelectedBackend;
       }).pipe(Effect.provide(layerService(baseDir, DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS)));
-      assert.deepEqual(result, { mode: "embedded", fallbackReason: null });
+      assert.deepEqual(result, {
+        mode: "embedded",
+        requestedMode: "embedded",
+        fallbackReason: null,
+      });
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
 });

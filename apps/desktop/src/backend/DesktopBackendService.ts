@@ -157,18 +157,17 @@ export const adoptRunningLocalService = Effect.fn(
 });
 
 /**
- * The auto default follows p0d availability instead of the stored mode. A document that
- * recorded the embedded default (no explicit choice) moves to local-service as
- * soon as p0d resolves, and moves back if it disappears.
+ * The bundled in-app backend is always the default. A p0d binary appearing on disk must not
+ * take over an install the user did not opt into; an external mode is only used once the user
+ * has chosen it.
  */
 export function resolveEffectiveBackendMode(
   settings: Pick<DesktopAppSettings.DesktopSettings, "backendMode" | "backendModeConfiguredByUser">,
-  hasP0d: boolean,
 ): DesktopBackendMode {
   if (settings.backendModeConfiguredByUser) {
     return settings.backendMode;
   }
-  return hasP0d ? "local-service" : "embedded";
+  return "embedded";
 }
 
 function p0dBinaryName(platform: NodeJS.Platform): string {
@@ -228,6 +227,8 @@ export function p0dBinaryCandidates(input: {
   if (input.configuredBinaryPath) {
     pushUnique(input.configuredBinaryPath);
   }
+  // Only binaries this app ships or the user points at explicitly. A p0d left behind by an
+  // unrelated install (or on PATH) is not ours to trust.
   for (const packaged of packagedP0dBinaryCandidates(input)) {
     pushUnique(packaged);
   }
@@ -235,22 +236,6 @@ export function p0dBinaryCandidates(input: {
     for (const subdir of p0dDistSubdirs(input.platform, input.arch)) {
       pushUnique(input.path.join(input.rootDir, "apps", "p0d", "dist", subdir, binaryName));
     }
-  }
-  pushUnique(input.path.join(input.baseDir, "bin", binaryName));
-  pushUnique(input.path.join(input.baseDir, "p0d", "bin", binaryName));
-  pushUnique(input.path.join(input.homeDirectory, ".p0code", "bin", binaryName));
-  if (input.platform === "win32") {
-    pushUnique(
-      input.path.join(input.appDataDirectory, "..", "Local", "p0code", "p0d", "bin", binaryName),
-    );
-  } else if (input.platform === "linux") {
-    pushUnique(
-      input.path.join(input.homeDirectory, ".local", "share", "p0code", "p0d", "bin", binaryName),
-    );
-    pushUnique("/usr/local/bin/p0d");
-  } else if (input.platform === "darwin") {
-    pushUnique("/opt/homebrew/bin/p0d");
-    pushUnique("/usr/local/bin/p0d");
   }
   return candidates;
 }
@@ -1017,7 +1002,10 @@ export class DesktopBackendService extends Context.Service<
      * switches this install back to the in-app backend and says why.
      */
     readonly prepareSelectedBackend: Effect.Effect<{
+      /** The mode this launch will run, which is embedded when an external mode failed. */
       readonly mode: DesktopBackendMode;
+      /** The stored choice. It is never rewritten by a failed launch. */
+      readonly requestedMode: DesktopBackendMode;
       readonly fallbackReason: string | null;
     }>;
     readonly getStatus: (input: {
@@ -1028,7 +1016,10 @@ export class DesktopBackendService extends Context.Service<
     }) => Effect.Effect<DesktopBackendStatus>;
     readonly updateConfig: (
       input: DesktopBackendConfigUpdate,
-    ) => Effect.Effect<{ readonly changed: boolean }, DesktopAppSettings.DesktopSettingsWriteError>;
+    ) => Effect.Effect<
+      { readonly changed: boolean; readonly error: string | null },
+      DesktopAppSettings.DesktopSettingsWriteError
+    >;
     readonly controlService: (
       action: DesktopBackendAction,
     ) => Effect.Effect<void, BackendServiceDriverError>;
@@ -1103,15 +1094,10 @@ export const make = Effect.gen(function* () {
 
   const resolveEffectiveMode = Effect.gen(function* () {
     const settings = yield* appSettings.get;
-    const p0dAvailable = yield* hasP0d;
-    return resolveEffectiveBackendMode(
-      {
-        backendMode:
-          settings.backendMode ?? DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS.backendMode,
-        backendModeConfiguredByUser: settings.backendModeConfiguredByUser ?? false,
-      },
-      p0dAvailable,
-    );
+    return resolveEffectiveBackendMode({
+      backendMode: settings.backendMode ?? DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS.backendMode,
+      backendModeConfiguredByUser: settings.backendModeConfiguredByUser ?? false,
+    });
   });
 
   const resolveServiceDriver: Effect.Effect<BackendServiceDriver> = Effect.gen(function* () {
@@ -1169,15 +1155,20 @@ export const make = Effect.gen(function* () {
     });
   });
 
+  const REMOTE_BACKEND_UNSUPPORTED_MESSAGE =
+    "Remote backend mode is experimental and not supported yet: there is no pairing credential for a remote server. Add the other machine from Settings > Connections instead.";
+
   const externalBackendFailure = Effect.fn("desktop.backendService.externalBackendFailure")(
     function* (mode: DesktopBackendMode): Effect.fn.Return<string | null> {
       if (mode === "remote") {
-        return "Remote backend mode can't sign this app in yet: there is no way to give it a pairing credential for the remote server.";
+        return REMOTE_BACKEND_UNSUPPORTED_MESSAGE;
       }
       if (mode !== "local-service") return null;
       const driver = yield* resolveServiceDriver;
       if (driver.desktopBootstrapSecret === null) {
-        return `The ${driver.kind} backend service can't sign this app in yet.`;
+        return driver.kind === "p0d"
+          ? "This p0d build can't prove its identity to the desktop app yet, so it can't sign the app in. The in-app backend is being used instead."
+          : `The ${driver.kind} backend service can't sign this app in yet.`;
       }
       return yield* driver.ensureRunning.pipe(
         Effect.as(null),
@@ -1190,38 +1181,21 @@ export const make = Effect.gen(function* () {
     Effect.gen(function* () {
       const settings = yield* appSettings.get;
       // Runs after settings load, so this sees a configured p0d override from disk.
-      const p0dAvailable = yield* refreshP0dAvailability;
-      const mode = resolveEffectiveBackendMode(settings, p0dAvailable);
-      if (!settings.backendModeConfiguredByUser && settings.backendMode !== mode) {
-        // Record what the auto default resolved to without claiming the user picked it.
-        yield* appSettings.setBackendConfig({ mode, modeConfiguredByUser: false }).pipe(
-          Effect.tap(() => logServiceInfo("recorded the resolved auto backend mode", { mode })),
-          Effect.catch((error) =>
-            logServiceWarning("failed to record the resolved backend mode", {
-              error: error.message,
-            }),
-          ),
-        );
+      yield* refreshP0dAvailability;
+      const requestedMode = resolveEffectiveBackendMode(settings);
+      const fallbackReason = yield* externalBackendFailure(requestedMode);
+      if (fallbackReason === null) {
+        return { mode: requestedMode, requestedMode, fallbackReason };
       }
-      const fallbackReason = yield* externalBackendFailure(mode);
-      if (fallbackReason === null) return { mode, fallbackReason };
-      yield* logServiceWarning("selected backend mode failed; falling back to the in-app backend", {
-        mode,
+      // Keep the user's choice on disk: a transient failure must not silently pin a different
+      // mode, and the next launch should try their backend again.
+      yield* logServiceWarning("selected backend mode failed; using the in-app backend for now", {
+        mode: requestedMode,
         reason: fallbackReason,
       });
-      yield* appSettings
-        .setBackendConfig({
-          mode: "embedded",
-          modeConfiguredByUser: settings.backendModeConfiguredByUser,
-        })
-        .pipe(
-          Effect.catch((error) =>
-            logServiceWarning("failed to persist the in-app backend fallback", {
-              error: error.message,
-            }).pipe(Effect.andThen(appSettings.applyBuiltInBackendFallbackInMemory)),
-          ),
-        );
-      return { mode: "embedded" as const, fallbackReason };
+      // Re-resolve so a binary that appeared or vanished while we tried is reflected next time.
+      yield* refreshP0dAvailability;
+      return { mode: "embedded" as const, requestedMode, fallbackReason };
     }).pipe(Effect.withSpan("desktop.backendService.prepareSelectedBackend"));
 
   const getStatus: DesktopBackendService["Service"]["getStatus"] = Effect.fn(
@@ -1236,32 +1210,13 @@ export const make = Effect.gen(function* () {
     const remoteUrl = settings.backendRemoteUrl ?? null;
 
     if (mode === "remote") {
-      const parsed = parseUrlOrNull(remoteUrl);
-      if (parsed === null) {
-        return {
-          mode,
-          status: "stopped",
-          running: false,
-          url: null,
-          remoteUrl,
-          binaryPath,
-          resolvedBinaryPath,
-          driverKind: "remote",
-          version: null,
-          pid: null,
-          serviceInstalled: false,
-          managedByService: false,
-          error: "No remote backend URL configured.",
-        };
-      }
-      const reachable = yield* probeBackendHealth(httpClient, parsed, {
-        allowLegacyWellKnown: true,
-      });
+      // Kept visible so a saved legacy choice is explained rather than rewritten, but never
+      // reported as a working backend until a pairing flow exists.
       return {
         mode,
-        status: reachable ? "running" : "unreachable",
-        running: reachable,
-        url: parsed.href,
+        status: "stopped",
+        running: false,
+        url: null,
         remoteUrl,
         binaryPath,
         resolvedBinaryPath,
@@ -1270,7 +1225,7 @@ export const make = Effect.gen(function* () {
         pid: null,
         serviceInstalled: false,
         managedByService: false,
-        error: reachable ? null : `Cannot reach backend at ${parsed.href}.`,
+        error: REMOTE_BACKEND_UNSUPPORTED_MESSAGE,
       };
     }
 
@@ -1290,7 +1245,10 @@ export const make = Effect.gen(function* () {
         pid: info.pid,
         serviceInstalled: info.installed,
         managedByService: true,
-        error: null,
+        error:
+          driver.desktopBootstrapSecret === null
+            ? "This p0d build can't prove its identity to the desktop app yet, so it can't sign the app in."
+            : null,
       };
     }
 
@@ -1318,8 +1276,17 @@ export const make = Effect.gen(function* () {
   const updateConfig: DesktopBackendService["Service"]["updateConfig"] = Effect.fn(
     "desktop.backendService.updateConfig",
   )(function* (input) {
+    // A backend the app cannot sign in to is not saved as the next launch's choice. Validate
+    // before switching; a failed attempt leaves the current config untouched.
+    if (input.mode === "remote") {
+      return { changed: false, error: REMOTE_BACKEND_UNSUPPORTED_MESSAGE };
+    }
+    if (input.mode === "local-service" && input.binaryPath === undefined) {
+      const failure = yield* externalBackendFailure("local-service");
+      if (failure !== null) return { changed: false, error: failure };
+    }
     const change = yield* appSettings.setBackendConfig(input);
-    return { changed: change.changed };
+    return { changed: change.changed, error: null };
   });
 
   const controlService: DesktopBackendService["Service"]["controlService"] = Effect.fn(
@@ -1384,7 +1351,11 @@ export const layerTest = (
       resolveEffectiveMode: Effect.succeed("embedded"),
       findP0dBinary: Effect.succeedNone,
       resolveServiceDriver: Effect.die("DesktopBackendService.layerTest resolveServiceDriver"),
-      prepareSelectedBackend: Effect.succeed({ mode: "embedded", fallbackReason: null }),
+      prepareSelectedBackend: Effect.succeed({
+        mode: "embedded",
+        requestedMode: "embedded",
+        fallbackReason: null,
+      }),
       getStatus: Effect.fn("DesktopBackendService.getStatus")(function () {
         return Effect.succeed({
           mode: "embedded" as const,
@@ -1403,7 +1374,7 @@ export const layerTest = (
         });
       }),
       updateConfig: Effect.fn("DesktopBackendService.updateConfig")(function () {
-        return Effect.succeed({ changed: false });
+        return Effect.succeed({ changed: false, error: null });
       }),
       controlService: Effect.fn("DesktopBackendService.controlService")(function () {
         return logServiceWarning("controlService called on DesktopBackendService.layerTest");
