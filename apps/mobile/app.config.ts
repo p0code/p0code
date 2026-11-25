@@ -3,7 +3,12 @@ import type { ExpoConfig } from "expo/config";
 import { BRAND_ASSET_PATHS } from "../../scripts/lib/brand-assets.ts";
 import { loadRepoEnv } from "../../scripts/lib/public-config.ts";
 
-type AppVariant = "development" | "preview" | "production";
+export type AppVariant = "development" | "preview" | "production";
+
+export interface MobileAppIdentifiers {
+  readonly iosBundleIdentifier: string;
+  readonly androidPackage: string;
+}
 
 const repoEnv = loadRepoEnv();
 Object.assign(process.env, repoEnv);
@@ -120,10 +125,25 @@ function resolveAppVariant(value: string | undefined): AppVariant {
   }
 }
 
+/**
+ * The identifiers a variant's native project installs under, as Expo resolves them here. Scripts
+ * (native client installs, showcase captures, render metrics) read this instead of hardcoding IDs.
+ * The Personal Team override applies only to the variant this checkout is configured to build.
+ */
+export function resolveMobileAppIdentifiers(variant: AppVariant): MobileAppIdentifiers {
+  const selected = VARIANT_CONFIG[variant];
+  return {
+    iosBundleIdentifier:
+      isIosPersonalTeamBuild && variant === APP_VARIANT
+        ? personalTeamBundleIdentifier!
+        : selected.iosBundleIdentifier,
+    androidPackage: selected.androidPackage,
+  };
+}
+
 const variant = VARIANT_CONFIG[APP_VARIANT];
-const iosBundleIdentifier = isIosPersonalTeamBuild
-  ? personalTeamBundleIdentifier!
-  : variant.iosBundleIdentifier;
+const appIdentifiers = resolveMobileAppIdentifiers(APP_VARIANT);
+const iosBundleIdentifier = appIdentifiers.iosBundleIdentifier;
 
 const dmSansFonts = {
   regular: "@expo-google-fonts/dm-sans/400Regular/DMSans_400Regular.ttf",
@@ -299,7 +319,7 @@ const config: ExpoConfig = {
   },
   android: {
     icon: variant.assets.appIcon,
-    package: variant.androidPackage,
+    package: appIdentifiers.androidPackage,
     ...(repoEnv.T3CODE_ANDROID_GOOGLE_SERVICES_FILE
       ? { googleServicesFile: repoEnv.T3CODE_ANDROID_GOOGLE_SERVICES_FILE }
       : {}),

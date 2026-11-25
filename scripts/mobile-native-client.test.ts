@@ -9,9 +9,11 @@ import {
   androidSdk,
   buildRunTitle,
   NativeClientError,
+  nativeClientBundleId,
   prebuildAndroid,
   remoteBuildState,
 } from "./mobile-native-client.ts";
+import { resolveMobileAppIdentifiers } from "../apps/mobile/app.config.ts";
 
 const caches = [".gradle/history", "app/.cxx/object"];
 
@@ -150,4 +152,11 @@ it("finds a Blacksmith build by its run title and reads its state", () => {
     remoteBuildState([run("2026-11-09T12:01:00Z", "completed", "cancelled")], title, since),
     "failed",
   );
+});
+
+it("targets the fork's development client resolved from the Expo config", () => {
+  const identifiers = resolveMobileAppIdentifiers("development");
+  assert.strictEqual(nativeClientBundleId("ios"), identifiers.iosBundleIdentifier);
+  assert.strictEqual(nativeClientBundleId("android"), identifiers.androidPackage);
+  assert.notStrictEqual(nativeClientBundleId("android"), "com.t3tools.t3code.dev");
 });

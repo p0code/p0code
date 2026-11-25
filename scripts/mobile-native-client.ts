@@ -3,6 +3,7 @@ import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { isCommandAvailable, resolveSpawnCommand } from "@t3tools/shared/shell";
+import { resolveMobileAppIdentifiers } from "../apps/mobile/app.config.ts";
 import * as Clock from "effect/Clock";
 import * as Console from "effect/Console";
 import * as Context from "effect/Context";
@@ -135,7 +136,15 @@ export const hashBundle = Effect.fn("hashBundle")(function* (root: string) {
 });
 type FileSystemError = import("effect/PlatformError").PlatformError;
 
-const bundleId = "com.t3tools.t3code.dev";
+// The development variant's IDs come from the Expo config, so installs find the fork's client.
+const developmentAppIdentifiers = resolveMobileAppIdentifiers("development");
+
+/** The development client's app ID on this platform, matching `apps/mobile/app.config.ts`. */
+export const nativeClientBundleId = (platform: NativePlatform): string =>
+  platform === "ios"
+    ? developmentAppIdentifiers.iosBundleIdentifier
+    : developmentAppIdentifiers.androidPackage;
+
 const roots = Effect.gen(function* () {
   const path = yield* Path.Path;
   const repo = yield* path.fromFileUrl(new URL("../", import.meta.url));
@@ -370,6 +379,7 @@ export const installedBinary = Effect.fn("installedBinary")(function* (
   device: string,
   run: typeof command = command,
 ) {
+  const bundleId = nativeClientBundleId(platform);
   if (platform === "ios") {
     const apps = yield* run("xcrun", ["simctl", "listapps", device]);
     if (!apps.includes(`"${bundleId}"`)) return null;
@@ -1061,7 +1071,7 @@ const install = Effect.fn("nativeClient.install")(function* (
         Effect.fail(
           error.message.includes("INSTALL_FAILED_UPDATE_INCOMPATIBLE")
             ? new NativeClientError({
-                message: `The installed client has a different signature. Remove it with adb -s ${device} uninstall ${bundleId} (this clears its pairings), then run ensure again.`,
+                message: `The installed client has a different signature. Remove it with adb -s ${device} uninstall ${nativeClientBundleId(platform)} (this clears its pairings), then run ensure again.`,
               })
             : error,
         ),
@@ -1130,6 +1140,7 @@ const installIntoSession = Effect.fn("nativeClient.installIntoSession")(function
   const started = yield* Clock.currentTimeMillis;
   const path = yield* Path.Path;
   const node = yield* HostProcess.ExecutablePath;
+  const bundleId = nativeClientBundleId(platform);
   const agentDevice = path.join(
     (yield* roots).repo,
     "scripts/node_modules/agent-device/bin/agent-device.mjs",
