@@ -20,6 +20,39 @@ p0code runs the coding agents on your machine and gives them one fast interface.
 
 It works with Claude Code, Codex, Cursor, OpenCode, Grok Build, Antigravity, Kiro, Pi, Muse Code, fx, and any [ACP](./docs/user/providers-acp.md) agent. If an agent is set up on your computer, p0code can control it.
 
+## What's different from T3 Code
+
+p0code is a fork of [T3 Code](https://github.com/pingdotgg/t3code), so most of what's here comes from upstream. These are the things that changed.
+
+**Privacy**
+
+- All telemetry and analytics are gone. p0code also has no Clerk sign-in and no T3 Connect cloud.
+
+**Remote access**
+
+- A self-hosted relay ([`apps/relay`](./apps/relay)) replaces T3 Connect. TLS terminates on your own machine, and the relay only sees encrypted tunnel traffic. The stock T3 Code mobile app still pairs by QR code.
+- Someone else can follow a single thread through a guest link. They don't need an account, and their messages wait for you to send or dismiss. See [Guest links](./docs/user/guest-links.md).
+
+**Threads and accounts**
+
+- Hidden threads get their own section in the sidebar. They auto-archive after 30 days hidden with no open PR; you can change that window in settings or turn it off.
+- Work and personal account profiles keep provider accounts separate and fail over between them. Switching profiles carries over to the other machines you're connected to.
+- The model picker shows how much usage each linked subscription has left, and a context ring next to the model chip opens context and limit details.
+
+**Runtime and data**
+
+- The CLI is `p0`. The native backend is `p0d`, written in Go, and the desktop app can run it as a separate local service.
+- Data lives in `~/.p0code`. An old `~/.hhh` folder is migrated on first launch.
+- Importing from T3 Code refuses a database from a newer p0code or an unknown migration instead of risking it. See [Moving over from T3 Code](./docs/user/migrating-from-t3-code.md).
+- There's a plugin host, off by default. The T3 Connect bridge ships as an unofficial plugin for people who want those notifications back.
+
+**Also here**
+
+- Upstream T3 Code 0.1.12 is merged in, so multi-repo projects and the rest of that release are included.
+- `p0deploy` builds a container image, ships it over `ssh`, and swaps it in behind Traefik with a rollback command — no registry needed. Cost is broken down per project.
+- Simplified and Traditional Chinese are both available.
+- macOS builds are signed with a stable self-signed certificate, so keychain approvals survive updates. [Install](#install) has the one-time Gatekeeper step.
+
 ## What you get
 
 - **Your subscriptions.** p0code does not resell tokens. It drives the agents you are already signed in to.
