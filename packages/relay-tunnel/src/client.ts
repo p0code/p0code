@@ -5,7 +5,13 @@ import type { ClientOptions } from "ws";
 import * as NodeNet from "node:net";
 import WebSocket from "ws";
 import { signHandshake } from "./auth.ts";
-import { StreamMultiplexer, websocketBytes, type MuxStream, type StreamLabel } from "./mux.ts";
+import {
+  parseHostLabel,
+  StreamMultiplexer,
+  websocketBytes,
+  type MuxStream,
+  type StreamLabel,
+} from "./mux.ts";
 import { HttpChallengeStore } from "./certificates.ts";
 
 export interface RelayTunnelClientOptions {
@@ -15,8 +21,11 @@ export interface RelayTunnelClientOptions {
   challenges: HttpChallengeStore;
   getSecureContext: (hostname: string) => Promise<NodeTls.SecureContext>;
   onSecureConnection: (socket: NodeTls.TLSSocket, metadata: StreamLabel) => void;
-  /** Must authorize forwarded port labels before obtaining their certificates. */
-  allowPort?: (port: number) => boolean;
+  /**
+   * Authorizes forwarded port (`<port>-<slug>`) and public tunnel (`<name>-<slug>`) labels.
+   * Called before any certificate is requested, so a refused label never triggers ACME.
+   */
+  allowLabel?: (label: { port: number } | { name: string }) => boolean;
   webSocketOptions?: Pick<ClientOptions, "ca" | "rejectUnauthorized"> & {
     lookup?: NodeNet.LookupFunction;
   };
@@ -24,7 +33,16 @@ export interface RelayTunnelClientOptions {
   backoffBaseMs?: number;
   backoffCapMs?: number;
 }
+/** What the relay advertised when it authenticated this environment. */
+export interface RelayInfo {
+  /** `"public-hosts"` when the relay routes `<name>-<slug>` hostnames. */
+  features: readonly string[];
+  /** Domain that `<name>-<slug>` hostnames live under, when not the relay host. */
+  publicDomain?: string;
+}
 export class RelayTunnelClient extends NodeEvents.EventEmitter {
+  /** Set while connected; undefined before the first authentication. */
+  relayInfo: RelayInfo | undefined;
   private ws: WebSocket | undefined;
   private mux: StreamMultiplexer | undefined;
   private stopped = true;
@@ -108,11 +126,13 @@ export class RelayTunnelClient extends NodeEvents.EventEmitter {
             maxStreams > (this.options.maxStreams ?? 128)
           )
             throw new Error("Invalid stream limit");
+          const relayInfo = parseRelayInfo(value);
           const mux = new StreamMultiplexer(ws, { initiator: false, maxStreams });
           this.mux = mux;
-          mux.on("stream", (stream: MuxStream) => this.accept(stream, relayHost));
+          mux.on("stream", (stream: MuxStream) => this.accept(stream, relayHost, relayInfo));
           this.attempt = 0;
-          this.emit("connected");
+          this.relayInfo = relayInfo;
+          this.emit("connected", relayInfo);
         } else throw new Error("Authentication rejected");
       } catch (error) {
         this.report(error);
@@ -124,6 +144,7 @@ export class RelayTunnelClient extends NodeEvents.EventEmitter {
     ws.once("close", () => {
       clearTimeout(authTimer);
       if (this.ws !== ws) return;
+      this.relayInfo = undefined;
       this.emit("disconnected");
       if (this.stopped) return;
       const maximum = Math.min(
@@ -134,18 +155,25 @@ export class RelayTunnelClient extends NodeEvents.EventEmitter {
       this.timer.unref();
     });
   }
-  private accept(stream: MuxStream, relayHost: string): void {
+  private accept(stream: MuxStream, relayHost: string, relayInfo: RelayInfo): void {
     const metadata = stream.metadata;
-    const portLabel = new RegExp(`^([1-9][0-9]{0,4})-${this.options.slug}$`).exec(metadata.label);
-    const port = portLabel ? Number(portLabel[1]) : undefined;
+    const label = parseHostLabel(metadata.label);
     if (
-      metadata.label !== this.options.slug &&
-      (!port || port > 65535 || !this.options.allowPort?.(port))
+      !label ||
+      label.slug !== this.options.slug ||
+      label.port !== metadata.port ||
+      label.name !== metadata.name
     ) {
       stream.destroy();
       return;
     }
-    if (metadata.port !== port) {
+    const prefix =
+      label.port !== undefined
+        ? { port: label.port }
+        : label.name !== undefined
+          ? { name: label.name }
+          : undefined;
+    if (prefix && !this.options.allowLabel?.(prefix)) {
       stream.destroy();
       return;
     }
@@ -153,7 +181,9 @@ export class RelayTunnelClient extends NodeEvents.EventEmitter {
       this.challengeServer.emit("connection", stream);
       return;
     }
-    const hostname = `${metadata.label}.${relayHost}`;
+    // Names live under the public domain when the relay has one; everything else under the relay.
+    const domain = label.name !== undefined ? (relayInfo.publicDomain ?? relayHost) : relayHost;
+    const hostname = `${metadata.label}.${domain}`;
     const tls = new NodeTls.TLSSocket(stream, {
       isServer: true,
       ALPNProtocols: ["http/1.1"],
@@ -188,4 +218,17 @@ export class RelayTunnelClient extends NodeEvents.EventEmitter {
       }
     });
   }
+}
+
+function parseRelayInfo(value: object): RelayInfo {
+  const features = "features" in value ? value.features : [];
+  if (!Array.isArray(features) || !features.every((entry) => typeof entry === "string"))
+    throw new Error("Invalid relay features");
+  const publicDomain = "publicDomain" in value ? value.publicDomain : undefined;
+  if (
+    publicDomain !== undefined &&
+    (typeof publicDomain !== "string" || !/^[a-z0-9][a-z0-9.-]*[a-z0-9]$/.test(publicDomain))
+  )
+    throw new Error("Invalid relay public domain");
+  return { features, ...(publicDomain ? { publicDomain } : {}) };
 }

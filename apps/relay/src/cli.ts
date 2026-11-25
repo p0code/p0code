@@ -20,6 +20,8 @@ const { values, positionals } = NodeUtil.parseArgs({
     "bind-host": { type: "string" },
     "max-streams": { type: "string" },
     "idle-timeout-ms": { type: "string" },
+    "public-hosts": { type: "boolean" },
+    "public-domain": { type: "string" },
   },
 });
 const statePath = NodePath.resolve(
@@ -37,6 +39,19 @@ if (command === "enroll") {
   const slug = positionals[1];
   if (!slug) throw new Error("Usage: hhh-relay revoke <slug>");
   console.log(state.revoke(slug) ? `Revoked ${slug}` : `Unknown environment: ${slug}`);
+  state.close();
+} else if (command === "block" || command === "unblock") {
+  const label = positionals[1];
+  if (!label) throw new Error(`Usage: hhh-relay ${command} <name-label>`);
+  try {
+    if (command === "block")
+      console.log(state.block(label) ? `Blocked ${label}` : `Already blocked: ${label}`);
+    else console.log(state.unblock(label) ? `Unblocked ${label}` : `Not blocked: ${label}`);
+  } finally {
+    state.close();
+  }
+} else if (command === "blocked") {
+  console.log(JSON.stringify(state.blockedLabels(), null, 2));
   state.close();
 } else if (command === "serve") {
   const relayHost = values.host ?? process.env.RELAY_HOST;
@@ -63,9 +78,15 @@ if (command === "enroll") {
       throw new Error("Invalid numeric option");
     return result;
   };
+  const publicHosts =
+    values["public-hosts"] ??
+    /^(1|true|yes|on)$/i.test((process.env.RELAY_PUBLIC_HOSTS ?? "").trim());
+  const publicDomain = values["public-domain"] || process.env.RELAY_PUBLIC_DOMAIN || undefined;
   const relay = new RelayServer({
     relayHost,
     state,
+    publicHosts,
+    ...(publicDomain ? { publicDomain } : {}),
     challenges,
     getSecureContext: (hostname) => certificates.getSecureContext(hostname),
     bindHost: values["bind-host"] ?? process.env.RELAY_BIND_HOST ?? "0.0.0.0",
@@ -94,8 +115,11 @@ if (command === "enroll") {
     await shutdown();
     throw error;
   });
-  console.log(`hhh-relay serving ${relayHost}`);
+  console.log(
+    `hhh-relay serving ${relayHost}` +
+      (publicHosts ? `, public hosts under ${publicDomain ?? relayHost}` : ""),
+  );
 } else {
   state.close();
-  throw new Error("Usage: hhh-relay serve|enroll|ls|revoke [options]");
+  throw new Error("Usage: hhh-relay serve|enroll|ls|revoke|block|unblock|blocked [options]");
 }

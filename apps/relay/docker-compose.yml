@@ -10,6 +10,8 @@ services:
     environment:
       RELAY_HOST: ${RELAY_HOST:?Set RELAY_HOST}
       RELAY_ACME_EMAIL: ${RELAY_ACME_EMAIL:?Set RELAY_ACME_EMAIL}
+      RELAY_PUBLIC_HOSTS: ${RELAY_PUBLIC_HOSTS:-}
+      RELAY_PUBLIC_DOMAIN: ${RELAY_PUBLIC_DOMAIN:-}
     volumes:
       - relay-data:/data
 volumes:
