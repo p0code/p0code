@@ -55,9 +55,7 @@ function describeUsageLeft(
 ): string {
   return resetsIn === null
     ? resolve(msg("{window}: {left}% left", { window: windowLabel, left }))
-    : resolve(
-        msg("{window}: {left}% left, {resetsIn}", { window: windowLabel, left, resetsIn }),
-      );
+    : resolve(msg("{window}: {left}% left, {resetsIn}", { window: windowLabel, left, resetsIn }));
 }
 
 const PICKER_TOOLTIP_SIDE = "left" as const;
@@ -176,13 +174,19 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
             const usageSummary =
               usageWindow === null || usageLeft === null
                 ? null
-                : describeUsageLeft(usageWindow.label, usageLeft, formatResetsIn(usageWindow, now, m), m);
+                : describeUsageLeft(
+                    usageWindow.label,
+                    usageLeft,
+                    formatResetsIn(usageWindow, now, m),
+                    m,
+                  );
             const baseTooltip = isUnavailable
               ? describeUnavailableInstance(entry, m)
               : isContextDisabled
                 ? (props.getDisabledInstanceTooltip?.(entry) ?? entry.displayName)
                 : entry.displayName;
-            const tooltip = usageSummary === null ? baseTooltip : `${baseTooltip} · ${usageSummary}`;
+            const tooltip =
+              usageSummary === null ? baseTooltip : `${baseTooltip} · ${usageSummary}`;
 
             const button = (
               <Toolbar.Button
@@ -204,7 +208,11 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
                 focusableWhenDisabled={!isDisabled}
                 aria-pressed={isSelected}
                 type="button"
-                aria-label={isUnavailable || isContextDisabled || usageSummary !== null ? tooltip : entry.displayName}
+                aria-label={
+                  isUnavailable || isContextDisabled || usageSummary !== null
+                    ? tooltip
+                    : entry.displayName
+                }
               >
                 <ProviderInstanceIcon
                   driverKind={entry.driverKind}

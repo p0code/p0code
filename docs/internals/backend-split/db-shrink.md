@@ -7,13 +7,13 @@ Biggest consumers: `projection_turn_items` 225 MB (`dynamic_tool` payloads 94 MB
 46 MB), `orchestration_events` 152 MB, `projection_nodes` 65 MB. All 190 indexes together are 94 MB.
 Almost all of the file is live data, so storage hygiene and index cleanup only recover a few percent.
 
-| Step                                                   | Copy size (bytes) | Change      |
-| ------------------------------------------------------ | ----------------- | ----------- |
-| Baseline (`VACUUM INTO` of the live DB)                | 620,527,616       |             |
-| 1. one-time `VACUUM` into `auto_vacuum=INCREMENTAL`    | 621,285,376       | +0.76 MB    |
-| 2. drop two unused indexes + `incremental_vacuum`      | 611,004,416       | −10.3 MB    |
-| 3. event log compaction                                | already implemented, see below | |
-| 4. compress tool outputs                               | not done, see below | |
+| Step                                                | Copy size (bytes)              | Change   |
+| --------------------------------------------------- | ------------------------------ | -------- |
+| Baseline (`VACUUM INTO` of the live DB)             | 620,527,616                    |          |
+| 1. one-time `VACUUM` into `auto_vacuum=INCREMENTAL` | 621,285,376                    | +0.76 MB |
+| 2. drop two unused indexes + `incremental_vacuum`   | 611,004,416                    | −10.3 MB |
+| 3. event log compaction                             | already implemented, see below |          |
+| 4. compress tool outputs                            | not done, see below            |          |
 
 An end-to-end run of the real startup layer (`Sqlite.layerFromPath`) on a fresh copy gave the same
 611.0 MB, with `auto_vacuum=2` and migration 112 recorded. The VACUUM took about 3 s here.
@@ -68,13 +68,13 @@ are never read again. Everything the copy still holds is the retention window (3
 
 Inside that window, superseded updates (a later event for the same entity id exists) are:
 
-| Event type           | Rows   | Superseded rows | Superseded size |
-| -------------------- | ------ | --------------- | --------------- |
-| `turn-item.updated`  | 14,187 | 8,140           | 34.5 MB         |
-| `node.updated`       | 9,185  | 4,234           | 6.6 MB          |
-| `provider-turn.updated` | 4,139 | 4,033         | 6.0 MB          |
-| `message.updated`    | 1,966  | 899             | 2.2 MB          |
-| `run.updated`        | 1,236  | 281             | 0.3 MB          |
+| Event type              | Rows   | Superseded rows | Superseded size |
+| ----------------------- | ------ | --------------- | --------------- |
+| `turn-item.updated`     | 14,187 | 8,140           | 34.5 MB         |
+| `node.updated`          | 9,185  | 4,234           | 6.6 MB          |
+| `provider-turn.updated` | 4,139  | 4,033           | 6.0 MB          |
+| `message.updated`       | 1,966  | 899             | 2.2 MB          |
+| `run.updated`           | 1,236  | 281             | 0.3 MB          |
 
 About 50 MB (8% of the file). I did not delete these, because it is not provable from the server alone:
 events inside the window are replayed in order to reconnecting clients, plugins (`plugins/bindings.ts`)

@@ -3870,7 +3870,8 @@ export default function ChatView(props: ChatViewProps) {
                                   providerInstanceId: activeProviderInstanceId,
                                   model: activeUsageModel,
                                   providers: providerStatuses,
-                                  sources: serverConfig?.usageLimitSources ?? EMPTY_USAGE_LIMIT_SOURCES,
+                                  sources:
+                                    serverConfig?.usageLimitSources ?? EMPTY_USAGE_LIMIT_SOURCES,
                                   contextWindow: activeContextWindow,
                                 }}
                                 reportedModelSelection={reportedModelSelection}

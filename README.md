@@ -37,12 +37,12 @@ It works with Claude Code, Codex, Cursor, OpenCode, Grok Build, Antigravity, Kir
 
 [Download T3 Code](https://t3.codes/download) for macOS, Windows, or Linux. You can also use a package manager:
 
-| Platform       | Command                                                              |
-| -------------- | -------------------------------------------------------------------- |
-| macOS          | `brew install --cask t3-code`                                        |
-| Windows        | `winget install T3Tools.T3Code` or `scoop install extras/t3code`     |
-| Arch Linux     | `yay -S t3code-bin`                                                  |
-| Nix            | `nix profile add github:NixOS/nixpkgs/nixos-unstable#t3code`         |
+| Platform       | Command                                                                 |
+| -------------- | ----------------------------------------------------------------------- |
+| macOS          | `brew install --cask t3-code`                                           |
+| Windows        | `winget install T3Tools.T3Code` or `scoop install extras/t3code`        |
+| Arch Linux     | `yay -S t3code-bin`                                                     |
+| Nix            | `nix profile add github:NixOS/nixpkgs/nixos-unstable#t3code`            |
 | Debian, Ubuntu | `.deb` from [Releases](https://github.com/jsserve-org/hhhcode/releases) |
 
 ### Command line

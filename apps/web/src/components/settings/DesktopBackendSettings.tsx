@@ -57,9 +57,8 @@ export function DesktopBackendSettings() {
       syncFromStatus(next);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : gt("Could not read backend status."));
-    } finally {
-      setBusyAction(null);
     }
+    setBusyAction(null);
   };
 
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- loads desktop backend IPC status once on mount
@@ -140,9 +139,8 @@ export function DesktopBackendSettings() {
           description: message,
         }),
       );
-    } finally {
-      setBusyAction(null);
     }
+    setBusyAction(null);
   };
 
   const handleControl = async (action: DesktopBackendAction) => {
@@ -165,9 +163,8 @@ export function DesktopBackendSettings() {
           description: message,
         }),
       );
-    } finally {
-      setBusyAction(null);
     }
+    setBusyAction(null);
   };
 
   const modeDescription =

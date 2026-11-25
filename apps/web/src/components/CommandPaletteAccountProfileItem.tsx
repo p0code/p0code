@@ -43,7 +43,7 @@ export function useCommandPaletteAccountProfileItem(): CommandPaletteSubmenuItem
                 <T context="the account profile in use now">Current</T>
               </span>
             ) : undefined,
-          run: () => setActiveAccountProfile(environmentId, profile.id, profile.name),
+          run: () => setActiveAccountProfile(environmentId, profile.id),
         })),
       },
     ],

@@ -22,7 +22,6 @@ function readPrimaryAccountProfiles() {
 export async function setActiveAccountProfile(
   environmentId: EnvironmentId,
   activeAccountProfileId: AccountProfileId,
-  name: string,
 ) {
   await runAtomCommand(
     appAtomRegistry,
@@ -36,5 +35,5 @@ export function cycleAccountProfile() {
   const current = readPrimaryAccountProfiles();
   const next = current === null ? undefined : nextAccountProfile(current.settings);
   if (current === null || next === undefined) return;
-  void setActiveAccountProfile(current.environmentId, next.id, next.name);
+  void setActiveAccountProfile(current.environmentId, next.id);
 }

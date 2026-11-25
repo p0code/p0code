@@ -1049,13 +1049,16 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodePlatformCrypto.layer))(
         );
         expect(revoked._tag).toBe("ServerAuthInvalidCredentialError");
       }).pipe(
-        Effect.provide(layerEnvironmentAuth()),
         Effect.provide(
-          Layer.effectDiscard(
-            Effect.sync(() => {
-              // @effect-diagnostics-next-line processEnvInEffect:off -- p0d passes the token this way.
-              process.env.P0D_INTERNAL_TOKEN = "p0d-secret";
-            }),
+          layerEnvironmentAuth().pipe(
+            Layer.provide(
+              Layer.effectDiscard(
+                Effect.sync(() => {
+                  // @effect-diagnostics-next-line processEnvInEffect:off -- p0d passes the token this way.
+                  process.env.P0D_INTERNAL_TOKEN = "p0d-secret";
+                }),
+              ),
+            ),
           ),
         ),
       ),

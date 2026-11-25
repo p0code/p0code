@@ -26,7 +26,7 @@ export function SidebarAccountProfileToggle() {
           const id = next[0];
           if (id === undefined) return;
           const profile = accountProfiles.find((candidate) => candidate.id === id);
-          if (profile) void setActiveAccountProfile(environmentId, profile.id, profile.name);
+          if (profile) void setActiveAccountProfile(environmentId, profile.id);
         }}
       >
         {accountProfiles.map((profile) => (

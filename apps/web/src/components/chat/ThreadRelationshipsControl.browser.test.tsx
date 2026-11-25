@@ -243,7 +243,7 @@ it("loads the rest of the agents when the list scrolls to its end", async () => 
   const { updatedAt } = projection.thread;
   state.projection = {
     ...projection,
-    subagents: Array.from({ length: 7 }, (_, index) => ({
+    subagents: Array.from({ length: 20 }, (_, index) => ({
       id: NodeId.make(`agent-${index}`),
       threadId: projection.thread.id,
       runId: null,
@@ -274,10 +274,12 @@ it("loads the rest of the agents when the list scrolls to its end", async () => 
     />,
   );
   await screen.getByRole("button", { name: /Previous agents/ }).click();
-  expect(screen.getByText("Agent 6", { exact: true }).query()).toBeNull();
+  // A list too short to scroll fills itself, so wait for it to overflow before scrolling.
+  await expect.element(screen.getByText("Agent 7", { exact: true })).toBeInTheDocument();
+  expect(screen.getByText("Agent 9", { exact: true }).query()).toBeNull();
   const list = screen.getByRole("list", { name: "Related threads" }).element();
   list.scrollTop = list.scrollHeight;
-  await expect.element(screen.getByText("Agent 6", { exact: true })).toBeInTheDocument();
+  await expect.element(screen.getByText("Agent 9", { exact: true })).toBeInTheDocument();
 });
 
 it("shows a lineage thread's full title in its tooltip", async () => {

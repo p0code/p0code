@@ -2750,7 +2750,7 @@ export const layerWsRpc = (
               (cause) =>
                 new ServerSettingsError({
                   settingsPath: config.environmentThemesDir,
-                  detail: cause.message,
+                  operation: "write-file",
                   cause,
                 }),
             ),
