@@ -2,6 +2,7 @@ import {
   type ListTextGeneratorModelsInput,
   type ListTextGeneratorModelsResult,
   type ProviderInstanceId,
+  AuthProvidersManageScope,
   TextGenerationError,
   type TextGeneratorConfig,
   TextGeneratorError,
@@ -14,12 +15,14 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Equal from "effect/Equal";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import { FetchHttpClient, HttpClient } from "effect/http";
 
 import * as SecretResolverLayer from "../secrets/SecretResolver.ts";
 import { requireSettingsSecret } from "../secrets/settingsSecretValue.ts";
 import * as ServerSettings from "../serverSettings.ts";
+import { RpcCallerScopes } from "../auth/RpcCallerScopes.ts";
 import { SECRET_REDACTED } from "../settingsSecrets.ts";
 import {
   TEXT_GENERATOR_DRIVERS,
@@ -84,6 +87,24 @@ export const make = Effect.gen(function* () {
     return { baseUrl: config.baseUrl, apiKey, label } satisfies TextGeneratorConnection;
   });
 
+  // Saved endpoints are reachable with settings:write; an endpoint the caller names is a manager's
+  // call, so a narrow token cannot make the server probe arbitrary hosts.
+  const requireProviderManager = (adHoc: boolean) =>
+    adHoc
+      ? Effect.serviceOption(RpcCallerScopes).pipe(
+          Effect.flatMap((caller) =>
+            Option.isNone(caller) || caller.value.scopes.includes(AuthProvidersManageScope)
+              ? Effect.void
+              : Effect.fail(
+                  new TextGeneratorRequestError({
+                    detail:
+                      "Checking an unsaved model endpoint needs the providers:manage permission.",
+                  }),
+                ),
+          ),
+        )
+      : Effect.void;
+
   const runnerFor =
     (config: TextGeneratorConfig): TextGenerationOperations.Runner =>
     (request) => {
@@ -145,6 +166,9 @@ export const make = Effect.gen(function* () {
           detail: "That text generator no longer exists.",
         });
       }
+      yield* requireProviderManager(
+        input.config !== undefined && input.config.baseUrl !== saved?.baseUrl,
+      );
       // Checking unsaved settings, or testing, must reach the API rather than trust the cache.
       const fresh = input.config !== undefined || input.test === true;
       const cached = (yield* Ref.get(modelCache)).get(input.id);

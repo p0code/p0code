@@ -24,6 +24,7 @@ import {
   AuthRelayReadScope,
   AuthRelayWriteScope,
   AuthTerminalOperateScope,
+  ListTextGeneratorModelsInput,
   ORCHESTRATION_V2_WS_METHODS,
   type OrchestrationV2Command,
   type OrchestrationV2ThreadLaunchInput,
@@ -39,6 +40,7 @@ import * as Schema from "effect/Schema";
 import * as Layer from "effect/Layer";
 import type * as RpcGroup from "effect/rpc/RpcGroup";
 import { isProviderSignOutPrompt } from "../orchestration-v2/CommandPolicy.ts";
+import { RpcCallerScopes } from "./RpcCallerScopes.ts";
 
 type WsRpcMethod = RpcGroup.Rpcs<typeof WsRpcGroup>["_tag"];
 
@@ -295,6 +297,7 @@ const requiredScopesForSettingsUpdate = (payload: unknown) => {
 const decodeProjectMutation = Schema.decodeUnknownSync(ProjectMutation);
 const decodeAssetCreateUrlInput = Schema.decodeUnknownSync(AssetCreateUrlInput);
 const decodeSecretRequestAnswer = Schema.decodeUnknownSync(SecretRequestAnswerInput);
+const decodeListTextGeneratorModelsInput = Schema.decodeUnknownSync(ListTextGeneratorModelsInput);
 
 /**
  * A queued edit that omits `attachments` keeps the queued ones, which a payload cannot show;
@@ -341,6 +344,13 @@ export const requiredScopesForRpcCall = (
     ];
   }
   if (method === WS_METHODS.serverUpdateSettings) return requiredScopesForSettingsUpdate(payload);
+  // Checking unsaved provider settings names an endpoint the caller has not saved: a manager's call.
+  if (method === WS_METHODS.serverListTextGeneratorModels) {
+    const input = decodeListTextGeneratorModelsInput(payload);
+    if (input.config !== undefined) {
+      return [AuthSettingsWriteScope, AuthProvidersManageScope];
+    }
+  }
   // These send the credential they are given to a URL the caller names, as a saved setting would.
   if (
     (method === WS_METHODS.deviceSimlockIdentity ||
@@ -381,9 +391,11 @@ export const layer = (
     const requiredScopes = requiredScopesForRpcCall(rpc._tag, payload);
     const requiredScope = requiredScopes.find((scope) => !scopes.includes(scope));
     if (requiredScope !== undefined) return Effect.fail(rpcAuthorizationError(requiredScope));
-    return onAuthorized === undefined
-      ? effect
-      : Effect.tap(effect, () => onAuthorized(rpc._tag, payload));
+    const authorized =
+      onAuthorized === undefined
+        ? effect
+        : Effect.tap(effect, () => onAuthorized(rpc._tag, payload));
+    return Effect.provideService(authorized, RpcCallerScopes, RpcCallerScopes.of({ scopes }));
   });
 
 /** Retrying can install or restart tools even though ordinary listing is readable. */
