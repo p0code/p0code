@@ -1,7 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
 import type { EnvironmentId, PluginInfo } from "@t3tools/contracts";
 import { OBSIDIAN_SHARED_MEMORY_ID } from "@t3tools/plugin-obsidian-shared-memory/actions";
-import { RELAYOO_ID } from "@t3tools/plugin-relayoo/actions";
 import { T3_CONNECT_BRIDGE_ID } from "@t3tools/plugin-t3-connect-bridge/actions";
 import { T, useGT } from "gt-react";
 import type { ComponentType } from "react";
@@ -16,7 +15,6 @@ import {
   ObsidianSharedMemoryDisclosure,
   ObsidianSharedMemoryPanel,
 } from "./ObsidianSharedMemoryPanel";
-import { RelayooDisclosure, RelayooPanel } from "./RelayooPanel";
 import { T3ConnectBridgeDisclosure, T3ConnectBridgePanel } from "./T3ConnectBridgePanel";
 
 interface PluginPanel {
@@ -32,7 +30,6 @@ const PLUGIN_PANELS: Readonly<Record<string, PluginPanel>> = {
     Disclosure: ObsidianSharedMemoryDisclosure,
     Panel: ObsidianSharedMemoryPanel,
   },
-  [RELAYOO_ID]: { Disclosure: RelayooDisclosure, Panel: RelayooPanel },
 };
 
 export function PluginsSettingsPanel() {

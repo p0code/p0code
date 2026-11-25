@@ -175,9 +175,5 @@
       "entry": ["graphql.config.ts", "scripts/measure-pr-preview.ts"],
       "ignoreIssues": { "**/*.graphql.ts": ["exports", "types", "namespaceMembers"] },
     },
-    "plugins/relayoo": {
-      // The plugin repo keeps the panel draft that is copied into apps/web, not imported.
-      "entry": ["web/RelayooPanel.tsx"],
-    },
   },
 }
