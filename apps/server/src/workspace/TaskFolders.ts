@@ -208,7 +208,7 @@ export class TaskFolders extends Context.Service<
       projectId: ProjectId,
     ) => Effect.Effect<WorkspaceLayoutCommandsResult, TaskFolderError>;
   }
->()("t3/workspace/TaskFolders") {}
+>()("p0/workspace/TaskFolders") {}
 
 const isTaskFolderError = Schema.is(TaskFolderError);
 

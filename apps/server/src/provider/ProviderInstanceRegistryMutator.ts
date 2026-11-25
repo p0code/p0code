@@ -26,4 +26,4 @@ export interface ProviderInstanceRegistryMutatorShape {
 export class ProviderInstanceRegistryMutator extends Context.Service<
   ProviderInstanceRegistryMutator,
   ProviderInstanceRegistryMutatorShape
->()("t3/provider/ProviderInstanceRegistryMutator") {}
+>()("p0/provider/ProviderInstanceRegistryMutator") {}

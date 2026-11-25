@@ -218,7 +218,7 @@ export class GitManager extends Context.Service<
       Scope.Scope
     >;
   }
->()("t3/git/GitManager") {}
+>()("p0/git/GitManager") {}
 
 const COMMIT_TIMEOUT_MS = 10 * 60_000;
 const MAX_PROGRESS_TEXT_LENGTH = 500;
@@ -278,7 +278,7 @@ interface SharedPrLookupGitReads {
 }
 
 const prLookupGitReads = Context.Reference<SharedPrLookupGitReads | null>(
-  "t3/GitManager/prLookupGitReads",
+  "p0/GitManager/prLookupGitReads",
   { defaultValue: () => null },
 );
 

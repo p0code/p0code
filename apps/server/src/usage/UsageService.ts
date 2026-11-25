@@ -173,7 +173,7 @@ export class UsageService extends Context.Service<
       inputs: ReadonlyArray<{ readonly model: string; readonly totals: UsageTokenTotals }>,
     ) => Effect.Effect<ReadonlyArray<number | null>>;
   }
->()("t3/usage/UsageService") {}
+>()("p0/usage/UsageService") {}
 
 export const make = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;

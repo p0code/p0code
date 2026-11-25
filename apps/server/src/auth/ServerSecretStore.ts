@@ -209,7 +209,7 @@ export class ServerSecretStore extends Context.Service<
     readonly list?: (prefix: string) => Effect.Effect<ReadonlyArray<string>, SecretStoreError>;
     readonly storage?: SecretStorageStatus;
   }
->()("t3/auth/ServerSecretStore") {}
+>()("p0/auth/ServerSecretStore") {}
 
 // A single-executable server resolves packages on disk only through `require`.
 const requireExternal = NodeModule.createRequire(import.meta.url);

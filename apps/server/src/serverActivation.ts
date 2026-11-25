@@ -5,7 +5,7 @@ import type * as Fiber from "effect/Fiber";
 import type * as Scope from "effect/Scope";
 
 export class ServerActivation extends Context.Reference<Effect.Effect<void> | undefined>(
-  "t3/serverActivation",
+  "p0/serverActivation",
   { defaultValue: () => undefined },
 ) {}
 

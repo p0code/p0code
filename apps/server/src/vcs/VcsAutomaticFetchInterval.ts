@@ -8,7 +8,7 @@ import { resolveServerBackgroundActivitySettings } from "@t3tools/shared/backgro
 import * as ServerSettings from "../serverSettings.ts";
 
 export class VcsAutomaticFetchInterval extends Context.Reference<Effect.Effect<Duration.Duration>>(
-  "t3/vcs/VcsAutomaticFetchInterval",
+  "p0/vcs/VcsAutomaticFetchInterval",
   { defaultValue: () => Effect.succeed(DEFAULT_AUTOMATIC_GIT_FETCH_INTERVAL) },
 ) {}
 
