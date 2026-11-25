@@ -76,6 +76,8 @@ export const ProviderInstanceConfig = Schema.Struct({
   driver: ProviderDriverKind,
   displayName: Schema.optional(TrimmedNonEmptyString),
   accentColor: Schema.optional(TrimmedNonEmptyString),
+  // Clients cap it at three graphemes; the length bound only stops abuse of the wire.
+  instanceBadge: Schema.optional(TrimmedNonEmptyString.check(Schema.isMaxLength(32))),
   environment: Schema.optionalKey(ProviderInstanceEnvironment),
   enabled: Schema.optionalKey(Schema.Boolean),
   config: Schema.optionalKey(Schema.Unknown),
