@@ -179,5 +179,10 @@
       // The plugin repo keeps the panel draft that is copied into apps/web, not imported.
       "entry": ["web/RelayooPanel.tsx"],
     },
+    "plugins/tokscale-auto-publish-plugin": {
+      // Mounted git submodule ships its standalone harness and reference panel draft.
+      "ignore": ["standalone/**", "web/**"],
+      "ignoreDependencies": ["@effect/platform-node", "@effect/vitest"],
+    },
   },
 }

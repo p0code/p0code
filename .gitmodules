@@ -7,3 +7,6 @@
 [submodule "plugins/relayoo"]
 	path = plugins/relayoo
 	url = https://github.com/jsserve-org/p0code-relayoo
+[submodule "plugins/tokscale-auto-publish-plugin"]
+	path = plugins/tokscale-auto-publish-plugin
+	url = https://github.com/p0code/tokscale-auto-publish-plugin

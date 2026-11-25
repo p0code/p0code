@@ -29,6 +29,24 @@ export class PluginError extends Schema.TaggedError<PluginError>()("PluginError"
 
 export type ActivityState = AgentAwarenessState;
 
+export interface UsageDailyTotal {
+  /** `YYYY-MM-DD` in the requested time zone. */
+  readonly day: string;
+  /** A `UsageProviderKind`, typed as string so a newer host cannot break an older plugin. */
+  readonly provider: string;
+  readonly model: string;
+  readonly uncachedInputTokens: number;
+  readonly cachedInputTokens: number;
+  readonly cacheCreationTokens: number;
+  /** Includes reasoning tokens, as in `UsageTokenTotals`. */
+  readonly outputTokens: number;
+  readonly reasoningTokens: number;
+  readonly costUsd: number;
+  readonly records: number;
+  /** Records with no known price; their cost is missing from `costUsd`. */
+  readonly unpricedRecords: number;
+}
+
 /** Everything the host lends a running plugin. It lives as long as the plugin stays enabled. */
 export class PluginContext extends Context.Service<
   PluginContext,
@@ -72,6 +90,15 @@ export class PluginContext extends Context.Service<
       readonly read: (threadId: ThreadId) => Effect.Effect<ActivityState | null, PluginError>;
       /** Listed threads that are working or waiting now. */
       readonly activeThreadIds: Effect.Effect<ReadonlyArray<ThreadId>, PluginError>;
+    };
+    /** Requires the `usage:read` capability. */
+    readonly usage: {
+      /** Daily totals per provider and model; days with no usage are absent. */
+      readonly dailyTotals: (input: {
+        readonly sinceDay: string;
+        readonly untilDay: string;
+        readonly timeZone: string;
+      }) => Effect.Effect<ReadonlyArray<UsageDailyTotal>, PluginError>;
     };
   }
 >()("@t3tools/plugin-api/PluginContext") {}

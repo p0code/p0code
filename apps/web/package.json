@@ -38,6 +38,7 @@
     "@t3tools/plugin-obsidian-shared-memory": "workspace:*",
     "@t3tools/plugin-relayoo": "workspace:*",
     "@t3tools/plugin-t3-connect-bridge": "workspace:*",
+    "@t3tools/plugin-tokscale-auto-publish": "workspace:*",
     "@t3tools/provider-core": "workspace:*",
     "@t3tools/secret-provider-definitions": "workspace:*",
     "@t3tools/secret-provider-onepassword": "workspace:*",

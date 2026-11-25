@@ -180,6 +180,8 @@ export default defineConfig({
   fmt: {
     ignorePatterns: [
       ".repos/**",
+      // Mounted plugin submodules own their own formatting.
+      "plugins/**",
       "infra/task-cache/vendor/**",
       ".alchemy",
       "dist",
@@ -214,6 +216,8 @@ export default defineConfig({
     ignorePatterns: [
       ".repos",
       ".repos/**",
+      // Mounted plugin submodules own their own lint configuration.
+      "plugins/**",
       "infra/task-cache/vendor/**",
       "dist",
       "dist-electron",
