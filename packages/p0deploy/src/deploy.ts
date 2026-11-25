@@ -42,6 +42,7 @@ import {
   setRestartScript,
   tagScript,
   tagsToPrune,
+  withIdentity,
   type Codec,
   type ContainerInfo,
   type Host,
@@ -56,6 +57,7 @@ import {
 } from "./config.ts";
 import { DeployError } from "./errors.ts";
 import { Shell, type ExecResult } from "./shell.ts";
+import { describeAuth, sshAuth } from "./ssh.ts";
 
 export interface BuildResult {
   readonly image: string;
@@ -133,7 +135,9 @@ const tail = (text: string): string =>
   text.length <= OUTPUT_TAIL ? text.trim() : text.slice(-OUTPUT_TAIL).trim();
 
 export const runOn = (host: Host, script: string) =>
-  Effect.flatMap(Effect.service(Shell), (shell) => shell.exec(onHost(host, script)));
+  Effect.flatMap(Effect.service(Shell), (shell) =>
+    shell.exec(onHost(withIdentity(host, shell.identity), script)),
+  );
 
 export const commandFailed = (host: Host, what: string, result: ExecResult, target?: string) =>
   new DeployError({
@@ -224,7 +228,7 @@ export const build = Effect.fn("p0deploy.build")(function* (
     const results = yield* shell.pipe(
       [
         contextTarArgv(loaded.contextDir, hasDockerignore ? dockerignorePath : null),
-        onHost(host, remoteBuildScript({ ...spec, dockerfile })),
+        onHost(withIdentity(host, shell.identity), remoteBuildScript({ ...spec, dockerfile })),
       ],
       { stream: true },
     );
@@ -294,14 +298,20 @@ export const pushToTarget = Effect.fn("p0deploy.pushToTarget")(function* (
     mode === "direct" && host.kind === "ssh"
       ? [
           yield* shell.exec(
-            onHost(source.host, directTransferScript(engine, source.image, codec, host.address)),
+            onHost(
+              withIdentity(source.host, shell.identity),
+              directTransferScript(engine, source.image, codec, host.address),
+            ),
             { stream: true },
           ),
         ]
       : yield* shell.pipe(
           [
-            onHost(source.host, saveScript(engine, source.image, codec)),
-            onHost(host, loadScript(engine, codec)),
+            onHost(
+              withIdentity(source.host, shell.identity),
+              saveScript(engine, source.image, codec),
+            ),
+            onHost(withIdentity(host, shell.identity), loadScript(engine, codec)),
           ],
           { stream: true },
         );
@@ -676,7 +686,29 @@ export const doctor = Effect.fn("p0deploy.doctor")(function* (
   }
 
   for (const [label, { host, needsProxy, deploysHere }] of hosts) {
-    const probe = yield* runOn(host, probeScript(engine));
+    let probeHost = host;
+    if (host.kind === "ssh") {
+      const auth = yield* sshAuth(host.address);
+      checks.push({
+        host: label,
+        check: "ssh-auth",
+        ok: auth.auth !== "none",
+        required: true,
+        detail: describeAuth(auth, label),
+      });
+      if (auth.auth === "none") {
+        checks.push({
+          host: label,
+          check: "ssh",
+          ok: false,
+          required: true,
+          detail: `unreachable; run \`p0deploy ssh setup ${label}\``,
+        });
+        continue;
+      }
+      probeHost = { ...host, identity: auth.identity };
+    }
+    const probe = yield* runOn(probeHost, probeScript(engine));
     if (host.kind === "ssh") {
       const reachable = probe.exitCode !== SSH_CONNECTION_FAILED;
       checks.push({

@@ -21,6 +21,7 @@ import {
 import { build, doctor, logs, push, rollback, status, up, type SwapResult } from "./deploy.ts";
 import { DeployError, exitCodeFor } from "./errors.ts";
 import { serverInit, serverStatus } from "./server.ts";
+import { sshKey, sshSetup } from "./ssh.ts";
 import { layerShell, type Shell } from "./shell.ts";
 
 const configFlag = Flag.String("config").pipe(
@@ -134,7 +135,7 @@ const initCommand = Command.make(
         force: flags.force,
       }),
       (result) =>
-        `Wrote ${result.path}. Set targets[0].host and domains, then run \`p0deploy server init <host>\` and \`p0deploy doctor\`.`,
+        `Wrote ${result.path}. Set targets[0].host and domains, then run \`p0deploy ssh setup <host>\`, \`p0deploy server init <host>\` and \`p0deploy doctor\`.`,
     ),
 ).pipe(Command.withDescription("Write a starter p0deploy.json next to the Dockerfile."));
 
@@ -400,6 +401,56 @@ const serverCommand = Command.make("server").pipe(
   Command.withSubcommands([serverInitCommand, serverStatusCommand]),
 );
 
+const sshSetupFlags = {
+  host: hostArgument,
+  password: Flag.Boolean("password").pipe(
+    Flag.withDescription(
+      "Prompt for the account password (hidden). Agents use P0DEPLOY_SSH_PASSWORD.",
+    ),
+    Flag.withDefault(false),
+  ),
+  json: jsonFlag,
+};
+
+const sshSetupHandler = (flags: { host: string; password: boolean; json: boolean }) =>
+  respond(
+    "ssh setup",
+    flags.json,
+    sshSetup({ host: flags.host, forcePrompt: flags.password }),
+    (result) =>
+      `${result.host}: ${
+        result.action === "already-authorized" ? "already has" : "installed"
+      } p0deploy's key (${result.via})\n${result.publicKeyPath}`,
+  );
+
+const sshSetupCommand = Command.make("setup", sshSetupFlags, sshSetupHandler).pipe(
+  Command.withDescription(
+    "Give p0deploy its own key on a host, using an existing key, agent, or account password.",
+  ),
+);
+
+const sshKeyCommand = Command.make("key", { json: jsonFlag }, (flags) =>
+  respond("ssh key", flags.json, sshKey(), (result) => `${result.path}\n${result.publicKey}`),
+).pipe(
+  Command.withDescription(
+    "Print the install's public key for a manual paste into authorized_keys.",
+  ),
+);
+
+const sshCommand = Command.make("ssh").pipe(
+  Command.withDescription("Set up and inspect the key p0deploy uses to reach deploy hosts."),
+  Command.withSubcommands([sshSetupCommand, sshKeyCommand]),
+);
+
+const hostAddCommand = Command.make("add", sshSetupFlags, sshSetupHandler).pipe(
+  Command.withDescription("Alias for `ssh setup`."),
+);
+
+const hostCommand = Command.make("host").pipe(
+  Command.withDescription("Host onboarding shortcuts."),
+  Command.withSubcommands([hostAddCommand]),
+);
+
 export const cli = Command.make("p0deploy").pipe(
   Command.withDescription(
     "Build a container image, copy it over ssh, and swap it in behind Traefik. Exit codes: 0 ok, 1 failed, 2 bad config or usage, 3 new version unhealthy (old one kept).",
@@ -414,6 +465,8 @@ export const cli = Command.make("p0deploy").pipe(
     rollbackCommand,
     doctorCommand,
     serverCommand,
+    sshCommand,
+    hostCommand,
   ]),
 );
 

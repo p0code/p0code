@@ -4,12 +4,25 @@ import type { Engine, HealthCheck, ServerMode, Target } from "./config.ts";
 
 export type Argv = ReadonlyArray<string>;
 
-export type Host = { readonly kind: "local" } | { readonly kind: "ssh"; readonly address: string };
+export type Host =
+  | { readonly kind: "local" }
+  | {
+      readonly kind: "ssh";
+      readonly address: string;
+      /** Private key to offer first. null means only ~/.ssh/config and the agent; undefined inherits the shell's key. */
+      readonly identity?: string | null | undefined;
+    };
 
 export const LOCAL_HOST: Host = { kind: "local" };
 
-export const hostFor = (address: string | undefined): Host =>
-  address === undefined || address === "local" ? LOCAL_HOST : { kind: "ssh", address };
+export const hostFor = (address: string | undefined, identity?: string | null): Host =>
+  address === undefined || address === "local"
+    ? LOCAL_HOST
+    : { kind: "ssh", address, ...(identity === undefined ? {} : { identity }) };
+
+/** Adds the install's deploy key unless the caller already decided which identity to use (null: none). */
+export const withIdentity = (host: Host, identity: string | undefined): Host =>
+  host.kind === "ssh" && host.identity === undefined ? { ...host, identity } : host;
 
 export const hostLabel = (host: Host): string => (host.kind === "local" ? "local" : host.address);
 
@@ -25,6 +38,18 @@ export const SSH_OPTIONS: Argv = [
   "ServerAliveCountMax=3",
 ];
 
+// Setup connects record a new host key once; scripted ones also stay in BatchMode.
+export const SSH_BOOTSTRAP_OPTIONS: Argv = [
+  "-o",
+  "ConnectTimeout=10",
+  "-o",
+  "ServerAliveInterval=15",
+  "-o",
+  "ServerAliveCountMax=3",
+  "-o",
+  "StrictHostKeyChecking=accept-new",
+];
+
 /** ssh's exit status when the connection itself failed. */
 export const SSH_CONNECTION_FAILED = 255;
 
@@ -35,16 +60,36 @@ export const quoteArg = (value: string): string =>
 
 export const shellJoin = (argv: Argv): string => argv.map(quoteArg).join(" ");
 
-export const sshArgv = (address: string, script: string): Argv => [
+/** Offers the install's key first; config aliases and the agent still work for every other identity. */
+export const identityOptions = (identity: string | null | undefined): Argv =>
+  identity ? ["-i", identity, "-o", "IdentitiesOnly=yes"] : [];
+
+export const sshArgv = (address: string, script: string, identity?: string | null): Argv => [
   "ssh",
   ...SSH_OPTIONS,
+  ...identityOptions(identity),
+  address,
+  script,
+];
+
+/** Used only while setting a key up. BatchMode is on unless the caller is about to answer with askpass. */
+export const sshBootstrapArgv = (
+  address: string,
+  script: string,
+  identity?: string | null,
+  options: { readonly batchMode?: boolean | undefined } = {},
+): Argv => [
+  "ssh",
+  ...(options.batchMode === false ? [] : ["-o", "BatchMode=yes"]),
+  ...SSH_BOOTSTRAP_OPTIONS,
+  ...identityOptions(identity),
   address,
   script,
 ];
 
 /** Runs a POSIX sh script on a host: through `sh -c` locally, or as ssh's remote command. */
 export const onHost = (host: Host, script: string): Argv =>
-  host.kind === "local" ? ["sh", "-c", script] : sshArgv(host.address, script);
+  host.kind === "local" ? ["sh", "-c", script] : sshArgv(host.address, script, host.identity);
 
 // `set -o pipefail` is missing from old dash, where a failing special builtin would end the script.
 const PIPEFAIL = "(set -o pipefail) 2>/dev/null && set -o pipefail";

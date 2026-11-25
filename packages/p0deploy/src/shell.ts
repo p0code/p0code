@@ -7,6 +7,7 @@ import * as Stream from "effect/Stream";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 import type { Argv } from "./commands.ts";
+import { findDeployKey } from "./sshKey.ts";
 
 export interface ExecResult {
   readonly exitCode: number;
@@ -17,6 +18,8 @@ export interface ExecResult {
 export interface ExecOptions {
   /** Written to the process's stdin. Used for secrets so they never appear in argv. */
   readonly stdin?: string;
+  /** Extra environment for the child; merged over this process's env. Used for SSH_ASKPASS. */
+  readonly env?: Readonly<Record<string, string>> | undefined;
   /** Long-running step (build, transfer): echo its output live when the shell is verbose. */
   readonly stream?: boolean;
 }
@@ -31,6 +34,8 @@ export interface ShellShape {
   ) => Effect.Effect<ReadonlyArray<ExecResult>>;
   /** Human progress line; dropped in --json mode. */
   readonly note: (message: string) => Effect.Effect<void>;
+  /** `-i` key for ssh hosts, once this install has one. Fake shells may omit it. */
+  readonly identity?: string | undefined;
 }
 
 export class Shell extends Context.Service<Shell, ShellShape>()("@t3tools/p0deploy/shell") {}
@@ -57,10 +62,20 @@ export const makeShell = Effect.fn("p0deploy.makeShell")(function* (options: {
   readonly verbose: boolean;
 }) {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+  const identity = yield* findDeployKey();
 
-  const spawn = (argv: Argv, stdin: ChildProcess.CommandInput) => {
+  const spawn = (
+    argv: Argv,
+    stdin: ChildProcess.CommandInput,
+    env?: Readonly<Record<string, string>> | undefined,
+  ) => {
     const [command = "", ...args] = argv;
-    return spawner.spawn(ChildProcess.make(command, args, { stdin: { stream: stdin } }));
+    return spawner.spawn(
+      ChildProcess.make(command, args, {
+        stdin: { stream: stdin },
+        ...(env === undefined ? {} : { env, extendEnv: true }),
+      }),
+    );
   };
 
   const failedToStart = (argv: Argv, cause: unknown): ExecResult => ({
@@ -76,7 +91,7 @@ export const makeShell = Effect.fn("p0deploy.makeShell")(function* (options: {
         execOptions?.stdin === undefined
           ? "ignore"
           : Stream.make(encoder.encode(execOptions.stdin));
-      const handle = yield* spawn(argv, stdin);
+      const handle = yield* spawn(argv, stdin, execOptions?.env);
       const [stdout, stderr, exitCode] = yield* Effect.all(
         [collect(handle.stdout, echo), collect(handle.stderr, echo), handle.exitCode],
         { concurrency: "unbounded" },
@@ -125,9 +140,9 @@ export const makeShell = Effect.fn("p0deploy.makeShell")(function* (options: {
     if (options.verbose) yield* Console.error(message);
   });
 
-  return Shell.of({ exec, pipe, note });
+  return Shell.of({ exec, pipe, note, ...(identity === undefined ? {} : { identity }) });
 });
 
-/** Real processes. Needs a ChildProcessSpawner, e.g. from `@effect/platform-node/NodeServices`. */
+/** Real processes. Needs a ChildProcessSpawner, FileSystem and Path, e.g. from `@effect/platform-node/NodeServices`. */
 export const layerShell = (options: { readonly verbose: boolean }) =>
   Layer.effect(Shell, makeShell(options));
