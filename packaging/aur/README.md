@@ -6,10 +6,8 @@ repackage the official x86_64 and ARM64 AppImages from GitHub Releases.
 
 ## Publishing
 
-The release workflow calls `.github/workflows/publish-aur.yml` after publishing a GitHub release;
-the workflow can also be run manually for a specific tag. It selects the stable or nightly
-package, then updates its version and both architectures' asset names and checksums, builds it
-for the host architecture, regenerates `.SRCINFO`, and pushes it to the AUR.
+This fork does not publish to the AUR automatically. To publish, update the package version and
+both architectures' asset names and checksums, build it, regenerate `.SRCINFO`, and push it to the AUR.
 
 To validate a release on Arch Linux:
 
