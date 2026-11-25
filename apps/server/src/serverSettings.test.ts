@@ -1479,6 +1479,21 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("server settings"
                 { name: "BASE_URL", value: "https://example.test", sensitive: false },
               ],
             },
+            [ProviderInstanceId.make("opencode_custom")]: {
+              driver: ProviderDriverKind.make("opencode"),
+              config: {
+                customProviders: [
+                  {
+                    id: "acme",
+                    name: "Acme",
+                    kind: "openaiCompatible",
+                    baseUrl: "https://acme.example.test/v1",
+                    models: [{ id: "acme-chat" }],
+                  },
+                ],
+                customProviderApiKeys: { acme: "custom-provider-secret" },
+              },
+            },
           },
           sourceControlHosts: {
             github: { tokens: { "github.com": "github-secret" } },
@@ -1513,6 +1528,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("server settings"
           "gitcafe-secret",
           "quota-secret",
           "expo-secret",
+          "custom-provider-secret",
         ];
         const client = ServerSettingsModule.redactServerSettingsForClient(saved, {
           secretReferences: true,
@@ -1569,6 +1585,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("server settings"
         const secretNames = [
           "provider-config-YW50aWdyYXZpdHlfc2VjcmV0cw-YW50aWdyYXZpdHk-YXBpS2V5",
           "provider-env-YW50aWdyYXZpdHlfc2VjcmV0cw-QVBJX1RPS0VO",
+          "provider-config-b3BlbmNvZGVfY3VzdG9t-b3BlbmNvZGU-Y3VzdG9tUHJvdmlkZXJBcGlLZXlz-YWNtZQ",
           sourceControlHostSecretName({
             kind: "github",
             field: "tokens",

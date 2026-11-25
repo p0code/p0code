@@ -160,7 +160,12 @@ it.effect("checks unsaved settings, keeping the saved key behind a redaction mar
             model: JSON.parse(String(init?.body)).model,
             choices: [{ finish_reason: "stop", message: { content: "OK" } }],
           })
-        : Response.json({ data: [{ id: "model-a" }] });
+        : Response.json({
+            data: [
+              { id: "model-a", context_length: 32_000 },
+              { id: "model-b", context_length: 0 },
+            ],
+          });
     });
     const generators = yield* TextGenerators.TextGenerators.pipe(
       Effect.provide(layer({ apiKey: "saved-key" })),
@@ -180,7 +185,8 @@ it.effect("checks unsaved settings, keeping the saved key behind a redaction mar
         .pipe(Effect.provideService(FetchHttpClient.Fetch, upstream));
 
     expect((yield* list("draft", { apiKey: "typed-key" })).models).toEqual([
-      { id: "model-a", name: "model-a" },
+      { id: "model-a", name: "model-a", contextWindow: 32_000 },
+      { id: "model-b", name: "model-b" },
     ]);
     yield* list(ID, { apiKey: SECRET_REDACTED, baseUrl: "https://api.test/v1" });
     // The saved key goes only to the endpoint it was saved for.
