@@ -51,9 +51,8 @@ Report bugs in issues. Put feature requests in
 
 ## Rules for a PR
 
-These rules apply to every PR from outside the team, drafts included. The team is the logins in
-[.github/TRIAGE_EXEMPTIONS.td](.github/TRIAGE_EXEMPTIONS.td). A PR that follows the rules can still be
-closed. We do not owe a review or a merge.
+These rules apply to every PR from outside the team, drafts included. A PR that follows the rules can
+still be closed. We do not owe a review or a merge.
 
 <a id="prior-approval"></a>
 
@@ -68,7 +67,7 @@ A maintainer can ask you to open a PR that is not a bug fix. Link the request.
 
 <a id="vouched-features"></a>
 
-Vouched contributors in [.github/VOUCHED.td](.github/VOUCHED.td) can also open a small, focused
+Vouched contributors can also open a small, focused
 feature PR without a request. Everything else on the list above is still closed: UI overhauls, new
 providers, architecture overhauls, source control, auth, and platforms.
 
@@ -116,7 +115,7 @@ again.
 A PR that conflicts with its base branch gets a `needs-rebase` label. If it still conflicts after 7
 days with no activity, it is closed.
 
-Vouched contributors in [.github/VOUCHED.td](.github/VOUCHED.td) are exempt from this rule and from
+Vouched contributors are exempt from this rule and from
 the open PR limit. The [feature PR limit](#vouched-features) still applies to them.
 
 ## Bans
@@ -125,7 +124,7 @@ the open PR limit. The [feature PR limit](#vouched-features) still applies to th
 - If you make our lives harder as reviewers and maintainers, you will be banned. Examples are repeated
   pings, a fight over a closure, and a second account to get around a limit.
 
-A banned account is denounced in [.github/VOUCHED.td](.github/VOUCHED.td). Any issue or PR it opens
+A banned account is denounced. Any issue or PR it opens
 is closed when it is opened.
 
 <a id="closure-and-reconsideration"></a>
@@ -140,7 +139,7 @@ the old one.
 
 ## Forks and branding
 
-If you want changes outside our scope, you are welcome to fork the MIT-licensed source code. That license covers the source code only, not the **T3 Code** name, wordmark, logos, or branding. Any fork or derivative project must use its own branding and make it unmistakably clear that it is unofficial and not affiliated with T3 Tools, Inc. Using our name, wordmark, logo, or branding without making it unmistakably clear that your project is unofficial, or indicating that an unofficial project is an official version of T3 Code, is unlawful and will be pursued to the full extent of the law. Truthful, plain-text attribution is fine; see [TRADEMARK.md](./TRADEMARK.md).
+If you want changes outside our scope, you are welcome to fork the MIT-licensed source code. That license covers the source code only, not the **T3 Code** name, wordmark, logos, or branding. Any fork or derivative project must use its own branding and make it unmistakably clear that it is unofficial and not affiliated with T3 Tools, Inc. Using our name, wordmark, logo, or branding without making it unmistakably clear that your project is unofficial, or indicating that an unofficial project is an official version of T3 Code, is unlawful and will be pursued to the full extent of the law. Truthful, plain-text attribution is fine.
 
 ## Setup
 
