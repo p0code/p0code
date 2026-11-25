@@ -1,6 +1,7 @@
 // Shared with the client settings form; keep schema code browser-safe.
 import {
   CustomModelSetting,
+  customModelProviderSettingsFields,
   makeBinaryPathSetting,
   makeProviderSettingsSchema,
   TrimmedString,
@@ -33,6 +34,7 @@ export const PiSettings = makeProviderSettingsSchema(
       Schema.withDecodingDefault(Effect.succeed([])),
       Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
     ),
+    ...customModelProviderSettingsFields,
   },
   {
     order: ["binaryPath", "launchArgs"],

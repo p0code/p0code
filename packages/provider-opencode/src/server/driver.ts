@@ -72,6 +72,11 @@ import {
 } from "@t3tools/provider-core/server/driver";
 import { withInstanceIdentity } from "@t3tools/provider-core/server/instanceIdentity";
 import { mergeProviderInstanceEnvironment } from "@t3tools/provider-core/server/instanceEnvironment";
+import { customModelProviderKeyEnvironment } from "@t3tools/provider-core/server/customModelProviders";
+import {
+  openCodeCustomProvidersEnvironment,
+  readOpenCodeUserModelProviders,
+} from "./customProviders.ts";
 import { providerProbeEnvironment } from "@t3tools/provider-core/server/snapshotProbe";
 import {
   enrichProviderSnapshotWithVersionAdvisory,
@@ -268,7 +273,7 @@ export const OpenCodeDriver: ProviderDriver<
     instanceId,
     displayName,
     accentColor,
-    environment,
+    environment: userEnvironment,
     enabled,
     config,
   }) {
@@ -281,6 +286,30 @@ export const OpenCodeDriver: ProviderDriver<
     const latestVersions = yield* ProviderLatestVersions.ProviderLatestVersions;
     const digest = yield* Digest.Digest;
     const host = yield* ProviderHost.ProviderHost;
+    const home = yield* HostProcess.HomeDirectory;
+    const userProcessEnv = yield* mergeProviderInstanceEnvironment(userEnvironment);
+    const environment = [
+      ...userEnvironment,
+      ...customModelProviderKeyEnvironment(config),
+      ...(yield* openCodeCustomProvidersEnvironment({
+        providers: config.customProviders,
+        stateDir: host.paths.stateDir,
+        instanceId,
+        baseEnvironment: userProcessEnv,
+      }).pipe(
+        Effect.provideService(FileSystem.FileSystem, fileSystem),
+        Effect.provideService(Path.Path, pathService),
+        Effect.mapError(
+          (cause) =>
+            new ProviderDriverError({
+              driver: DRIVER_KIND,
+              instanceId,
+              detail: "Failed to write the OpenCode custom provider config.",
+              cause,
+            }),
+        ),
+      )),
+    ];
     const processEnv = yield* mergeProviderInstanceEnvironment(environment);
     const continuationIdentity = defaultProviderContinuationIdentity({
       driverKind: DRIVER_KIND,
@@ -296,7 +325,7 @@ export const OpenCodeDriver: ProviderDriver<
     const effectiveConfig = {
       ...config,
       enabled,
-      binaryPath: expandHomePath(config.binaryPath, yield* HostProcess.HomeDirectory),
+      binaryPath: expandHomePath(config.binaryPath, home),
       // The instance registry has already read a referenced password from its secret provider.
       serverPassword: settingsSecretLiteral(config.serverPassword),
     } satisfies OpenCodeSettings;
@@ -847,6 +876,10 @@ export const OpenCodeDriver: ProviderDriver<
               ),
             ),
       workspaceRescans: catalogWatch.rescans,
+      listUserModelProviders: readOpenCodeUserModelProviders(userProcessEnv, home).pipe(
+        Effect.provideService(FileSystem.FileSystem, fileSystem),
+        Effect.provideService(Path.Path, pathService),
+      ),
       invalidateCaches: openCode2Server.forget,
       afterUpdate,
       orchestrationAdapter,

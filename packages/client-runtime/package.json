@@ -3,6 +3,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./custom-model-providers": {
+      "types": "./src/customModelProviders.ts",
+      "default": "./src/customModelProviders.ts"
+    },
     "./pull-request-diff-fold": {
       "types": "./src/pullRequestDiffFold.ts",
       "default": "./src/pullRequestDiffFold.ts"

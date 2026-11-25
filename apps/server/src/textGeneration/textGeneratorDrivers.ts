@@ -118,9 +118,21 @@ const withTimeout =
 const sortModels = (models: Iterable<TextGeneratorModel>) =>
   [...models].sort((left, right) => left.id.localeCompare(right.id));
 
-const readModel = (entry: { readonly id: string; readonly name?: string | undefined }) => {
+const readModel = (entry: {
+  readonly id: string;
+  readonly name?: string | undefined;
+  readonly contextWindow?: number | undefined;
+}): TextGeneratorModel | undefined => {
   const id = entry.id.trim();
-  return id ? { id, name: entry.name?.trim() || id } : undefined;
+  if (!id) return undefined;
+  const { contextWindow } = entry;
+  return {
+    id,
+    name: entry.name?.trim() || id,
+    ...(contextWindow !== undefined && Number.isInteger(contextWindow) && contextWindow > 0
+      ? { contextWindow }
+      : {}),
+  };
 };
 
 const ChatCompletion = Schema.Struct({
@@ -131,8 +143,17 @@ const ChatCompletion = Schema.Struct({
     }),
   ),
 });
+// Context sizes are not part of OpenAI's list; OpenRouter, vLLM, and others add one of these.
 const OpenAIModelList = Schema.Struct({
-  data: Schema.Array(Schema.Struct({ id: Schema.String, name: Schema.optional(Schema.String) })),
+  data: Schema.Array(
+    Schema.Struct({
+      id: Schema.String,
+      name: Schema.optional(Schema.String),
+      context_length: Schema.optional(Schema.Number),
+      context_window: Schema.optional(Schema.Number),
+      max_model_len: Schema.optional(Schema.Number),
+    }),
+  ),
 });
 
 const openAICompatible: TextGeneratorDriver = {
@@ -164,7 +185,18 @@ const openAICompatible: TextGeneratorDriver = {
     let request = HttpClientRequest.get(endpoint(connection, "/models"));
     if (connection.apiKey) request = HttpClientRequest.bearerToken(request, connection.apiKey);
     return sendJson(label, request, OpenAIModelList).pipe(
-      Effect.map((list) => sortModels(list.data.flatMap((entry) => readModel(entry) ?? []))),
+      Effect.map((list) =>
+        sortModels(
+          list.data.flatMap(
+            (entry) =>
+              readModel({
+                id: entry.id,
+                name: entry.name,
+                contextWindow: entry.context_length ?? entry.context_window ?? entry.max_model_len,
+              }) ?? [],
+          ),
+        ),
+      ),
       withTimeout(label, LIST_MODELS_TIMEOUT),
     );
   },
