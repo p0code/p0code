@@ -17,7 +17,7 @@
 # instead of fetching the release again.
 set -eu
 
-repo="jsserve-org/hhhcode"
+repo="p0code/p0code"
 base_url="${T3CODE_RELEASE_BASE_URL:-https://github.com/${repo}/releases/download}"
 # Carry a home from before the rename to p0code over, as the app does on launch.
 if [ -z "${P0CODE_HOME:-}${HHHCODE_HOME:-}${T3CODE_HOME:-}" ] && [ ! -e "$HOME/.p0code" ] && [ -d "$HOME/.hhh" ]; then

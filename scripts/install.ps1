@@ -16,7 +16,7 @@
 $ErrorActionPreference = "Stop"
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-$repo = "jsserve-org/hhhcode"
+$repo = "p0code/p0code"
 $baseUrl = if ($env:T3CODE_RELEASE_BASE_URL) { $env:T3CODE_RELEASE_BASE_URL.TrimEnd("/") } else { "https://github.com/$repo/releases/download" }
 # Carry a home from before the rename to p0code over, as the app does on launch.
 $previousHome = Join-Path $HOME ".hhh"

@@ -46,7 +46,7 @@ jobs:
   # keeps the whole pipeline off other forks.
   resolve_commit:
     name: Resolve release commit
-    if: github.repository == 'jsserve-org/hhhcode'
+    if: github.repository == 'p0code/p0code'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
@@ -765,7 +765,7 @@ jobs:
           > [!WARNING]
           > **This is a preview build. Do not install it unless you know exactly why you are here.**
           >
-          > Preview builds are cut by maintainers from unreleased branches to exercise the release pipeline. They can be broken, receive no fixes, are never offered as updates, and are not supported. If you want p0code, install the [latest release](https://github.com/jsserve-org/hhhcode/releases/latest) or a nightly instead.
+          > Preview builds are cut by maintainers from unreleased branches to exercise the release pipeline. They can be broken, receive no fixes, are never offered as updates, and are not supported. If you want p0code, install the [latest release](https://github.com/p0code/p0code/releases/latest) or a nightly instead.
 
           Built from `${{ needs.preflight.outputs.ref }}`.
           EOF
@@ -823,7 +823,7 @@ jobs:
   update_feed:
     name: Check the update feed
     needs: [preflight, release]
-    if: ${{ !cancelled() && github.repository == 'jsserve-org/hhhcode' && needs.preflight.outputs.release_channel == 'nightly' }}
+    if: ${{ !cancelled() && github.repository == 'p0code/p0code' && needs.preflight.outputs.release_channel == 'nightly' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:

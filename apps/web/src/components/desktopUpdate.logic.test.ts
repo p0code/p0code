@@ -156,10 +156,10 @@ describe("desktop update UI helpers", () => {
     "falls back to the default repository for an invalid configured repository: %s",
     (repository) => {
       expect(getDesktopUpdateReleaseHistoryUrl(repository)).toBe(
-        "https://github.com/jsserve-org/hhhcode/releases",
+        "https://github.com/p0code/p0code/releases",
       );
       expect(getDesktopUpdateReleaseUrl("1.2.3", repository)).toBe(
-        "https://github.com/jsserve-org/hhhcode/releases/tag/v1.2.3",
+        "https://github.com/p0code/p0code/releases/tag/v1.2.3",
       );
     },
   );
