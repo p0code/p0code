@@ -303,6 +303,7 @@ import { promptSuggestionToAccept, usePromptSuggestion } from "./usePromptSugges
 import { useProviderWorkspaceSnapshotRefresh } from "./useProviderWorkspaceSnapshotRefresh";
 import { useRestingComposerControlsLayout } from "./useRestingComposerControlsLayout";
 import { splitTransferredFiles } from "./workspaceFileDrop";
+import type { ThreadDetailsUsageInput } from "./ThreadDetailsUsage";
 
 const isEnvironmentRequestInvalidError = Schema.is(EnvironmentRequestInvalidError);
 
@@ -371,6 +372,8 @@ export interface ChatComposerHandle {
 }
 
 export interface ChatComposerProps {
+  /** Context window and usage limits for the ring beside the model picker. */
+  usage?: ThreadDetailsUsageInput;
   composerDraftTarget: ScopedThreadRef | DraftId;
   environmentId: EnvironmentId;
   canOperateThread: boolean;
@@ -2701,6 +2704,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const composerControls = (
     <ComposerControlsBar
       environmentId={environmentId}
+      usage={props.usage}
       workspaceCwd={gitCwd}
       routeKind={typeof composerDraftTarget === "string" ? "draft" : routeKind}
       routeThreadRef={routeThreadRef}

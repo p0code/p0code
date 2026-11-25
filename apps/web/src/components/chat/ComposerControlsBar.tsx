@@ -28,6 +28,8 @@ import {
   describeComposerEffort,
 } from "./ComposerModelEffort";
 import { resolveComposerTraitsInput } from "./composerProviderState";
+import { ComposerUsageRing } from "./ComposerUsageRing";
+import type { ThreadDetailsUsageInput } from "./ThreadDetailsUsage";
 import type { PromptUltrathink } from "./TraitsPicker";
 import { useApplyThreadModelPick } from "./useApplyThreadModelPick";
 import type { useComposerProviderModel } from "./useComposerProviderModel";
@@ -41,6 +43,7 @@ import type { useComposerProviderModel } from "./useComposerProviderModel";
 const MODEL_TRIGGER_STATES = "data-popup-open:bg-accent data-popup-open:text-foreground";
 
 export function ComposerControlsBar(props: {
+  usage: ThreadDetailsUsageInput | undefined;
   environmentId: EnvironmentId;
   workspaceCwd: string | null;
   routeKind: ChatComposerProps["routeKind"];
@@ -267,6 +270,7 @@ export function ComposerControlsBar(props: {
   ) : (
     <>
       {composerModelPicker}
+      {props.usage ? <ComposerUsageRing usage={props.usage} size={controlSize} /> : null}
 
       <>
         {restingBlockDefs.map((def, index) => {
