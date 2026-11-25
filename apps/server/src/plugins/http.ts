@@ -71,10 +71,15 @@ const isUiOrigin = (request: HttpServerRequest.HttpServerRequest, origin: string
  * Plugin routes are host-guarded, not plugin-guarded: a caller must be the p0code UI (same
  * origin) or present the route secret, and every body is capped like the HttpApi routes.
  */
-const route = Effect.fn("PluginHttp.route")(function* (path: string, secret: string) {
-  const handler = yield* PluginHost.pipe(Effect.flatMap((host) => host.route(path)));
-  if (handler === null) return HttpServerResponse.empty({ status: 404 });
+const route = Effect.fn("PluginHttp.route")(function* (
+  path: string,
+  secret: string,
+  pluginId: string,
+) {
   const request = yield* HttpServerRequest.HttpServerRequest;
+  if (request.method !== "POST") return HttpServerResponse.empty({ status: 404 });
+  const handler = yield* PluginHost.pipe(Effect.flatMap((host) => host.route(path, pluginId)));
+  if (handler === null) return HttpServerResponse.empty({ status: 404 });
   const url = Option.getOrUndefined(requestUrl(request));
   const querySecret = url?.searchParams.get("p0_route");
   url?.searchParams.delete("p0_route");
@@ -92,7 +97,15 @@ const route = Effect.fn("PluginHttp.route")(function* (path: string, secret: str
   const raw = yield* sanitized.text.pipe(
     Effect.provideService(HttpIncomingMessage.MaxBodySize, ByteSize.bytes(API_MAX_BODY_BYTES)),
   );
-  const body = raw.trim().length === 0 ? null : Option.getOrNull(decodeJson(raw));
+  const nonempty = raw.trim().length > 0;
+  if (
+    nonempty &&
+    sanitized.headers["content-type"]?.split(";")[0]?.trim().toLowerCase() !== "application/json"
+  )
+    return HttpServerResponse.empty({ status: 415 });
+  const decoded = nonempty ? decodeJson(raw) : Option.some(null);
+  if (Option.isNone(decoded)) return HttpServerResponse.empty({ status: 400 });
+  const body = decoded.value;
   const response = yield* handler(body).pipe(
     Effect.provideService(HttpServerRequest.HttpServerRequest, sanitized),
     Effect.catchCause((cause) =>
@@ -120,21 +133,28 @@ export const makeLayer = <R>(
   Layer.effectDiscard(
     Effect.gen(function* () {
       const router = yield* HttpRouter.HttpRouter;
-      for (const plugin of plugins) {
-        if (!plugin.manifest.capabilities.includes("http:routes")) {
-          if (plugin.manifest.httpRoutes.length > 0) {
-            yield* Effect.logError(
-              "Refusing to mount plugin routes: the manifest does not declare http:routes.",
-              { plugin: plugin.manifest.id },
-            );
-          }
-          continue;
-        }
-        const secret = yield* secretFor(plugin.manifest.id);
-        for (const path of plugin.manifest.httpRoutes) {
-          yield* router.add("POST", `/${path.replace(/^\/+/u, "")}`, route(path, secret));
-        }
-      }
+      const dispatch = Effect.gen(function* () {
+        const request = yield* HttpServerRequest.HttpServerRequest;
+        const pathname = Option.getOrUndefined(requestUrl(request))?.pathname;
+        if (!pathname || request.method !== "POST")
+          return HttpServerResponse.empty({ status: 404 });
+        const host = yield* PluginHost;
+        const snapshot = yield* host.snapshot;
+        const candidates = [
+          ...snapshot.plugins.filter((plugin) => plugin.state === "running"),
+          ...plugins,
+        ];
+        const owner = candidates.find(
+          (plugin) =>
+            plugin.manifest.capabilities.includes("http:routes") &&
+            plugin.manifest.httpRoutes.includes(pathname),
+        );
+        if (!owner) return HttpServerResponse.empty({ status: 404 });
+        const secret = yield* secretFor(owner.manifest.id);
+        return yield* route(pathname, secret, owner.manifest.id);
+      });
+      yield* router.add("*", "/api/*", dispatch);
+      yield* router.add("*", "/api", HttpServerResponse.empty({ status: 404 }));
     }),
   );
 
@@ -144,6 +164,6 @@ export const layer = Layer.unwrap(
     yield* removeObsoleteRouteSecrets(hosted.plugins.map((plugin) => plugin.manifest)).pipe(
       Effect.orDie,
     );
-    return makeLayer(hosted.plugins, (id) => routeSecret(id).pipe(Effect.orDie));
+    return makeLayer([], (id) => routeSecret(id).pipe(Effect.orDie));
   }),
 ).pipe(Layer.provide(pluginRegistryLayer));

@@ -1,3 +1,4 @@
+import * as PluginInstaller from "./plugins/installer.ts";
 import * as DataBackup from "./persistence/DataBackup.ts";
 import { DataRestoreError } from "@t3tools/contracts";
 import { applyApprovedRestore } from "./persistence/dataBackupFiles.ts";
@@ -1180,6 +1181,7 @@ const layerMakeServer = Layer.unwrap(
     );
 
     return layerServerApplication.pipe(
+      Layer.provide(PluginInstaller.layer),
       Layer.provideMerge(layerPluginHost),
       Layer.provideMerge(
         DataBackup.layer.pipe(Layer.provide(layerServerRestart), Layer.provide(layerLauncher)),

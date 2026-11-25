@@ -1,3 +1,4 @@
+import { PluginInstaller } from "./plugins/installer.ts";
 import { DataBackup } from "./persistence/DataBackup.ts";
 import * as SecretResolver from "@t3tools/secret-provider-core/server/SecretResolver";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
@@ -895,6 +896,7 @@ const layerUnusedConfigRpcServices = Layer.mergeAll(
   Layer.mock(PullRequestSyncReactor.PullRequestSyncReactor)({}),
   Layer.mock(SelfRelay.SelfRelay)({}),
   Layer.mock(PluginHost)({}),
+  Layer.mock(PluginInstaller)({}),
   Layer.mock(DataBackup)({}),
   Layer.mock(RepositoryIdentityResolver.RepositoryIdentityResolver)({}),
   Layer.mock(ResourceTelemetry.ResourceTelemetry)({}),
