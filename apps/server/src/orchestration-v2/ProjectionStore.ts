@@ -48,6 +48,7 @@ import type {
   OrchestrationV2Run,
   OrchestrationV2RuntimeRequest,
   OrchestrationV2Subagent,
+  OrchestrationV2ThreadContextUsage,
   OrchestrationV2ThreadShellSnapshot,
   OrchestrationV2ShellThreadStatus,
   OrchestrationV2ThreadShell,
@@ -1273,6 +1274,7 @@ type ShellThreadRow = {
   readonly fork_run_ids_json: string | null;
   readonly thread_id: string;
   readonly payload_json: string;
+  readonly active_provider_thread_id: string | null;
   readonly forked_from_run_source_thread_id: string | null;
   readonly worktree_path: string | null;
   readonly latest_run_id: string | null;
@@ -2032,6 +2034,10 @@ export function threadShellFromProjection(
       projection.providerThreads,
       projection.thread.activeProviderThreadId,
     ),
+    ...(() => {
+      const contextUsage = activeContextUsageForProjection(projection);
+      return contextUsage === undefined ? {} : { contextUsage };
+    })(),
     itemCount: activeLocalTurnItems(projection).length,
     visibleItemCount: projection.visibleTurnItems.length,
     createdAt: projection.thread.createdAt,
@@ -2085,6 +2091,119 @@ function activeProviderGoalForShell(
   activeProviderThreadId: OrchestrationV2ThreadProjection["thread"]["activeProviderThreadId"],
 ): OrchestrationV2ThreadShell["goal"] {
   return providerThreads.find((thread) => thread.id === activeProviderThreadId)?.goal ?? null;
+}
+
+type ShellTurnUsageSummary = {
+  readonly usedTokens: number;
+  readonly maxTokens: number | null;
+  readonly updatedAtMs: number;
+};
+
+type ShellCompactionSummary = {
+  readonly providerThreadId: string | null;
+  readonly afterTokenCount: number | null;
+  readonly atMs: number;
+};
+
+function normalizeContextUsage(
+  usedTokens: unknown,
+  maxTokens: unknown,
+): OrchestrationV2ThreadContextUsage | undefined {
+  if (typeof usedTokens !== "number" || !Number.isFinite(usedTokens) || usedTokens < 0) {
+    return undefined;
+  }
+  const roundedUsed = Math.round(usedTokens);
+  const validMax =
+    typeof maxTokens === "number" && Number.isFinite(maxTokens) && maxTokens > 0
+      ? Math.round(maxTokens)
+      : undefined;
+  return validMax === undefined
+    ? { usedTokens: roundedUsed }
+    : { usedTokens: roundedUsed, maxTokens: validMax };
+}
+
+function deriveShellContextUsage(input: {
+  readonly activeProviderThread:
+    | Pick<OrchestrationV2ProviderThread, "id" | "contextUsage" | "updatedAt">
+    | undefined;
+  readonly latestTurnUsage: ShellTurnUsageSummary | undefined;
+  readonly compactions: ReadonlyArray<ShellCompactionSummary> | undefined;
+}): OrchestrationV2ThreadContextUsage | undefined {
+  const { activeProviderThread, latestTurnUsage, compactions } = input;
+  const activeId = activeProviderThread?.id ?? null;
+  const latestCompaction = compactions?.findLast(
+    (entry) =>
+      activeId === null || entry.providerThreadId === null || entry.providerThreadId === activeId,
+  );
+  const usageUpdatedAtMs =
+    latestTurnUsage !== undefined
+      ? latestTurnUsage.updatedAtMs
+      : activeProviderThread?.contextUsage != null
+        ? DateTime.toEpochMillis(activeProviderThread.updatedAt)
+        : null;
+  if (
+    latestCompaction !== undefined &&
+    (usageUpdatedAtMs === null ||
+      !Number.isFinite(usageUpdatedAtMs) ||
+      latestCompaction.atMs > usageUpdatedAtMs)
+  ) {
+    return normalizeContextUsage(
+      latestCompaction.afterTokenCount,
+      latestTurnUsage?.maxTokens ?? activeProviderThread?.contextUsage?.maxTokens,
+    );
+  }
+  if (latestTurnUsage !== undefined) {
+    return normalizeContextUsage(
+      latestTurnUsage.usedTokens,
+      latestTurnUsage.maxTokens ?? activeProviderThread?.contextUsage?.maxTokens,
+    );
+  }
+  if (activeProviderThread?.contextUsage != null) {
+    return normalizeContextUsage(
+      activeProviderThread.contextUsage.usedTokens,
+      activeProviderThread.contextUsage.maxTokens,
+    );
+  }
+  return undefined;
+}
+
+function activeContextUsageForProjection(
+  projection: Pick<
+    OrchestrationV2ThreadProjection,
+    "thread" | "providerThreads" | "providerTurns" | "turnItems"
+  >,
+): OrchestrationV2ThreadContextUsage | undefined {
+  const activeProviderThread = (projection.providerThreads ?? []).find(
+    (thread) => thread.id === projection.thread.activeProviderThreadId,
+  );
+  let latestTurnUsage: ShellTurnUsageSummary | undefined;
+  for (const turn of projection.providerTurns ?? []) {
+    if (turn.tokenUsage === undefined) continue;
+    if (activeProviderThread !== undefined && turn.providerThreadId !== activeProviderThread.id) {
+      continue;
+    }
+    const updatedAtMs = Date.parse(turn.tokenUsage.updatedAt);
+    if (
+      latestTurnUsage === undefined ||
+      (Number.isFinite(updatedAtMs) && updatedAtMs >= latestTurnUsage.updatedAtMs)
+    ) {
+      latestTurnUsage = {
+        usedTokens: turn.tokenUsage.usedTokens,
+        maxTokens: turn.tokenUsage.maxTokens ?? null,
+        updatedAtMs: Number.isFinite(updatedAtMs) ? updatedAtMs : 0,
+      };
+    }
+  }
+  const compactions: ShellCompactionSummary[] = [];
+  for (const item of projection.turnItems ?? []) {
+    if (item.type !== "compaction" || item.status !== "completed") continue;
+    compactions.push({
+      providerThreadId: item.providerThreadId ?? null,
+      afterTokenCount: item.afterTokenCount ?? null,
+      atMs: DateTime.toEpochMillis(item.completedAt ?? item.updatedAt),
+    });
+  }
+  return deriveShellContextUsage({ activeProviderThread, latestTurnUsage, compactions });
 }
 
 function isSilentRunForShell(
@@ -2159,6 +2278,7 @@ type ShellThreadState = {
   readonly pendingBackgroundTasks: OrchestrationV2ThreadShell["pendingBackgroundTasks"];
   readonly providerInstanceHistory: OrchestrationV2ThreadShell["providerInstanceHistory"];
   readonly goal: OrchestrationV2ThreadShell["goal"];
+  readonly contextUsage: OrchestrationV2ThreadContextUsage | undefined;
   readonly itemCount: number;
   readonly runlessItemCount: number;
   readonly updatedAt: OrchestrationV2ThreadProjection["updatedAt"];
@@ -2340,6 +2460,7 @@ function shellFromState(input: {
     pendingBackgroundTasks: input.state.pendingBackgroundTasks,
     providerInstanceHistory: input.state.providerInstanceHistory,
     goal: input.state.goal,
+    ...(input.state.contextUsage === undefined ? {} : { contextUsage: input.state.contextUsage }),
     itemCount: input.state.itemCount,
     visibleItemCount: input.visibleItemCount,
     createdAt: input.state.thread.createdAt,
@@ -7180,6 +7301,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
             // Deletion keeps the rows for surviving forks; a client reads the thread as gone.
             if (projection.thread.deletedAt !== null)
               return yield* new ProjectionStoreThreadNotFoundError({ threadId });
+            const subagents = yield* enrichSubagentsContextUsage(projection.subagents);
             const rows = yield* sql<{ readonly snapshot_sequence: number | null }>`
             SELECT MAX(sequence) AS snapshot_sequence
             FROM orchestration_events
@@ -7190,7 +7312,8 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
             return {
               schemaVersion: ORCHESTRATION_V2_PROJECTION_SCHEMA_VERSION,
               snapshotSequence: rows[0]?.snapshot_sequence ?? 0,
-              projection,
+              projection:
+                subagents === projection.subagents ? projection : { ...projection, subagents },
             };
           }),
         )
@@ -8072,7 +8195,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
             const subagentIds = rows.flatMap(({ sourceThreadId, item }) =>
               item.type === "subagent" && sourceThreadId === threadId ? [item.subagentId] : [],
             );
-            const subagents =
+            const rawSubagents =
               subagentIds.length === 0
                 ? []
                 : yield* sql<PayloadRow>`
@@ -8081,6 +8204,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
               AND subagent_id IN (SELECT value FROM json_each(${encodeIdList(subagentIds)}))
             ORDER BY COALESCE(started_at, ''), subagent_id ASC
           `.pipe(Effect.flatMap(decodeRows(decodeSubagentPayload, threadId)));
+            const subagents = yield* enrichSubagentsContextUsage(rawSubagents);
             return {
               snapshotSequence,
               items: rows,
@@ -8387,12 +8511,17 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                   AND item.thread_id = ${threadId}
               `,
             )).filter((item) => !retainedIds.has(item.id));
+            const enrichedSubagents = yield* enrichSubagentsContextUsage(projection.subagents);
+            const baseProjection =
+              enrichedSubagents === projection.subagents
+                ? projection
+                : { ...projection, subagents: enrichedSubagents };
             const windowProjection =
               pendingCards.length === 0
-                ? projection
+                ? baseProjection
                 : {
-                    ...projection,
-                    turnItems: [...projection.turnItems, ...pendingCards].toSorted(
+                    ...baseProjection,
+                    turnItems: [...baseProjection.turnItems, ...pendingCards].toSorted(
                       (left, right) =>
                         left.ordinal - right.ordinal || left.id.localeCompare(right.id),
                     ),
@@ -8525,6 +8654,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
             SELECT
               t.thread_id,
               t.payload_json,
+              json_extract(t.payload_json, '$.activeProviderThreadId') AS active_provider_thread_id,
               t.fork_run_ids_json,
               CASE
                 WHEN json_extract(t.payload_json, '$.forkedFrom.type') = 'run'
@@ -8847,6 +8977,175 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
             FROM orchestration_v2_projection_provider_threads
             WHERE thread_id IN (SELECT value FROM json_each(${encodeIdList(threadIds)}))
           `;
+
+    type ShellTurnUsageRow = {
+      readonly thread_id: string;
+      readonly provider_thread_id: string;
+      readonly used_tokens: number | null;
+      readonly max_tokens: number | null;
+      readonly updated_at: string | null;
+    };
+
+    type ShellCompactionRow = {
+      readonly thread_id: string;
+      readonly provider_thread_id: string | null;
+      readonly after_token_count: number | null;
+      readonly compacted_at: string | null;
+    };
+
+    const selectShellLatestTurnUsageRows = (providerThreadIds: ReadonlyArray<string>) =>
+      providerThreadIds.length === 0
+        ? Effect.succeed([] as ReadonlyArray<ShellTurnUsageRow>)
+        : sql<ShellTurnUsageRow>`
+            SELECT
+              thread_id,
+              provider_thread_id,
+              json_extract(payload_json, '$.tokenUsage.usedTokens') AS used_tokens,
+              json_extract(payload_json, '$.tokenUsage.maxTokens') AS max_tokens,
+              json_extract(payload_json, '$.tokenUsage.updatedAt') AS updated_at
+            FROM orchestration_v2_projection_provider_turns
+            WHERE provider_thread_id IN (SELECT value FROM json_each(${encodeIdList(providerThreadIds)}))
+              AND json_extract(payload_json, '$.tokenUsage') IS NOT NULL
+            ORDER BY provider_thread_id ASC, ordinal ASC
+          `;
+
+    const selectShellLatestCompactionRows = (threadIds: ReadonlyArray<ThreadId>) =>
+      threadIds.length === 0
+        ? Effect.succeed([] as ReadonlyArray<ShellCompactionRow>)
+        : sql<ShellCompactionRow>`
+            SELECT
+              thread_id,
+              provider_thread_id,
+              json_extract(payload_json, '$.afterTokenCount') AS after_token_count,
+              COALESCE(json_extract(payload_json, '$.completedAt'), updated_at) AS compacted_at
+            FROM orchestration_v2_projection_turn_items
+              INDEXED BY orchestration_v2_projection_turn_items_thread_type_idx
+            WHERE thread_id IN (SELECT value FROM json_each(${encodeIdList(threadIds)}))
+              AND type = 'compaction'
+              AND status = 'completed'
+            ORDER BY thread_id ASC, ordinal ASC
+          `;
+
+    const indexShellContextUsageRows = (input: {
+      readonly turnUsageRows: ReadonlyArray<ShellTurnUsageRow>;
+      readonly compactionRows: ReadonlyArray<ShellCompactionRow>;
+    }) => {
+      const turnUsageByProviderThreadId = new Map<string, ShellTurnUsageSummary>();
+      for (const row of input.turnUsageRows) {
+        if (typeof row.used_tokens !== "number" || !Number.isFinite(row.used_tokens)) continue;
+        const parsedAt = row.updated_at !== null ? Date.parse(row.updated_at) : Number.NaN;
+        const updatedAtMs = Number.isFinite(parsedAt) ? parsedAt : 0;
+        const previous = turnUsageByProviderThreadId.get(row.provider_thread_id);
+        if (previous === undefined || updatedAtMs >= previous.updatedAtMs) {
+          turnUsageByProviderThreadId.set(row.provider_thread_id, {
+            usedTokens: row.used_tokens,
+            maxTokens: typeof row.max_tokens === "number" ? row.max_tokens : null,
+            updatedAtMs,
+          });
+        }
+      }
+      const compactionsByThreadId = new Map<ThreadId, Array<ShellCompactionSummary>>();
+      for (const row of input.compactionRows) {
+        const parsedAt = row.compacted_at !== null ? Date.parse(row.compacted_at) : Number.NaN;
+        if (!Number.isFinite(parsedAt)) continue;
+        const threadId = ThreadId.make(row.thread_id);
+        const list = compactionsByThreadId.get(threadId) ?? [];
+        list.push({
+          providerThreadId: row.provider_thread_id,
+          afterTokenCount: typeof row.after_token_count === "number" ? row.after_token_count : null,
+          atMs: parsedAt,
+        });
+        compactionsByThreadId.set(threadId, list);
+      }
+      return { turnUsageByProviderThreadId, compactionsByThreadId };
+    };
+
+    const enrichSubagentsContextUsage = Effect.fnUntraced(function* (
+      subagents: ReadonlyArray<OrchestrationV2Subagent>,
+    ) {
+      const childIds = [
+        ...new Set(
+          subagents.flatMap((subagent) =>
+            subagent.childThreadId !== null && subagent.contextUsage === undefined
+              ? [subagent.childThreadId]
+              : [],
+          ),
+        ),
+      ];
+      if (childIds.length === 0) return subagents;
+      const childRows = yield* sql<{
+        readonly thread_id: string;
+        readonly active_provider_thread_id: string | null;
+        readonly pt_used_tokens: number | null;
+        readonly pt_max_tokens: number | null;
+        readonly pt_updated_at: string | null;
+      }>`
+        SELECT
+          t.thread_id,
+          json_extract(t.payload_json, '$.activeProviderThreadId') AS active_provider_thread_id,
+          json_extract(pt.payload_json, '$.contextUsage.usedTokens') AS pt_used_tokens,
+          json_extract(pt.payload_json, '$.contextUsage.maxTokens') AS pt_max_tokens,
+          pt.updated_at AS pt_updated_at
+        FROM orchestration_v2_projection_threads t
+        LEFT JOIN orchestration_v2_projection_provider_threads pt
+          ON pt.provider_thread_id = json_extract(t.payload_json, '$.activeProviderThreadId')
+        WHERE t.thread_id IN (SELECT value FROM json_each(${encodeIdList(childIds)}))
+      `;
+      if (childRows.length === 0) return subagents;
+      const activeProviderThreadIds = childRows.flatMap((row) =>
+        row.active_provider_thread_id === null ? [] : [row.active_provider_thread_id],
+      );
+      const [turnUsageRows, compactionRows] = yield* Effect.all([
+        selectShellLatestTurnUsageRows(activeProviderThreadIds),
+        selectShellLatestCompactionRows(childIds),
+      ]);
+      const { turnUsageByProviderThreadId, compactionsByThreadId } = indexShellContextUsageRows({
+        turnUsageRows,
+        compactionRows,
+      });
+      const usageByChildId = new Map<ThreadId, OrchestrationV2ThreadContextUsage>();
+      for (const row of childRows) {
+        const childId = ThreadId.make(row.thread_id);
+        const activeProviderThread =
+          row.active_provider_thread_id === null
+            ? undefined
+            : {
+                id: row.active_provider_thread_id as ProviderThreadId,
+                contextUsage:
+                  typeof row.pt_used_tokens === "number" && Number.isFinite(row.pt_used_tokens)
+                    ? {
+                        usedTokens: row.pt_used_tokens,
+                        ...(typeof row.pt_max_tokens === "number" &&
+                        Number.isFinite(row.pt_max_tokens) &&
+                        row.pt_max_tokens > 0
+                          ? { maxTokens: row.pt_max_tokens }
+                          : {}),
+                      }
+                    : null,
+                updatedAt:
+                  row.pt_updated_at !== null
+                    ? DateTime.makeUnsafe(row.pt_updated_at)
+                    : DateTime.makeUnsafe(0),
+              };
+        const usage = deriveShellContextUsage({
+          activeProviderThread,
+          latestTurnUsage:
+            row.active_provider_thread_id === null
+              ? undefined
+              : turnUsageByProviderThreadId.get(row.active_provider_thread_id),
+          compactions: compactionsByThreadId.get(childId),
+        });
+        if (usage !== undefined) usageByChildId.set(childId, usage);
+      }
+      if (usageByChildId.size === 0) return subagents;
+      return subagents.map((subagent) => {
+        if (subagent.childThreadId === null || subagent.contextUsage !== undefined) {
+          return subagent;
+        }
+        const contextUsage = usageByChildId.get(subagent.childThreadId);
+        return contextUsage === undefined ? subagent : { ...subagent, contextUsage };
+      });
+    });
 
     const selectShellPendingTurnItemRows = (
       threadIds?: ReadonlyArray<ThreadId>,
@@ -9193,6 +9492,11 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
           ThreadId,
           ReadonlyArray<OrchestrationV2TurnItem>
         >;
+        readonly turnUsageByProviderThreadId?: ReadonlyMap<string, ShellTurnUsageSummary>;
+        readonly compactionsByThreadId?: ReadonlyMap<
+          ThreadId,
+          ReadonlyArray<ShellCompactionSummary>
+        >;
       }) {
         const {
           row,
@@ -9201,6 +9505,8 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
           shellItemCountsByThreadId,
           providerThreadsByThreadId,
           pendingTurnItemsByThreadId,
+          turnUsageByProviderThreadId,
+          compactionsByThreadId,
         } = input;
         const thread = yield* decodeThreadPayload(row.payload_json);
         const latestUserAuthoredMessageAt =
@@ -9359,6 +9665,16 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
             providerThreadsByThreadId.get(thread.id) ?? [],
             thread.activeProviderThreadId,
           ),
+          contextUsage: deriveShellContextUsage({
+            activeProviderThread: (providerThreadsByThreadId.get(thread.id) ?? []).find(
+              (providerThread) => providerThread.id === thread.activeProviderThreadId,
+            ),
+            latestTurnUsage:
+              thread.activeProviderThreadId === null
+                ? undefined
+                : turnUsageByProviderThreadId?.get(thread.activeProviderThreadId),
+            compactions: compactionsByThreadId?.get(thread.id),
+          }),
           itemCount: shellItemCountsByThreadId.get(thread.id)?.itemCount ?? 0,
           runlessItemCount: shellItemCountsByThreadId.get(thread.id)?.runlessItemCount ?? 0,
           updatedAt: thread.updatedAt,
@@ -9409,6 +9725,13 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
       const threadRows = [...rowsByThreadId.values()];
       const threadIds = [...rowsByThreadId.keys()];
       const forkSourceIds = shellForkSourceIds(threadRows);
+      const activeProviderThreadIds = [
+        ...new Set(
+          threadRows.flatMap((row) =>
+            row.active_provider_thread_id === null ? [] : [row.active_provider_thread_id],
+          ),
+        ),
+      ];
       const readForThreadIds = <A>(
         read: (ids: ReadonlyArray<ThreadId>) => Effect.Effect<ReadonlyArray<A>, unknown>,
         ids: ReadonlyArray<ThreadId> = threadIds,
@@ -9420,6 +9743,8 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
         sequenceRows,
         providerThreadRows,
         pendingTurnItemRows,
+        turnUsageRows,
+        compactionRows,
       ] = yield* Effect.all([
         readForThreadIds(selectShellRunRows, forkSourceIds),
         readForThreadIds(selectShellRunItemCounts, forkSourceIds),
@@ -9441,6 +9766,8 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
             ),
           ),
         ),
+        selectShellLatestTurnUsageRows(activeProviderThreadIds),
+        readForThreadIds(selectShellLatestCompactionRows),
       ]);
       return {
         targetThreadIds,
@@ -9451,6 +9778,8 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
         sequenceRows,
         providerThreadRows,
         pendingTurnItemRows,
+        turnUsageRows,
+        compactionRows,
       };
     });
 
@@ -9463,6 +9792,8 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
       sequenceRows,
       providerThreadRows,
       pendingTurnItemRows,
+      turnUsageRows,
+      compactionRows,
     }: Effect.Success<ReturnType<typeof readShellSnapshotRows>>) {
       const { runsByThreadId, itemCountsByThreadId } = runMapsByThreadId({
         runRows,
@@ -9471,6 +9802,10 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
       const shellItemCountsByThreadId = shellItemCountMap(shellItemCountRows);
       const { providerThreadsByThreadId, pendingTurnItemsByThreadId } =
         yield* pendingBackgroundDataByThreadId({ providerThreadRows, pendingTurnItemRows });
+      const { turnUsageByProviderThreadId, compactionsByThreadId } = indexShellContextUsageRows({
+        turnUsageRows,
+        compactionRows,
+      });
       const states = yield* Effect.forEach(threadRows, (row) =>
         shellThreadStateFromRow({
           row,
@@ -9479,6 +9814,8 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
           shellItemCountsByThreadId,
           providerThreadsByThreadId,
           pendingTurnItemsByThreadId,
+          turnUsageByProviderThreadId,
+          compactionsByThreadId,
         }),
       );
       const statesByThreadId = new Map(states.map((state) => [state.thread.id, state]));
@@ -9938,12 +10275,21 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
 
             const threadIds = [...rowsByThreadId.keys()];
             const forkSourceIds = shellForkSourceIds([...rowsByThreadId.values()]);
+            const activeProviderThreadIds = [
+              ...new Set(
+                [...rowsByThreadId.values()].flatMap((row) =>
+                  row.active_provider_thread_id === null ? [] : [row.active_provider_thread_id],
+                ),
+              ),
+            ];
             const [
               runRows,
               itemCountRows,
               shellItemCountRows,
               providerThreadRows,
               pendingTurnItemRows,
+              turnUsageRows,
+              compactionRows,
             ] = yield* Effect.all([
               forkSourceIds.length === 0
                 ? Effect.succeed([] as ReadonlyArray<ShellRunRow>)
@@ -9961,6 +10307,8 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                     : [],
                 ),
               ),
+              selectShellLatestTurnUsageRows(activeProviderThreadIds),
+              selectShellLatestCompactionRows(threadIds),
             ]);
             const { runsByThreadId, itemCountsByThreadId } = runMapsByThreadId({
               runRows,
@@ -9969,6 +10317,8 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
             const shellItemCountsByThreadId = shellItemCountMap(shellItemCountRows);
             const { providerThreadsByThreadId, pendingTurnItemsByThreadId } =
               yield* pendingBackgroundDataByThreadId({ providerThreadRows, pendingTurnItemRows });
+            const { turnUsageByProviderThreadId, compactionsByThreadId } =
+              indexShellContextUsageRows({ turnUsageRows, compactionRows });
 
             const states = yield* Effect.forEach([...rowsByThreadId.values()], (row) =>
               shellThreadStateFromRow({
@@ -9978,6 +10328,8 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                 shellItemCountsByThreadId,
                 providerThreadsByThreadId,
                 pendingTurnItemsByThreadId,
+                turnUsageByProviderThreadId,
+                compactionsByThreadId,
               }),
             );
             const statesByThreadId = new Map(states.map((state) => [state.thread.id, state]));

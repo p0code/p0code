@@ -12287,4 +12287,297 @@ it.layer(layerTest)("ProjectionStoreV2", (it) => {
       }
     }),
   );
+
+  it.effect("projects latest contextUsage onto thread shells and parent subagent summaries", () =>
+    Effect.gen(function* () {
+      const store = yield* ProjectionStore.ProjectionStoreV2;
+      const projectId = ProjectId.make("project:context-usage");
+      const parentThreadId = ThreadId.make("thread:context-usage:parent");
+      const childThreadId = ThreadId.make("thread:context-usage:child");
+      const childProviderThreadId = ProviderThreadId.make("provider-thread:context-usage:child");
+      const childTurnId = ProviderTurnId.make("provider-turn:context-usage:child:1");
+      const rootNodeId = NodeId.make("node:context-usage:root");
+      const subagentId = NodeId.make("node:context-usage:subagent");
+      const t0 = DateTime.makeUnsafe("2026-04-12T10:00:00.000Z");
+      const t1 = DateTime.makeUnsafe("2026-04-12T10:01:00.000Z");
+      const t2 = DateTime.makeUnsafe("2026-04-12T10:02:00.000Z");
+      const t3 = DateTime.makeUnsafe("2026-04-12T10:03:00.000Z");
+
+      yield* store.apply({
+        id: EventId.make("event:context-usage:parent-created"),
+        type: "thread.created",
+        threadId: parentThreadId,
+        occurredAt: t0,
+        payload: {
+          createdBy: "user",
+          creationSource: "web",
+          id: parentThreadId,
+          projectId,
+          title: "Parent thread",
+          providerInstanceId,
+          modelSelection,
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          branch: null,
+          worktreePath: null,
+          activeProviderThreadId: null,
+          lineage: {
+            parentThreadId: null,
+            relationshipToParent: null,
+            rootThreadId: parentThreadId,
+          },
+          forkedFrom: null,
+          createdAt: t0,
+          updatedAt: t0,
+          archivedAt: null,
+          settledOverride: null,
+          settledAt: null,
+          lastVisitedAt: null,
+          deletedAt: null,
+        },
+      });
+      yield* store.apply({
+        id: EventId.make("event:context-usage:child-created"),
+        type: "thread.created",
+        threadId: childThreadId,
+        occurredAt: t0,
+        payload: {
+          createdBy: "agent",
+          creationSource: "web",
+          id: childThreadId,
+          projectId,
+          title: "Child agent",
+          providerInstanceId,
+          modelSelection,
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          branch: null,
+          worktreePath: null,
+          activeProviderThreadId: childProviderThreadId,
+          lineage: {
+            parentThreadId,
+            relationshipToParent: "subagent",
+            rootThreadId: parentThreadId,
+          },
+          forkedFrom: null,
+          createdAt: t0,
+          updatedAt: t0,
+          archivedAt: null,
+          settledOverride: null,
+          settledAt: null,
+          lastVisitedAt: null,
+          deletedAt: null,
+        },
+      });
+      yield* store.apply({
+        id: EventId.make("event:context-usage:subagent-upserted"),
+        type: "subagent.updated",
+        threadId: parentThreadId,
+        occurredAt: t0,
+        payload: {
+          id: subagentId,
+          threadId: parentThreadId,
+          runId: null,
+          parentNodeId: rootNodeId,
+          origin: "app_owned",
+          createdBy: "agent",
+          driver,
+          providerInstanceId,
+          providerThreadId: childProviderThreadId,
+          childThreadId,
+          nativeTaskRef: null,
+          prompt: "Research codebase",
+          title: "Child agent",
+          model: "gpt-5.4",
+          modelSelection,
+          status: "running",
+          result: null,
+          startedAt: t0,
+          completedAt: null,
+          updatedAt: t0,
+        },
+      });
+
+      // Unknown before any usage event arrives.
+      const beforeShell = yield* store.getThreadShell(childThreadId);
+      assert.isUndefined(beforeShell?.contextUsage);
+
+      // Provider thread exists + provider-turn.updated reports tokenUsage.
+      yield* store.apply({
+        id: EventId.make("event:context-usage:provider-thread"),
+        type: "provider-thread.updated",
+        threadId: childThreadId,
+        driver,
+        providerInstanceId,
+        occurredAt: t0,
+        payload: {
+          id: childProviderThreadId,
+          driver,
+          providerInstanceId,
+          providerSessionId: null,
+          appThreadId: childThreadId,
+          ownerNodeId: null,
+          nativeThreadRef: null,
+          nativeConversationHeadRef: null,
+          status: "active",
+          firstRunOrdinal: 1,
+          lastRunOrdinal: 1,
+          handoffIds: [],
+          forkedFrom: null,
+          createdAt: t0,
+          updatedAt: t0,
+        },
+      });
+      yield* store.apply({
+        id: EventId.make("event:context-usage:turn-usage"),
+        type: "provider-turn.updated",
+        threadId: childThreadId,
+        driver,
+        providerInstanceId,
+        occurredAt: t1,
+        payload: {
+          id: childTurnId,
+          providerThreadId: childProviderThreadId,
+          nodeId: rootNodeId,
+          runAttemptId: RunAttemptId.make("attempt:context-usage:child:1"),
+          nativeTurnRef: null,
+          ordinal: 1,
+          status: "completed",
+          startedAt: t0,
+          completedAt: t1,
+          tokenUsage: {
+            usedTokens: 553_000,
+            maxTokens: 1_000_000,
+            updatedAt: DateTime.formatIso(t1),
+          },
+        },
+      });
+
+      const afterTurnShell = yield* store.getThreadShell(childThreadId);
+      assert.deepEqual(afterTurnShell?.contextUsage, {
+        usedTokens: 553_000,
+        maxTokens: 1_000_000,
+      });
+      const snapshotAfterTurn = yield* store.getShellSnapshot();
+      assert.deepEqual(
+        snapshotAfterTurn.threads.find((thread) => thread.id === childThreadId)?.contextUsage,
+        { usedTokens: 553_000, maxTokens: 1_000_000 },
+      );
+
+      // Provider-thread contextUsage is used when present and no newer turn usage supersedes it.
+      const providerOnlyChildId = ThreadId.make("thread:context-usage:provider-only");
+      const providerOnlyPtId = ProviderThreadId.make("provider-thread:context-usage:provider-only");
+      yield* store.apply({
+        id: EventId.make("event:context-usage:provider-only-thread"),
+        type: "thread.created",
+        threadId: providerOnlyChildId,
+        occurredAt: t0,
+        payload: {
+          createdBy: "agent",
+          creationSource: "web",
+          id: providerOnlyChildId,
+          projectId,
+          title: "Provider-only child",
+          providerInstanceId,
+          modelSelection,
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          branch: null,
+          worktreePath: null,
+          activeProviderThreadId: providerOnlyPtId,
+          lineage: {
+            parentThreadId,
+            relationshipToParent: "subagent",
+            rootThreadId: parentThreadId,
+          },
+          forkedFrom: null,
+          createdAt: t0,
+          updatedAt: t0,
+          archivedAt: null,
+          settledOverride: null,
+          settledAt: null,
+          lastVisitedAt: null,
+          deletedAt: null,
+        },
+      });
+      yield* store.apply({
+        id: EventId.make("event:context-usage:provider-thread-usage"),
+        type: "provider-thread.updated",
+        threadId: providerOnlyChildId,
+        driver,
+        providerInstanceId,
+        occurredAt: t2,
+        payload: {
+          id: providerOnlyPtId,
+          driver,
+          providerInstanceId,
+          providerSessionId: null,
+          appThreadId: providerOnlyChildId,
+          ownerNodeId: null,
+          nativeThreadRef: null,
+          nativeConversationHeadRef: null,
+          status: "idle",
+          firstRunOrdinal: 1,
+          lastRunOrdinal: 1,
+          handoffIds: [],
+          forkedFrom: null,
+          contextUsage: {
+            usedTokens: 612_000,
+            maxTokens: 1_000_000,
+          },
+          createdAt: t0,
+          updatedAt: t2,
+        },
+      });
+      const afterProviderUsageShell = yield* store.getThreadShell(providerOnlyChildId);
+      assert.deepEqual(afterProviderUsageShell?.contextUsage, {
+        usedTokens: 612_000,
+        maxTokens: 1_000_000,
+      });
+
+      // Completed compaction newer than prior usage updates shell and parent subagent summary.
+      yield* store.apply({
+        id: EventId.make("event:context-usage:compaction"),
+        type: "turn-item.updated",
+        threadId: childThreadId,
+        occurredAt: t3,
+        payload: {
+          id: TurnItemId.make("item:context-usage:compaction"),
+          threadId: childThreadId,
+          runId: null,
+          nodeId: null,
+          providerThreadId: childProviderThreadId,
+          providerTurnId: null,
+          nativeItemRef: null,
+          parentItemId: null,
+          ordinal: 1,
+          type: "compaction",
+          driver,
+          status: "completed",
+          title: null,
+          afterTokenCount: 120_000,
+          startedAt: t3,
+          completedAt: t3,
+          updatedAt: t3,
+        },
+      });
+
+      const afterCompactionShell = yield* store.getThreadShell(childThreadId);
+      assert.deepEqual(afterCompactionShell?.contextUsage, {
+        usedTokens: 120_000,
+        maxTokens: 1_000_000,
+      });
+
+      const parentSnapshot = yield* store.getThreadSnapshot(parentThreadId);
+      assert.deepEqual(parentSnapshot.projection.subagents[0]?.contextUsage, {
+        usedTokens: 120_000,
+        maxTokens: 1_000_000,
+      });
+      const parentWindow = yield* store.getThreadSnapshotWindow(parentThreadId, { rowLimit: 10 });
+      assert.deepEqual(parentWindow.projection.subagents[0]?.contextUsage, {
+        usedTokens: 120_000,
+        maxTokens: 1_000_000,
+      });
+    }),
+  );
 });
