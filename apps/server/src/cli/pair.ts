@@ -10,7 +10,7 @@ import { resolveWorktreeT3Home } from "@t3tools/shared/devHome";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { formatHostForUrl, isWildcardHost } from "@t3tools/shared/hostClassification";
 import { DEFAULT_SIGNAL_EXPORT } from "@t3tools/shared/observability";
-import { buildPairingAppLink } from "@t3tools/shared/remote";
+import { buildPairingAppLink, stripPairingTokenFromUrl } from "@t3tools/shared/remote";
 import * as OtelEnvironment from "@t3tools/shared/otelEnvironment";
 import {
   buildTailscaleHttpsBaseUrl,
@@ -218,19 +218,28 @@ const formatPairOutput = (input: {
   readonly token: string;
   readonly expiresAt: DateTime.Utc;
   readonly notes: ReadonlyArray<string>;
-}): string =>
-  [
+  /** Plaintext credentials are opt-in, so captured output is safe to paste into a report. */
+  readonly showToken: boolean;
+}): string => {
+  const displayPairingUrl = input.showToken
+    ? input.pairingUrl
+    : stripPairingTokenFromUrl(new URL(input.pairingUrl)).toString();
+  return [
     `Pairing with ${input.serverLabel} (${input.origin}).`,
     "",
     renderTerminalQrCode(input.pairingUrl),
     "",
-    `Pairing URL: ${input.pairingUrl}`,
-    `App link: ${buildPairingAppLink(input.pairingUrl)}`,
-    `Token: ${input.token}`,
+    `Pairing URL: ${displayPairingUrl}`,
+    `App link: ${buildPairingAppLink(displayPairingUrl)}`,
+    ...(input.showToken ? [`Token: ${input.token}`] : []),
     `Expires: ${DateTime.formatIso(input.expiresAt)}`,
+    ...(input.showToken
+      ? []
+      : ["", "Note: The token is hidden from this output. Pass --show-token to print it."]),
     ...input.notes.flatMap((note) => ["", `Note: ${note}`]),
     "",
   ].join("\n");
+};
 
 type EnvironmentProbeResult =
   | { readonly _tag: "descriptor"; readonly descriptor: ExecutionEnvironmentDescriptor }
@@ -528,6 +537,13 @@ const tailscaleServePortFlag = Flag.Int("tailscale-serve-port").pipe(
   Flag.withDefault(DEFAULT_TAILSCALE_SERVE_PORT),
 );
 
+const showTokenFlag = Flag.Boolean("show-token").pipe(
+  Flag.withDescription(
+    "Print the pairing token and a pairing URL that contains it. Off by default so captured output stays safe.",
+  ),
+  Flag.withDefault(false),
+);
+
 export const pairCommand = Command.make("pair", {
   baseDir: baseDirFlag,
   scopes: authScopesFlag(AuthStandardClientScopes),
@@ -535,6 +551,7 @@ export const pairCommand = Command.make("pair", {
   label: labelFlag,
   tailscale: tailscaleFlag,
   tailscaleServePort: tailscaleServePortFlag,
+  showToken: showTokenFlag,
 }).pipe(
   Command.withDescription(
     "Mint a pairing token for a running p0code server and print it as a QR code.",
@@ -617,6 +634,7 @@ export const pairCommand = Command.make("pair", {
           token: issued.credential,
           expiresAt: issued.expiresAt,
           notes,
+          showToken: flags.showToken,
         }),
       );
     }).pipe(Effect.provide(FetchHttpClient.layer)),

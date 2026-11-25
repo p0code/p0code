@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   buildPairingAppLink,
+  legacyPairingTokenRedirectLocation,
   readPairingAppLink,
   RemoteBackendUrlMissingError,
   RemotePairingTokenMissingError,
@@ -147,16 +148,35 @@ describe("remote", () => {
   it("round-trips pairing urls through app links on every channel scheme", () => {
     const pairingUrl = "https://vps.example.com/pair#token=ABC123";
     const appLink = buildPairingAppLink(pairingUrl);
-    expect(appLink.startsWith("t3code://pair?")).toBe(true);
+    expect(appLink.startsWith("t3code://pair#")).toBe(true);
     expect(readPairingAppLink(appLink)).toBe(pairingUrl);
     expect(readPairingAppLink(appLink.replace("t3code:", "t3code-dev:"))).toBe(pairingUrl);
     expect(readPairingAppLink("t3code://pair")).toBeNull();
-    expect(readPairingAppLink(appLink.replace("//pair?", "//pair/other?"))).toBeNull();
+    expect(readPairingAppLink(appLink.replace("//pair#", "//pair/other#"))).toBeNull();
     expect(
-      readPairingAppLink(`t3code://threads?pairingUrl=${encodeURIComponent(pairingUrl)}`),
+      readPairingAppLink(`t3code://threads#pairingUrl=${encodeURIComponent(pairingUrl)}`),
     ).toBeNull();
     expect(
-      readPairingAppLink(`https://pair?pairingUrl=${encodeURIComponent(pairingUrl)}`),
+      readPairingAppLink(`https://pair#pairingUrl=${encodeURIComponent(pairingUrl)}`),
+    ).toBeNull();
+  });
+
+  it("still reads app links that carry the payload in the query", () => {
+    const pairingUrl = "https://vps.example.com/pair#token=ABC123";
+    expect(readPairingAppLink(`t3code://pair?pairingUrl=${encodeURIComponent(pairingUrl)}`)).toBe(
+      pairingUrl,
+    );
+  });
+
+  it("moves a legacy query token into the fragment for /pair only", () => {
+    expect(
+      legacyPairingTokenRedirectLocation(new URL("https://host.example.com/pair?token=ABC")),
+    ).toBe("/pair#token=ABC");
+    expect(
+      legacyPairingTokenRedirectLocation(new URL("https://host.example.com/pair?label=Work#old")),
+    ).toBeNull();
+    expect(
+      legacyPairingTokenRedirectLocation(new URL("https://host.example.com/other?token=ABC")),
     ).toBeNull();
   });
 });
