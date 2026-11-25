@@ -2,17 +2,32 @@
 
 A very small deploy tool built for coding agents. It builds a container image on this machine or on a build host, copies the image to your servers over `ssh`, and swaps it in behind Traefik once it is healthy. You don't need a registry, a control plane, Kubernetes or a web UI. A deploy host needs only Docker (or Podman), one Traefik container, and `sshd`.
 
-p0deploy uses your own `ssh` binary, so `~/.ssh/config`, your agent and your keys all work as usual. It never reads private keys.
+p0deploy uses your own `ssh` binary, and gives itself a dedicated key once you run `p0deploy ssh setup <host>`. `~/.ssh/config`, your agent and your existing keys keep working, and you never copy keys to a server by hand.
 
 ## Quickstart
 
 ```sh
+p0deploy ssh setup deploy@203.0.113.9                             # once per host: teaches p0deploy its own key
 p0deploy init --host deploy@203.0.113.9 --domain app.example.com    # writes p0deploy.json from your Dockerfile
 p0deploy server init deploy@203.0.113.9 --email ops@example.com     # once per host: installs Traefik + Let's Encrypt
 p0deploy doctor                                                     # ssh, docker, zstd, traefik on every host
 p0deploy up                                                         # build → copy → swap once healthy
 p0deploy rollback                                                   # back to the previous image
 ```
+
+## SSH access
+
+`p0deploy ssh setup deploy@host` tries, in order:
+
+1. The install's own key, at `<p0code data dir>/deploy/keys/p0deploy_ed25519` (mode `600`). If it already logs in, setup is done.
+2. Your existing `ssh` (agent or `~/.ssh/config`). It appends the public key to the remote `~/.ssh/authorized_keys`, guarded by `grep -qxF`, and creates the directory and file with the usual `700`/`600` modes.
+3. A password: `--password` prompts on a terminal (hidden), and agents set `P0DEPLOY_SSH_PASSWORD` because they cannot answer a prompt. The password goes only into a temporary `SSH_ASKPASS` helper and a `0600` temp file, never into argv, logs or the script; both files are deleted afterwards.
+
+Setup connects use `StrictHostKeyChecking=accept-new`, so a new host key is pinned once. Every other command still runs with `BatchMode=yes` and never prompts.
+
+If none of that works, setup tells you to pass `--password` or set `P0DEPLOY_SSH_PASSWORD`. For a fully manual fallback, `p0deploy ssh key` prints the public key's path and value so you can paste it into `~/.ssh/authorized_keys` yourself. Once the key exists, every command offers it with `ssh -i <path> -o IdentitiesOnly=yes`; `~/.ssh/config` aliases and other agent identities keep working, and installs without the key behave exactly as before.
+
+The data directory follows the rest of p0code: `P0CODE_HOME`, then `HHHCODE_HOME` or `T3CODE_HOME`, else `~/.p0code`.
 
 ## How a deploy works
 
@@ -123,7 +138,7 @@ p0deploy logs --target prod --tail 200 --json
 p0deploy rollback --json                  # or: rollback --to <tag from status>
 ```
 
-ssh always runs with `BatchMode=yes`, so it never waits for a password or host-key prompt. Accept a new host key once in a terminal first.
+ssh always runs with `BatchMode=yes`, so it never waits for a password or host-key prompt. `p0deploy ssh setup` records a new host key once; ordinary commands never prompt.
 
 ## Library
 
@@ -136,7 +151,8 @@ const program = Effect.gen(function* () {
   const loaded = yield* P0Deploy.loadConfig("/repo/p0deploy.json");
   return yield* P0Deploy.up(loaded, { buildHost: settings.defaultBuildHost }); // UpResult, fails with DeployError
 }).pipe(Effect.provide(P0Deploy.layerShell({ verbose: false })));
-// layerShell needs a ChildProcessSpawner (e.g. NodeServices.layer); loadConfig/build need FileSystem + Path.
+// layerShell needs a ChildProcessSpawner, FileSystem and Path (NodeServices.layer provides all three);
+// loadConfig/build need FileSystem + Path.
 ```
 
-The other entry points are `build`, `push`, `swap`, `rollback`, `status`, `logs`, `doctor`, `initConfig`, `serverInit` and `serverStatus`. `DeployError.code` and `exitCodeFor(code)` match the CLI.
+The other entry points are `build`, `push`, `swap`, `rollback`, `status`, `logs`, `doctor`, `initConfig`, `serverInit`, `serverStatus`, `sshSetup`, `sshKey` and `bootstrapSsh`. `DeployError.code` and `exitCodeFor(code)` match the CLI.

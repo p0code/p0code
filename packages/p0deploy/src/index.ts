@@ -29,6 +29,31 @@ export {
 } from "./deploy.ts";
 export { DeployError, exitCodeFor, type DeployErrorCode } from "./errors.ts";
 export {
+  authorizedKeysScript,
+  bootstrapSsh,
+  ensureDeployKey,
+  noPasswordError,
+  resolvePassword,
+  sshAuth,
+  sshKey,
+  sshSetup,
+  sshSetupHint,
+  withAskpass,
+  type DeployKey,
+  type SshAuthMethod,
+  type SshAuthState,
+  type SshBootstrapResult,
+  type SshSetupResult,
+} from "./ssh.ts";
+export {
+  APP_HOME_ENV,
+  SSH_KEY_FILE_NAME,
+  appHomeFromEnv,
+  resolveAppHome,
+  resolveSshKeyPath,
+  sshKeyPath,
+} from "./sshKey.ts";
+export {
   serverInit,
   serverStatus,
   type ServerInitOptions,
