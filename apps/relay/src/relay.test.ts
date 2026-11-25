@@ -100,6 +100,7 @@ it("enrolls over HTTPS, passes environment TLS/HTTP/WS and port hosts end to end
   const forwardedAddress = forwarded.address();
   if (!forwardedAddress || typeof forwardedAddress === "string") throw new Error("Missing port");
   const forwardedPort = forwardedAddress.port;
+  const allowed: Array<{ port: number } | { name: string }> = [];
   let client: RelayTunnelClient | undefined;
   let replacement: RelayTunnelClient | undefined;
   let websocket: WebSocket | undefined;
@@ -137,7 +138,10 @@ it("enrolls over HTTPS, passes environment TLS/HTTP/WS and port hosts end to end
       privateKey: keys.privateKey,
       challenges,
       webSocketOptions: { rejectUnauthorized: false, lookup },
-      allowPort: (port: number) => port === forwardedPort,
+      allowLabel: (label: { port: number } | { name: string }) => {
+        allowed.push(label);
+        return "port" in label && label.port === forwardedPort;
+      },
       getSecureContext: async () => NodeTls.createSecureContext(envCert),
       onSecureConnection: (socket: NodeTls.TLSSocket, metadata: { port?: number }) => {
         if (metadata.port) {
@@ -152,6 +156,7 @@ it("enrolls over HTTPS, passes environment TLS/HTTP/WS and port hosts end to end
     const connected = NodeEvents.EventEmitter.once(client, "connected");
     client.start();
     await connected;
+    expect(client.relayInfo).toEqual({ features: [] });
     const reply = await httpsRequest({
       hostname: "abcdef.relay.test",
       port: ports.tlsPort,
@@ -201,6 +206,11 @@ it("enrolls over HTTPS, passes environment TLS/HTTP/WS and port hosts end to end
     await expect(
       httpsRequest({ hostname: "1-abcdef.relay.test", port: ports.tlsPort, path: "/" }),
     ).rejects.toThrow();
+    // Public hosts are off: a name label is refused at SNI and never reaches the environment.
+    await expect(
+      httpsRequest({ hostname: "docs-abcdef.relay.test", port: ports.tlsPort, path: "/" }),
+    ).rejects.toThrow();
+    expect(allowed.some((label) => "name" in label)).toBe(false);
     const disconnected = NodeEvents.EventEmitter.once(client, "disconnected");
     replacement = new RelayTunnelClient(options);
     const replacementConnected = NodeEvents.EventEmitter.once(replacement, "connected");
@@ -308,6 +318,151 @@ it("rate limits enrollment and tunnel attempts by source IP", async () => {
     expect(await rejected).toBe(429);
   } finally {
     ws?.terminate();
+    await relay.close();
+    state.close();
+    await NodeFSP.rm(directory, { recursive: true, force: true });
+  }
+});
+
+function openTls(port: number, servername: string): Promise<NodeTls.TLSSocket> {
+  return new Promise((resolve, reject) => {
+    const socket = NodeTls.connect({
+      host: "127.0.0.1",
+      port,
+      servername,
+      rejectUnauthorized: false,
+    });
+    socket.once("secureConnect", () => resolve(socket));
+    socket.once("error", reject);
+    socket.once("close", () => reject(new Error("closed before handshake")));
+  });
+}
+it("routes public names under the public domain only, keeps owner headroom, caps visitors per IP, and blocks a label live", async () => {
+  const directory = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "hhh-relay-public-"));
+  const relayCert = testCertificate(directory, "relay.test");
+  const envCert = testCertificate(directory, "*.relay.test", "env", ["*.usercontent.test"]);
+  const state = new RelayState(NodePath.join(directory, "state.sqlite"));
+  expect(
+    () =>
+      new RelayServer({
+        relayHost: "relay.test",
+        state,
+        publicDomain: "usercontent.test",
+        getSecureContext: async () => NodeTls.createSecureContext(relayCert),
+      }),
+  ).toThrow("public hosts");
+  const relay = new RelayServer({
+    relayHost: "relay.test",
+    state,
+    publicHosts: true,
+    publicDomain: "usercontent.test",
+    // 6 streams, 3 kept for the owner; at most 2 open connections per visitor IP.
+    maxStreams: 6,
+    visitorLimits: { concurrent: 2 },
+    bindHost: "127.0.0.1",
+    tlsPort: 0,
+    httpPort: 0,
+    getSecureContext: async () => NodeTls.createSecureContext(relayCert),
+  });
+  const app = NodeHttp.createServer((req, res) => res.end(`${req.headers.host}${req.url}`));
+  const names: string[] = [];
+  const certificates: string[] = [];
+  const sockets: NodeTls.TLSSocket[] = [];
+  let client: RelayTunnelClient | undefined;
+  try {
+    const ports = await relay.start();
+    const keys = generateEnvironmentKeyPair();
+    state.enroll(state.issueToken(), keys.publicKey, "abcdef");
+    const challenges = new HttpChallengeStore();
+    challenges.set("docs-abcdef.usercontent.test", "name-token", "name-proof");
+    client = new RelayTunnelClient({
+      relayUrl: `https://relay.test:${ports.tlsPort}`,
+      slug: "abcdef",
+      privateKey: keys.privateKey,
+      challenges,
+      maxStreams: 6,
+      webSocketOptions: { rejectUnauthorized: false, lookup },
+      allowLabel: (label) => {
+        if ("name" in label) names.push(label.name);
+        return "name" in label && label.name === "docs";
+      },
+      getSecureContext: async (hostname) => {
+        certificates.push(hostname);
+        return NodeTls.createSecureContext(envCert);
+      },
+      onSecureConnection: (socket) => app.emit("connection", socket),
+    });
+    const connected = NodeEvents.EventEmitter.once(client, "connected");
+    client.start();
+    expect((await connected)[0]).toEqual({
+      features: ["public-hosts"],
+      publicDomain: "usercontent.test",
+    });
+    const reply = await httpsRequest({
+      hostname: "docs-abcdef.usercontent.test",
+      port: ports.tlsPort,
+      path: "/a",
+    });
+    expect(reply.body).toBe(`docs-abcdef.usercontent.test:${ports.tlsPort}/a`);
+    expect(
+      await plainRequest(
+        ports.httpPort,
+        "docs-abcdef.usercontent.test",
+        "/.well-known/acme-challenge/name-token",
+      ),
+    ).toMatchObject({ status: 200, body: "name-proof" });
+    // With a public domain, names never live under the relay host, and the environment's own
+    // host and ports never live under the public domain.
+    for (const hostname of [
+      "docs-abcdef.relay.test",
+      "abcdef.usercontent.test",
+      "3000-abcdef.usercontent.test",
+      "0-abcdef.usercontent.test",
+      "docs--x-abcdef.usercontent.test",
+    ])
+      await expect(httpsRequest({ hostname, port: ports.tlsPort, path: "/" })).rejects.toThrow();
+    // An unknown name reaches the environment's allowLabel but never asks for a certificate.
+    await expect(
+      httpsRequest({ hostname: "nope-abcdef.usercontent.test", port: ports.tlsPort, path: "/" }),
+    ).rejects.toThrow();
+    expect(names).toContain("nope");
+    expect(certificates).not.toContain("nope-abcdef.usercontent.test");
+
+    // Per-IP cap: the third concurrent visitor connection from one IP is refused.
+    const visitors = [
+      await openTls(ports.tlsPort, "docs-abcdef.usercontent.test"),
+      await openTls(ports.tlsPort, "docs-abcdef.usercontent.test"),
+    ];
+    sockets.push(...visitors);
+    await expect(openTls(ports.tlsPort, "docs-abcdef.usercontent.test")).rejects.toThrow();
+
+    // Block cuts the label's live connections and refuses new ones, without touching the env.
+    const closed = visitors.map((socket) => NodeEvents.EventEmitter.once(socket, "close"));
+    expect(relay.block("docs-abcdef")).toBe(true);
+    await Promise.all(closed);
+    await expect(
+      httpsRequest({ hostname: "docs-abcdef.usercontent.test", port: ports.tlsPort, path: "/" }),
+    ).rejects.toThrow();
+    expect(
+      (await httpsRequest({ hostname: "abcdef.relay.test", port: ports.tlsPort, path: "/" })).body,
+    ).toBe(`abcdef.relay.test:${ports.tlsPort}/`);
+    expect(state.blockedLabels()).toEqual(["docs-abcdef"]);
+    expect(() => state.block("not a label")).toThrow();
+    expect(state.unblock("docs-abcdef")).toBe(true);
+    await expect.poll(() => relay["bridged"].size).toBe(0);
+
+    // Headroom: two owner connections plus one visitor fill the visitor share (6 - 3), so the
+    // next visitor is refused while the owner can still connect.
+    sockets.push(await openTls(ports.tlsPort, "abcdef.relay.test"));
+    sockets.push(await openTls(ports.tlsPort, "abcdef.relay.test"));
+    sockets.push(await openTls(ports.tlsPort, "docs-abcdef.usercontent.test"));
+    await expect(openTls(ports.tlsPort, "docs-abcdef.usercontent.test")).rejects.toThrow();
+    sockets.push(await openTls(ports.tlsPort, "abcdef.relay.test"));
+  } finally {
+    for (const socket of sockets) socket.destroy();
+    client?.stop();
+    app.closeAllConnections();
+    app.close();
     await relay.close();
     state.close();
     await NodeFSP.rm(directory, { recursive: true, force: true });

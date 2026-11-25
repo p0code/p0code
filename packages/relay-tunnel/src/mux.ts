@@ -7,8 +7,48 @@ export interface StreamLabel {
   label: string;
   remoteAddr?: string;
   kind: "tls" | "http";
+  /** Forwarded port, for `<port>-<envslug>` labels. */
   port?: number;
+  /** Public tunnel name, for `<name>-<envslug>` labels. */
+  name?: string;
 }
+
+/** What a hostname label means: `<envslug>`, `<port>-<envslug>` or `<name>-<envslug>`. */
+export interface HostLabel {
+  slug: string;
+  port?: number;
+  name?: string;
+}
+
+const ENV_SLUG = /^[a-z][a-z0-9]{5,31}$/;
+
+/**
+ * A public tunnel name: 1–30 lowercase letters, digits and single hyphens, not purely numeric
+ * (numeric prefixes are forwarded ports). Double hyphens are refused so a label never looks
+ * like an IDNA (`xn--`) label.
+ */
+export function isTunnelName(name: string): boolean {
+  return name.length <= 30 && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name) && !/^[0-9]+$/.test(name);
+}
+
+/**
+ * Splits a hostname label at its last hyphen. Env slugs never contain hyphens, so the split is
+ * unambiguous. Returns undefined for anything outside the grammar.
+ */
+export function parseHostLabel(label: string): HostLabel | undefined {
+  if (label.length > 63) return undefined;
+  const dash = label.lastIndexOf("-");
+  const slug = label.slice(dash + 1);
+  if (!ENV_SLUG.test(slug)) return undefined;
+  if (dash < 0) return { slug };
+  const prefix = label.slice(0, dash);
+  if (/^[0-9]+$/.test(prefix)) {
+    const port = Number(prefix);
+    return /^[1-9][0-9]{0,4}$/.test(prefix) && port <= 65535 ? { slug, port } : undefined;
+  }
+  return isTunnelName(prefix) ? { slug, name: prefix } : undefined;
+}
+
 export function parseStreamLabel(bytes: Buffer): StreamLabel {
   const value: unknown = JSON.parse(bytes.toString());
   if (
@@ -16,20 +56,16 @@ export function parseStreamLabel(bytes: Buffer): StreamLabel {
     typeof value !== "object" ||
     !("label" in value) ||
     typeof value.label !== "string" ||
-    !/^[a-z0-9-]{1,63}$/.test(value.label) ||
     !("kind" in value) ||
     (value.kind !== "tls" && value.kind !== "http")
   ) {
     throw new Error("Invalid stream label");
   }
-  if (
-    "port" in value &&
-    (typeof value.port !== "number" ||
-      !Number.isInteger(value.port) ||
-      value.port < 1 ||
-      value.port > 65535)
-  )
-    throw new Error("Invalid port");
+  const parsed = parseHostLabel(value.label);
+  if (!parsed) throw new Error("Invalid stream label");
+  // `port` and `name` must restate what the label says, so consumers can trust either.
+  if (("port" in value ? value.port : undefined) !== parsed.port) throw new Error("Invalid port");
+  if (("name" in value ? value.name : undefined) !== parsed.name) throw new Error("Invalid name");
   if ("remoteAddr" in value && typeof value.remoteAddr !== "string")
     throw new Error("Invalid remote address");
   return value as StreamLabel;
@@ -169,15 +205,19 @@ export class StreamMultiplexer extends NodeEvents.EventEmitter {
     }, 30_000);
     this.heartbeat.unref();
   }
+  /** Streams open right now, in either direction. */
   get streamCount(): number {
     return this.streams.size;
+  }
+  get maxStreams(): number {
+    return this.options.maxStreams ?? 128;
   }
   open(metadata: StreamLabel): MuxStream {
     if (
       !this.options.initiator ||
       this.closed ||
       this.nextId > 0xffffffff ||
-      this.streams.size >= (this.options.maxStreams ?? 128)
+      this.streams.size >= this.maxStreams
     )
       throw new Error("Cannot open stream");
     const id = this.nextId++;
@@ -236,7 +276,7 @@ export class StreamMultiplexer extends NodeEvents.EventEmitter {
         if (this.options.initiator || frame.streamId <= this.lastPeerId)
           throw new Error("Invalid stream open");
         this.lastPeerId = frame.streamId;
-        if (this.streams.size >= (this.options.maxStreams ?? 128)) {
+        if (this.streams.size >= this.maxStreams) {
           this.send({ type: FrameType.CLOSE, streamId: frame.streamId, payload: Buffer.from([1]) });
           return;
         }

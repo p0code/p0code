@@ -17,6 +17,9 @@ Point two DNS A records at the relay host:
 - `relay.example.com`
 - `*.relay.example.com`
 
+For public tunnels on a separate domain (see [Public hosts](#public-hosts)), also point
+`*.usercontent.example` at it.
+
 Open TCP ports **80 and 443** directly to the relay process. Do not put an HTTP reverse proxy or a
 CDN in front of it: anything that terminates the environment hostnames' TLS breaks the encryption
 guarantee, and HTTP-01 needs public port 80 even when you use a custom ACME directory.
@@ -30,6 +33,7 @@ RELAY_HOST=relay.example.com RELAY_ACME_EMAIL=you@example.com docker compose up 
 docker compose exec relay node apps/relay/src/cli.ts enroll
 docker compose exec relay node apps/relay/src/cli.ts ls
 docker compose exec relay node apps/relay/src/cli.ts revoke abcdef
+docker compose exec relay node apps/relay/src/cli.ts block docs-abcdef
 ```
 
 The image keeps its SQLite state and ACME certificates in the `relay-data` volume
@@ -49,7 +53,7 @@ RELAY_HOST=relay.example.com RELAY_ACME_EMAIL=you@example.com \
 
 ## Admin commands
 
-`hhh-relay [serve|enroll|ls|revoke] [options]`. Every command opens the same SQLite state file as
+`hhh-relay [serve|enroll|ls|revoke|block|unblock|blocked] [options]`. Every command opens the same SQLite state file as
 `serve` (default `./relay-data/state.sqlite`; pass `--state` or set `RELAY_STATE` consistently).
 Run only one `serve` per state file. A running server observes revocations from another process
 within about one second and closes the live tunnel; a newer authenticated tunnel for a slug
@@ -62,6 +66,9 @@ replaces the old one.
 - `ls` — list enrolled environments (slug, public key, creation time) as JSON.
 - `revoke <slug>` — remove an environment: its live tunnel closes and it can no longer
   authenticate.
+- `block <label>` — refuse one hostname label, such as an abusive public tunnel `docs-abcdef`,
+  without unlinking its environment. Live connections to it close within about a second.
+  `unblock <label>` lifts it; `blocked` lists blocked labels as JSON.
 
 Slugs are 6–32 lowercase letters/digits starting with a letter. The database stores public keys
 only, never environment private keys, and an enrollment cannot overwrite an enrolled slug.
@@ -81,6 +88,33 @@ only, never environment private keys, and an enrollment cannot overwrite an enro
 | `--directory-url`   | `RELAY_ACME_DIRECTORY_URL` | Let's Encrypt production    |
 | `--max-streams`     | `RELAY_MAX_STREAMS`        | `128` per tunnel            |
 | `--idle-timeout-ms` | `RELAY_IDLE_TIMEOUT_MS`    | `120000` per stream         |
+| `--public-hosts`    | `RELAY_PUBLIC_HOSTS=1`     | off                         |
+| `--public-domain`   | `RELAY_PUBLIC_DOMAIN`      | none (names use `--host`)   |
+
+## Public hosts
+
+Environments can publish a dev server, a file or a static folder as a public tunnel at
+`<name>-<slug>.<domain>`. The relay routes those hostnames by SNI like every other environment
+host: TLS still terminates on the environment, so the relay sees the hostname, the visitor's IP
+and byte counts, never paths, headers or bodies. Names are owned by the environment and namespaced
+by its slug; the relay keeps no registry.
+
+- **Off by default.** Start with `--public-hosts` (or `RELAY_PUBLIC_HOSTS=1`). Off, name hostnames
+  are refused at SNI, and environments are told so when they connect. Hosting public content on
+  your domain is an abuse and phishing liability, so think before enabling it on a shared relay.
+- **Separate domain (recommended).** `--public-domain usercontent.example` puts names under that
+  domain and nowhere else; `<slug>` and `<port>-<slug>` stay under `--host`. Tunnel pages run
+  arbitrary JavaScript, and under `--host` they are same-site with the environment's own origin.
+  The domain needs wildcard DNS to the relay and must not overlap `--host`. Without it, names live
+  under `--host`.
+- **Visitor limits.** Every label except an environment's own `<slug>` is a visitor: each source IP
+  gets a burst of 100 new connections, refilled at 20 a second, with at most 64 open. Visitors never take the
+  last 16 streams of a tunnel, so the owner's own clients still connect when a tunnel is busy.
+- **Takedown.** `block <label>` kills one hostname; `revoke <slug>` kills the whole environment.
+
+Public tunnel certificates are issued by the environment over HTTP-01 through port 80, the same way
+as port hosts. Each name hostname appears in Certificate Transparency logs once its certificate is
+issued.
 
 ## Certificates
 
@@ -144,6 +178,10 @@ Environment variables on the environment side:
 - **Tunnel keeps dropping** — check `--max-streams`, `--idle-timeout-ms`, and the environment's
   log. A relay behind a NAT that lacks 80/443 passthrough, or in front of a TLS-terminating proxy,
   shows up here.
+- **A public tunnel hostname refuses connections** — the relay needs `--public-hosts`; with
+  `--public-domain`, the name lives only under that domain (check its wildcard DNS). Check
+  `hhh-relay blocked`. Busy tunnels refuse new visitor connections before the owner's.
+- **`A public domain needs public hosts enabled`** — pass `--public-hosts` with `--public-domain`.
 - **SQLite busy or a second `serve` fails** — run only one `serve` per state file.
 - **Docker** — compose reads its variables at `docker compose up` and again at each
   `docker compose exec`; keep the `relay-data` volume.

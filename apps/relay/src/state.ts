@@ -5,6 +5,7 @@ import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 import * as NodeCrypto from "node:crypto";
 import { validatePublicKey } from "@t3tools/relay-tunnel/auth";
+import { parseHostLabel } from "@t3tools/relay-tunnel/mux";
 
 export interface EnrolledEnvironment {
   slug: string;
@@ -18,7 +19,8 @@ export class RelayState {
     this.db = new NodeSqlite.DatabaseSync(path);
     this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;
       CREATE TABLE IF NOT EXISTS environments (slug TEXT PRIMARY KEY, publicKey TEXT NOT NULL, createdAt INTEGER NOT NULL);
-      CREATE TABLE IF NOT EXISTS tokens (hash TEXT PRIMARY KEY, expiresAt INTEGER NOT NULL);`);
+      CREATE TABLE IF NOT EXISTS tokens (hash TEXT PRIMARY KEY, expiresAt INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS blocked_labels (label TEXT PRIMARY KEY, createdAt INTEGER NOT NULL);`);
   }
   purgeExpiredTokens(): void {
     this.db.prepare("DELETE FROM tokens WHERE expiresAt <= ?").run(Date.now());
@@ -64,6 +66,26 @@ export class RelayState {
   }
   revoke(slug: string): boolean {
     return this.db.prepare("DELETE FROM environments WHERE slug = ?").run(slug).changes === 1;
+  }
+  /** Operator takedown of one hostname label (e.g. `docs-abcdef`) without revoking its environment. */
+  block(label: string): boolean {
+    if (!parseHostLabel(label)) throw new Error(`Not a relay hostname label: ${label}`);
+    return (
+      this.db.prepare("INSERT OR IGNORE INTO blocked_labels VALUES (?, ?)").run(label, Date.now())
+        .changes === 1
+    );
+  }
+  unblock(label: string): boolean {
+    return this.db.prepare("DELETE FROM blocked_labels WHERE label = ?").run(label).changes === 1;
+  }
+  isBlocked(label: string): boolean {
+    return this.db.prepare("SELECT 1 FROM blocked_labels WHERE label = ?").get(label) !== undefined;
+  }
+  blockedLabels(): string[] {
+    return this.db
+      .prepare("SELECT label FROM blocked_labels ORDER BY createdAt")
+      .all()
+      .map((row) => String(row.label));
   }
   close(): void {
     this.db.close();

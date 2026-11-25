@@ -204,10 +204,13 @@ const make = Effect.gen(function* () {
       privateKey: current.privateKey,
       challenges,
       ...(relayCa ? { webSocketOptions: { ca: Buffer.from(relayCa) } } : {}),
-      allowPort: (port) =>
-        state?.ports.some(
-          (entry) => entry.port === port && entry.expiresAt > clock.currentTimeMillisUnsafe(),
-        ) ?? false,
+      // Public tunnel names are refused until the public tunnel service exists.
+      allowLabel: (label) =>
+        "port" in label &&
+        (state?.ports.some(
+          (entry) => entry.port === label.port && entry.expiresAt > clock.currentTimeMillisUnsafe(),
+        ) ??
+          false),
       getSecureContext: async (hostname) => {
         try {
           const context = await manager.getSecureContext(hostname);

@@ -6,8 +6,10 @@ import * as NodeTls from "node:tls";
 import { WebSocketServer, type WebSocket } from "ws";
 import { HandshakeChallenge } from "@t3tools/relay-tunnel/auth";
 import {
+  parseHostLabel,
   StreamMultiplexer,
   websocketBytes,
+  type HostLabel,
   type MuxStream,
   type StreamLabel,
 } from "@t3tools/relay-tunnel/mux";
@@ -25,7 +27,25 @@ export interface RelayServerOptions {
   httpPort?: number;
   maxStreams?: number;
   idleTimeoutMs?: number;
+  /** Route `<name>-<slug>` public tunnel hostnames. Off by default: they are refused at SNI. */
+  publicHosts?: boolean;
+  /** Separate domain for `<name>-<slug>` hostnames instead of the relay host. Needs publicHosts. */
+  publicDomain?: string;
+  /** Per visitor IP, for every label except an environment's own `<slug>`. */
+  visitorLimits?: Partial<VisitorLimits>;
 }
+export interface VisitorLimits {
+  /** New connections a visitor IP may open at once. */
+  burst: number;
+  /** New connections per second the burst refills at. */
+  perSecond: number;
+  /** Open connections per visitor IP. */
+  concurrent: number;
+}
+const DEFAULT_VISITOR_LIMITS: VisitorLimits = { burst: 100, perSecond: 20, concurrent: 64 };
+/** Mux streams kept free for the owner's own `<slug>` clients when visitors are busy. */
+const OWNER_RESERVED_STREAMS = 16;
+const HOSTNAME = /^[a-z0-9][a-z0-9.-]*[a-z0-9]$/;
 interface Tunnel {
   ws: WebSocket;
   mux: StreamMultiplexer;
@@ -80,12 +100,48 @@ export class RelayServer {
     this.buckets.set(ip, { tokens: Math.max(0, tokens - 1), at: now });
     return tokens >= 1;
   }
+  private readonly visitorBuckets = new Map<string, { tokens: number; at: number }>();
+  private readonly visitorConnections = new Map<string, number>();
+  private admitVisitor(socket: NodeNet.Socket): boolean {
+    const limits = { ...DEFAULT_VISITOR_LIMITS, ...this.options.visitorLimits };
+    const ip = socket.remoteAddress ?? "unknown";
+    const open = this.visitorConnections.get(ip) ?? 0;
+    if (open >= limits.concurrent) return false;
+    const now = Date.now();
+    const prior = this.visitorBuckets.get(ip);
+    if (!prior && this.visitorBuckets.size >= 10000) return false;
+    const tokens = Math.min(
+      limits.burst,
+      (prior?.tokens ?? limits.burst) + ((now - (prior?.at ?? now)) / 1000) * limits.perSecond,
+    );
+    this.visitorBuckets.set(ip, { tokens: Math.max(0, tokens - 1), at: now });
+    if (tokens < 1) return false;
+    this.visitorConnections.set(ip, open + 1);
+    socket.once("close", () => {
+      const left = (this.visitorConnections.get(ip) ?? 1) - 1;
+      if (left > 0) this.visitorConnections.set(ip, left);
+      else this.visitorConnections.delete(ip);
+    });
+    return true;
+  }
+  /** Every socket piped into a tunnel, by hostname label, so `block` can cut it. */
+  private readonly bridged = new Map<NodeNet.Socket, string>();
   private revocationTimer: ReturnType<typeof setInterval> | undefined;
   private readonly options: RelayServerOptions;
   constructor(options: RelayServerOptions) {
     this.options = options;
-    if (!/^[a-z0-9][a-z0-9.-]*[a-z0-9]$/.test(options.relayHost))
-      throw new Error("Invalid relay hostname");
+    if (!HOSTNAME.test(options.relayHost)) throw new Error("Invalid relay hostname");
+    const publicDomain = options.publicDomain;
+    if (publicDomain !== undefined) {
+      if (!options.publicHosts) throw new Error("A public domain needs public hosts enabled");
+      if (!HOSTNAME.test(publicDomain)) throw new Error("Invalid public domain");
+      if (
+        publicDomain === options.relayHost ||
+        publicDomain.endsWith(`.${options.relayHost}`) ||
+        options.relayHost.endsWith(`.${publicDomain}`)
+      )
+        throw new Error("The public domain must not overlap the relay host");
+    }
     this.tls.on("tlsClientError", (_error, socket) => socket.destroy());
     this.control.on("upgrade", (request, socket, head) => {
       if (
@@ -144,9 +200,23 @@ export class RelayServer {
     this.options.state.purgeExpiredTokens();
     for (const [ip, bucket] of this.buckets)
       if (Date.now() - bucket.at > 60_000) this.buckets.delete(ip);
+    for (const [ip, bucket] of this.visitorBuckets)
+      if (Date.now() - bucket.at > 60_000) this.visitorBuckets.delete(ip);
+    this.closeBlocked();
     for (const [slug, tunnel] of this.tunnels) {
       if (this.options.state.get(slug)?.publicKey !== tunnel.publicKey) tunnel.mux.close();
     }
+  }
+  /** Refuse one hostname label from now on and cut its live connections. */
+  block(label: string): boolean {
+    const added = this.options.state.block(label);
+    this.closeBlocked();
+    return added;
+  }
+  private closeBlocked(): void {
+    if (!this.bridged.size) return;
+    const blocked = new Set(this.options.state.blockedLabels());
+    for (const [socket, label] of this.bridged) if (blocked.has(label)) socket.destroy();
   }
   revoke(slug: string): boolean {
     const removed = this.options.state.revoke(slug);
@@ -243,7 +313,14 @@ export class RelayServer {
         )
           throw new Error("Invalid stream limit");
         const maxStreams = Math.min(this.options.maxStreams ?? 128, peerLimit);
-        ws.send(JSON.stringify({ type: "authenticated", maxStreams }));
+        ws.send(
+          JSON.stringify({
+            type: "authenticated",
+            maxStreams,
+            features: this.options.publicHosts ? ["public-hosts"] : [],
+            ...(this.options.publicDomain ? { publicDomain: this.options.publicDomain } : {}),
+          }),
+        );
         const mux = new StreamMultiplexer(ws, {
           initiator: true,
           maxStreams,
@@ -261,25 +338,66 @@ export class RelayServer {
       }
     });
   }
+  /**
+   * `<slug>` and `<port>-<slug>` live under the relay host. `<name>-<slug>` lives under the public
+   * domain when there is one, else the relay host, and only with public hosts on. The environment
+   * decides whether a name exists; the relay keeps no registry.
+   */
+  private hostLabel(hostname: string): (HostLabel & { label: string }) | undefined {
+    const { relayHost, publicDomain, publicHosts } = this.options;
+    const underPublic = publicDomain !== undefined && hostname.endsWith(`.${publicDomain}`);
+    const suffix = `.${underPublic ? publicDomain : relayHost}`;
+    if (!hostname.endsWith(suffix)) return undefined;
+    const label = hostname.slice(0, -suffix.length);
+    const parsed = parseHostLabel(label);
+    if (!parsed) return undefined;
+    if (parsed.name === undefined) return underPublic ? undefined : { label, ...parsed };
+    if (!publicHosts || underPublic !== (publicDomain !== undefined)) return undefined;
+    return { label, ...parsed };
+  }
   private destination(
     hostname: string,
     kind: "http" | "tls",
     remoteAddr?: string,
   ): { tunnel: Tunnel; metadata: StreamLabel } | undefined {
-    const suffix = `.${this.options.relayHost}`;
-    if (!hostname.endsWith(suffix)) return undefined;
-    const label = hostname.slice(0, -suffix.length);
-    const match = /^(?:([1-9][0-9]{0,4})-)?([a-z][a-z0-9]{5,31})$/.exec(label);
-    if (!match) return undefined;
-    const slug = match[2];
-    const port = match[1] ? Number(match[1]) : undefined;
-    if (!slug || (port !== undefined && port > 65535)) return undefined;
-    const tunnel = this.tunnels.get(slug);
-    if (!tunnel || this.options.state.get(slug)?.publicKey !== tunnel.publicKey) return undefined;
+    const host = this.hostLabel(hostname);
+    if (!host || this.options.state.isBlocked(host.label)) return undefined;
+    const tunnel = this.tunnels.get(host.slug);
+    if (!tunnel || this.options.state.get(host.slug)?.publicKey !== tunnel.publicKey)
+      return undefined;
     return {
       tunnel,
-      metadata: { label, kind, ...(remoteAddr ? { remoteAddr } : {}), ...(port ? { port } : {}) },
+      metadata: {
+        label: host.label,
+        kind,
+        ...(remoteAddr ? { remoteAddr } : {}),
+        ...(host.port !== undefined ? { port: host.port } : {}),
+        ...(host.name !== undefined ? { name: host.name } : {}),
+      },
     };
+  }
+  /**
+   * Opens the mux stream for a routed socket. Visitors (any label but the environment's own
+   * `<slug>`) are admitted per IP and never take the streams reserved for the owner.
+   */
+  private openStream(
+    socket: NodeNet.Socket,
+    { tunnel, metadata }: { tunnel: Tunnel; metadata: StreamLabel },
+  ): MuxStream | undefined {
+    if (metadata.port !== undefined || metadata.name !== undefined) {
+      const { maxStreams, streamCount } = tunnel.mux;
+      const reserved = Math.min(OWNER_RESERVED_STREAMS, Math.floor(maxStreams / 2));
+      if (streamCount >= maxStreams - reserved || !this.admitVisitor(socket)) return undefined;
+    }
+    let stream: MuxStream;
+    try {
+      stream = tunnel.mux.open(metadata);
+    } catch {
+      return undefined;
+    }
+    this.bridged.set(socket, metadata.label);
+    socket.once("close", () => this.bridged.delete(socket));
+    return stream;
   }
   private bridge(socket: NodeNet.Socket, stream: MuxStream, initial: Buffer): void {
     socket.once("error", () => stream.destroy());
@@ -301,11 +419,12 @@ export class RelayServer {
       return;
     }
     const destination = this.destination(hello.servername, "tls", socket.remoteAddress);
-    if (!destination) {
+    const stream = destination && this.openStream(socket, destination);
+    if (!stream) {
       socket.destroy();
       return;
     }
-    this.bridge(socket, destination.tunnel.mux.open(destination.metadata), hello.bytes);
+    this.bridge(socket, stream, hello.bytes);
   }
   private routeHttp(socket: NodeNet.Socket): void {
     let bytes = Buffer.alloc(0);
@@ -333,7 +452,9 @@ export class RelayServer {
         socket.end("HTTP/1.1 400 Bad Request\r\nConnection: close\r\nContent-Length: 0\r\n\r\n");
         return;
       }
-      if (hostname !== this.options.relayHost && !hostname.endsWith(`.${this.options.relayHost}`)) {
+      const ownDomain = (domain: string | undefined): boolean =>
+        domain !== undefined && (hostname === domain || hostname.endsWith(`.${domain}`));
+      if (!ownDomain(this.options.relayHost) && !ownDomain(this.options.publicDomain)) {
         socket.end(
           "HTTP/1.1 421 Misdirected Request\r\nConnection: close\r\nContent-Length: 0\r\n\r\n",
         );
@@ -351,12 +472,9 @@ export class RelayServer {
           return;
         }
         const destination = this.destination(hostname, "http", socket.remoteAddress);
-        if (destination) {
-          try {
-            this.bridge(socket, destination.tunnel.mux.open(destination.metadata), bytes);
-          } catch {
-            socket.destroy();
-          }
+        const stream = destination && this.openStream(socket, destination);
+        if (stream) {
+          this.bridge(socket, stream, bytes);
           return;
         }
       }
