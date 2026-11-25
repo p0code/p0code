@@ -15,6 +15,7 @@ import { createThreadListEnvironmentsAtom } from "../../state/thread-list-enviro
 
 import {
   createThreadRowProviderInstanceResolver,
+  resolveThreadAccountLabel,
   resolveThreadProviderInstance,
 } from "./thread-provider-instance";
 
@@ -24,6 +25,7 @@ function makeConfig(
     readonly driver: string;
     readonly displayName?: string;
     readonly accentColor?: string;
+    readonly instanceBadge?: string;
   }>,
 ): ServerConfig {
   return {
@@ -114,6 +116,35 @@ describe("resolveThreadProviderInstance", () => {
       displayName: "Codex Work",
       showBadge: true,
     });
+  });
+});
+
+describe("account badges and names", () => {
+  const environmentId = EnvironmentId.make("environment-a");
+  const providers = makeConfig([
+    { instanceId: "claudeAgent", driver: "claudeAgent", displayName: "Claude Work Business" },
+    { instanceId: "claude_work_2", driver: "claudeAgent", displayName: "Claude Work 2" },
+    { instanceId: "codex", driver: "codex" },
+  ]).providers;
+
+  it("gives accounts of one driver distinct badges", () => {
+    const badgeOf = (instanceId: string) =>
+      resolveThreadProviderInstance(providers, makeThread(environmentId, instanceId))?.badgeLabel;
+    expect([badgeOf("claudeAgent"), badgeOf("claude_work_2")]).toEqual(["CWB", "CW2"]);
+  });
+
+  it("names the account only when another instance shares its driver", () => {
+    expect(resolveThreadAccountLabel(providers, makeThread(environmentId, "claude_work_2"))).toBe(
+      "Claude Work 2",
+    );
+    expect(resolveThreadAccountLabel(providers, makeThread(environmentId, "codex"))).toBeNull();
+  });
+
+  it("shows a badge set in settings even on a lone instance", () => {
+    const lone = makeConfig([{ instanceId: "codex", driver: "codex", instanceBadge: "🏢" }]);
+    expect(
+      resolveThreadProviderInstance(lone.providers, makeThread(environmentId, "codex")),
+    ).toMatchObject({ badgeLabel: "🏢", showBadge: true });
   });
 });
 

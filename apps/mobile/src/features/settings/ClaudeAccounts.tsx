@@ -29,6 +29,10 @@ import {
   type ClaudeAccountDraft,
 } from "./claude-accounts";
 import type { SettingsTarget } from "./settings-environment-filter";
+import {
+  PROVIDER_INSTANCE_BADGE_ACTION_ID,
+  useProviderInstanceBadgeAction,
+} from "./useProviderInstanceBadgeAction";
 
 function useProviderInstanceMutation(environment: SettingsTarget) {
   const gt = useGT();
@@ -74,6 +78,7 @@ export function ClaudeAccount({
   const gt = useGT();
   const [editing, setEditing] = useState(false);
   const { run, pending, error } = useProviderInstanceMutation(environment);
+  const badge = useProviderInstanceBadgeAction(environment, provider);
   const instance = environment.serverConfig.settings.providerInstances[provider.instanceId];
   const configDir = claudeConfigDir(instance);
   const name = provider.displayName ?? "Claude";
@@ -94,6 +99,7 @@ export function ClaudeAccount({
     );
   const actions: MenuAction[] = [
     { id: "edit", title: gt("Edit"), image: "pencil" },
+    badge.action,
     ...(removable
       ? [
           {
@@ -145,6 +151,7 @@ export function ClaudeAccount({
             onPressAction={({ nativeEvent }) => {
               if (pending) return;
               if (nativeEvent.event === "edit") setEditing(true);
+              else if (nativeEvent.event === PROVIDER_INSTANCE_BADGE_ACTION_ID) badge.edit();
               else if (nativeEvent.event === "remove") remove();
             }}
           >

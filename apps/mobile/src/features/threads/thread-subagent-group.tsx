@@ -3,6 +3,7 @@ import { useGT, useMessages } from "gt-react-native";
 import { StackActions, useNavigation } from "@react-navigation/native";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
+  resolveProviderInstanceBadges,
   resolveProviderInstanceDisplayName,
   shouldShowInstanceBadge,
 } from "@t3tools/client-runtime/state/provider-instance-display";
@@ -89,6 +90,7 @@ function SubagentAvatar(props: {
           iconUrl={provider.iconUrl}
           size={15}
           displayName={resolveProviderInstanceDisplayName(provider)}
+          badgeLabel={resolveProviderInstanceBadges(providers).get(provider.instanceId)}
           accentColor={provider.accentColor}
           showBadge
         />

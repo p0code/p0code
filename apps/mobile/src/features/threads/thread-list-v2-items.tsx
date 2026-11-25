@@ -1669,6 +1669,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
               provider={providerInstance.driverKind}
               size={14}
               displayName={providerInstance.displayName}
+              badgeLabel={providerInstance.badgeLabel}
               accentColor={providerInstance.accentColor}
               showBadge={providerInstance.showBadge}
               surfaceColor={rowAppearance.providerIconSurfaceColor}

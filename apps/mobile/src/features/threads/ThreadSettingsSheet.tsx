@@ -60,7 +60,7 @@ import { useSheetStackOptions } from "../layout/nested-stacks";
 
 import { groupModelsBySubProvider } from "@t3tools/client-runtime/providerSubProviders";
 import { formatProviderUpdateRequiredNotice } from "@t3tools/client-runtime/providerUpdateRequiredModels";
-import { ProviderIcon } from "../../components/ProviderIcon";
+import { ProviderIcon, ProviderInstanceIcon } from "../../components/ProviderIcon";
 import type { AppBarSearch } from "../../components/ui/AppBar";
 import { AppBar } from "../../components/ui/AppBar";
 import { SymbolView } from "../../components/ui/AppSymbol";
@@ -155,6 +155,7 @@ const attemptedMigrationGenerations = new Map<EnvironmentId, number>();
 function ProviderHeader(props: {
   readonly driver: string | undefined;
   readonly iconUrl: string | undefined;
+  readonly badge?: ModelOption["providerBadge"];
   readonly label: string;
   /** A backend inside a provider's section, such as one of fx's: no icon. */
   readonly nested?: boolean;
@@ -168,7 +169,17 @@ function ProviderHeader(props: {
   const gt = useGT();
   const content = (
     <>
-      {props.nested ? null : (
+      {props.nested ? null : props.badge?.showBadge ? (
+        <ProviderInstanceIcon
+          iconUrl={props.iconUrl}
+          provider={props.driver}
+          size={15}
+          displayName={props.badge.displayName}
+          badgeLabel={props.badge.badgeLabel}
+          accentColor={props.badge.accentColor}
+          showBadge
+        />
+      ) : (
         <ProviderIcon iconUrl={props.iconUrl} provider={props.driver} size={15} />
       )}
       {props.detail ? (
@@ -177,7 +188,12 @@ function ProviderHeader(props: {
           <Text className="text-xs text-foreground-muted">{props.detail}</Text>
         </View>
       ) : (
-        <Text className="text-sm font-t3-medium text-foreground-muted">{props.label}</Text>
+        <Text className="shrink text-sm font-t3-medium text-foreground-muted" numberOfLines={1}>
+          {props.label}
+          {props.badge?.namesAccount && props.badge.accountDetail ? (
+            <Text className="text-xs">{` · ${props.badge.accountDetail}`}</Text>
+          ) : null}
+        </Text>
       )}
       {props.collapsible ? (
         <>
@@ -722,6 +738,7 @@ type ThreadSettingsProviderCatalog = {
   readonly key: string;
   readonly driver: string | undefined;
   readonly iconUrl: string | undefined;
+  readonly badge: ModelOption["providerBadge"];
   readonly label: string;
   readonly collapsible: boolean;
   readonly collapsed: boolean;
@@ -805,6 +822,7 @@ function ThreadSettingsProviderListHeader(props: {
       collapsed={props.provider.collapsed}
       driver={props.provider.driver}
       iconUrl={props.provider.iconUrl}
+      badge={props.provider.badge}
       label={props.provider.label}
       modelCount={props.provider.modelCount}
       onToggle={onToggle}
@@ -941,6 +959,7 @@ function buildThreadSettingsCatalogItems(
       key: group.providerKey,
       driver,
       iconUrl: group.models[0]?.providerIconUrl,
+      badge: group.models[0]?.providerBadge,
       label: group.providerLabel,
       collapsible,
       collapsed,

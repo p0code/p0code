@@ -296,11 +296,18 @@ describe("mobile model options", () => {
     } as unknown as ServerConfig;
     const selection = { instanceId: ProviderInstanceId.make("codex_work"), model: "saved" };
     const options = buildModelOptions(config, selection, undefined, null);
-    expect(options[0]?.providerBadge).toEqual({ displayName: "Personal", showBadge: true });
+    expect(options[0]?.providerBadge).toEqual({
+      displayName: "Personal",
+      badgeLabel: "PE",
+      showBadge: true,
+      namesAccount: true,
+    });
     expect(options[1]?.providerBadge).toEqual({
       displayName: "Work",
+      badgeLabel: "WO",
       accentColor: "#123456",
       showBadge: true,
+      namesAccount: true,
     });
     expect(options[2]?.providerBadge).toEqual(options[1]?.providerBadge);
     expect(
@@ -311,6 +318,31 @@ describe("mobile model options", () => {
         null,
       )[0]?.providerBadge?.showBadge,
     ).toBe(false);
+  });
+
+  it("gives same-driver accounts distinct badges and their sign-in details", () => {
+    const config = {
+      providers: [
+        { instanceId: "claudeAgent", displayName: "Claude Work Business" },
+        { instanceId: "claude_work_2", displayName: "Claude Work 2" },
+      ].map((provider) => ({
+        ...provider,
+        driver: "claudeAgent",
+        enabled: true,
+        installed: true,
+        auth: { status: "authenticated", email: "work@example.com", label: "Max" },
+        models: [{ slug: "test", name: "Test", capabilities: null }],
+      })),
+    } as unknown as ServerConfig;
+    expect(
+      buildModelOptions(config, null, undefined, null).map((option) => [
+        option.providerBadge?.badgeLabel,
+        option.providerBadge?.accountDetail,
+      ]),
+    ).toEqual([
+      ["CWB", "work@example.com · Max"],
+      ["CW2", "work@example.com · Max"],
+    ]);
   });
 
   it("only badges ACP accounts that share the same agent", () => {

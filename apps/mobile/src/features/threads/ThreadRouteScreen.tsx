@@ -56,7 +56,8 @@ import { scopedThreadKey } from "../../lib/scopedEntities";
 import { useDelayedStatus } from "../../lib/useDelayedStatus";
 import { connectionRetryLabel } from "./floating-working-status";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { useThreadShell } from "../../state/entities";
+import { useEnvironmentServerConfig, useThreadShell } from "../../state/entities";
+import { resolveThreadAccountLabel } from "./thread-provider-instance";
 import { NATIVE_LIQUID_GLASS_SUPPORTED } from "../../native/native-glass";
 import { connectionTone } from "../connection/connectionTone";
 import { runtimeConnectionErrorText } from "../connection/environmentStatusText";
@@ -546,9 +547,13 @@ function ThreadRouteContent(
       : scopeThreadRef(delegatedFrom.environmentId, delegatedFrom.threadId);
   // The title it had at delegation, until this client sees the parent itself.
   const delegatedFromThread = useThreadShell(delegatedFromRef);
+  const threadServerConfig = useEnvironmentServerConfig(selectedThread?.environmentId ?? null);
   const headerSubtitle = [
     selectedThreadProject?.title ?? null,
     selectedEnvironmentConnection?.environmentLabel ?? null,
+    selectedThread
+      ? resolveThreadAccountLabel(threadServerConfig?.providers, selectedThread)
+      : null,
     // A linked environment's delegated task names its parent; other linked work its origin.
     delegatedFrom !== null
       ? gt("Subagent of {title}", { title: delegatedFromThread?.title ?? delegatedFrom.title })

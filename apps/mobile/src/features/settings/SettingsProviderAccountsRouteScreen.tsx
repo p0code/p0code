@@ -39,6 +39,10 @@ import { AddClaudeAccount, ClaudeAccount } from "./ClaudeAccounts";
 import { AccountProfilesSection } from "./AccountProfilesSection";
 import { CLAUDE_DRIVER } from "./claude-accounts";
 import { useSettingsEnvironmentFilter, type SettingsTarget } from "./settings-environment-filter";
+import {
+  PROVIDER_INSTANCE_BADGE_ACTION_ID,
+  useProviderInstanceBadgeAction,
+} from "./useProviderInstanceBadgeAction";
 
 export function SettingsProviderAccountsRouteScreen() {
   const gt = useGT();
@@ -173,6 +177,7 @@ function ProviderAccount({
   const cancel = useAtomCommand(serverEnvironment.cancelProviderAuth, options);
   const logout = useAtomCommand(serverEnvironment.logoutProviderAuth, options);
   const removeMethod = useAtomCommand(serverEnvironment.removeProviderAuthMethod, options);
+  const badge = useProviderInstanceBadgeAction(environment, provider);
   const canRemoveMethod = useAtomValue(
     serverEnvironment.removeProviderAuthMethod.permissionAtom(environmentId),
   );
@@ -329,7 +334,8 @@ function ProviderAccount({
     );
   }
   function onMenuAction(id: string) {
-    if (id === "signOut") signOut();
+    if (id === PROVIDER_INSTANCE_BADGE_ACTION_ID) badge.edit();
+    else if (id === "signOut") signOut();
     // iOS keeps a disabled submenu's children selectable, so sign-in guards here too.
     else if (signInDisabled) return;
     else if (id.startsWith("remove:")) {
@@ -341,6 +347,7 @@ function ProviderAccount({
     else if (id === "change") startSignIn();
   }
   const accountActions: MenuAction[] = [
+    badge.action,
     ...removeActions,
     ...(canSignIn
       ? [
