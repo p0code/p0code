@@ -1,7 +1,4 @@
 import {
-  EventId,
-  GUEST_COMMAND_OUTPUT_ROUTE,
-  GUEST_RENDER_ROUTE,
   GuestMessageId,
   GuestShareId,
   GuestStreamEvent,
@@ -88,21 +85,6 @@ const items: ReadonlyArray<OrchestrationV2TurnItem> = [
     text: "Run the checks",
     attachments: [],
   },
-  // As the owner's stream sends it: the output loads when the row expands.
-  {
-    ...itemBase("command", 1),
-    type: "command_execution",
-    input: "vp run check:changed",
-    outputOmitted: true,
-    exitCode: 0,
-  },
-  {
-    ...itemBase("visual", 2),
-    type: "dynamic_tool",
-    toolName: "mcp__t3-code__html_render",
-    input: null,
-    output: { htmlRender: { attachmentId: "thread-a-1", title: "Chart", height: 200 } },
-  },
   reply("reply", 3, "All checks pass."),
 ];
 
@@ -115,7 +97,7 @@ const view: GuestShareView = {
   model: { driver: ProviderDriverKind.make("codex"), name: "GPT-5.4", shortName: "5.4" },
 };
 
-/** The stream's opening, as the server sends it: the share, then the owner's snapshot. */
+/** The stream's opening, as the server sends it: the share, then the public snapshot. */
 const opening = (
   runs: ReadonlyArray<OrchestrationV2Run>,
   turnItems: ReadonlyArray<OrchestrationV2TurnItem>,
@@ -129,7 +111,6 @@ const opening = (
       projection: {
         ...fixture,
         runs,
-        turnItems,
         visibleTurnItems: turnItems.map((item, position) => ({
           position,
           visibility: "local",
@@ -149,41 +130,16 @@ const threadEvent = (
     | { readonly type: "turn-item.updated"; readonly payload: OrchestrationV2TurnItem }
     | { readonly type: "run.updated"; readonly payload: OrchestrationV2Run },
 ): GuestStreamEvent => {
-  const common = {
-    id: EventId.make(`event-${sequence}`),
-    threadId,
-    providerInstanceId: fixture.thread.providerInstanceId,
-    occurredAt: finished,
-  };
   return {
     type: "thread",
     item: {
       kind: "event",
       sequence,
-      event:
-        event.type === "run.updated"
-          ? { ...common, type: "run.updated", runId: event.payload.id, payload: event.payload }
-          : {
-              ...common,
-              type: "turn-item.updated",
-              driver: ProviderDriverKind.make("codex"),
-              payload: event.payload,
-            },
+      event,
     },
   };
 };
 
-const finalOutput = JSON.stringify({
-  kind: "replace",
-  text: "4 files checked\n",
-  truncated: false,
-  running: false,
-});
-
-/**
- * Delivers the opening as soon as the page subscribes, or a command's final output. `sources`
- * collects the streams, so a test can send more events.
- */
 function fakeEventSource(
   events: ReadonlyArray<GuestStreamEvent>,
   sources: Array<EventTarget> = [],
@@ -194,9 +150,7 @@ function fakeEventSource(
     constructor(readonly url: string) {
       super();
       sources.push(this);
-      const frames = url.startsWith(GUEST_COMMAND_OUTPUT_ROUTE)
-        ? [finalOutput]
-        : events.map((event) => encodeEvent(event));
+      const frames = events.map((event) => encodeEvent(event));
       queueMicrotask(() => {
         for (const data of frames) this.dispatchEvent(new MessageEvent("message", { data }));
       });
@@ -230,18 +184,8 @@ describe("GuestPage", () => {
     await using screen = await render(<GuestPage />, { container });
 
     await expect.element(screen.getByText("All checks pass.")).toBeVisible();
-    // A finished turn folds its work, as it does for the owner; the command is inside.
-    await userEvent.click(screen.getByRole("button", { name: /Worked for/ }));
-    await expect.element(screen.getByText("vp run check:changed")).toBeVisible();
-    // Expanding the command shows its output, read through the guest route.
-    await userEvent.click(screen.getByText("vp run check:changed"));
-    await expect.element(screen.getByText("4 files checked")).toBeVisible();
-    await expect
-      .element(screen.getByTitle("Chart"))
-      .toHaveAttribute(
-        "src",
-        expect.stringContaining(`${GUEST_RENDER_ROUTE}?share=${SHARE_ID}&item=visual`),
-      );
+    await expect.element(screen.getByText("Run the checks")).toBeVisible();
+    expect(screen.container.textContent).not.toContain("vp run check:changed");
     // Guests cannot act on the thread, so no control offers to.
     expect(screen.container.querySelector('[aria-label="Fork from this response"]')).toBeNull();
     expect(socket).not.toHaveBeenCalled();

@@ -48,7 +48,9 @@ revocation and ceilings hold, not what a full-scope session can do once issued.
 3. **Mode or policy escalation.** An agent, MCP client, or peer link acting
    above its runtime-mode ceiling, `linkOrigin`, `T3-Mode-Limit`, or managed
    policy.
-4. **Guest escape.** A guest token reading another thread, acting beyond
+4. **Guest escape.** Guest links expose conversation messages, status, and file-change summaries
+   with diff text removed, never raw execution records or command output.
+   A guest token reading another thread, acting beyond
    proposing messages, or surviving a closed or replaced share.
 5. **Revocation that doesn't take effect.** A revoked session, device key,
    pairing link, or peer link that still works. Documented exception: signed

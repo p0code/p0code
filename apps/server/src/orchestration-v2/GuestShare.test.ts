@@ -321,7 +321,7 @@ it.effect("shows a guest message as dismissed when the owner cancels its queued 
   }).pipe(Effect.provide(layerTest)),
 );
 
-it.effect("brings a settled thread back when its guest sends a request", () =>
+it.effect("keeps a settled thread settled when its guest submits without starting a run", () =>
   Effect.gen(function* () {
     const orchestrator = yield* setup;
     const projections = yield* ProjectionStore.ProjectionStoreV2;
@@ -337,10 +337,8 @@ it.effect("brings a settled thread back when its guest sends a request", () =>
       commandId: CommandId.make("settle"),
       threadId,
     });
-    assert.equal(
-      (yield* projections.getThreadProjection(threadId)).thread.settledOverride,
-      "settled",
-    );
+    const before = yield* projections.getThreadProjection(threadId);
+    assert.equal(before.thread.settledOverride, "settled");
     yield* orchestrator.dispatch({
       type: "thread.guest-message.submit",
       commandId: CommandId.make("submit"),
@@ -350,7 +348,12 @@ it.effect("brings a settled thread back when its guest sends a request", () =>
       text: "Why?",
     });
     const { thread } = yield* projections.getThreadProjection(threadId);
-    assert.isNull(thread.settledOverride);
-    assert.isNull(thread.settledAt);
+    assert.equal(thread.settledOverride, before.thread.settledOverride);
+    assert.deepEqual(thread.settledAt, before.thread.settledAt);
+    assert.deepEqual(thread.unsettledAt, before.thread.unsettledAt);
+    assert.equal(
+      (yield* projections.getThreadProjection(threadId)).runs.length,
+      before.runs.length,
+    );
   }).pipe(Effect.provide(layerTest)),
 );

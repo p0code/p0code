@@ -1,9 +1,7 @@
 import {
-  EventId,
   GuestMessageId,
   GuestShareId,
   MessageId,
-  ProviderDriverKind,
   RunId,
   TurnItemId,
   type GuestShareView,
@@ -87,12 +85,7 @@ const itemEvent = (sequence: number, item: OrchestrationV2TurnItem): GuestStream
     kind: "event",
     sequence,
     event: {
-      id: EventId.make(`event-${sequence}`),
       type: "turn-item.updated",
-      threadId: projection.thread.id,
-      driver: ProviderDriverKind.make("codex"),
-      providerInstanceId: projection.thread.providerInstanceId,
-      occurredAt: now,
       payload: item,
     },
   },
