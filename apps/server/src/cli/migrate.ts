@@ -1,12 +1,4 @@
-// @effect-diagnostics nodeBuiltinImport:off -- The keychain binding is a native module loaded on demand.
-import * as NodeModule from "node:module";
 import { AppHomeConfig, STOCK_T3_HOME_DIRECTORY_NAME } from "@t3tools/shared/appHome";
-import {
-  credentialNamespace,
-  keychainSecrets,
-  keyringStore,
-  type KeychainStore,
-} from "@t3tools/shared/credentialKeychain";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import {
   formatMigrationReport,
@@ -22,36 +14,7 @@ import * as CliError from "effect/cli/CliError";
 import { Command, Flag } from "effect/cli";
 
 import { expandHomePath, resolveBaseDir } from "../os-jank.ts";
-
-const requireExternal = NodeModule.createRequire(import.meta.url);
-
-const resolveMigrationKeychain = async (
-  to: string,
-  dryRun: boolean,
-  requested: string,
-  platform: NodeJS.Platform,
-): Promise<KeychainStore | null> => {
-  if (requested === "file" || process.env.VITEST) return null;
-  if (requested !== "auto" && requested !== "keychain") {
-    throw new Error(`P0CODE_SECRET_BACKEND must be "keychain" or "file", got "${requested}".`);
-  }
-  try {
-    const keyring: typeof import("@napi-rs/keyring") = requireExternal("@napi-rs/keyring");
-    const store = keyringStore(keyring, platform);
-    if (!dryRun) {
-      const secrets = keychainSecrets(store, await credentialNamespace(`${to}/userdata/secrets`));
-      await secrets.probe();
-    }
-    return store;
-  } catch (cause) {
-    if (requested === "keychain") {
-      throw new Error("P0CODE_SECRET_BACKEND=keychain, but the OS keychain is not available.", {
-        cause,
-      });
-    }
-    return null;
-  }
-};
+import { resolveT3ImportKeychain } from "../t3Import.ts";
 
 const fromT3Command = Command.make("from-t3", {
   from: Flag.String("from").pipe(
@@ -107,12 +70,12 @@ const fromT3Command = Command.make("from-t3", {
       const platform = yield* HostProcess.Platform;
       const report = yield* Effect.tryPromise({
         try: async () => {
-          const keychain = await resolveMigrationKeychain(
+          const keychain = await resolveT3ImportKeychain({
             to,
-            flags.dryRun,
-            requestedBackend,
+            dryRun: flags.dryRun === true,
+            requested: requestedBackend,
             platform,
-          );
+          });
           return migrateFromT3({
             from,
             to,

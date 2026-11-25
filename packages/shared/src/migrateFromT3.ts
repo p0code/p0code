@@ -28,6 +28,10 @@ import { incompatibleSourceMigrations } from "./migrationManifest.ts";
  */
 
 export const MIGRATION_MARKER_FILE = "migrated-from-t3.json";
+/** Web consent written now and applied by the next server start, before its database opens. */
+export const PENDING_T3_IMPORT_FILE = "pending-t3-import.json";
+/** What the one import applied at startup copied, rewritten and skipped. */
+export const T3_IMPORT_REPORT_FILE = "t3-import-report.json";
 const MIGRATION_TOOL_VERSION = 1;
 
 export interface MigrationEntry {

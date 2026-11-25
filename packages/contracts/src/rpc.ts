@@ -480,6 +480,7 @@ import {
   ScheduledTaskMutationResult,
 } from "./scheduledTask.ts";
 import { SecretRequestAnswerInput, SecretRequestError } from "./secretRequest.ts";
+import { T3ImportAcceptInput, T3ImportError, T3ImportStatus } from "./t3Import.ts";
 import {
   ProjectCloneActionInput,
   ProjectCloneActionResult,
@@ -633,6 +634,8 @@ export const WS_METHODS = {
   peerLinksPairLink: "peerLinks.pairLink",
   serverGetSettings: "server.getSettings",
   serverUpdateSettings: "server.updateSettings",
+  t3ImportStatus: "t3Import.status",
+  t3ImportAccept: "t3Import.accept",
   serverDeleteEnvironmentTheme: "server.deleteEnvironmentTheme",
   serverDiscoverSourceControl: "server.discoverSourceControl",
   serverCheckSecretSource: "server.checkSecretSource",
@@ -1066,6 +1069,18 @@ const WsServerUpdateSettingsRpc = Rpc.make(WS_METHODS.serverUpdateSettings, {
   }),
   success: ServerSettings,
   error: Schema.Union([ServerSettingsError, EnvironmentAuthorizationError]),
+});
+
+const WsT3ImportStatusRpc = Rpc.make(WS_METHODS.t3ImportStatus, {
+  payload: Schema.Struct({}),
+  success: T3ImportStatus,
+  error: EnvironmentAuthorizationError,
+});
+
+const WsT3ImportAcceptRpc = Rpc.make(WS_METHODS.t3ImportAccept, {
+  payload: T3ImportAcceptInput,
+  success: T3ImportStatus,
+  error: Schema.Union([T3ImportError, EnvironmentAuthorizationError]),
 });
 
 const WsServerDeleteEnvironmentThemeRpc = Rpc.make(WS_METHODS.serverDeleteEnvironmentTheme, {
@@ -2611,6 +2626,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerGetSettingsRpc,
   WsServerReclaimDatabaseSpaceRpc,
   WsServerUpdateSettingsRpc,
+  WsT3ImportStatusRpc,
+  WsT3ImportAcceptRpc,
   WsServerDeleteEnvironmentThemeRpc,
   WsPeerLinksListRpc,
   WsPeerLinksNamesRpc,

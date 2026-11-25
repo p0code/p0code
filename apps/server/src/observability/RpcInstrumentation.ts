@@ -80,6 +80,8 @@ const RPC_AGGREGATES = {
   [WS_METHODS.serverGetSettings]: "server",
   [WS_METHODS.serverUpdateSettings]: "server",
   [WS_METHODS.serverDeleteEnvironmentTheme]: "server",
+  [WS_METHODS.t3ImportStatus]: "server",
+  [WS_METHODS.t3ImportAccept]: "server",
   [WS_METHODS.serverSearchAcpRegistry]: "server",
   [WS_METHODS.serverPrepareAcpRegistryAgent]: "server",
   [WS_METHODS.serverUninstallAcpRegistryManagedBinary]: "server",

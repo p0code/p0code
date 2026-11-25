@@ -149,6 +149,43 @@ it.layer(NodeServices.layer)("DesktopT3Import", (it) => {
       }),
   );
 
+  it.effect("does not prompt when the web welcome screen already staged consent", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const homeDirectory = yield* fs.makeTempDirectoryScoped({ prefix: "p0-desktop-t3-pending-" });
+      const baseDir = path.join(homeDirectory, ".p0code");
+      const stockHome = path.join(homeDirectory, ".t3");
+      yield* fs.makeDirectory(path.join(baseDir, "userdata"), { recursive: true });
+      yield* fs.writeFileString(
+        path.join(baseDir, "userdata", "pending-t3-import.json"),
+        '{"requestedAt":"2026-01-01T00:00:00.000Z","source":"/tmp/.t3","appVersion":"0.2.0"}',
+      );
+      seedT3Home(
+        stockHome,
+        migrationManifest.filter(([id]) => id <= 118),
+      );
+
+      const result = yield* offerT3Import().pipe(
+        Effect.provideService(DesktopEnvironment.DesktopEnvironment, {
+          homeDirectory,
+          baseDir,
+          isDevelopment: false,
+        } as unknown as DesktopEnvironment.DesktopEnvironment["Service"]),
+        Effect.provideService(ElectronDialog.ElectronDialog, {
+          showMessageBox: () => Effect.die("the dialog must not open for a pending import"),
+          showErrorBox: (title: string) => Effect.die(`unexpected error box: ${title}`),
+        } as unknown as ElectronDialog.ElectronDialog["Service"]),
+        Effect.provideService(ElectronApp.ElectronApp, {
+          relaunch: () => Effect.die("a pending import must not relaunch"),
+          quit: () => Effect.die("a pending import must not quit"),
+        } as unknown as ElectronApp.ElectronApp["Service"]),
+      );
+
+      assert.isFalse(result);
+    }),
+  );
+
   it.effect("imports a compatible T3 Code database on first launch and relaunches", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
