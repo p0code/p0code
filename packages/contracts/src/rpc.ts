@@ -6,6 +6,7 @@ import {
 import {
   SelfRelayStatus,
   SelfRelayLink,
+  SelfRelayStatusInput,
   RelayExposePort,
   RelayPortLink,
   SelfRelayOperationError,
@@ -1269,7 +1270,7 @@ const WsServerSignalProcessRpc = Rpc.make(WS_METHODS.serverSignalProcess, {
 });
 
 const WsserverRelayStatusRpc = Rpc.make(WS_METHODS.serverRelayStatus, {
-  payload: Schema.Struct({}),
+  payload: SelfRelayStatusInput,
   success: SelfRelayStatus,
   error: Schema.Union([SelfRelayOperationError, EnvironmentAuthorizationError]),
 });

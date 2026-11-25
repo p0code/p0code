@@ -5,8 +5,14 @@ import {
   AuthStandardClientScopes,
   type EnvironmentId,
 } from "@t3tools/contracts";
-import { useState } from "react";
-import { T, useGT } from "gt-react";
+import { useReducer, useState } from "react";
+import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
+import {
+  initialRelayLinkFormState,
+  relayLinkFormReducer,
+  relayLinkErrorMessage,
+} from "./SelfRelaySettings.logic";
+import { T, useGT, msg, useMessages } from "gt-react";
 import { serverEnvironment } from "~/state/server";
 import { authEnvironment } from "~/state/auth";
 import { useEnvironmentQuery } from "~/state/query";
@@ -17,22 +23,29 @@ import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { QRCodeSvg } from "../ui/qr-code";
 
-const DEFAULT_SELF_RELAY_URL = "https://relay.hhh.yhw.tw";
+const RELAY_URL_PLACEHOLDER = "https://relay.yourdomain.com";
 
 export function SelfRelaySettings({ environmentId }: { environmentId: EnvironmentId }) {
   const gt = useGT();
-  const status = useEnvironmentQuery(serverEnvironment.relayStatus({ environmentId, input: {} }));
+  const m = useMessages();
+  const [relayUrl, setRelayUrl] = useState("");
+  const [configRelayUrl, setConfigRelayUrl] = useState("");
+  const status = useEnvironmentQuery(
+    serverEnvironment.relayStatus({ environmentId, input: { relayUrl: configRelayUrl } }),
+  );
   const canLink = useAtomValue(serverEnvironment.relayLink.permissionAtom(environmentId));
   const canUnlink = useAtomValue(serverEnvironment.relayUnlink.permissionAtom(environmentId));
   const canExpose = useAtomValue(serverEnvironment.relayExposePort.permissionAtom(environmentId));
   const canShare = useEnvironmentScope(environmentId, AuthAccessWriteScope);
-  const link = useAtomCommand(serverEnvironment.relayLink);
+  const link = useAtomCommand(serverEnvironment.relayLink, { reportFailure: false });
   const unlink = useAtomCommand(serverEnvironment.relayUnlink);
   const expose = useAtomCommand(serverEnvironment.relayExposePort);
   const unexpose = useAtomCommand(serverEnvironment.relayUnexposePort);
   const portLink = useAtomCommand(serverEnvironment.relayPortLink);
   const pair = useAtomCommand(authEnvironment.createPairingCredential);
-  const [relayUrl, setRelayUrl] = useState(DEFAULT_SELF_RELAY_URL);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [form, dispatch] = useReducer(relayLinkFormReducer, initialRelayLinkFormState);
   const [token, setToken] = useState("");
   const [label, setLabel] = useState("");
   const [expiry, setExpiry] = useState("3600");
@@ -40,7 +53,7 @@ export function SelfRelaySettings({ environmentId }: { environmentId: Environmen
   const [port, setPort] = useState("");
   const [portAccess, setPortAccess] = useState<"private" | "link">("private");
   const [sharedUrl, setSharedUrl] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const busy = form.pending;
   const origin = status.data?.publicOrigin;
   const scopes = AuthStandardClientScopes.filter(
     (scope) =>
@@ -66,13 +79,21 @@ export function SelfRelaySettings({ environmentId }: { environmentId: Environmen
     }
   };
   const linkRelay = async () => {
-    setBusy(true);
-    const result = await link({ environmentId, input: { relayUrl, token } });
+    if (busy) return;
+    dispatch({ type: "start" });
+    const input = form.advanced ? { relayUrl, token } : { relayUrl, username, password };
+    setPassword("");
+    setToken("");
+    const result = await link({ environmentId, input });
     if (result._tag === "Success") {
-      setToken("");
+      dispatch({ type: "success" });
       status.refresh();
+    } else {
+      dispatch({
+        type: "failure",
+        error: relayLinkErrorMessage(squashAtomCommandFailure(result), m),
+      });
     }
-    setBusy(false);
   };
   return (
     <SettingsSection id="self-relay" title={gt("Self-hosted relay")}>
@@ -92,7 +113,9 @@ export function SelfRelaySettings({ environmentId }: { environmentId: Environmen
         {status.error ? <p role="alert">{status.error}</p> : null}
         {status.data?.linked ? (
           <div className="space-y-2 text-sm">
-            <p>{status.data.relayUrl}</p>
+            <p>
+              {status.data.slug} · {status.data.relayUrl}
+            </p>
             <p>{origin}</p>
             <p>
               {status.data.connected ? gt("Connected") : gt("Reconnecting")} · {gt("Certificate")}:{" "}
@@ -110,25 +133,111 @@ export function SelfRelaySettings({ environmentId }: { environmentId: Environmen
             </Button>
           </div>
         ) : (
-          <div className="flex flex-wrap gap-2">
-            <Input
-              aria-label={gt("Relay HTTPS origin")}
-              placeholder={DEFAULT_SELF_RELAY_URL}
-              value={relayUrl}
-              onChange={(event) => setRelayUrl(event.target.value)}
-            />
-            <Input
-              type="password"
-              aria-label={gt("Enrollment token")}
-              placeholder={gt("Enrollment token")}
-              value={token}
-              onChange={(event) => setToken(event.target.value)}
-            />
-            <Button
-              disabled={!canLink || busy || !relayUrl || !token}
-              onClick={() => void linkRelay()}
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              {m(
+                msg(
+                  "The relay only forwards encrypted traffic. Your password is sent to your relay once to link this environment and is never saved.",
+                ),
+              )}
+            </p>
+            <form
+              className="space-y-3"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void linkRelay();
+              }}
             >
-              <T>Link relay</T>
+              <label className="block space-y-1 text-sm">
+                <span>{m(msg("Relay URL"))}</span>
+                <Input
+                  type="url"
+                  placeholder={RELAY_URL_PLACEHOLDER}
+                  value={relayUrl}
+                  disabled={busy}
+                  onChange={(event) => setRelayUrl(event.target.value)}
+                  onBlur={() => setConfigRelayUrl(relayUrl.trim())}
+                />
+              </label>
+              {!form.advanced ? (
+                <>
+                  <label className="block space-y-1 text-sm">
+                    <span>{m(msg("Username"))}</span>
+                    <Input
+                      autoComplete="username"
+                      value={username}
+                      disabled={busy}
+                      onChange={(event) => setUsername(event.target.value)}
+                    />
+                  </label>
+                  <label className="block space-y-1 text-sm">
+                    <span>{m(msg("Password"))}</span>
+                    <Input
+                      type="password"
+                      autoComplete="current-password"
+                      value={password}
+                      disabled={busy}
+                      onChange={(event) => setPassword(event.target.value)}
+                    />
+                  </label>
+                </>
+              ) : (
+                <>
+                  <p className="text-xs text-muted-foreground">
+                    {m(msg("Use an enrollment token for agents, CI, or automated setup."))}
+                  </p>
+                  <label className="block space-y-1 text-sm">
+                    <span>{m(msg("Enrollment token"))}</span>
+                    <Input
+                      type="password"
+                      autoComplete="off"
+                      value={token}
+                      disabled={busy}
+                      onChange={(event) => setToken(event.target.value)}
+                    />
+                  </label>
+                </>
+              )}
+              {form.error ? (
+                <p role="alert" className="text-sm text-destructive">
+                  {form.error}
+                </p>
+              ) : null}
+              <Button
+                type="submit"
+                disabled={
+                  !canLink ||
+                  busy ||
+                  !relayUrl.trim() ||
+                  (form.advanced ? !token : !username.trim() || !password)
+                }
+              >
+                {busy
+                  ? m(msg("Linking…"))
+                  : form.advanced
+                    ? m(msg("Link relay"))
+                    : m(msg("Sign in and link"))}
+              </Button>
+            </form>
+            {status.data?.signupUrl && !form.advanced ? (
+              <p className="text-sm">
+                <a href={status.data.signupUrl} target="_blank" rel="noreferrer">
+                  {m(msg("Create account"))}
+                </a>
+              </p>
+            ) : null}
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-expanded={form.advanced}
+              disabled={busy}
+              onClick={() => {
+                setPassword("");
+                setToken("");
+                dispatch({ type: "toggle" });
+              }}
+            >
+              {m(msg("Advanced"))}
             </Button>
           </div>
         )}

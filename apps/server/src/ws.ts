@@ -2841,7 +2841,8 @@ export const layerWsRpc = (
               ),
             ),
           ),
-        [WS_METHODS.serverRelayStatus]: () => relay.status,
+        [WS_METHODS.serverRelayStatus]: (input) =>
+          relay.statusFor(input.relayUrl).pipe(Effect.mapError(relayError)),
         [WS_METHODS.serverRelayLink]: (input) =>
           relay.link(input).pipe(Effect.mapError(relayError)),
         [WS_METHODS.serverRelayUnlink]: () => relay.unlink().pipe(Effect.mapError(relayError)),

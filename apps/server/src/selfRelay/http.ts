@@ -18,8 +18,11 @@ export const layer = HttpApiBuilder.group(
   Effect.fnUntraced(function* (handlers) {
     const relay = yield* SelfRelay.SelfRelay;
     return handlers
-      .handle("status", () =>
-        requireEnvironmentScope(AuthRelayReadScope).pipe(Effect.andThen(relay.status)),
+      .handle("status", ({ query }) =>
+        requireEnvironmentScope(AuthRelayReadScope).pipe(
+          Effect.andThen(relay.statusFor(query.relayUrl)),
+          Effect.catchTags({ SelfRelayError: failure }),
+        ),
       )
       .handle("link", ({ payload }) =>
         Effect.gen(function* () {

@@ -38,7 +38,7 @@ function PairingQr({ value }: { value: string }) {
     </Svg>
   );
 }
-const DEFAULT_SELF_RELAY_URL = "https://relay.hhh.yhw.tw";
+const RELAY_URL_PLACEHOLDER = "https://relay.yourdomain.com";
 
 export function SelfRelaySection({ environmentId }: { environmentId: EnvironmentId }) {
   const gt = useGT();
@@ -58,7 +58,7 @@ export function SelfRelaySection({ environmentId }: { environmentId: Environment
   const canExpose = useAtomValue(serverEnvironment.relayExposePort.permissionAtom(environmentId));
   const [port, setPort] = useState("");
   const pair = useAtomCommand(authEnvironment.createPairingCredential);
-  const [relayUrl, setRelayUrl] = useState(DEFAULT_SELF_RELAY_URL);
+  const [relayUrl, setRelayUrl] = useState("");
   const [token, setToken] = useState("");
   const [label, setLabel] = useState("");
   const [access, setAccess] = useState<"read-only" | "operate" | "full">("read-only");
@@ -120,7 +120,7 @@ export function SelfRelaySection({ environmentId }: { environmentId: Environment
           <>
             <TextInput
               accessibilityLabel={gt("Relay HTTPS origin")}
-              placeholder={DEFAULT_SELF_RELAY_URL}
+              placeholder={RELAY_URL_PLACEHOLDER}
               value={relayUrl}
               onChangeText={setRelayUrl}
               autoCapitalize="none"
