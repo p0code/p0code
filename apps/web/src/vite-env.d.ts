@@ -7,6 +7,8 @@ interface ImportMetaEnv {
   readonly VITE_WS_URL: string;
   readonly VITE_HOSTED_APP_URL: string;
   readonly VITE_HOSTED_APP_CHANNEL: string;
+  readonly VITE_MOBILE_IOS_STORE_URL: string;
+  readonly VITE_MOBILE_ANDROID_STORE_URL: string;
   readonly VITE_RELEASE_CHANNEL: string;
   readonly T3CODE_DESKTOP_UPDATE_REPOSITORY: string;
   readonly APP_VERSION: string;

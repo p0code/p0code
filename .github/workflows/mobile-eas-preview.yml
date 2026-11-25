@@ -25,6 +25,8 @@ jobs:
       client: ${{ steps.client.outputs.link }}
       build: ${{ steps.client.outputs.build }}
       fingerprint: ${{ steps.client.outputs.fingerprint }}
+      project_id: ${{ steps.app.outputs.project_id }}
+      scheme: ${{ steps.app.outputs.scheme }}
     env:
       APP_VARIANT: preview
       NODE_OPTIONS: --max-old-space-size=8192
@@ -96,12 +98,27 @@ jobs:
           }
           NODE
 
+      - id: app
+        name: Resolve the fork's Expo identity
+        if: steps.expo-token.outputs.present == 'true'
+        working-directory: apps/mobile
+        shell: bash
+        run: |
+          config="$(npx expo config --json --type public 2>/dev/null | sed -n '/^{/,$p')"
+          for key in owner slug scheme; do
+            printf '%s=%s\n' "$key" "$(jq -r --arg key "$key" '.[$key] // ""' <<<"$config")" >> "$GITHUB_OUTPUT"
+          done
+          printf 'project_id=%s\n' "$(jq -r '.extra.eas.projectId // ""' <<<"$config")" >> "$GITHUB_OUTPUT"
+
       # The same command the Expo action runs, so this is the runtime version the update gets.
       - id: client
         name: Find the client for this fingerprint
         if: steps.expo-token.outputs.present == 'true'
         working-directory: apps/mobile
         shell: bash
+        env:
+          EXPO_OWNER: ${{ steps.app.outputs.owner }}
+          EXPO_SLUG: ${{ steps.app.outputs.slug }}
         run: |
           hash="$(eas env:exec --non-interactive preview "npx expo-updates fingerprint:generate --platform ios" | sed -n '/^{/,$p' | jq -er '.hash | select(type == "string" and length > 0)')"
           echo "fingerprint=$hash" >> "$GITHUB_OUTPUT"
@@ -114,7 +131,7 @@ jobs:
             # A client EAS built before this job existed; expired ones are gone.
             link="$(eas build:list --platform ios --build-profile preview:dev --runtime-version "$hash" --status finished --limit 5 --json --non-interactive \
               | sed -n '/^\[/,$p' \
-              | jq -r --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '[.[] | select((.expirationDate // "9999") > $now)][0] | select(. != null) | "https://expo.dev/accounts/pingdotgg/projects/t3-code/builds/\(.id)"')"
+              | jq -r --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg owner "$EXPO_OWNER" --arg slug "$EXPO_SLUG" '[.[] | select((.expirationDate // "9999") > $now)][0] | select(. != null) | "https://expo.dev/accounts/\($owner)/projects/\($slug)/builds/\(.id)"')"
           fi
           echo "link=$link" >> "$GITHUB_OUTPUT"
           if [ -z "$link" ]; then echo "build=true" >> "$GITHUB_OUTPUT"; fi
@@ -147,6 +164,8 @@ jobs:
       client: ${{ steps.client.outputs.link }}
       build: ${{ steps.client.outputs.build }}
       fingerprint: ${{ steps.client.outputs.fingerprint }}
+      project_id: ${{ steps.app.outputs.project_id }}
+      scheme: ${{ steps.app.outputs.scheme }}
     env:
       APP_VARIANT: preview
       NODE_OPTIONS: --max-old-space-size=8192
@@ -218,12 +237,27 @@ jobs:
           }
           NODE
 
+      - id: app
+        name: Resolve the fork's Expo identity
+        if: steps.expo-token.outputs.present == 'true'
+        working-directory: apps/mobile
+        shell: bash
+        run: |
+          config="$(npx expo config --json --type public 2>/dev/null | sed -n '/^{/,$p')"
+          for key in owner slug scheme; do
+            printf '%s=%s\n' "$key" "$(jq -r --arg key "$key" '.[$key] // ""' <<<"$config")" >> "$GITHUB_OUTPUT"
+          done
+          printf 'project_id=%s\n' "$(jq -r '.extra.eas.projectId // ""' <<<"$config")" >> "$GITHUB_OUTPUT"
+
       # The same command the Expo action runs, so this is the runtime version the update gets.
       - id: client
         name: Find the client for this fingerprint
         if: steps.expo-token.outputs.present == 'true'
         working-directory: apps/mobile
         shell: bash
+        env:
+          EXPO_OWNER: ${{ steps.app.outputs.owner }}
+          EXPO_SLUG: ${{ steps.app.outputs.slug }}
         run: |
           hash="$(eas env:exec --non-interactive preview "npx expo-updates fingerprint:generate --platform android" | sed -n '/^{/,$p' | jq -er '.hash | select(type == "string" and length > 0)')"
           echo "fingerprint=$hash" >> "$GITHUB_OUTPUT"
@@ -235,7 +269,7 @@ jobs:
             # A client EAS built before this job existed; expired ones are gone.
             link="$(eas build:list --platform android --build-profile preview:dev --runtime-version "$hash" --status finished --limit 5 --json --non-interactive \
               | sed -n '/^\[/,$p' \
-              | jq -r --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '[.[] | select((.expirationDate // "9999") > $now)][0] | select(. != null) | "https://expo.dev/accounts/pingdotgg/projects/t3-code/builds/\(.id)"')"
+              | jq -r --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg owner "$EXPO_OWNER" --arg slug "$EXPO_SLUG" '[.[] | select((.expirationDate // "9999") > $now)][0] | select(. != null) | "https://expo.dev/accounts/\($owner)/projects/\($slug)/builds/\(.id)"')"
           fi
           echo "link=$link" >> "$GITHUB_OUTPUT"
           if [ -z "$link" ]; then echo "build=true" >> "$GITHUB_OUTPUT"; fi
@@ -310,6 +344,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          EXPO_PROJECT_ID: ${{ needs.ios.outputs.project_id || needs.android.outputs.project_id }}
+          APP_SCHEME: ${{ needs.ios.outputs.scheme || needs.android.outputs.scheme }}
           ANDROID_FINGERPRINT: ${{ needs.android.outputs.fingerprint }}
           ANDROID_GROUP: ${{ needs.android.outputs.group }}
           ANDROID_CLIENT: ${{ needs.android-build.outputs.client || needs.android.outputs.client }}

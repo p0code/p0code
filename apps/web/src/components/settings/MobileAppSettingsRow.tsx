@@ -11,21 +11,23 @@ const stores = [
   {
     label: msg("iPhone and iPad"),
     store: "App Store",
-    url: "https://apps.apple.com/us/app/t3-code-remote-claude-more/id6787819824",
+    url: import.meta.env.VITE_MOBILE_IOS_STORE_URL?.trim() ?? "",
     Icon: AppleIcon,
   },
   {
-    label: "Android",
+    label: msg("Android"),
     store: "Google Play",
-    url: "https://play.google.com/store/apps/details?id=com.t3tools.t3code",
+    url: import.meta.env.VITE_MOBILE_ANDROID_STORE_URL?.trim() ?? "",
     Icon: AndroidIcon,
   },
-];
+].filter((entry) => entry.url.length > 0);
 
 export function MobileAppSettingsRow() {
   const searchableSetting = useSearchableSetting();
   const gt = useGT();
   const m = useMessages();
+  // A fork with no store listings yet shows nothing rather than upstream's apps.
+  if (stores.length === 0) return null;
   return (
     <SettingsRow
       {...searchableSetting("mobile-app")}

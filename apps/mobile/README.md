@@ -133,7 +133,15 @@ The native lint task runs SwiftLint for Swift plus ktlint and detekt for Kotlin.
 The app ships with the fork's own identifiers (`com.p0code.p0code*`, slug `p0code`) and no Expo
 owner, project, or update URL. To build under a real Expo account, set `T3CODE_EAS_OWNER`,
 `T3CODE_EAS_PROJECT_ID`, `T3CODE_MOBILE_UPDATES_URL`, `T3CODE_IOS_TEAM_ID`, and, for universal
-links, `T3CODE_MOBILE_HOSTED_APP_HOST`. Absent values are omitted from the resolved config.
+links, `T3CODE_MOBILE_HOSTED_APP_HOST`. Absent values are omitted from the resolved config, and
+malformed ones fail the config load instead of reaching EAS.
+
+Link these before CI resolves the config (the preview workflow reads the resolved project ID and
+scheme for its update links). Run `eas init` for slug `p0code` to create the fork's EAS project and
+owner, set `T3CODE_MOBILE_UPDATES_URL=https://u.expo.dev/<project id>` for OTA, store the fork's
+`ascAppId` in the `production` profile of `eas.json` for non-interactive iOS submissions, and add
+push credentials for the new bundle IDs, including the Android `google-services.json`
+(`T3CODE_ANDROID_GOOGLE_SERVICES_FILE`).
 
 Preview and production variants use Expo fingerprinting so OTA updates only reach binaries with matching native dependencies, config plugins, and patches. CI uses the `preview:dev` profile to reuse a compatible native build when possible.
 
