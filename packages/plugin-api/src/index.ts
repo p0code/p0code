@@ -42,6 +42,12 @@ export class PluginContext extends Context.Service<
       readonly set: (key: string, value: string) => Effect.Effect<void, PluginError>;
       readonly remove: (key: string) => Effect.Effect<void, PluginError>;
     };
+    /**
+     * Present only with http:routes. Host-issued per-plugin bearer secret, stable across
+     * restarts and enable/disable; removed with the plugin's installation. Give callers
+     * x-p0code-plugin-route-secret or append p0_route to declared route URLs. Keep it private.
+     */
+    readonly routes?: { readonly secret: string };
     /** The one-line status shown beside the plugin; null clears it. */
     readonly reportStatus: (message: string | null) => Effect.Effect<void>;
     readonly environment: {

@@ -42,7 +42,7 @@ const events: Array<string> = [];
 const revoked: Array<string> = [];
 
 const echo = definePlugin({
-  manifest: manifest("echo", ["auth:issue-device-credentials"]),
+  manifest: manifest("echo", ["auth:issue-device-credentials", "http:routes"]),
   actions: { echo: { input: Schema.Struct({ text: Schema.String }), output: Schema.String } },
   start: Effect.gen(function* () {
     const context = yield* PluginContext;

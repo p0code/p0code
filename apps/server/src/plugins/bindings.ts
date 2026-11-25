@@ -33,6 +33,7 @@ import type * as ServerSettings from "../serverSettings.ts";
 import { loopbackUrlHostForAddress } from "../startupAccess.ts";
 import { migrateObsidianSharedMemory } from "./migrateObsidianSharedMemory.ts";
 import { PluginHostBindings } from "./PluginHost.ts";
+import { routeSecret } from "./routeSecret.ts";
 
 /** Sessions and links a plugin mints carry this subject, so disabling it can end them. */
 const pluginSubject = (pluginId: string) => `plugin:${pluginId}`;
@@ -172,6 +173,16 @@ export const layer = Layer.effect(
               .remove(secretName(key))
               .pipe(Effect.mapError(hostError("Could not write plugin storage."))),
         },
+        ...(declared("http:routes")
+          ? {
+              routes: {
+                secret: yield* routeSecret(manifest.id).pipe(
+                  Effect.provideService(ServerSecretStore.ServerSecretStore, secrets),
+                  Effect.orDie,
+                ),
+              },
+            }
+          : {}),
         reportStatus,
         environment: {
           environmentId: environment.getEnvironmentId,

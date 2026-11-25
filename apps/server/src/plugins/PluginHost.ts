@@ -247,7 +247,14 @@ const make = Effect.gen(function* () {
 
   const route: PluginHost["Service"]["route"] = (path) =>
     Effect.sync(() => {
-      for (const { started } of running.values()) {
+      for (const plugin of plugins) {
+        if (
+          !plugin.manifest.capabilities.includes("http:routes") ||
+          !plugin.manifest.httpRoutes.includes(path)
+        )
+          continue;
+        const started = running.get(plugin.manifest.id)?.started;
+        if (started === undefined) continue;
         const handler = started.routes.get(path);
         if (handler !== undefined) return handler;
       }
