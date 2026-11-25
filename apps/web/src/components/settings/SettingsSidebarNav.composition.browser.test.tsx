@@ -12,6 +12,7 @@ vi.mock("./useAvailableSettingsSearchItems", () => ({
     { id: "theme", title: "Theme", to: "/settings/appearance" },
   ],
   useHasSecretProvidersEnvironment: () => false,
+  useHasPluginsEnvironment: () => false,
 }));
 vi.mock("../chat/GlobalVoiceInputIndicator", () => ({ GlobalVoiceInputIndicator: () => null }));
 

@@ -118,3 +118,63 @@ it("loads BYO certificates and rejects names outside their coverage", async () =
     await NodeFSP.rm(directory, { recursive: true, force: true });
   }
 });
+
+it("keeps private keys in the key store and moves keys earlier versions wrote to files", async () => {
+  const directory = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "hhh-cert-keys-"));
+  const fixture = testCertificate(directory, "abcdef.relay.test");
+  const certificateDirectory = NodePath.join(directory, "managed");
+  await NodeFSP.mkdir(certificateDirectory, { recursive: true });
+  const stored = new Map<string, Buffer>();
+  const keys = {
+    get: async (name: string) => stored.get(name),
+    set: async (name: string, value: Buffer) => void stored.set(name, value),
+  };
+  const certificatePath = NodePath.join(certificateDirectory, "abcdef.relay.test.json");
+  await NodeFSP.writeFile(
+    certificatePath,
+    JSON.stringify({ cert: fixture.cert.toString(), key: fixture.key.toString() }),
+  );
+  await NodeFSP.writeFile(NodePath.join(certificateDirectory, "account.key"), "legacy account");
+  const parsed = new NodeCrypto.X509Certificate(fixture.cert);
+  const start = Date.parse(parsed.validFrom);
+  const renewal = start + ((Date.parse(parsed.validTo) - start) * 2) / 3;
+  const manager = new AcmeCertificateManager({
+    directory: certificateDirectory,
+    challenges: new HttpChallengeStore(),
+    directoryUrl: "https://acme.invalid/directory",
+    keys,
+  });
+  using _account = vi
+    .spyOn(Client.prototype, "createAccount")
+    .mockResolvedValue({ status: "valid", orders: "https://acme.invalid/orders" });
+  using _uri = vi
+    .spyOn(Client.prototype, "getAccountUrl")
+    .mockReturnValue("https://acme.invalid/acct/123");
+  using _csr = vi.spyOn(crypto, "createCsr").mockResolvedValue([fixture.key, Buffer.from("csr")]);
+  using issued = vi
+    .spyOn(Client.prototype, "auto")
+    .mockImplementation(async () => fixture.cert.toString());
+  vi.useFakeTimers({ toFake: ["Date"] });
+  try {
+    vi.setSystemTime(start + 1000);
+    await manager.getSecureContext("abcdef.relay.test");
+    expect(issued).toHaveBeenCalledTimes(0);
+    expect(JSON.parse(await NodeFSP.readFile(certificatePath, "utf8"))).toEqual({
+      cert: fixture.cert.toString(),
+    });
+    expect(stored.get("tls-abcdef.relay.test")?.toString()).toBe(fixture.key.toString());
+
+    vi.setSystemTime(renewal);
+    await manager.getSecureContext("abcdef.relay.test");
+    expect(issued).toHaveBeenCalledTimes(1);
+    expect(stored.get("account")?.toString()).toBe("legacy account");
+    expect(await NodeFSP.readdir(certificateDirectory)).not.toContain("account.key");
+    expect(JSON.parse(await NodeFSP.readFile(certificatePath, "utf8"))).toEqual({
+      cert: fixture.cert.toString(),
+    });
+  } finally {
+    manager.close();
+    vi.useRealTimers();
+    await NodeFSP.rm(directory, { recursive: true, force: true });
+  }
+});

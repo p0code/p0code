@@ -1874,6 +1874,9 @@
     },
     " pour en ajouter un."
   ],
+  "a20b495b9e6f82b9": "Démarrage…",
+  "946cb426f67fbe20": "Non officiel. Pas de chiffrement de bout en bout : Cloudflare termine le TLS et le relais de T3 voit les métadonnées de connexion.",
+  "c1b7649ac731ed07": "Extensions",
   "9d7fb2ec72ce9693": "Désactivé",
   "d92a43b7bf4c24c8": "Garder les requêtes de gestion de versions dans cet environnement.",
   "2763012f6869f8d0": "Lire les PR",
@@ -4335,7 +4338,6 @@
   "69fa1b48f739f0df": "Forcer l’arrêt de l’agent",
   "9150dfa27deb478c": "Forcer l’arrêt de l’agent ?",
   "288db2b396aa13b7": "Il n’a pas répondu à Arrêter. Forcer l’arrêt termine le tour et tue les processus de l’agent, sauf si d’autres fils en cours les partagent.",
-  "a20b495b9e6f82b9": "Démarrage…",
   "7917e738e8c3fd41": "Ouvrir l’approbation de {title}",
   "54c8b8a3c6e6046b": "Ouvrir la question de {title}",
   "715be2d41b9f1b72": "Reprendre l’objectif",

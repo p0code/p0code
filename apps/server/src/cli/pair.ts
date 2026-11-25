@@ -1,3 +1,4 @@
+import { AppHomeConfig } from "@t3tools/shared/appHome";
 import {
   type AuthEnvironmentScope,
   AuthStandardClientScopes,
@@ -18,7 +19,6 @@ import {
   readTailscaleServeRootHolder,
   readTailscaleStatus,
 } from "@t3tools/tailscale";
-import * as Config from "effect/Config";
 import * as Console from "effect/Console";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
@@ -287,7 +287,7 @@ const discoverPairTarget = Effect.fn("pair.discoverPairTarget")(function* (
       bases.push(worktreeHome);
       inLinkedWorktree = true;
     } else {
-      const envHome = yield* Config.String("T3CODE_HOME").pipe(Config.option);
+      const envHome = yield* AppHomeConfig;
       bases.push(yield* resolveBaseDir(Option.getOrUndefined(envHome)));
     }
   }

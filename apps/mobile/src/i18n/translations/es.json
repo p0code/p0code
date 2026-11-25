@@ -1874,6 +1874,9 @@
     },
     " para añadir uno."
   ],
+  "a20b495b9e6f82b9": "Iniciando…",
+  "946cb426f67fbe20": "No oficial. Sin cifrado de extremo a extremo: Cloudflare termina el TLS y el relay de T3 ve los metadatos de conexión.",
+  "c1b7649ac731ed07": "Complementos",
   "9d7fb2ec72ce9693": "Desactivado",
   "d92a43b7bf4c24c8": "Mantiene las solicitudes al control de versiones en este entorno.",
   "2763012f6869f8d0": "Leer PR",
@@ -4334,7 +4337,6 @@
   "69fa1b48f739f0df": "Forzar la detención del agente",
   "9150dfa27deb478c": "¿Forzar la detención del agente?",
   "288db2b396aa13b7": "No ha respondido a Detener. Forzar la detención termina el turno y mata los procesos del agente, salvo que otros hilos en curso los compartan.",
-  "a20b495b9e6f82b9": "Iniciando…",
   "7917e738e8c3fd41": "Abrir la aprobación de {title}",
   "54c8b8a3c6e6046b": "Abrir la pregunta de {title}",
   "715be2d41b9f1b72": "Reanudar objetivo",

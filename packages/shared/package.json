@@ -383,6 +383,18 @@
       "types": "./src/httpReadiness.ts",
       "import": "./src/httpReadiness.ts"
     },
+    "./appHome": {
+      "types": "./src/appHome.ts",
+      "import": "./src/appHome.ts"
+    },
+    "./migrateFromT3": {
+      "types": "./src/migrateFromT3.ts",
+      "import": "./src/migrateFromT3.ts"
+    },
+    "./credentialKeychain": {
+      "types": "./src/credentialKeychain.ts",
+      "import": "./src/credentialKeychain.ts"
+    },
     "./devHome": {
       "types": "./src/devHome.ts",
       "import": "./src/devHome.ts"

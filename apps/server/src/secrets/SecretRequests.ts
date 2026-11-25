@@ -35,7 +35,8 @@ const SECRET_REF_PREFIX = "secret-ref:";
 const storeName = (ref: SecretRef) => `secret-request-${ref.slice(SECRET_REF_PREFIX.length)}`;
 const REF_PATTERN = /^secret-ref:[0-9a-f]{32}$/;
 const SECRET_REF_TTL_MS = 24 * 60 * 60 * 1000;
-const STORE_NAME_PATTERN = /^(secret-request-[0-9a-f]{32})\.bin$/;
+const STORE_NAME_PREFIX = "secret-request-";
+const STORE_NAME_PATTERN = /^secret-request-[0-9a-f]{32}$/;
 const FILE_NAME_PATTERN = /^[0-9a-f]{32}(\.partial)?$/;
 
 const StoredSecret = Schema.fromJsonString(
@@ -399,12 +400,11 @@ const make = Effect.gen(function* () {
   });
 
   const sweepExpired = Effect.gen(function* () {
-    if (store.directory === undefined) return;
+    if (store.list === undefined) return;
     const now = yield* Clock.currentTimeMillis;
-    const names = (yield* fileSystem.readDirectory(store.directory)).flatMap((file) => {
-      const match = STORE_NAME_PATTERN.exec(file);
-      return match?.[1] === undefined ? [] : [match[1]];
-    });
+    const names = (yield* store.list(STORE_NAME_PREFIX)).filter((name) =>
+      STORE_NAME_PATTERN.test(name),
+    );
     let removed = 0;
     for (const name of names) {
       const stored = yield* store.get(name).pipe(Effect.orElseSucceed(Option.none));

@@ -149,12 +149,10 @@ it.live(
       );
       const authLayer = EnvironmentAuth.layer.pipe(
         Layer.provideMerge(SqlitePersistence.layerMemory),
-        Layer.provideMerge(ServerSecretStore.layer),
-        Layer.provideMerge(
-          ServerEnvironment.layerIdentity.pipe(Layer.provide(ServerSecretStore.layer)),
-        ),
+        Layer.provideMerge(ServerEnvironment.layerIdentity),
       );
       const services = Layer.mergeAll(SelfRelay.layer, authLayer).pipe(
+        Layer.provideMerge(ServerSecretStore.layer),
         Layer.provideMerge(ManagedPolicy.layerTest()),
         Layer.provideMerge(configLayer),
         Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodePlatformCrypto.layer)),

@@ -1874,6 +1874,9 @@
     },
     ", um eine hinzuzufügen."
   ],
+  "a20b495b9e6f82b9": "Wird gestartet…",
+  "946cb426f67fbe20": "Inoffiziell. Nicht Ende-zu-Ende-verschlüsselt: Cloudflare beendet TLS, und T3s Relay sieht Verbindungsmetadaten.",
+  "c1b7649ac731ed07": "Plugins",
   "9d7fb2ec72ce9693": "Aus",
   "d92a43b7bf4c24c8": "Versionskontrollanfragen in dieser Umgebung behalten.",
   "2763012f6869f8d0": "PRs lesen",
@@ -4341,7 +4344,6 @@
   "69fa1b48f739f0df": "Agent erzwungen stoppen",
   "9150dfa27deb478c": "Agent erzwungen stoppen?",
   "288db2b396aa13b7": "Er hat nicht auf Stopp reagiert. Erzwungenes Stoppen beendet die Runde und beendet die Prozesse des Agenten, sofern andere arbeitende Threads sie nicht mitnutzen.",
-  "a20b495b9e6f82b9": "Wird gestartet…",
   "7917e738e8c3fd41": "Genehmigungsanfrage von {title} öffnen",
   "54c8b8a3c6e6046b": "Frage von {title} öffnen",
   "715be2d41b9f1b72": "Ziel fortsetzen",

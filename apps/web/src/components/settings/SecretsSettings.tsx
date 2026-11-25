@@ -39,8 +39,16 @@ export function SecretsSettingsPanel() {
   const setting = useSearchableSetting();
   const { scope, environment } = useSettingsScope();
   const connected = environment?.connection.phase === "connected";
+  const credentialStorage = environment?.serverConfig?.credentialStorage;
   return (
     <SettingsPageContainer>
+      {connected && credentialStorage !== undefined ? (
+        <p className="px-1 text-xs text-muted-foreground">
+          <T>
+            Credentials: <Var>{credentialStorage.label}</Var>
+          </T>
+        </p>
+      ) : null}
       {connected &&
       environment.serverConfig !== null &&
       environment.serverConfig.secretProviderSettings !== true ? (

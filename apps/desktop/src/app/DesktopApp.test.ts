@@ -109,6 +109,8 @@ const runStubbedDesktop = (stub: StubbedDesktop) =>
           platform: "linux",
           isDevelopment: false,
           isPackaged: true,
+          homeDirectory: "/isolated",
+          baseDir: "/isolated",
           stateDir: "/isolated/userdata",
           configuredBackendPort: Option.some(3773),
           defaultDesktopSettings: { serverExposureMode: "local-only" },

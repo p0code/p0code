@@ -1,6 +1,10 @@
 import * as SharedMemorySync from "./memory/SharedMemorySync.ts";
 import * as SelfRelay from "./selfRelay/SelfRelay.ts";
 import * as SelfRelayHttp from "./selfRelay/http.ts";
+import * as PluginHost from "./plugins/PluginHost.ts";
+import * as PluginHostBindings from "./plugins/bindings.ts";
+import * as PluginHttp from "./plugins/http.ts";
+import * as PluginRegistry from "./plugins/registry.ts";
 import { PublicOrigin } from "./selfRelay/PublicOrigin.ts";
 import { createPortProxy } from "./selfRelay/portProxy.ts";
 import * as ProviderEventLoggers from "@t3tools/provider-core/server/ProviderEventLoggers";
@@ -559,7 +563,10 @@ const layerAuth = EnvironmentAuth.layer.pipe(
   Layer.provide(ServerSecretStore.layer),
 );
 
-const layerSelfRelay = SelfRelay.layer.pipe(Layer.provide(ManagedPolicy.layer));
+const layerSelfRelay = SelfRelay.layer.pipe(
+  Layer.provide(ManagedPolicy.layer),
+  Layer.provide(ServerSecretStore.layer),
+);
 const layerPublicOrigin = Layer.effect(
   PublicOrigin,
   Effect.map(SelfRelay.SelfRelay, (relay) => relay.publicOrigin),
@@ -820,6 +827,12 @@ const layerCommandReadiness = HttpRouter.middleware(
   { global: true },
 );
 
+// Plugins stop (and release what they hold) before the services they lean on.
+const layerPluginHost = PluginHost.layer.pipe(
+  Layer.provide(PluginRegistry.layer),
+  Layer.provide(PluginHostBindings.layer.pipe(Layer.provide(ServerSecretStore.layer))),
+);
+
 const layerMakeRoutes = Layer.mergeAll(
   Layer.mergeAll(
     HttpApiBuilder.layer(EnvironmentHttpApi).pipe(
@@ -841,6 +854,7 @@ const layerMakeRoutes = Layer.mergeAll(
     ServerHttp.layerAssetRoute,
     ServerHttp.layerAttachmentUploadRoute,
     GuestHttp.layer,
+    PluginHttp.layer,
     LinkThreadHttp.layer,
     DeviceHubProxy.layer,
     ServerBrowserStream.routeLayer,
@@ -1136,6 +1150,7 @@ const layerMakeServer = Layer.unwrap(
     );
 
     return layerServerApplication.pipe(
+      Layer.provideMerge(layerPluginHost),
       Layer.provideMerge(layerRuntimeServices),
       Layer.provideMerge(
         McpSessionRegistry.layer.pipe(

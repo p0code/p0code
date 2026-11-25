@@ -64,6 +64,24 @@ provider cannot roll back its conversation, reject the revert before touching th
 Thread settlement is server-owned. Clients render persisted settlement state rather than deriving it
 from local clocks or PR caches.
 
+## Home directory and stock T3 Code
+
+hhhcode defaults to `~/.hhh` (`HHHCODE_HOME`) so it never opens a stock T3 Code database in
+`~/.t3`; two servers on one home would fight over its lock and migrate its schema. `T3CODE_HOME`
+stays honored when set and is still how hhhcode's own launchers (service units, desktop backend,
+CLI shim, WSL) hand the resolved home to a child, because those set it explicitly; anything that
+sets it for a child must also drop an inherited `HHHCODE_HOME`, which wins. Wire identifiers, the
+`t3` command and the background service names are unchanged for compatibility, so installing
+hhhcode's background service replaces stock T3 Code's.
+
+`t3 migrate from-t3` ([migrateFromT3.ts](../../packages/shared/src/migrateFromT3.ts)) imports a
+stock home. The source is strictly read-only: databases are snapshotted with `VACUUM INTO` from a
+read-only connection (immutable when no WAL exists, so no side files appear in the source), and
+the result is built in `<to>.migrating-<time>` and renamed into place. Worktrees and scratch
+folders are not copied because git and running agents reference them by path; rows pointing there
+keep the old path. A new environment id is the default because two servers claiming one id
+confuse paired clients.
+
 ## Desktop process isolation
 
 Native modules never load on the Electron main process startup path. Native capabilities that can

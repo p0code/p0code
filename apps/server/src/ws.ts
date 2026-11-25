@@ -2,6 +2,7 @@ import { PublicOrigin } from "./selfRelay/PublicOrigin.ts";
 import { SharedMemoryError } from "@t3tools/contracts";
 import * as SharedMemorySync from "./memory/SharedMemorySync.ts";
 import * as SelfRelay from "./selfRelay/SelfRelay.ts";
+import { PluginHost } from "./plugins/PluginHost.ts";
 import { SelfRelayOperationError } from "@t3tools/contracts";
 import { GitCommandError, OrchestrationDispatchCommandError } from "@t3tools/contracts";
 // @effect-diagnostics-next-line nodeBuiltinImport:off -- A synchronous digest inside the pure provider mapping.
@@ -250,6 +251,7 @@ import * as DefectReporter from "./observability/DefectReporter.ts";
 import * as EventLoopMonitor from "./observability/EventLoopMonitor.ts";
 import * as BackgroundPolicy from "./background/BackgroundPolicy.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
+import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
 import { requiredScopeForDeviceList, rpcAuthorizationError } from "./auth/RpcAuthorization.ts";
 import * as RpcAuthorization from "./auth/RpcAuthorization.ts";
 import { RpcInstrumentation, rpcInstrumentationLayer } from "./observability/RpcInstrumentation.ts";
@@ -1534,6 +1536,7 @@ export const layerWsRpc = (
       const processResourceMonitor = yield* ProcessResourceMonitor.ProcessResourceMonitor;
       const resourceTelemetry = yield* ResourceTelemetry.ResourceTelemetry;
       const relay = yield* SelfRelay.SelfRelay;
+      const pluginHost = yield* PluginHost;
       const readPublicOrigin = yield* PublicOrigin;
       const relayError = (cause: SelfRelay.SelfRelayError) =>
         new SelfRelayOperationError({ message: cause.message });
@@ -1800,6 +1803,10 @@ export const layerWsRpc = (
           ...(publicOrigin === null ? {} : { publicOrigin }),
         };
         const auth = yield* serverAuth.getDescriptor();
+        const secretStore = yield* Effect.serviceOption(ServerSecretStore.ServerSecretStore);
+        const credentialStorage = Option.isSome(secretStore)
+          ? secretStore.value.storage
+          : undefined;
         const scratchWorkspaceRoot = yield* managedFolders.scratchRoot;
         const lastEventLoopStall = yield* eventLoopMonitor.latestNoticeableStall;
         const discovery = yield* resolveOpenDiscoveryForConfig({
@@ -1816,6 +1823,7 @@ export const layerWsRpc = (
         return {
           environment,
           auth,
+          ...(credentialStorage === undefined ? {} : { credentialStorage }),
           cwd: config.cwd,
           hostname: yield* HostProcess.Hostname,
           keybindingsConfigPath: config.keybindingsConfigPath,
@@ -2780,6 +2788,9 @@ export const layerWsRpc = (
           relay.unexposePort(input.port).pipe(Effect.mapError(relayError)),
         [WS_METHODS.serverPortLink]: (input) =>
           relay.portLink(input.port, currentSessionId).pipe(Effect.mapError(relayError)),
+        [WS_METHODS.pluginsSubscribe]: () => pluginHost.changes,
+        [WS_METHODS.pluginsSetEnabled]: (input) => pluginHost.setEnabled(input),
+        [WS_METHODS.pluginsInvoke]: (input) => pluginHost.invoke(input),
         [WS_METHODS.pullRequestsList]: (input) => pullRequests.list(input),
         [WS_METHODS.pullRequestsListStats]: (input) => pullRequests.listStats(input),
         [WS_METHODS.pullRequestsFilterOptions]: (input) => pullRequests.filterOptions(input),

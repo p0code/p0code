@@ -1,3 +1,6 @@
+import { AppHomeConfig, STOCK_T3_HOME_DIRECTORY_NAME } from "@t3tools/shared/appHome";
+import * as HostProcess from "@t3tools/shared/HostProcess";
+import { shouldOfferT3Import } from "@t3tools/shared/migrateFromT3";
 import * as NetService from "@t3tools/shared/Net";
 import {
   OtlpHeadersFromString,
@@ -45,7 +48,7 @@ const hostFlag = Flag.String("host").pipe(
 );
 export const baseDirFlag = Flag.String("base-dir").pipe(
   Flag.withDescription(
-    "Explicit T3 Code data directory; runtime state is stored under userdata (equivalent to T3CODE_HOME).",
+    "Explicit T3 Code data directory; runtime state is stored under userdata (equivalent to HHHCODE_HOME).",
   ),
   Flag.optional,
 );
@@ -138,7 +141,7 @@ const EnvServerConfig = Config.all({
   ),
   port: Config.Port("T3CODE_PORT").pipe(Config.option, Config.map(Option.getOrUndefined)),
   host: Config.String("T3CODE_HOST").pipe(Config.option, Config.map(Option.getOrUndefined)),
-  t3Home: Config.String("T3CODE_HOME").pipe(Config.option, Config.map(Option.getOrUndefined)),
+  t3Home: AppHomeConfig.pipe(Config.map(Option.getOrUndefined)),
   devUrl: Config.URL("VITE_DEV_SERVER_URL").pipe(Config.option, Config.map(Option.getOrUndefined)),
   devAllowedOrigins: Config.String("T3CODE_DEV_ALLOWED_ORIGINS").pipe(
     Config.withDefault(""),
@@ -356,6 +359,19 @@ export const resolveServerConfig = Effect.fn("config.resolveServerConfig")(funct
     }
   }
   yield* fs.makeDirectory(cwd, { recursive: true });
+  if (
+    mode === "web" &&
+    devUrl === undefined &&
+    Option.isNone(explicitBaseDir) &&
+    bootstrap?.t3Home === undefined
+  ) {
+    const stockHome = path.join(yield* HostProcess.HomeDirectory, STOCK_T3_HOME_DIRECTORY_NAME);
+    if (yield* Effect.promise(() => shouldOfferT3Import({ appHome: baseDir, stockHome }))) {
+      yield* Effect.logWarning(
+        `Found T3 Code data in ${stockHome}. hhhcode keeps its own data in ${baseDir} and has not imported anything. To bring threads, settings and providers over, stop this server and run \`t3 migrate from-t3 --force\` (the new, empty ${baseDir} is moved aside, not deleted).`,
+      );
+    }
+  }
   yield* ServerConfig.ensureServerDirectories(derivedPaths);
   const persistedObservabilitySettings = yield* loadPersistedObservabilitySettings(
     derivedPaths.settingsPath,

@@ -11,6 +11,12 @@ import {
   RelayPortLink,
   SelfRelayOperationError,
 } from "./selfRelay.ts";
+import {
+  PluginInvokeInput,
+  PluginOperationError,
+  PluginSetEnabledInput,
+  PluginsSnapshot,
+} from "./plugins.ts";
 import { PortSchema } from "./baseSchemas.ts";
 import {
   OrchestrationV2SearchThreadError,
@@ -673,6 +679,10 @@ export const WS_METHODS = {
   serverUnexposePort: "relay.unexposePort",
   serverPortLink: "relay.portLink",
 
+  pluginsSubscribe: "plugins.subscribe",
+  pluginsSetEnabled: "plugins.setEnabled",
+  pluginsInvoke: "plugins.invoke",
+
   pullRequestsList: "pullRequests.list",
   pullRequestsListStats: "pullRequests.listStats",
   pullRequestsFilterOptions: "pullRequests.filterOptions",
@@ -1249,6 +1259,23 @@ const WsserverPortLinkRpc = Rpc.make(WS_METHODS.serverPortLink, {
   payload: Schema.Struct({ port: PortSchema }),
   success: RelayPortLink,
   error: Schema.Union([SelfRelayOperationError, EnvironmentAuthorizationError]),
+});
+
+const WsPluginsSubscribeRpc = Rpc.make(WS_METHODS.pluginsSubscribe, {
+  payload: Schema.Struct({}),
+  success: PluginsSnapshot,
+  error: EnvironmentAuthorizationError,
+  stream: true,
+});
+const WsPluginsSetEnabledRpc = Rpc.make(WS_METHODS.pluginsSetEnabled, {
+  payload: PluginSetEnabledInput,
+  success: PluginsSnapshot,
+  error: Schema.Union([PluginOperationError, EnvironmentAuthorizationError]),
+});
+const WsPluginsInvokeRpc = Rpc.make(WS_METHODS.pluginsInvoke, {
+  payload: PluginInvokeInput,
+  success: Schema.Unknown,
+  error: Schema.Union([PluginOperationError, EnvironmentAuthorizationError]),
 });
 
 const WsServerReportClientActivityRpc = Rpc.make(WS_METHODS.serverReportClientActivity, {
@@ -2613,6 +2640,9 @@ export const WsRpcGroup = RpcGroup.make(
   WsserverExposePortRpc,
   WsserverUnexposePortRpc,
   WsserverPortLinkRpc,
+  WsPluginsSubscribeRpc,
+  WsPluginsSetEnabledRpc,
+  WsPluginsInvokeRpc,
   WsPullRequestsListRpc,
   WsPullRequestsListStatsRpc,
   WsPullRequestsFilterOptionsRpc,

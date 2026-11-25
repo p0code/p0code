@@ -4,8 +4,10 @@ import {
   AuthAccessWriteScope,
   AuthSettingsWriteScope,
   AuthProvidersManageScope,
+  AuthRelayConfigureScope,
   type AuthEnvironmentScope,
 } from "./auth.ts";
+import { PluginSettings } from "./plugins.ts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Duration from "effect/Duration";
@@ -1528,6 +1530,8 @@ export const ServerSettings = Schema.Struct({
   ).pipe(Schema.withDecodingDefault(Effect.succeed({}))),
   /** Fold once so restarts cannot undo later UI resets. */
   projectSettingsFolded: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  /** Bundled plugins stay off until someone with relay:configure turns them on. */
+  plugins: PluginSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
 
   enableAgentDeviceAccess: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   /** Enabling the Device panel must not grant providers device control. */
@@ -1949,6 +1953,7 @@ export const ServerSettingsPatch = Schema.Struct({
   requireConnectDeviceApproval: Schema.optionalKey(Schema.Boolean),
   enableAgentBrowserAccess: Schema.optionalKey(Schema.Boolean),
   enablePreviewTunnel: Schema.optionalKey(Schema.Boolean),
+  plugins: Schema.optionalKey(PluginSettings),
   cloudSpeechCredentials: Schema.optionalKey(
     Schema.Struct({
       openai: Schema.optionalKey(SettingsSecretValue),
@@ -2112,10 +2117,13 @@ export function requiredScopesForServerSettingsPatch(
   let changesProviders = false;
   let changesSettings = false;
   let changesAccess = false;
+  let changesPlugins = false;
   for (const [key, value] of Object.entries(patch)) {
     if (value === undefined) continue;
     if (key === "requireConnectDeviceApproval" || key === "enablePreviewTunnel") {
       changesAccess = true;
+    } else if (key === "plugins") {
+      changesPlugins = true;
     } else if (
       key === "providers" ||
       key === "providerInstances" ||
@@ -2135,7 +2143,11 @@ export function requiredScopesForServerSettingsPatch(
     changesSettings = true;
   }
   return [
-    ...(changesSettings || (!changesProviders && !changesAccess) ? [AuthSettingsWriteScope] : []),
+    ...(changesSettings || (!changesProviders && !changesAccess && !changesPlugins)
+      ? [AuthSettingsWriteScope]
+      : []),
+    // A plugin can open the environment to an outside service: the bar of linking a relay.
+    ...(changesPlugins ? [AuthRelayConfigureScope] : []),
     ...(changesProviders ? [AuthProvidersManageScope] : []),
     ...(changesAccess ? [AuthAccessWriteScope] : []),
     // Saving a script is choosing a command for the host to run, wherever the patch carries it.

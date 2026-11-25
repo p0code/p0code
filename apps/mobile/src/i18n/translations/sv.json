@@ -1874,6 +1874,9 @@
     },
     " för att lägga till en."
   ],
+  "a20b495b9e6f82b9": "Startar…",
+  "946cb426f67fbe20": "Inofficiell. Inte end-to-end-krypterad: Cloudflare avslutar TLS och T3:s relä ser anslutningsmetadata.",
+  "c1b7649ac731ed07": "Tillägg",
   "9d7fb2ec72ce9693": "Av",
   "d92a43b7bf4c24c8": "Behåll versionshanteringsbegäranden i den här miljön.",
   "2763012f6869f8d0": "Läs PR",
@@ -4341,7 +4344,6 @@
   "69fa1b48f739f0df": "Tvångsstoppa agenten",
   "9150dfa27deb478c": "Tvångsstoppa agenten?",
   "288db2b396aa13b7": "Den har inte svarat på Stoppa. Tvångsstopp avslutar omgången och dödar agentens processer, om inte andra arbetande trådar delar dem.",
-  "a20b495b9e6f82b9": "Startar…",
   "7917e738e8c3fd41": "Öppna godkännande från {title}",
   "54c8b8a3c6e6046b": "Öppna fråga från {title}",
   "715be2d41b9f1b72": "Återuppta mål",

@@ -87,6 +87,7 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
   repositoryIdentity: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   connectionProbe: Schema.optionalKey(Schema.Boolean),
   selfRelay: Schema.optionalKey(Schema.Boolean),
+  plugins: Schema.optionalKey(Schema.Boolean),
   threadLimitRecoveryPreference: Schema.optionalKey(Schema.Boolean),
   threadOpenEndedSnooze: Schema.optionalKey(Schema.Boolean),
   /** A DPoP session from a pairing link renews at /oauth/token; pair with a bearer where absent. */

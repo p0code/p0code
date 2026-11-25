@@ -21,6 +21,7 @@ import * as Layer from "effect/Layer";
 import { Argument, Command, Flag, GlobalFlag, Prompt } from "effect/cli";
 import * as ServerConfig from "../config.ts";
 import * as SelfRelay from "../selfRelay/SelfRelay.ts";
+import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
 import { authLocationFlags, type CliAuthLocationFlags, resolveCliAuthConfig } from "./config.ts";
 
 class RelayTokenInputError extends Schema.TaggedError<RelayTokenInputError>()(
@@ -37,7 +38,10 @@ const withRelay = Effect.fn("relay.withRelay")(function* <A, E, R>(
     Effect.flatMap(use),
     Effect.provide(
       Layer.mergeAll(
-        SelfRelay.layer.pipe(Layer.provide(ManagedPolicy.layer)),
+        SelfRelay.layer.pipe(
+          Layer.provide(ManagedPolicy.layer),
+          Layer.provide(ServerSecretStore.layer),
+        ),
         EnvironmentAuth.layerRuntime,
       ).pipe(
         Layer.provideMerge(FetchHttpClient.layer),

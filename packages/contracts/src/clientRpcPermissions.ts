@@ -28,6 +28,8 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
   [WS_METHODS.serverExposePort]: AuthRelayWriteScope,
   [WS_METHODS.serverUnexposePort]: AuthRelayWriteScope,
   [WS_METHODS.serverPortLink]: AuthTerminalOperateScope,
+  [WS_METHODS.pluginsSetEnabled]: AuthRelayConfigureScope,
+  [WS_METHODS.pluginsInvoke]: AuthRelayConfigureScope,
   [WS_METHODS.providerAuthRemoveMethod]: AuthProvidersManageScope,
   // An MCP sign-in stores a credential for the agent, as an account sign-in does.
   [WS_METHODS.providerMcpSignInStart]: AuthProvidersManageScope,

@@ -3,6 +3,7 @@
 ## Using T3 Code
 
 - [Install T3 Code](./user/install.md)
+- [Moving over from T3 Code](./user/migrating-from-t3-code.md)
 - [Messages and context](./user/composer.md)
 - [Working with threads](./user/thread-sidebar.md)
 - [Permission modes](./user/permission-modes.md)

@@ -7,6 +7,7 @@ import {
   CalendarClockIcon,
   createLucideIcon,
   FileDiffIcon,
+  PlugIcon,
   FlaskConicalIcon,
   FolderTreeIcon,
   GitBranchIcon,
@@ -62,6 +63,7 @@ import {
 import { handleSettingsSectionKeyDown } from "./settingsSectionNavigation";
 import {
   useAvailableSettingsSearchItems,
+  useHasPluginsEnvironment,
   useHasSecretProvidersEnvironment,
 } from "./useAvailableSettingsSearchItems";
 
@@ -99,6 +101,7 @@ const SETTINGS_SECTION_ICONS: Readonly<
   "/settings/connections": ServerIcon,
   "/settings/access": ShieldCheckIcon,
   "/settings/secrets": KeyRoundIcon,
+  "/settings/plugins": PlugIcon,
   "/settings/maintenance": WrenchIcon,
   "/settings/labs": FlaskConicalIcon,
   "/settings/about": InfoIcon,
@@ -134,7 +137,10 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
   const [compactSearchOpen, setCompactSearchOpen] = useState(false);
   const [activeResultIndex, setActiveResultIndex] = useState(0);
   const searchableItems = useAvailableSettingsSearchItems();
-  const navGroups = settingsNavGroups(useHasSecretProvidersEnvironment());
+  const navGroups = settingsNavGroups(
+    useHasSecretProvidersEnvironment(),
+    useHasPluginsEnvironment(),
+  );
   const results = searchSettings(query, searchableItems, m);
   const isSearching = query.trim().length > 0;
   const hasResults = results.length > 0;

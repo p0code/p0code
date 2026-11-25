@@ -15,6 +15,7 @@ import {
   resolveDesktopAppControlAddress,
   type DesktopAppControlAddress,
 } from "@t3tools/shared/desktopAppControl";
+import { AppHomeConfig } from "@t3tools/shared/appHome";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Config from "effect/Config";
 import * as Console from "effect/Console";
@@ -192,7 +193,7 @@ async function sendDesktopAppActivationRequest(input: {
 }
 
 const appEnvironment = Config.all({
-  t3Home: Config.String("T3CODE_HOME").pipe(Config.option, Config.map(Option.getOrUndefined)),
+  t3Home: AppHomeConfig.pipe(Config.map(Option.getOrUndefined)),
   sshConnection: Config.String("SSH_CONNECTION").pipe(Config.option),
   sshTty: Config.String("SSH_TTY").pipe(Config.option),
 });

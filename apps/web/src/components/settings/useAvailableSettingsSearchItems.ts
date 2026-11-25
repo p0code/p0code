@@ -24,6 +24,13 @@ export function useHasSecretProvidersEnvironment() {
   );
 }
 
+export function useHasPluginsEnvironment() {
+  const { environments } = useEnvironments();
+  return environments.some(
+    (environment) => environment.serverConfig?.environment.capabilities.plugins === true,
+  );
+}
+
 export function useAvailableSettingsSearchItems() {
   const { environments } = useEnvironments();
   // Explicit booleans keep flags out of the filter cache so environment updates do not rebuild the list.
@@ -51,6 +58,7 @@ export function useAvailableSettingsSearchItems() {
         environment.serverConfig.managedPolicy?.limits?.providers?.allowedDrivers === undefined,
     ) === true;
   const hasSecretProvidersEnvironment = useHasSecretProvidersEnvironment();
+  const hasPluginsEnvironment = useHasPluginsEnvironment();
   const hasThreadAutoSettlement =
     getThreadAutoSettlementSearchAvailability(environments).eligibleEnvironmentIds.length > 0;
   const primaryEnvironmentId = usePrimaryEnvironmentId();
@@ -81,5 +89,6 @@ export function useAvailableSettingsSearchItems() {
     hasTextGeneratorsEnvironment,
     hasPrimaryEnvironment: primaryEnvironmentId !== null,
     hasSecretProvidersEnvironment,
+    hasPluginsEnvironment,
   });
 }

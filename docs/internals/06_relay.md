@@ -26,7 +26,8 @@ links) is the only authority. Setup lives in the [relay runbook](../operations/0
   with the normal pairing URL (`<public origin>/pair#token=…`). Never add a relay-specific client
   protocol; that would break the stock clients.
 - **No push.** Push notifications to the store builds need the upstream APNs/FCM keys, so they are
-  not available through a self-hosted relay.
+  not available through a self-hosted relay. The opt-in [T3 Connect bridge](18_plugins.md) plugin
+  restores them through upstream T3 Connect, without its end-to-end guarantee.
 
 ## Enrollment and tunnel auth
 

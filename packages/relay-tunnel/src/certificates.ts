@@ -21,8 +21,15 @@ export interface CertificateFiles {
   cert: string;
   key: string;
 }
+/** Holds private keys outside the certificate folder, e.g. in the OS keychain. */
+export interface CertificateKeyStore {
+  get(name: string): Promise<Buffer | undefined>;
+  set(name: string, value: Buffer): Promise<void>;
+}
 export interface CertificateManagerOptions {
   directory: string;
+  /** Without one, private keys are files in `directory`. */
+  keys?: CertificateKeyStore;
   challenges: HttpChallengeStore;
   email?: string;
   directoryUrl?: string;
@@ -77,12 +84,21 @@ export class AcmeCertificateManager {
   }
   private async getAccountKey(): Promise<Buffer> {
     const path = NodePath.join(this.options.directory, "account.key");
+    const keys = this.options.keys;
+    const stored = await keys?.get("account");
+    if (stored) return stored;
     try {
-      return await NodeFSP.readFile(path);
+      const key = await NodeFSP.readFile(path);
+      if (keys) {
+        await keys.set("account", key);
+        await NodeFSP.rm(path, { force: true });
+      }
+      return key;
     } catch (error) {
       if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error;
       const key = await crypto.createPrivateKey();
-      await this.persist(path, key);
+      if (keys) await keys.set("account", key);
+      else await this.persist(path, key);
       return key;
     }
   }
@@ -121,12 +137,25 @@ export class AcmeCertificateManager {
           stored &&
           typeof stored === "object" &&
           "cert" in stored &&
-          typeof stored.cert === "string" &&
-          "key" in stored &&
-          typeof stored.key === "string"
+          typeof stored.cert === "string"
         ) {
           cert = Buffer.from(stored.cert);
-          key = Buffer.from(stored.key);
+          const fileKey =
+            "key" in stored && typeof stored.key === "string" ? Buffer.from(stored.key) : undefined;
+          const keys = this.options.keys;
+          if (keys && fileKey) {
+            // Written by an earlier version; the key moves out of the file.
+            await keys.set(`tls-${hostname}`, fileKey);
+            await this.persist(path, JSON.stringify({ cert: stored.cert }));
+          }
+          key = fileKey ?? (await keys?.get(`tls-${hostname}`));
+          // A crash between saving a renewed key and its certificate leaves a pair that
+          // does not match; issue again instead of failing every handshake.
+          if (
+            key &&
+            !new NodeCrypto.X509Certificate(cert).checkPrivateKey(NodeCrypto.createPrivateKey(key))
+          )
+            key = undefined;
         } else throw new Error("Invalid stored certificate");
       } catch (error) {
         if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error;
@@ -197,7 +226,12 @@ export class AcmeCertificateManager {
       });
       cert = Buffer.from(newCert);
       key = newKey;
-      await this.persist(path, JSON.stringify({ cert: cert.toString(), key: key.toString() }));
+      if (this.options.keys) {
+        await this.options.keys.set(`tls-${hostname}`, key);
+        await this.persist(path, JSON.stringify({ cert: cert.toString() }));
+      } else {
+        await this.persist(path, JSON.stringify({ cert: cert.toString(), key: key.toString() }));
+      }
     }
     const context = NodeTls.createSecureContext({ cert, key, minVersion: "TLSv1.2" });
     const renewAt = renewal(cert);

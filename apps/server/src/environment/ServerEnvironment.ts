@@ -221,6 +221,7 @@ export const make = Effect.gen(function* () {
       repositoryIdentity: true,
       connectionProbe: true,
       selfRelay: true,
+      plugins: true,
       threadLimitRecoveryPreference: true,
       threadOpenEndedSnooze: true,
       attachmentUploads: true,

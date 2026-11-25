@@ -707,9 +707,17 @@ export const ServerFeatureFlags = Schema.Struct({
 });
 export type ServerFeatureFlags = typeof ServerFeatureFlags.Type;
 
+export const ServerCredentialStorage = Schema.Struct({
+  backend: Schema.Literals(["keychain", "file"]),
+  label: Schema.String,
+});
+export type ServerCredentialStorage = typeof ServerCredentialStorage.Type;
+
 export const ServerConfig = Schema.Struct({
   environment: ExecutionEnvironmentDescriptor,
   auth: ServerAuthDescriptor,
+  /** Where this server keeps its own credentials (OS keychain or file fallback). */
+  credentialStorage: Schema.optionalKey(ServerCredentialStorage),
   cwd: TrimmedNonEmptyString,
   /** The machine's own name, which file URIs from its shells may carry. Older servers omit it. */
   hostname: Schema.optionalKey(Schema.String),

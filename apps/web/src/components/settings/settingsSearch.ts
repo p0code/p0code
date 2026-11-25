@@ -37,6 +37,7 @@ export type SettingsPath =
   | "/settings/connections"
   | "/settings/access"
   | "/settings/secrets"
+  | "/settings/plugins"
   | "/settings/maintenance"
   | "/settings/labs"
   | "/settings/about"
@@ -62,6 +63,7 @@ export interface SettingsSearchItem {
   readonly windowsOnly?: boolean;
   readonly releaseChannelOnly?: boolean;
   readonly secretProvidersOnly?: boolean;
+  readonly pluginsOnly?: boolean;
   readonly cloudOnly?: boolean;
   readonly environmentOnly?: boolean;
   readonly providerSettingsOnly?: boolean;
@@ -93,6 +95,7 @@ export interface SettingsSearchAvailability {
   readonly hasTextGeneratorsEnvironment?: boolean;
   readonly hasPrimaryEnvironment?: boolean;
   readonly hasSecretProvidersEnvironment?: boolean;
+  readonly hasPluginsEnvironment?: boolean;
 }
 
 export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
@@ -114,6 +117,7 @@ export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
   "/settings/connections": msg("Environments"),
   "/settings/access": msg("Sharing & access"),
   "/settings/secrets": msg("Secrets"),
+  "/settings/plugins": msg("Plugins"),
   "/settings/maintenance": msg("Maintenance"),
   "/settings/labs": msg("Labs"),
   "/settings/about": msg("About"),
@@ -167,7 +171,7 @@ const ALL_SETTINGS_NAV_GROUPS: ReadonlyArray<SettingsNavGroup> = [
   },
   {
     heading: msg("Connections"),
-    paths: ["/settings/connections", "/settings/access", "/settings/secrets"],
+    paths: ["/settings/connections", "/settings/access", "/settings/secrets", "/settings/plugins"],
   },
   {
     heading: msg("More"),
@@ -176,16 +180,27 @@ const ALL_SETTINGS_NAV_GROUPS: ReadonlyArray<SettingsNavGroup> = [
   },
 ];
 
-const SETTINGS_NAV_GROUPS_WITHOUT_SECRETS = ALL_SETTINGS_NAV_GROUPS.map((group) => ({
-  ...group,
-  paths: group.paths.filter((path) => path !== "/settings/secrets"),
-}));
+const navGroupsWithout = (hidden: ReadonlyArray<SettingsPath>) =>
+  ALL_SETTINGS_NAV_GROUPS.map((group) => ({
+    ...group,
+    paths: group.paths.filter((path) => !hidden.includes(path)),
+  }));
+const NAV_GROUPS = {
+  all: ALL_SETTINGS_NAV_GROUPS,
+  withoutSecrets: navGroupsWithout(["/settings/secrets"]),
+  withoutPlugins: navGroupsWithout(["/settings/plugins"]),
+  withoutBoth: navGroupsWithout(["/settings/secrets", "/settings/plugins"]),
+};
 
-/** Sidebar groups; Secrets shows only when some environment's server enables secret providers. */
-export function settingsNavGroups(hasSecretProvidersEnvironment: boolean) {
-  return hasSecretProvidersEnvironment
-    ? ALL_SETTINGS_NAV_GROUPS
-    : SETTINGS_NAV_GROUPS_WITHOUT_SECRETS;
+/** Sidebar groups; Secrets and Plugins show only when some environment's server offers them. */
+export function settingsNavGroups(
+  hasSecretProvidersEnvironment: boolean,
+  hasPluginsEnvironment = false,
+) {
+  if (hasSecretProvidersEnvironment) {
+    return hasPluginsEnvironment ? NAV_GROUPS.all : NAV_GROUPS.withoutPlugins;
+  }
+  return hasPluginsEnvironment ? NAV_GROUPS.withoutSecrets : NAV_GROUPS.withoutBoth;
 }
 
 export function keybindingSearchAnchorId<Command extends KeybindingCommand>(command: Command) {
@@ -1484,6 +1499,13 @@ export const SETTINGS_SEARCH_ITEMS = [
     secretProvidersOnly: true,
   },
   {
+    id: "plugins",
+    title: msg("Plugins"),
+    to: "/settings/plugins",
+    searchTerms: [msg("t3 connect bridge relay push notifications extensions")],
+    pluginsOnly: true,
+  },
+  {
     id: "archive",
     title: msg("Archived threads"),
     to: "/settings/archived",
@@ -1514,6 +1536,7 @@ const SETTINGS_CATEGORY_SCOPES: Readonly<Record<SettingsPath, SettingsSearchScop
   "/settings/connections": "connections",
   "/settings/access": "connections",
   "/settings/secrets": null,
+  "/settings/plugins": null,
   "/settings/scheduled-tasks": null,
   "/settings/maintenance": null,
   "/settings/labs": null,
@@ -1655,7 +1678,8 @@ export function filterAvailableSettingsSearchItems(
       (!item.fastWorktreeCheckoutOnly ||
         availability.hasFastWorktreeCheckoutEnvironment === true) &&
       (!item.textGeneratorsOnly || availability.hasTextGeneratorsEnvironment === true) &&
-      (!item.secretProvidersOnly || availability.hasSecretProvidersEnvironment === true),
+      (!item.secretProvidersOnly || availability.hasSecretProvidersEnvironment === true) &&
+      (!item.pluginsOnly || availability.hasPluginsEnvironment === true),
   );
 }
 

@@ -5,11 +5,14 @@ import * as ManagedPolicy from "../policy/ManagedPolicy.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as NodePlatformCrypto from "@effect/platform-node/NodeCrypto";
 import { generateEnvironmentKeyPair } from "@t3tools/relay-tunnel/auth";
+import { memoryKeychainStore } from "@t3tools/shared/credentialKeychain";
 import { expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as TestClock from "effect/testing/TestClock";
+import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
 import * as ServerConfig from "../config.ts";
 import * as SelfRelay from "./SelfRelay.ts";
 
@@ -32,11 +35,15 @@ const layerConfig = Layer.effect(
     return config;
   }),
 ).pipe(Layer.provide(ServerConfig.layerTest(process.cwd(), { prefix: "self-relay-test-" })));
-const layer = SelfRelay.layer.pipe(
-  Layer.provide(ManagedPolicy.layerTest()),
-  Layer.provide(layerConfig),
-  Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodePlatformCrypto.layer)),
-);
+const makeLayer = () => {
+  const keychain = memoryKeychainStore();
+  return SelfRelay.layer.pipe(
+    Layer.provideMerge(ServerSecretStore.layerWithKeychain(keychain)),
+    Layer.provide(ManagedPolicy.layerTest()),
+    Layer.provideMerge(layerConfig),
+    Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodePlatformCrypto.layer)),
+  );
+};
 const token = (url: string) => new URL(url).searchParams.get("t") ?? "";
 
 it.effect(
@@ -67,7 +74,7 @@ it.effect(
       yield* relay.unexposePort(3000);
       expect(yield* relay.authorizePort(3000, token(second.url))).toBeNull();
       expect((yield* relay.status).ports).toEqual([]);
-    }).pipe(Effect.provide(layer)),
+    }).pipe(Effect.provide(makeLayer())),
 );
 
 it.effect(
@@ -89,15 +96,22 @@ it.effect(
       });
       const fs = yield* FileSystem.FileSystem;
       const config = yield* ServerConfig.ServerConfig;
-      const state = yield* fs
+      const secrets = yield* ServerSecretStore.ServerSecretStore;
+      const storedFile = yield* fs
         .readFileString(`${config.stateDir}/self-relay/link.json`)
         .pipe(
           Effect.flatMap(
             Schema.decodeUnknownEffect(
-              Schema.fromJsonString(Schema.Struct({ privateKey: Schema.String })),
+              Schema.fromJsonString(
+                Schema.Struct({ privateKey: Schema.optionalKey(Schema.String) }),
+              ),
             ),
           ),
         );
+      expect(storedFile.privateKey).toBeUndefined();
+      const storedKey = yield* secrets.get("self-relay-tunnel-key");
+      expect(Option.isSome(storedKey)).toBe(true);
+      const privateKey = new TextDecoder().decode(Option.getOrThrow(storedKey));
       const raw = JSON.parse(
         Buffer.from(token(opened.url).split(".")[0]!, "base64url").toString(),
       ) as { port: number; id: string; sessionId: string; expiresAt: number };
@@ -105,13 +119,13 @@ it.effect(
         JSON.stringify({ ...raw, expiresAt: raw.expiresAt + 60_000 }),
       ).toString("base64url");
       const key = Buffer.from(
-        NodeCrypto.hkdfSync("sha256", state.privateKey, "hhhcode-self-relay", "port-link-v1", 32),
+        NodeCrypto.hkdfSync("sha256", privateKey, "hhhcode-self-relay", "port-link-v1", 32),
       );
       const signature = NodeCrypto.createHmac("sha256", key)
         .update(`port:${payload}`)
         .digest("base64url");
       expect(yield* relay.authorizePort(3001, `${payload}.${signature}`)).toBeNull();
-      const oldSignature = NodeCrypto.createHmac("sha256", state.privateKey)
+      const oldSignature = NodeCrypto.createHmac("sha256", privateKey)
         .update(`port:${payload}`)
         .digest("base64url");
       expect(yield* relay.authorizePort(3001, `${payload}.${oldSignature}`)).toBeNull();
@@ -124,13 +138,6 @@ it.effect(
       yield* relay.unlink();
       expect(yield* relay.publicOrigin).toBeNull();
       expect((yield* relay.status).linked).toBe(false);
-    }).pipe(
-      Effect.provide(
-        SelfRelay.layer.pipe(
-          Layer.provide(ManagedPolicy.layerTest()),
-          Layer.provideMerge(layerConfig),
-          Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodePlatformCrypto.layer)),
-        ),
-      ),
-    ),
+      expect(Option.isNone(yield* secrets.get("self-relay-tunnel-key"))).toBe(true);
+    }).pipe(Effect.provide(makeLayer())),
 );

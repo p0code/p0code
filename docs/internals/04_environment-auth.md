@@ -85,3 +85,26 @@ Signed asset URLs are bearer credentials for a single canonical file, rechecked 
 identity on serve ([`AssetAccess.ts`](../../apps/server/src/assets/AssetAccess.ts)). They never
 grant access to sibling files, and because `filesystem:read` is checked only at mint time, an issued
 URL remains valid until it expires even if the session or grant is revoked.
+
+## Credential storage
+
+Server credentials (signing keys, share/MCP/asset keys, peer links, provider auth, self-hosted
+relay tunnel and ACME/TLS private keys, Obsidian sync token, and plugin secrets) live in the OS
+keychain (macOS Keychain, Windows Credential Manager, Linux Secret Service) via
+[`ServerSecretStore.ts`](../../apps/server/src/auth/ServerSecretStore.ts) and
+[`credentialKeychain.ts`](../../packages/shared/src/credentialKeychain.ts), namespaced by a hash
+of the resolved `secrets` directory so multiple homes never collide. Values larger than Windows
+Credential Manager's 2.5 KiB limit are chunked transparently.
+
+- **Replay-marker exception.** Single-use replay markers and nonces (`dpop-proof-*`,
+  `cloud-mint-jti-*`, `cloud-mint-nonce-*`, `cloud-health-jti-*`, `cloud-health-nonce-*`) are not
+  credentials, can number in the thousands, and rely on atomic filesystem creation, so they stay as
+  files in `userdata/secrets/`. Every other name defaults to the keychain.
+- **Upgrade and fallback.** On startup, existing credential `.bin` files in `userdata/secrets/` are
+  written to the keychain, verified by read-back, and then deleted. A `keychain-backend` marker file
+  prevents silently falling back to files if a keychain-backed home starts with a locked keychain.
+  On headless hosts with no keychain, the server logs a warning and falls back to `0600` files
+  (override with `HHHCODE_SECRET_BACKEND=keychain|file`).
+- **Desktop and mobile.** Desktop seals its saved environment and catalog secrets with Electron
+  `safeStorage` (keychain-backed key); mobile uses `expo-secure-store` (iOS Keychain / Android
+  Keystore).

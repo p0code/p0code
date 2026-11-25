@@ -14,7 +14,7 @@ Shared vocabulary across T3 Code. Architecture and lifecycle constraints belong 
 | Worktree       | A separate Git checkout a thread can use instead of the project's main checkout.                  |
 | Thread         | The durable conversation and work history for a project. Survives provider process exits.         |
 | Turn           | One user-to-agent cycle (a run). Provider work can end before checkpoint and diff work settles.   |
-| T3 home        | The base data directory. Runtime state normally lives under its `userdata` directory.             |
+| T3 home        | The base data directory (`~/.hhh` by default). Runtime state normally lives under its `userdata`. |
 
 ## Orchestration
 

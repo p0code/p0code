@@ -9,15 +9,7 @@ import * as Schedule from "effect/Schedule";
 
 import * as ServerConfig from "../config.ts";
 import { forkParked } from "../serverActivation.ts";
-import { DPOP_REPLAY_MARKER_PREFIX } from "./dpop.ts";
-
-const REPLAY_MARKER_PREFIXES = [
-  DPOP_REPLAY_MARKER_PREFIX,
-  "cloud-mint-jti-",
-  "cloud-mint-nonce-",
-  "cloud-health-jti-",
-  "cloud-health-nonce-",
-];
+import { FILE_ONLY_SECRET_PREFIXES as REPLAY_MARKER_PREFIXES } from "@t3tools/shared/credentialKeychain";
 
 /**
  * A marker only matters while its proof can pass the time check (about 10 minutes

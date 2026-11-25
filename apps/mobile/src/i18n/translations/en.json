@@ -1874,6 +1874,9 @@
     },
     " to add one."
   ],
+  "a20b495b9e6f82b9": "Starting…",
+  "946cb426f67fbe20": "Unofficial. Not end-to-end encrypted: Cloudflare ends TLS and T3's relay sees connection metadata.",
+  "c1b7649ac731ed07": "Plugins",
   "9d7fb2ec72ce9693": "Off",
   "d92a43b7bf4c24c8": "Keep source control requests on this environment.",
   "2763012f6869f8d0": "Read PRs",
@@ -4343,7 +4346,6 @@
   "69fa1b48f739f0df": "Force stop the agent",
   "9150dfa27deb478c": "Force stop the agent?",
   "288db2b396aa13b7": "It has not answered Stop. Force stop ends the turn and kills the agent's processes, unless other working threads share them.",
-  "a20b495b9e6f82b9": "Starting…",
   "7917e738e8c3fd41": "Open approval from {title}",
   "54c8b8a3c6e6046b": "Open question from {title}",
   "715be2d41b9f1b72": "Resume goal",

@@ -25,6 +25,7 @@ import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 import { writeFileStringAtomically } from "@t3tools/shared/atomicWrite";
 import * as ServerConfig from "../config.ts";
+import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
 
 const PortRecord = Schema.Struct({
   port: Schema.Int,
@@ -40,7 +41,15 @@ const LinkState = Schema.Struct({
   ports: Schema.Array(PortRecord),
 });
 type LinkState = typeof LinkState.Type;
-const decodeState = Schema.decodeUnknownEffect(Schema.fromJsonString(LinkState));
+// link.json without its private key, which lives in the secret store (the OS keychain).
+const StoredLinkState = Schema.Struct({
+  ...LinkState.fields,
+  privateKey: Schema.optionalKey(Schema.String),
+});
+const decodeState = Schema.decodeUnknownEffect(Schema.fromJsonString(StoredLinkState));
+const encodeStoredState = Schema.encodeSync(Schema.fromJsonString(StoredLinkState));
+const TUNNEL_KEY_SECRET = "self-relay-tunnel-key";
+const certificateKeySecret = (name: string) => `self-relay-acme-${name}`;
 const Claims = Schema.Struct({
   port: Schema.Int,
   id: Schema.String,
@@ -57,6 +66,7 @@ export class SelfRelayError extends Schema.TaggedError<SelfRelayError>()("SelfRe
     return `Could not ${this.operation} the self-hosted relay.`;
   }
 }
+const isSelfRelayError = Schema.is(SelfRelayError);
 export class SelfRelay extends Context.Service<
   SelfRelay,
   {
@@ -84,6 +94,18 @@ export class SelfRelay extends Context.Service<
 
 const make = Effect.gen(function* () {
   const config = yield* ServerConfig.ServerConfig;
+  const secrets = yield* ServerSecretStore.ServerSecretStore;
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+  const certificateKeys = {
+    get: (name: string) =>
+      runPromise(
+        secrets
+          .get(certificateKeySecret(name))
+          .pipe(Effect.map(Option.match({ onNone: () => undefined, onSome: Buffer.from }))),
+      ),
+    set: (name: string, value: Buffer) =>
+      runPromise(secrets.set(certificateKeySecret(name), value)),
+  };
   const policy = yield* ManagedPolicy.ManagedPolicy;
   const ready = yield* Deferred.make<void>();
   const fs = yield* FileSystem.FileSystem;
@@ -165,6 +187,7 @@ const make = Effect.gen(function* () {
     const manager = new AcmeCertificateManager({
       directory: path.join(directory, "certificates"),
       challenges,
+      keys: certificateKeys,
       ...(Option.isSome(acmeDirectory) ? { directoryUrl: acmeDirectory.value } : {}),
       ...(Option.isSome(acmeEmail) ? { email: acmeEmail.value } : {}),
       ...(Option.isSome(certPath) && Option.isSome(keyPath)
@@ -243,24 +266,58 @@ const make = Effect.gen(function* () {
     tunnel.on("connectionError", () => {});
     tunnel.start();
   };
-  const reload = Effect.fn("SelfRelay.reload")(function* () {
-    const next = yield* fs.readFileString(statePath).pipe(
-      Effect.flatMap(decodeState),
-      Effect.catchIf(
-        (error) =>
-          "reason" in error &&
-          typeof error.reason === "object" &&
-          error.reason !== null &&
-          "_tag" in error.reason &&
-          error.reason._tag === "NotFound",
-        () => Effect.succeed(null),
-      ),
-      Effect.mapError((cause) => new SelfRelayError({ operation: "load", cause })),
+  const writeState = (next: LinkState) => {
+    const { privateKey: _privateKey, ...stored } = next;
+    return writeFileStringAtomically({
+      filePath: statePath,
+      contents: encodeStoredState(stored),
+    }).pipe(
+      Effect.provideService(FileSystem.FileSystem, fs),
+      Effect.provideService(Path.Path, path),
     );
-    if (encodeState(next) === encodeState(state)) return;
-    state = next;
-    start();
+  };
+  const withPrivateKey = Effect.fn("SelfRelay.withPrivateKey")(function* (
+    stored: typeof StoredLinkState.Type,
+  ) {
+    if (stored.privateKey !== undefined) {
+      // Written by an earlier version: move the key out of link.json.
+      const linked = { ...stored, privateKey: stored.privateKey };
+      yield* secrets.set(TUNNEL_KEY_SECRET, new TextEncoder().encode(stored.privateKey));
+      yield* writeState(linked);
+      return linked;
+    }
+    const key = yield* secrets.get(TUNNEL_KEY_SECRET);
+    if (Option.isNone(key)) {
+      return yield* new SelfRelayError({
+        operation: "load",
+        cause: "The relay tunnel key is missing.",
+      });
+    }
+    return { ...stored, privateKey: new TextDecoder().decode(key.value) };
   });
+  const reload = Effect.fn("SelfRelay.reload")(
+    function* () {
+      const stored = yield* fs.readFileString(statePath).pipe(
+        Effect.flatMap(decodeState),
+        Effect.catchIf(
+          (error) =>
+            "reason" in error &&
+            typeof error.reason === "object" &&
+            error.reason !== null &&
+            "_tag" in error.reason &&
+            error.reason._tag === "NotFound",
+          () => Effect.succeed(null),
+        ),
+      );
+      const next = stored === null ? null : yield* withPrivateKey(stored);
+      if (encodeState(next) === encodeState(state)) return;
+      state = next;
+      start();
+    },
+    Effect.mapError((cause) =>
+      isSelfRelayError(cause) ? cause : new SelfRelayError({ operation: "load", cause }),
+    ),
+  );
   yield* reload();
   yield* fs.watch(directory).pipe(
     Stream.filter((event) => event.path.endsWith("link.json")),
@@ -274,9 +331,7 @@ const make = Effect.gen(function* () {
   );
   yield* Effect.addFinalizer(() => Effect.sync(stop));
   const persist = (next: LinkState, operation: SelfRelayError["operation"]) =>
-    writeFileStringAtomically({ filePath: statePath, contents: encodeState(next) }).pipe(
-      Effect.provideService(FileSystem.FileSystem, fs),
-      Effect.provideService(Path.Path, path),
+    writeState(next).pipe(
       Effect.mapError((cause) => new SelfRelayError({ operation, cause })),
       Effect.tap(() =>
         Effect.sync(() => {
@@ -357,10 +412,12 @@ const make = Effect.gen(function* () {
     status,
     publicOrigin,
     whenReady: Deferred.await(ready),
-    attach: Effect.fn("SelfRelay.attach")(function* (server, forwarded) {
-      target = { server, forwarded };
-      start();
-    }),
+    attach: Effect.fn("SelfRelay.attach")((server, forwarded) =>
+      Effect.sync(() => {
+        target = { server, forwarded };
+        start();
+      }),
+    ),
     link: Effect.fn("SelfRelay.link")(function* (input) {
       return yield* Effect.gen(function* () {
         if (!ManagedLimits.allowsConnect(policy))
@@ -382,17 +439,23 @@ const make = Effect.gen(function* () {
           },
           catch: (cause) => new SelfRelayError({ operation: "link", cause }),
         });
+        yield* secrets
+          .set(TUNNEL_KEY_SECRET, new TextEncoder().encode(next.privateKey))
+          .pipe(Effect.mapError((cause) => new SelfRelayError({ operation: "link", cause })));
         yield* persist(next, "link");
         return yield* status;
       }).pipe(lock.withPermits(1));
     }),
-    unlink: Effect.fn("SelfRelay.unlink")(function* () {
-      yield* fs
-        .remove(statePath, { force: true })
-        .pipe(Effect.mapError((cause) => new SelfRelayError({ operation: "unlink", cause })));
-      state = null;
-      stop();
-    }, lock.withPermits(1)),
+    unlink: Effect.fn("SelfRelay.unlink")(
+      function* () {
+        yield* fs.remove(statePath, { force: true });
+        state = null;
+        stop();
+        yield* secrets.remove(TUNNEL_KEY_SECRET);
+      },
+      Effect.mapError((cause) => new SelfRelayError({ operation: "unlink", cause })),
+      lock.withPermits(1),
+    ),
     exposePort: Effect.fn("SelfRelay.exposePort")(function* (input) {
       return yield* Effect.gen(function* () {
         if (!ManagedLimits.allowsConnect(policy))

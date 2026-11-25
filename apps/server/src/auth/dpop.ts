@@ -19,7 +19,7 @@ import {
 import * as ServerSecretStore from "./ServerSecretStore.ts";
 import { requestUrl } from "../requestUrl.ts";
 
-export const DPOP_REPLAY_MARKER_PREFIX = "dpop-proof-";
+const DPOP_REPLAY_MARKER_PREFIX = "dpop-proof-";
 
 const mapDpopFailureReason = (code: DpopVerificationFailureCodeType): DpopFailureReason => {
   switch (code) {

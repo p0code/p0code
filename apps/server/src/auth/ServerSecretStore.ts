@@ -1,3 +1,18 @@
+// @effect-diagnostics nodeBuiltinImport:off -- The keychain binding is a native module loaded on demand.
+import * as NodeModule from "node:module";
+import {
+  classifySecret,
+  credentialNamespace,
+  importCredentialFiles,
+  KEYCHAIN_MARKER_FILE,
+  keychainSecrets,
+  type KeychainSecrets,
+  type KeychainStore,
+  keyringStore,
+} from "@t3tools/shared/credentialKeychain";
+import * as HostProcess from "@t3tools/shared/HostProcess";
+import { lock } from "proper-lockfile";
+import * as Config from "effect/Config";
 import * as Context from "effect/Context";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
@@ -148,6 +163,36 @@ const isPlatformError = (value: unknown): value is PlatformError.PlatformError =
 export const isSecretAlreadyExistsError = (error: SecretStoreError): boolean =>
   "cause" in error && isPlatformError(error.cause) && error.cause.reason._tag === "AlreadyExists";
 
+/** The server cannot reach the credential storage this home needs. Fails startup. */
+export class SecretStoreBackendError extends Schema.TaggedError<SecretStoreBackendError>()(
+  "SecretStoreBackendError",
+  {
+    detail: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {
+  override get message(): string {
+    return this.detail;
+  }
+}
+
+export interface SecretStorageStatus {
+  readonly backend: "keychain" | "file";
+  /** e.g. "macOS Keychain", or why credentials are files. */
+  readonly label: string;
+}
+
+const alreadyExists = (name: string) =>
+  new SecretStorePersistError({
+    resource: `secret ${name}`,
+    cause: PlatformError.systemError({
+      _tag: "AlreadyExists",
+      module: "ServerSecretStore",
+      method: "create",
+      description: "The secret already exists.",
+    }),
+  });
+
 export class ServerSecretStore extends Context.Service<
   ServerSecretStore,
   {
@@ -160,11 +205,30 @@ export class ServerSecretStore extends Context.Service<
       bytes: number,
     ) => Effect.Effect<Uint8Array, SecretStoreError>;
     readonly remove: (name: string) => Effect.Effect<void, SecretStoreError>;
+    /** Names starting with `prefix`, wherever they are stored. */
+    readonly list?: (prefix: string) => Effect.Effect<ReadonlyArray<string>, SecretStoreError>;
+    readonly storage?: SecretStorageStatus;
   }
 >()("t3/auth/ServerSecretStore") {}
 
-/** @public */
-export const make = Effect.gen(function* () {
+// A single-executable server resolves packages on disk only through `require`.
+const requireExternal = NodeModule.createRequire(import.meta.url);
+
+/** Loads the OS keychain; throws where it cannot be used. */
+export type KeychainLoader = (platform: NodeJS.Platform) => KeychainStore;
+
+const loadSystemKeychain: KeychainLoader = (platform) => {
+  // Tests get an in-memory keychain from `layerWithKeychain`; never the user's real one.
+  if (process.env.VITEST) throw new Error("tests never use the OS keychain");
+  const keyring: typeof import("@napi-rs/keyring") = requireExternal("@napi-rs/keyring");
+  return keyringStore(keyring, platform);
+};
+
+const SecretBackendSetting = Config.String("HHHCODE_SECRET_BACKEND").pipe(Config.option);
+
+export const makeWith = Effect.fn("ServerSecretStore.makeWith")(function* (
+  loadKeychain: KeychainLoader,
+) {
   const crypto = yield* SecureRandom.SecureRandom;
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -187,8 +251,6 @@ export const make = Effect.gen(function* () {
       ? Effect.fail(new SecretStoreNameError({ resource: `secret ${JSON.stringify(name)}` }))
       : Effect.succeed(path.join(serverConfig.secretsDir, `${name}.bin`));
   const emptySecretRepair = yield* Semaphore.make(1);
-  const isMissingOrNonEmpty = (secret: Option.Option<Uint8Array>) =>
-    Option.isNone(secret) || secret.value.byteLength > 0;
 
   const get: ServerSecretStore["Service"]["get"] = (name) =>
     resolveSecretPath(name).pipe(
@@ -289,7 +351,259 @@ export const make = Effect.gen(function* () {
       }),
     );
 
-  const getOrCreateRandom: ServerSecretStore["Service"]["getOrCreateRandom"] = (name, bytes) =>
+  const remove: ServerSecretStore["Service"]["remove"] = (name) =>
+    resolveSecretPath(name).pipe(
+      Effect.flatMap((secretPath) =>
+        fileSystem.remove(secretPath).pipe(
+          Effect.catch((cause) =>
+            cause.reason._tag === "NotFound"
+              ? Effect.void
+              : Effect.fail(
+                  new SecretStoreRemoveError({
+                    resource: `secret ${name}`,
+                    cause,
+                  }),
+                ),
+          ),
+        ),
+      ),
+      Effect.withSpan("ServerSecretStore.remove"),
+    );
+
+  const listFiles = (prefix: string) =>
+    fileSystem.readDirectory(serverConfig.secretsDir).pipe(
+      Effect.map((files) =>
+        files.flatMap((file) =>
+          file.endsWith(".bin") && file.startsWith(prefix) ? [file.slice(0, -".bin".length)] : [],
+        ),
+      ),
+      Effect.mapError(
+        (cause) => new SecretStoreReadError({ resource: `secrets ${prefix}*`, cause }),
+      ),
+    );
+
+  const fileStore = { get, set, create, remove, list: listFiles };
+  const { keychain, storage } = yield* resolveKeychain(loadKeychain, serverConfig.secretsDir);
+  if (keychain === undefined) {
+    return ServerSecretStore.of({
+      directory: serverConfig.secretsDir,
+      get,
+      set,
+      create,
+      getOrCreateRandom: makeGetOrCreateRandom(fileStore, crypto, emptySecretRepair),
+      remove,
+      list: listFiles,
+      storage,
+    });
+  }
+
+  const keychainStore = makeKeychainOperations(keychain, serverConfig.secretsDir);
+  const route = (name: string) => (classifySecret(name) === "keychain" ? keychainStore : fileStore);
+  const routed = {
+    get: (name: string) => route(name).get(name),
+    set: (name: string, value: Uint8Array) => route(name).set(name, value),
+    create: (name: string, value: Uint8Array) => route(name).create(name, value),
+    remove: (name: string) => route(name).remove(name),
+    list: (prefix: string) =>
+      Effect.all([keychainStore.list(prefix), listFiles(prefix)]).pipe(
+        Effect.map(([inKeychain, inFiles]) => [...new Set([...inKeychain, ...inFiles])]),
+      ),
+  };
+  return ServerSecretStore.of({
+    directory: serverConfig.secretsDir,
+    ...routed,
+    getOrCreateRandom: makeGetOrCreateRandom(routed, crypto, emptySecretRepair),
+    storage,
+  });
+});
+
+const isMissingOrNonEmpty = (secret: Option.Option<Uint8Array>) =>
+  Option.isNone(secret) || secret.value.byteLength > 0;
+
+interface SecretOperations {
+  readonly get: ServerSecretStore["Service"]["get"];
+  readonly set: ServerSecretStore["Service"]["set"];
+  readonly create: ServerSecretStore["Service"]["create"];
+  readonly remove: ServerSecretStore["Service"]["remove"];
+  readonly list: (prefix: string) => Effect.Effect<ReadonlyArray<string>, SecretStoreError>;
+}
+
+const resolveKeychain = Effect.fn("ServerSecretStore.resolveKeychain")(function* (
+  loadKeychain: KeychainLoader,
+  secretsDir: string,
+) {
+  const fileSystem = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const platform = yield* HostProcess.Platform;
+  const setting = yield* SecretBackendSetting.pipe(
+    Effect.map(Option.map((value) => value.trim().toLowerCase())),
+    Effect.mapError(
+      (cause) =>
+        new SecretStoreBackendError({ detail: "Could not read HHHCODE_SECRET_BACKEND.", cause }),
+    ),
+  );
+  const requested = Option.getOrElse(setting, () => "auto");
+  if (requested !== "auto" && requested !== "keychain" && requested !== "file") {
+    return yield* new SecretStoreBackendError({
+      detail: `HHHCODE_SECRET_BACKEND must be "keychain" or "file", got "${requested}".`,
+      cause: undefined,
+    });
+  }
+  const markerPath = path.join(secretsDir, KEYCHAIN_MARKER_FILE);
+  const marked = yield* fileSystem.exists(markerPath).pipe(Effect.orElseSucceed(() => false));
+  if (requested === "file") {
+    if (marked) {
+      yield* Effect.logWarning(
+        "HHHCODE_SECRET_BACKEND=file: credentials this home keeps in the OS keychain are not used.",
+      );
+    }
+    return {
+      keychain: undefined,
+      storage: { backend: "file", label: "files (HHHCODE_SECRET_BACKEND=file)" },
+    } as const;
+  }
+
+  const opened = yield* Effect.tryPromise({
+    try: async () => {
+      const secrets = keychainSecrets(
+        loadKeychain(platform),
+        await credentialNamespace(secretsDir),
+      );
+      await secrets.probe();
+      return secrets;
+    },
+    catch: (cause) =>
+      new SecretStoreBackendError({
+        detail:
+          requested === "keychain"
+            ? "HHHCODE_SECRET_BACKEND=keychain, but the OS keychain is not available."
+            : "This home keeps its credentials in the OS keychain, which is not available. Unlock it (or start the Secret Service on Linux) and start again.",
+        cause,
+      }),
+  }).pipe(Effect.result);
+  if (opened._tag === "Failure") {
+    if (requested === "keychain" || marked) return yield* opened.failure;
+    yield* Effect.logWarning(
+      "No OS keychain is available, so credentials are stored as owner-only files. Set HHHCODE_SECRET_BACKEND=file to silence this.",
+      { cause: opened.failure.cause },
+    );
+    return {
+      keychain: undefined,
+      storage: { backend: "file", label: "files (no keychain available)" },
+    } as const;
+  }
+
+  const keychain = opened.success;
+  yield* fileSystem
+    .writeFileString(markerPath, `${keychain.label}\n`, { mode: 0o600 })
+    .pipe(
+      Effect.mapError(
+        (cause) => new SecretStoreBackendError({ detail: "Could not mark the home.", cause }),
+      ),
+    );
+  const moved = yield* Effect.tryPromise({
+    try: () => importCredentialFiles(secretsDir, keychain),
+    catch: (cause) =>
+      new SecretStoreBackendError({
+        detail: "Could not move credential files into the OS keychain.",
+        cause,
+      }),
+  });
+  if (moved.imported.length > 0) {
+    yield* Effect.logInfo("Moved credential files into the OS keychain.", {
+      count: moved.imported.length,
+    });
+  }
+  if (moved.superseded.length > 0) {
+    yield* Effect.logWarning("Removed credential files the OS keychain already replaced.", {
+      names: moved.superseded,
+    });
+  }
+  return { keychain, storage: { backend: "keychain", label: keychain.label } } as const;
+});
+
+const makeKeychainOperations = (
+  keychain: KeychainSecrets,
+  secretsDir: string,
+): SecretOperations => {
+  const call = <A, E>(
+    operation: () => Promise<A>,
+    error: (cause: unknown) => E,
+  ): Effect.Effect<A, E> => Effect.tryPromise({ try: operation, catch: error });
+  const checked = <A>(
+    name: string,
+    use: () => Effect.Effect<A, SecretStoreError>,
+  ): Effect.Effect<A, SecretStoreError> =>
+    /[/\\\0]/.test(name)
+      ? Effect.fail(new SecretStoreNameError({ resource: `secret ${JSON.stringify(name)}` }))
+      : use();
+  const get = (name: string) =>
+    checked(name, () =>
+      call(
+        () => keychain.get(name),
+        (cause) => new SecretStoreReadError({ resource: `secret ${name}`, cause }),
+      ).pipe(Effect.map(Option.fromUndefinedOr)),
+    );
+  const set = (name: string, value: Uint8Array) =>
+    checked(name, () =>
+      call(
+        () => keychain.set(name, value),
+        (cause) => new SecretStorePersistError({ resource: `secret ${name}`, cause }),
+      ),
+    );
+  const createLock = Semaphore.makeUnsafe(1);
+  // The keychain has no add-if-absent; a lock shared with other processes on this home
+  // (CLI commands, a second server) makes check-then-write atomic.
+  const withCreateLock = <A, E>(name: string, task: Effect.Effect<A, E>) =>
+    Effect.acquireUseRelease(
+      call(
+        () =>
+          lock(`${secretsDir}/keychain-create`, {
+            realpath: false,
+            stale: 10_000,
+            retries: { retries: 50, factor: 1, minTimeout: 100, maxTimeout: 100 },
+          }),
+        (cause) => new SecretStorePersistError({ resource: `secret ${name}`, cause }),
+      ),
+      () => task,
+      (release) => Effect.promise(() => release()).pipe(Effect.ignore),
+    ).pipe(createLock.withPermits(1));
+  return {
+    get,
+    set,
+    create: (name, value) =>
+      checked(name, () =>
+        withCreateLock(
+          name,
+          get(name).pipe(
+            Effect.flatMap((existing) =>
+              Option.isSome(existing) ? Effect.fail(alreadyExists(name)) : set(name, value),
+            ),
+          ),
+        ),
+      ),
+    remove: (name) =>
+      checked(name, () =>
+        call(
+          () => keychain.remove(name),
+          (cause) => new SecretStoreRemoveError({ resource: `secret ${name}`, cause }),
+        ),
+      ),
+    list: (prefix) =>
+      call(
+        () => keychain.names(),
+        (cause) => new SecretStoreReadError({ resource: `secrets ${prefix}*`, cause }),
+      ).pipe(Effect.map((names) => names.filter((name) => name.startsWith(prefix)))),
+  };
+};
+
+const makeGetOrCreateRandom =
+  (
+    { get, create, remove }: Pick<SecretOperations, "get" | "create" | "remove">,
+    crypto: SecureRandom.SecureRandom["Service"],
+    emptySecretRepair: Semaphore.Semaphore,
+  ): ServerSecretStore["Service"]["getOrCreateRandom"] =>
+  (name, bytes) =>
     get(name).pipe(
       // Older builds could persist a 0-byte secret, which is never a usable key. Re-read under
       // the permit, and keep it until an interrupted removal settles, so a caller that saw the
@@ -344,33 +658,14 @@ export const make = Effect.gen(function* () {
       Effect.withSpan("ServerSecretStore.getOrCreateRandom"),
     );
 
-  const remove: ServerSecretStore["Service"]["remove"] = (name) =>
-    resolveSecretPath(name).pipe(
-      Effect.flatMap((secretPath) =>
-        fileSystem.remove(secretPath).pipe(
-          Effect.catch((cause) =>
-            cause.reason._tag === "NotFound"
-              ? Effect.void
-              : Effect.fail(
-                  new SecretStoreRemoveError({
-                    resource: `secret ${name}`,
-                    cause,
-                  }),
-                ),
-          ),
-        ),
-      ),
-      Effect.withSpan("ServerSecretStore.remove"),
-    );
-
-  return ServerSecretStore.of({
-    directory: serverConfig.secretsDir,
-    get,
-    set,
-    create,
-    getOrCreateRandom,
-    remove,
-  });
-});
+/** @public */
+export const make = makeWith(loadSystemKeychain);
 
 export const layer = Layer.effect(ServerSecretStore, make);
+
+/** For tests: a store whose keychain is the given fake, never the OS keychain. */
+export const layerWithKeychain = (keychain: KeychainStore) =>
+  Layer.effect(
+    ServerSecretStore,
+    makeWith(() => keychain),
+  );

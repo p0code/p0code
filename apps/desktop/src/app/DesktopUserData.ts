@@ -31,6 +31,8 @@ export class DesktopUserDataInitializationError extends Schema.TaggedError<Deskt
   }
 }
 
+const STOCK_T3_PROFILE_NAMES = ["t3code-v2", "T3 Code (Alpha)", "t3code"];
+
 export const resolveUserDataPath = Effect.fn("desktop.userData.resolveUserDataPath")(
   function* (input: {
     readonly appDataDirectory: string;
@@ -39,11 +41,10 @@ export const resolveUserDataPath = Effect.fn("desktop.userData.resolveUserDataPa
   }) {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const names = input.isDevelopment
-      ? { current: "t3code-dev", legacy: "T3 Code (Dev)" }
-      : { current: "t3code-v2", legacy: "T3 Code (Alpha)" };
-    const destinationPath = path.join(input.appDataDirectory, names.current);
-    const legacyPath = path.join(input.appDataDirectory, names.legacy);
+    const destinationPath = path.join(
+      input.appDataDirectory,
+      input.isDevelopment ? "hhhcode-dev" : "hhhcode",
+    );
     const inspect = (resourcePath: string) =>
       fs
         .exists(resourcePath)
@@ -52,18 +53,20 @@ export const resolveUserDataPath = Effect.fn("desktop.userData.resolveUserDataPa
             DesktopUserDataInitializationError.fromFileSystem(cause, "inspect", resourcePath),
           ),
         );
-    if (input.isDevelopment) {
-      return (yield* inspect(legacyPath)) ? legacyPath : destinationPath;
-    }
-    // Chromium databases require their own profile for each running version.
-    if (input.platform !== "win32") return destinationPath;
+    // Chromium databases require their own profile for each running app.
+    if (input.isDevelopment || input.platform !== "win32") return destinationPath;
     const destinationState = path.join(destinationPath, "Local State");
     if (yield* inspect(destinationState)) return destinationPath;
-    const legacyState = path.join(legacyPath, "Local State");
-    const sourceState = (yield* inspect(legacyState))
-      ? legacyState
-      : path.join(input.appDataDirectory, "t3code", "Local State");
-    if (!(yield* inspect(sourceState))) return destinationPath;
+    // Stock T3 Code's Local State holds the safeStorage key its saved secrets were sealed with.
+    let sourceState: string | undefined;
+    for (const profile of STOCK_T3_PROFILE_NAMES) {
+      const candidate = path.join(input.appDataDirectory, profile, "Local State");
+      if (yield* inspect(candidate)) {
+        sourceState = candidate;
+        break;
+      }
+    }
+    if (sourceState === undefined) return destinationPath;
     // Windows safeStorage keys live here. Copy only these preferences, never locked databases.
     const state = yield* fs
       .readFileString(sourceState)

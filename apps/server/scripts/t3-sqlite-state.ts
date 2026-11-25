@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { APP_HOME_DIRECTORY_NAME, STOCK_T3_HOME_DIRECTORY_NAME } from "@t3tools/shared/appHome";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as NodeOS from "node:os";
@@ -62,7 +63,7 @@ export class SqliteStateSharedHomeMutationError extends Schema.TaggedError<Sqlit
   {},
 ) {
   override get message(): string {
-    return "Refusing to mutate the shared ~/.t3 database. Use an isolated --base-dir.";
+    return "Refusing to mutate the shared ~/.hhh (or stock ~/.t3) database. Use an isolated --base-dir.";
   }
 }
 
@@ -181,7 +182,9 @@ export const runSqliteState = Effect.fn("runSqliteState")(function* (
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const baseDir = path.resolve(input.baseDir);
-  const sharedHome = path.resolve(options.sharedHome ?? path.join(NodeOS.homedir(), ".t3"));
+  const sharedHome = path.resolve(
+    options.sharedHome ?? path.join(NodeOS.homedir(), APP_HOME_DIRECTORY_NAME),
+  );
   const databasePath = path.join(baseDir, "userdata", "statev2.sqlite");
   const source = yield* resolveSqlSource(input.sql, input.file);
 
@@ -193,7 +196,11 @@ export const runSqliteState = Effect.fn("runSqliteState")(function* (
       fs.realPath(baseDir),
       fs.realPath(sharedHome).pipe(Effect.orElseSucceed(() => sharedHome)),
     ]);
-    if (canonicalBaseDir === canonicalSharedHome) {
+    const stockHome = path.join(NodeOS.homedir(), STOCK_T3_HOME_DIRECTORY_NAME);
+    const canonicalStockHome = yield* fs
+      .realPath(stockHome)
+      .pipe(Effect.orElseSucceed(() => stockHome));
+    if (canonicalBaseDir === canonicalSharedHome || canonicalBaseDir === canonicalStockHome) {
       return yield* new SqliteStateSharedHomeMutationError();
     }
   }

@@ -148,6 +148,7 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.serverExposePort]: AuthRelayWriteScope,
   [WS_METHODS.serverUnexposePort]: AuthRelayWriteScope,
   [WS_METHODS.serverPortLink]: AuthTerminalOperateScope,
+  [WS_METHODS.pluginsSubscribe]: AuthRelayReadScope,
   [WS_METHODS.pullRequestsList]: AuthOrchestrationReadScope,
   [WS_METHODS.pullRequestsListStats]: AuthOrchestrationReadScope,
   [WS_METHODS.pullRequestsFilterOptions]: AuthOrchestrationReadScope,

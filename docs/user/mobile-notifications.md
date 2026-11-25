@@ -14,4 +14,6 @@ app, stops alerts until you re-enable them.
 Push notifications and Live Activities in the App Store and Google Play builds
 are not available through a [self-hosted relay](./remote-access.md#self-hosted-relay):
 delivering them when the app is not connected needs the upstream APNs/FCM keys,
-so a relay-linked environment cannot reach the store app in the background.
+so a relay-linked environment cannot reach the store app in the background. The
+[unofficial T3 Connect bridge](./t3-connect-bridge.md) restores them, at the cost of
+end-to-end encryption.

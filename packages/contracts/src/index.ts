@@ -80,5 +80,6 @@ export * from "./settingsSecretValue.ts";
 export * from "./clientRpcPermissions.ts";
 
 export * from "./selfRelay.ts";
+export * from "./plugins.ts";
 
 export * from "./sharedMemory.ts";

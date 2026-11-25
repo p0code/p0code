@@ -1537,6 +1537,19 @@ export function createServerEnvironmentAtoms<R, E>(
       label: "environment-data:relay:port-link",
       tag: WS_METHODS.serverPortLink,
     }),
+    plugins: createEnvironmentRpcSubscriptionAtomFamily(runtime, {
+      label: "environment-data:plugins",
+      tag: WS_METHODS.pluginsSubscribe,
+    }),
+    pluginsSetEnabled: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:plugins:set-enabled",
+      tag: WS_METHODS.pluginsSetEnabled,
+      concurrency: { mode: "serial", key: ({ environmentId }) => environmentId },
+    }),
+    pluginsInvoke: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:plugins:invoke",
+      tag: WS_METHODS.pluginsInvoke,
+    }),
     runStorageCleanup: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:run-storage-cleanup",
       tag: WS_METHODS.serverRunStorageCleanup,
