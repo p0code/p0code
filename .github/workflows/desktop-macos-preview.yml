@@ -33,9 +33,8 @@ jobs:
     runs-on: blacksmith-32vcpu-ubuntu-2404
     timeout-minutes: 30
     steps:
-      # This repository is public, so Git needs no credentials. checkout's
-      # credential cleanup runs submodule foreach even with submodules disabled,
-      # which fails on the orphaned gitlinks in our vendored .repos tree.
+      # This repository is public, so Git needs no credentials. A manual sparse
+      # checkout also leaves the vendored .repos references out of the tree.
       - name: Checkout
         shell: bash
         env:

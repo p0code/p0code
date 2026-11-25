@@ -227,8 +227,8 @@ jobs:
         env:
           CHECKOUT_REF: ${{ github.sha }}
           GIT_TERMINAL_PROMPT: "0"
-        # Anonymous fetch avoids checkout's credential cleanup, which fails on
-        # orphaned gitlinks in .repos even when that directory is excluded.
+        # Anonymous fetch keeps checkout credentials out of a job that runs a
+        # validator fetched from the default branch.
         run: |
           set -euo pipefail
           git init .

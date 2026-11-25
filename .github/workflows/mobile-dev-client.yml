@@ -107,9 +107,8 @@ jobs:
           exit 1
 
       # The build runs dependency scripts; it gets no token. checkout keeps the token in a
-      # file under RUNNER_TEMP that .git/config includes, so both go. `persist-credentials:
-      # false` fails here: its cleanup runs `git submodule foreach`, which stops at the
-      # vendored gitlinks under .repos (no .gitmodules entry).
+      # file under RUNNER_TEMP that .git/config includes, so both go. Vendored `.repos`
+      # gitlinks are mapped with `update = none` and never initialized.
       - name: Drop checkout credentials
         run: |
           git config --local --get-regexp '^includeif\..*\.path$' | while read -r key file; do
@@ -257,9 +256,8 @@ jobs:
           exit 1
 
       # The build runs dependency scripts; it gets no token. checkout keeps the token in a
-      # file under RUNNER_TEMP that .git/config includes, so both go. `persist-credentials:
-      # false` fails here: its cleanup runs `git submodule foreach`, which stops at the
-      # vendored gitlinks under .repos (no .gitmodules entry).
+      # file under RUNNER_TEMP that .git/config includes, so both go. Vendored `.repos`
+      # gitlinks are mapped with `update = none` and never initialized.
       - name: Drop checkout credentials
         run: |
           git config --local --get-regexp '^includeif\..*\.path$' | while read -r key file; do

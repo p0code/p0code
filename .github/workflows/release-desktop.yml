@@ -125,9 +125,8 @@ jobs:
           echo "::error::untrusted_bundle cannot be combined with launch_check or cli_archive, which run the bundle."
           exit 1
 
-      # This repository is public, so Git needs no credentials. checkout's
-      # credential cleanup runs submodule foreach even with submodules disabled,
-      # which fails on the orphaned gitlinks in our vendored .repos tree.
+      # This repository is public, so Git needs no credentials, and a manual
+      # sparse checkout leaves the vendored .repos references out of the tree.
       # checkout.workers=0 writes the files on every core. Alternating both ways
       # in one job on the Windows runners, it wrote the files about 10s faster
       # (about 40% on arm64).

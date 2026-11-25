@@ -9,16 +9,17 @@ curl -fsSL https://vite.plus | bash
 # Windows PowerShell: irm https://vite.plus/ps1 | iex
 ```
 
-Clone with `--recurse-submodules` so bundled plugins under `plugins/` are checked out:
+Clone with `--recurse-submodules=plugins` so bundled plugins under `plugins/` are checked out
+(the vendored `.repos/` references are not build inputs and stay uninitialized):
 
 ```sh
-git clone --recurse-submodules https://github.com/p0code/p0code.git
+git clone --recurse-submodules=plugins https://github.com/p0code/p0code.git
 ```
 
 On Windows, also enable long paths so `.repos/` checks out cleanly:
 
 ```powershell
-git clone --recurse-submodules -c core.longpaths=true https://github.com/p0code/p0code.git
+git clone --recurse-submodules=plugins -c core.longpaths=true https://github.com/p0code/p0code.git
 ```
 
 From the repository root:
