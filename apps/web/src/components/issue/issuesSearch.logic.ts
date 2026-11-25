@@ -38,8 +38,11 @@ const projectPairs = (raw: unknown): IssuesSearch["hideProjects"] => {
 // Every optional key is an own key, even when undefined: the router lays these over the parent
 // route's unvalidated search, where a key left out would keep its raw value.
 export const issuesSearchFromUrl = (raw: Record<string, unknown>): IssuesSearch => ({
+  // A link saved with the old `who=all` opens the involves view, which replaced it.
   who:
-    raw.who === "assigned" || raw.who === "authored" || raw.who === "mentioned" ? raw.who : "all",
+    raw.who === "assigned" || raw.who === "authored" || raw.who === "mentioned"
+      ? raw.who
+      : "involves",
   status: raw.status === "closed" || raw.status === "all" ? raw.status : "open",
   hideProjects: projectPairs(raw.hideProjects),
   host: bounded(raw.host),

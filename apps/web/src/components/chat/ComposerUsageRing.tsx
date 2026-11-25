@@ -7,6 +7,7 @@ import { ComposerControl, type ComposerControlSize } from "./ComposerControl";
 import { resolveThreadDetailsLimits } from "./ThreadDetailsUsage.logic";
 import {
   ThreadDetailsContext,
+  ThreadDetailsCost,
   ThreadDetailsUsage,
   type ThreadDetailsUsageInput,
 } from "./ThreadDetailsUsage";
@@ -96,6 +97,7 @@ export function ComposerUsageRing({
           sources={usage.sources}
           compact
         />
+        <ThreadDetailsCost target={usage.costTarget} compact />
       </PopoverPopup>
     </Popover>
   );

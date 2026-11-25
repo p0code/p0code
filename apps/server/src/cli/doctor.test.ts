@@ -35,7 +35,7 @@ it.effect(
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const stateDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-doctor-" });
+      const stateDir = yield* fs.makeTempDirectoryScoped({ prefix: "p0-doctor-" });
       const serverRuntimeStatePath = path.join(stateDir, "server-runtime.json");
       const calls: string[] = [];
       const services =
@@ -113,7 +113,7 @@ it.effect(
       ).pipe(Effect.flip);
       assert.equal(
         refused.message,
-        `Stop T3 Code server process ${state.pid}, which the background service did not start, before repairing the database.`,
+        `Stop p0code server process ${state.pid}, which the background service did not start, before repairing the database.`,
       );
       assert.deepEqual(calls, ["pause", "resume"]);
     }).pipe(Effect.provide(layerHost)),

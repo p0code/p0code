@@ -235,7 +235,7 @@ function PairingForm({
           />
 
           <View collapsable={false} className="gap-2">
-            <Text className="px-4 text-sm font-t3-medium text-foreground-muted">
+            <Text className="px-4 text-sm font-p0-medium text-foreground-muted">
               <T>Or enter it</T>
             </Text>
             <View
@@ -274,7 +274,7 @@ function PairingForm({
               {pairingConnectionError ??
                 (linked
                   ? gt(
-                      "Create a pairing code on {environment}, in its Settings → Sharing & access or with `t3 auth pairing create`, and enter it here.",
+                      "Create a pairing code on {environment}, in its Settings → Sharing & access or with `p0 auth pairing create`, and enter it here.",
                       { environment: linked.label },
                     )
                   : gt(
@@ -366,7 +366,7 @@ function PairingScanCard(props: {
                 weight="light"
               />
               <Text
-                className={cn("font-t3-medium text-sm", light ? "text-black/70" : "text-white/80")}
+                className={cn("font-p0-medium text-sm", light ? "text-black/70" : "text-white/80")}
               >
                 <T>Tap to scan</T>
               </Text>
@@ -375,7 +375,7 @@ function PairingScanCard(props: {
         </View>
         <Text className={cn("text-center text-sm", light ? "text-black/70" : "text-white/80")}>
           {gt("Scan the code from {command} or desktop Connections settings", {
-            command: "t3 pair",
+            command: "p0 pair",
           })}
         </Text>
       </View>

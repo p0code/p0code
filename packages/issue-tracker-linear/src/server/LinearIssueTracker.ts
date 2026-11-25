@@ -316,6 +316,14 @@ function involvementFilter(input: IssueInvolvementFilter): LinearApi.IssueFilter
       return { creator: { displayName: { eq: input.viewer } } };
     case "mentioned":
       return { subscribers: { some: { displayName: { eq: input.viewer } } } };
+    case "involves":
+      return {
+        or: [
+          { assignee: { displayName: { eq: input.viewer } } },
+          { creator: { displayName: { eq: input.viewer } } },
+          { subscribers: { some: { displayName: { eq: input.viewer } } } },
+        ],
+      };
     case "all":
       return {};
   }

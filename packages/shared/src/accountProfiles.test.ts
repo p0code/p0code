@@ -11,9 +11,11 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   explicitProjectAccountProfile,
+  isListedProfileAccount,
   isProjectInActiveAccountProfile,
   isThreadInActiveAccountProfile,
   limitFailoverSelection,
+  listedProfileDrivers,
   moveProfileInstance,
   newProjectAccountProfilePatch,
   newThreadAccountProfilePatch,
@@ -90,6 +92,38 @@ const settings = (activeAccountProfileId: string | null) => ({
 // Settings order puts the company account first, so only the profile can explain the results.
 const providers = [provider(company), provider(personal), provider(second)];
 const opusOn = (instanceId: ProviderInstanceId) => ({ instanceId, model: "claude-opus" });
+
+describe("listedProfileDrivers", () => {
+  const cursor = ProviderDriverKind.make("cursor");
+  const cursorMain = ProviderInstanceId.make("cursorMain");
+
+  it("lists each driver with an existing account, in settings order", () => {
+    expect(
+      listedProfileDrivers([provider(cursorMain, { driver: cursor }), provider(personal)]),
+    ).toEqual([cursor, claude]);
+  });
+
+  it.each([
+    ["disabled", { enabled: false }],
+    ["not installed", { installed: false }],
+    ["signed out", { auth: { status: "unauthenticated" as const } }],
+    ["unavailable", { availability: "unavailable" as const }],
+  ])("omits a driver whose only account is %s", (_case, overrides) => {
+    const snapshot = provider(personal, overrides);
+    expect(isListedProfileAccount(snapshot)).toBe(false);
+    expect(listedProfileDrivers([snapshot])).toEqual([]);
+  });
+
+  it("keeps a driver once one of its accounts exists", () => {
+    expect(
+      listedProfileDrivers([
+        provider(personal, { enabled: false }),
+        provider(company, { installed: false }),
+        provider(second),
+      ]),
+    ).toEqual([claude]);
+  });
+});
 
 describe("routeSelectionToAccountProfile", () => {
   it.each([

@@ -65,7 +65,7 @@ const makeDesktopBootstrap = (
   mode: "desktop",
   noBrowser: true,
   port: 4888,
-  t3Home: "/tmp/t3-bootstrap-home",
+  t3Home: "/tmp/p0-bootstrap-home",
   host: "127.0.0.1",
   desktopBootstrapToken: "desktop-bootstrap-token",
   tailscaleServeEnabled: false,
@@ -108,7 +108,7 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
 
   const openBootstrapFd = Effect.fn(function* (payload: DesktopBackendBootstrapValue) {
     const fs = yield* FileSystem.FileSystem;
-    const filePath = yield* fs.makeTempFileScoped({ prefix: "t3-bootstrap-", suffix: ".ndjson" });
+    const filePath = yield* fs.makeTempFileScoped({ prefix: "p0-bootstrap-", suffix: ".ndjson" });
     const encoded = yield* encodeDesktopBootstrap(payload);
     yield* fs.writeFileString(filePath, `${encoded}\n`);
     return yield* Effect.acquireRelease(
@@ -213,7 +213,7 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
       const cwd = path.join(baseDir, "project");
       const result = yield* resolveManualWebLaunch(baseDir, cwd);
       assert(Result.isFailure(result));
-      expect(result.failure).toContain("A T3 Code server is already running");
+      expect(result.failure).toContain("A p0code server is already running");
       expect(result.failure).toContain(`pid ${child.pid}`);
       expect(yield* fs.exists(cwd)).toBe(false);
     }),
@@ -497,7 +497,7 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
         makeDesktopBootstrap({
           port: 4888,
           host: "127.0.0.2",
-          t3Home: "/tmp/t3-bootstrap-home",
+          t3Home: "/tmp/p0-bootstrap-home",
           noBrowser: false,
           desktopBootstrapToken: "desktop-token",
           tailscaleServeEnabled: false,
@@ -833,7 +833,7 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
             ConfigProvider.layer(
               ConfigProvider.fromEnv({
                 env: {
-                  T3CODE_OTLP_HEADERS: "authorization=Bearer abc==, x-tenant=t3",
+                  T3CODE_OTLP_HEADERS: "authorization=Bearer abc==, x-tenant=p0",
                   T3CODE_OTLP_TRACES_URL: "http://collector.internal:4318",
                 },
               }),
@@ -845,7 +845,7 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
 
       expect(resolved.otlpTracesExport.headers).toEqual({
         authorization: "Bearer abc==",
-        "x-tenant": "t3",
+        "x-tenant": "p0",
       });
       expect(resolved.otlpTracesUrl).toBe("http://collector.internal:4318");
     }),
@@ -948,7 +948,7 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
               ConfigProvider.layer(
                 ConfigProvider.fromEnv({
                   env: {
-                    T3CODE_OTLP_TRACES_URL: "http://t3:4318/v1/traces",
+                    T3CODE_OTLP_TRACES_URL: "http://p0:4318/v1/traces",
                     T3CODE_OTLP_HEADERS: "x-key=secret",
                     OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: "http://otel-traces:4318/custom",
                     OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: "http://otel-metrics:4318/custom",
@@ -961,7 +961,7 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
           ),
         );
 
-        expect(resolved.otlpTracesUrl).toBe("http://t3:4318/v1/traces");
+        expect(resolved.otlpTracesUrl).toBe("http://p0:4318/v1/traces");
         expect(resolved.otlpTracesExport.headers).toEqual({ "x-key": "secret" });
         expect(resolved.otlpMetricsUrl).toBe("http://otel-metrics:4318/custom");
         expect(resolved.otlpMetricsExport).toEqual({
@@ -1013,7 +1013,7 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
               ConfigProvider.layer(
                 ConfigProvider.fromEnv({
                   env: {
-                    T3CODE_OTLP_TRACES_URL: "http://t3:4318/v1/traces",
+                    T3CODE_OTLP_TRACES_URL: "http://p0:4318/v1/traces",
                     OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel:4318",
                     OTEL_EXPORTER_OTLP_HEADERS: "x-key=%zz",
                   },
@@ -1024,7 +1024,7 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
           ),
         );
 
-        expect(resolved.otlpTracesUrl).toBe("http://t3:4318/v1/traces");
+        expect(resolved.otlpTracesUrl).toBe("http://p0:4318/v1/traces");
         expect(resolved.otlpMetricsUrl).toBeUndefined();
         expect(resolved.otlpLogsUrl).toBeUndefined();
       }),
@@ -1079,7 +1079,7 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
         privateNetworkOnly: true,
       });
       // Without the launcher's IPC channel the context was inherited, e.g. by
-      // `t3 serve` started from an agent inside the service.
+      // `p0 serve` started from an agent inside the service.
       expect(yield* resolveHost({ connected: false })).toEqual({
         host: undefined,
         privateNetworkOnly: undefined,

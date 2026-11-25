@@ -290,11 +290,11 @@ export const buildWslRuntimeInstallScript = (
     `runtime_root="$runtime_parent/${safeRuntimeId}"`,
     `ready_marker="$runtime_root/${WSL_RUNTIME_READY_MARKER}"`,
     "runtime_entry_runs() {",
-    '  [ -x "$1/t3" ] && "$1/t3" --version >/dev/null',
+    '  [ -x "$1/p0" ] && "$1/p0" --version >/dev/null',
     "}",
     // Hash the entry to detect a swapped or partially written executable, even if it still runs.
     "runtime_server_entry_digest() {",
-    `  sha256sum "$1/t3" 2>/dev/null | cut -d ' ' -f 1`,
+    `  sha256sum "$1/p0" 2>/dev/null | cut -d ' ' -f 1`,
     "}",
     "runtime_is_ready() {",
     '  [ -f "$ready_marker" ] &&',
@@ -357,7 +357,7 @@ export const buildWslRuntimeInstallScript = (
     "trap cleanup_runtime_install EXIT",
     `tar -xzf ${shellQuote(linuxArchivePath)} -C "$runtime_tmp" --strip-components=1`,
     'if ! runtime_entry_runs "$runtime_tmp"; then',
-    "  printf 'WSL runtime archive does not contain a working t3 executable\\n' >&2",
+    "  printf 'WSL runtime archive does not contain a working p0 executable\\n' >&2",
     "  exit 1",
     "fi",
     'installed_entry_digest=$(runtime_server_entry_digest "$runtime_tmp")',
@@ -447,7 +447,7 @@ const NODE_PTY_BINARY_MISSING_EXIT_CODE = 4;
 
 const formatNodePtyProbeFailureReason = (exitCode: number): string | null =>
   exitCode === NODE_PTY_BINARY_MISSING_EXIT_CODE
-    ? "WSL support is missing from this T3 Code build: the packaged Linux node-pty binary was not included. Install a build that includes WSL support."
+    ? "WSL support is missing from this p0code build: the packaged Linux node-pty binary was not included. Install a build that includes WSL support."
     : null;
 
 // Capture login-shell PATH because the server launches provider CLIs by name.
@@ -487,7 +487,7 @@ require("node-pty");
 NODE`;
 
 // Resolve version-managed Node for providers without making runtime readiness depend on it.
-// The install script already ran the staged t3, so running it again here only adds a second startup.
+// The install script already ran the staged p0, so running it again here only adds a second startup.
 export const buildWslRuntimeProbeScript = () =>
   `bash -lc ${shellQuote(`${buildWslNodeEnvPreamble()}${RESOLVED_PATH_LINE}\n${T3_HOME_LINE}`)} 2>/dev/null || ${RESOLVED_PATH_LINE}`;
 

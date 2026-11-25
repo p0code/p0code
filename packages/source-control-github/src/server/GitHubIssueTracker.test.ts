@@ -631,6 +631,28 @@ describe("GitHubIssueTracker", () => {
     }),
   );
 
+  it.effect("narrowing to the viewer is asked of search itself", () =>
+    Effect.gen(function* () {
+      const seen: unknown[] = [];
+      const api = yield* tracker((variables) => seen.push(variables));
+      yield* api
+        .listIssues({
+          cwd: "/w",
+          host: "github.com",
+          scope: "acme/web",
+          state: "open",
+          involvement: "involves",
+          viewer: "theo",
+          sort: "updated",
+          limit: 10,
+        })
+        .pipe(Effect.exit);
+      expect(seen[0]).toMatchObject({
+        q: "is:issue repo:acme/web is:open involves:theo sort:updated-desc",
+      });
+    }),
+  );
+
   it.effect("offers YAML issue forms when blank issues are disabled", () =>
     Effect.gen(function* () {
       const form = {

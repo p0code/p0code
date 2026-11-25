@@ -39,7 +39,7 @@ const makeService = Effect.fnUntraced(function* (
 ) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const npmBin = yield* fs.makeTempDirectoryScoped({ prefix: "t3-npm-release-" });
+  const npmBin = yield* fs.makeTempDirectoryScoped({ prefix: "p0-npm-release-" });
   for (const name of ["npm", "npm.cmd"]) {
     yield* fs.writeFileString(path.join(npmBin, name), "", { mode: 0o755 });
   }
@@ -81,7 +81,7 @@ it.effect.each([
     expect(calls).toHaveLength(1);
     expect(calls[0]).toMatchObject({
       command: expect.stringMatching(/[/\\]npm(?:\.cmd)?$/i),
-      args: ["view", "--global", "--json", `t3@${fixture.spec}`, "version", "t3code"],
+      args: ["view", "--global", "--json", `p0@${fixture.spec}`, "version", "t3code"],
       maxOutputBytes: 256 * 1024,
     });
     yield* TestClock.adjust("1 minute");
@@ -153,9 +153,9 @@ it.effect("falls back to public npm only when npm is not installed", () =>
     yield* TestClock.adjust("15 seconds");
     expect(Result.isFailure(yield* Fiber.join(stalled))).toBe(true);
     expect(urls).toEqual([
-      "https://registry.npmjs.org/t3/nightly",
-      "https://registry.npmjs.org/t3/9.9.9",
-      "https://registry.npmjs.org/t3/latest",
+      "https://registry.npmjs.org/p0/nightly",
+      "https://registry.npmjs.org/p0/9.9.9",
+      "https://registry.npmjs.org/p0/latest",
     ]);
   }),
 );

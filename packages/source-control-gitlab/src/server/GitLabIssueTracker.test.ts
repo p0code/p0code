@@ -390,6 +390,34 @@ describe("GitLabIssueTracker", () => {
     }),
   );
 
+  it.effect("keeps the rows the viewer is on when `involves` is asked", () =>
+    Effect.gen(function* () {
+      const paths: string[] = [];
+      const api = yield* tracker((args) => {
+        paths.push(args[1]!);
+        return encode([
+          ISSUE,
+          { ...ISSUE, iid: 43, author: { ...ISSUE.author, username: "renovate" }, assignees: [] },
+        ]);
+      });
+      const page = yield* api.listIssues({
+        cwd: "/w",
+        host: "gitlab.com",
+        scope: "acme/web",
+        state: "open",
+        involvement: "involves",
+        viewer: "Theo",
+        sort: "updated",
+        limit: 50,
+      });
+      // No parameter narrows to the union, so the wide listing is dropped to the viewer's rows.
+      expect(paths[0]).toBe(
+        "projects/acme%2Fweb/issues?state=opened&order_by=updated_at&sort=desc&with_labels_details=true&per_page=50&page=1",
+      );
+      expect(page.items.map((item) => item.key)).toEqual(["42"]);
+    }),
+  );
+
   it.effect("removes the viewer's own award by id, paging until it is found", () =>
     Effect.gen(function* () {
       const calls: string[] = [];

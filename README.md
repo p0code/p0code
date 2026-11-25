@@ -1,32 +1,31 @@
 <p align="center">
-  <a href="https://t3.codes">
-    <img src="./assets/prod/t3-black-web-icon-192x192.png" width="80" height="80" alt="T3 Code logo" />
-  </a>
+  <img src="./assets/prod/logo.svg" width="80" height="80" alt="p0code logo" />
 </p>
 
-<h1 align="center">T3 Code</h1>
+<h1 align="center">p0code</h1>
 
 <p align="center">The open-source control plane for coding agents.</p>
 
+> [!IMPORTANT]
+> p0code is an independent, unofficial fork of T3 Code. It is not affiliated with, endorsed by, or sponsored by T3 Tools, Inc. "T3 Code" is a trademark of T3 Tools, Inc.
+
 <p align="center">
-  <a href="https://t3.codes/download"><strong>Download</strong></a> ·
-  <a href="https://apps.apple.com/us/app/t3-code-remote-claude-more/id6787819824">iOS</a> ·
-  <a href="https://play.google.com/store/apps/details?id=com.t3tools.t3code">Android</a> ·
-  <a href="https://app.t3.codes">Web</a> ·
+  <a href="https://github.com/p0code/p0code/releases"><strong>Download</strong></a> ·
   <a href="./docs/README.md">Docs</a> ·
-  <a href="https://discord.gg/jn4EGJjrvv">Discord</a>
+  <a href="https://github.com/p0code/p0code/issues">Issues</a> ·
+  <a href="https://github.com/p0code/p0code/discussions">Discussions</a>
 </p>
 
-T3 Code runs the coding agents on your machine and gives them one fast interface. Start a thread at your desk, then approve the next step from your phone.
+p0code runs the coding agents on your machine and gives them one fast interface. Start a thread at your desk, then approve the next step from your phone.
 
-It works with Claude Code, Codex, Cursor, OpenCode, Grok Build, Antigravity, Kiro, Pi, Muse Code, fx, and any [ACP](./docs/user/providers-acp.md) agent. If an agent is set up on your computer, T3 Code can control it.
+It works with Claude Code, Codex, Cursor, OpenCode, Grok Build, Antigravity, Kiro, Pi, Muse Code, fx, and any [ACP](./docs/user/providers-acp.md) agent. If an agent is set up on your computer, p0code can control it.
 
 ## What you get
 
-- **Your subscriptions.** T3 Code does not resell tokens. It drives the agents you are already signed in to.
+- **Your subscriptions.** p0code does not resell tokens. It drives the agents you are already signed in to.
 - **Every agent in one place.** Change models in the middle of a thread. Let Claude hand a task to Codex.
 - **Desktop, web, and phone.** One server, and every client shows the same threads. There are apps for iOS and Android.
-- **Remote ready.** Run agents on any machine. Connect over your local network, Tailscale, or [T3 Connect](./docs/user/remote-access.md).
+- **Remote ready.** Run agents on any machine. Connect over your local network, Tailscale, or the self-hosted relay.
 - **Git built in.** Each thread can work in its own worktree. Review the diff, then commit, push, and open a pull request with one button.
 - **Fast.** Performance is a feature here. We measure it, and we treat a dropped frame as a bug.
 - **Open.** Source code is MIT licensed. If you don't like something, fork it under your own branding (see [Trademarks and forks](#trademarks-and-forks)).
@@ -35,51 +34,31 @@ It works with Claude Code, Codex, Cursor, OpenCode, Grok Build, Antigravity, Kir
 
 ### Desktop app
 
-[Download T3 Code](https://t3.codes/download) for macOS, Windows, or Linux. You can also use a package manager:
-
-| Platform       | Command                                                                 |
-| -------------- | ----------------------------------------------------------------------- |
-| macOS          | `brew install --cask t3-code`                                           |
-| Windows        | `winget install T3Tools.T3Code` or `scoop install extras/t3code`        |
-| Arch Linux     | `yay -S t3code-bin`                                                     |
-| Nix            | `nix profile add github:NixOS/nixpkgs/nixos-unstable#t3code`            |
-| Debian, Ubuntu | `.deb` from [Releases](https://github.com/p0code/p0code/releases) |
+Download a build from [Releases](https://github.com/p0code/p0code/releases) for macOS, Windows, or Linux, or [build from source](./docs/operations/00_development.md#first-checkout).
 
 ### Command line
 
-This installs the `t3` command. Run `t3` to start the server and open the web app.
+From a checkout of this repository, install dependencies and start the server (the `p0` command):
 
 ```bash
-curl -fsSL https://t3.codes/install.sh | sh
+bb i
+node apps/server/src/bin.ts
 ```
-
-On Windows, in PowerShell:
-
-```powershell
-irm https://t3.codes/install.ps1 | iex
-```
-
-To try it once without an install, run `npx t3@latest`.
-
-### Phone
-
-Get the app from the [App Store](https://apps.apple.com/us/app/t3-code-remote-claude-more/id6787819824) or [Google Play](https://play.google.com/store/apps/details?id=com.t3tools.t3code). Then follow [remote access](./docs/user/remote-access.md) to connect it to your computer.
 
 ### Sign in to an agent
 
-T3 Code needs one agent that is installed and signed in. For example, install [Claude Code](https://claude.com/product/claude-code) and run `claude auth login`, or install [Codex CLI](https://developers.openai.com/codex/cli) and run `codex login`.
+p0code needs one agent that is installed and signed in. For example, install [Claude Code](https://claude.com/product/claude-code) and run `claude auth login`, or install [Codex CLI](https://developers.openai.com/codex/cli) and run `codex login`.
 
-[Provider setup](./docs/user/install.md#providers) has the steps for each agent. [Install T3 Code](./docs/user/install.md) covers nightly builds, AppImage, WSL, and NixOS.
+[Provider setup](./docs/user/install.md#providers) has the steps for each agent. [Install](./docs/user/install.md) covers nightly builds, AppImage, WSL, and NixOS.
 
 ## "Wait, what are you selling me?"
 
-Nothing. We built T3 Code because we wanted the best possible development experience with agents. We were inspired by existing solutions like the Codex desktop app, Conductor, Claude Desktop and Cursor Glass, but none met our bar.
-
-We wanted something performant, remote-ready, and truly open. If we ever go the wrong direction, we want you to have everything you need to fork the source code and build the tool that you want, under your own name and branding.
+Nothing. p0code is a fork of T3 Code, built because we wanted the best possible development experience with agents and wanted to keep it truly open. If we ever go the wrong direction, you have everything you need to fork the source code and build the tool that you want, under your own name and branding.
 
 ## Documentation
 
 - [Install and first run](./docs/user/install.md)
+- [Migrating from T3 Code](./docs/user/migrating-from-t3-code.md)
 - [Remote access from a phone or another machine](./docs/user/remote-access.md)
 - [Permission modes](./docs/user/permission-modes.md)
 - [Source control](./docs/user/source-control.md)
@@ -90,12 +69,9 @@ We wanted something performant, remote-ready, and truly open. If we ever go the 
 
 ## Contributing
 
-We have limited review capacity. Small, focused fixes are the most likely to be merged. Features need an approved discussion first.
-
 - Read [CONTRIBUTING.md](./CONTRIBUTING.md) before you report a bug or open a pull request.
 - Put feature requests in [Ideas](https://github.com/p0code/p0code/discussions/categories/ideas).
 - Build from source with the [development runbook](./docs/operations/00_development.md#first-checkout). The [architecture overview](./docs/internals/01_architecture.md) explains how it works.
-- Get help in [Discord](https://discord.gg/jn4EGJjrvv).
 
 ## License
 

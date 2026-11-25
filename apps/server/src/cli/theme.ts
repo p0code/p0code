@@ -91,7 +91,7 @@ export class ThemeFileInvalidError extends Schema.TaggedError<ThemeFileInvalidEr
   { filePath: Schema.String, cause: Schema.Defect() },
 ) {
   override get message(): string {
-    return `${this.filePath} is not a valid theme file. Use a theme exported from T3 Code, or a seeded file with name, appearance, canvas, and accent.`;
+    return `${this.filePath} is not a valid theme file. Use a theme exported from p0code, or a seeded file with name, appearance, canvas, and accent.`;
   }
 }
 
@@ -168,7 +168,7 @@ export class ThemeTargetMissingError extends Schema.TaggedError<ThemeTargetMissi
   {},
 ) {
   override get message(): string {
-    return "Provide a theme id or file, or run `t3 theme clear` to remove the theme.";
+    return "Provide a theme id or file, or run `p0 theme clear` to remove the theme.";
   }
 }
 
@@ -188,7 +188,7 @@ const resolveThemePaths = Effect.fn(function* (explicitBaseDir: Option.Option<st
     baseDirIsExplicit: Option.isSome(configuredBaseDir),
   });
   // A dev server with an implicit home keeps its state in `dev`; follow it unless a
-  // `userdata` server is running too, the same order `t3 pair` checks.
+  // `userdata` server is running too, the same order `p0 pair` checks.
   let derivedPaths = userdataPaths;
   if (
     Option.isNone(configuredBaseDir) &&

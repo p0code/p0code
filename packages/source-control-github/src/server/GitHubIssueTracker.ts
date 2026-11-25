@@ -80,6 +80,7 @@ const INVOLVEMENT_QUALIFIER: Record<Exclude<IssueInvolvement, "all">, string> = 
   assigned: "assignee",
   authored: "author",
   mentioned: "mentions",
+  involves: "involves",
 };
 
 function searchQuery(

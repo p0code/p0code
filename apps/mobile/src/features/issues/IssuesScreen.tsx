@@ -55,18 +55,18 @@ import { issueViewMatches } from "./issueSavedViews";
 import { SavedViewsMenu } from "../layout/workspace/SavedViewsMenu";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
 
-const DEFAULT_ISSUE_LIST_INPUT = { state: "open", involvement: "all", limit: 50 } as const;
+const DEFAULT_ISSUE_LIST_INPUT = { state: "open", involvement: "involves", limit: 50 } as const;
 const STATES = {
   open: msg("Open", { $context: "issue state" }),
   closed: msg("Closed", { $context: "issue state" }),
   all: msg("All states"),
 } as const satisfies Record<IssueListState, string>;
 const INVOLVEMENT = {
-  all: msg("Everyone", { $context: "issue filter" }),
+  involves: msg("Involving me", { $context: "issue filter" }),
   assigned: msg("Assigned to you"),
   authored: msg("Opened by you"),
   mentioned: msg("Mentioning you"),
-} as const satisfies Record<IssueInvolvement, string>;
+} as const satisfies Record<Exclude<IssueInvolvement, "all">, string>;
 const SORTS = {
   updated: msg("Recently updated"),
   created: msg("Newest", { $context: "sort order" }),
@@ -133,7 +133,10 @@ export function IssuesScreen(
   const debouncedQuery = useDebouncedValue(tab.query.trim(), 300);
   const query = tab.searchMode === "resting" ? "" : debouncedQuery;
   const [state, setState] = useState<IssueListState>("open");
-  const [involvement, setInvolvement] = useState<IssueInvolvement>("all");
+  const [involvement, setInvolvement] = useState<IssueInvolvement>("involves");
+  // Saved views from before "Everyone" was removed still say "all".
+  const shownInvolvement: Exclude<IssueInvolvement, "all"> =
+    involvement === "all" ? "involves" : involvement;
   const navigation = useNavigation();
   const [{ labels, assignee }, setFilters] = useAtom(issueListFiltersAtom);
   const { themeAppearance } = useAppearancePreferences();
@@ -234,7 +237,7 @@ export function IssuesScreen(
 
   const customized =
     state !== "open" ||
-    involvement !== "all" ||
+    involvement !== "involves" ||
     sort !== "updated" ||
     labels.length > 0 ||
     assignee !== null;
@@ -251,7 +254,7 @@ export function IssuesScreen(
             {
               id: "involvement",
               title: gt("Involvement"),
-              subactions: choices(INVOLVEMENT, involvement, messages, "involvement"),
+              subactions: choices(INVOLVEMENT, shownInvolvement, messages, "involvement"),
             },
             {
               id: "labels",
@@ -287,7 +290,7 @@ export function IssuesScreen(
               navigation.navigate("IssueFilterSearch", { kind: field, scopes: filterScopes });
             if (field === "reset") {
               setState("open");
-              setInvolvement("all");
+              setInvolvement("involves");
               setSort("updated");
               setFilters({ labels: [], assignee: null });
             }
@@ -373,7 +376,7 @@ export function IssuesScreen(
                 }}
                 onApply={(view) => {
                   setState(view.state);
-                  setInvolvement(view.involvement);
+                  setInvolvement(view.involvement === "all" ? "involves" : view.involvement);
                   setSort(view.sort);
                   setFilters({ labels: view.labels, assignee: view.assignee });
                   const viewQuery = view.query.trim();
@@ -397,10 +400,10 @@ export function IssuesScreen(
                 }}
               />
               <ListFilterMenu
-                label={messages(INVOLVEMENT[involvement])}
-                active={involvement !== "all"}
+                label={messages(INVOLVEMENT[shownInvolvement])}
+                active={involvement !== "involves"}
                 accessibilityLabel={gt("Filter by involvement")}
-                actions={choices(INVOLVEMENT, involvement, messages)}
+                actions={choices(INVOLVEMENT, shownInvolvement, messages)}
                 onSelect={(id) => {
                   setInvolvement(id as IssueInvolvement);
                   scrollToTop();
@@ -511,7 +514,7 @@ export function IssuesScreen(
                     : capable.length > 0
                       ? gt("Reconnect to load issues.")
                       : environments.length > 0
-                        ? gt("Update the environment's T3 Code server to browse issues.")
+                        ? gt("Update the environment's p0code server to browse issues.")
                         : gt("Add an environment in Settings to browse its issues."))
                 }
                 variant="plain"

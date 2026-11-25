@@ -48,7 +48,7 @@ export function environmentMismatchError(input: {
     reason: "configuration",
     ...translatableDetail(
       msg(
-        "This address now runs a different T3 Code install ({actual}, not {expected}). Remove this connection and add it again.",
+        "This address now runs a different p0code install ({actual}, not {expected}). Remove this connection and add it again.",
         { actual: input.actual, expected: input.expected },
       ),
     ),

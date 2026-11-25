@@ -50,7 +50,7 @@ export function presentConnectionDiagnosis(
 }
 export function connectionDiagnosisText(hostLabel: string, diagnosis: ConnectionDiagnosis): string {
   return [
-    `T3 Code connection to ${hostLabel}: ${diagnosis.headline}`,
+    `p0code connection to ${hostLabel}: ${diagnosis.headline}`,
     ...diagnosis.steps,
     ...diagnosis.facts.map(([label, value]) => `${label}: ${value}`),
   ].join("\n");

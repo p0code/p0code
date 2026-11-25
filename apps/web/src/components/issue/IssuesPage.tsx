@@ -118,7 +118,7 @@ const STATE_TABS = [
 ] as const satisfies ReadonlyArray<PullRequestFilterOption<IssueListState>>;
 
 const INVOLVEMENT_TABS = [
-  { value: "all", label: msg("Everyone", { $context: "issue filter" }), Icon: UsersIcon },
+  { value: "involves", label: msg("Involving me"), Icon: UsersIcon },
   { value: "assigned", label: msg("Assigned to me"), Icon: UserCheckIcon },
   { value: "authored", label: msg("Opened by me"), Icon: PenLineIcon },
   { value: "mentioned", label: msg("Mentioning me"), Icon: AtSignIcon },
@@ -507,7 +507,7 @@ export function IssuesPage() {
   const listBody: ReactNode = !issuesSupported ? (
     <PullRequestsUnavailableState
       title={gt("Issues unavailable")}
-      error={gt("Update this environment's T3 Code server to browse issues.")}
+      error={gt("Update this environment's p0code server to browse issues.")}
     />
   ) : noneAnswered && list.isPending ? (
     <PullRequestListGhost />

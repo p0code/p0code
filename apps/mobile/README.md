@@ -1,4 +1,4 @@
-# T3 Code Mobile
+# p0code Mobile
 
 > [!NOTE]
 > To install the released app from the App Store or Google Play, see [Mobile app](../../docs/user/install.md#mobile-app). This guide covers building it from source.
@@ -10,9 +10,9 @@
 
 This app has three variants:
 
-- `development`: Expo dev client, installable side-by-side as `T3 Code Dev`
-- `preview`: persistent internal preview build, installable side-by-side as `T3 Code Preview`
-- `production`: store/release build as `T3 Code`
+- `development`: Expo dev client, installable side-by-side as `p0code Dev`
+- `preview`: persistent internal preview build, installable side-by-side as `p0code Preview`
+- `production`: store/release build as `p0code`
 
 Run commands from `apps/mobile`.
 

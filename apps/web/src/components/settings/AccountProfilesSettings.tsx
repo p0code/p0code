@@ -18,7 +18,12 @@ import {
   type RuntimeMode,
   type ServerProvider,
 } from "@t3tools/contracts";
-import { moveProfileInstance, orderInstancesForDriver } from "@t3tools/shared/accountProfiles";
+import {
+  isListedProfileAccount,
+  listedProfileDrivers,
+  moveProfileInstance,
+  orderInstancesForDriver,
+} from "@t3tools/shared/accountProfiles";
 import { exhaustedUsageWindow } from "@t3tools/shared/usageLimits";
 import { T, useGT } from "gt-react";
 import { ArrowDownIcon, ArrowUpIcon, GripVerticalIcon, PlusIcon, Trash2Icon } from "lucide-react";
@@ -61,7 +66,7 @@ export function AccountProfilesSettings({
   const editing =
     profiles.find((profile) => profile.id === (editingId ?? settings.activeAccountProfileId)) ??
     profiles[0];
-  const drivers = [...new Set(providers.map((provider) => provider.driver))];
+  const drivers = listedProfileDrivers(providers);
   const now = Date.parse(`${nowMinute}:00Z`);
 
   const saveProfiles = (next: ReadonlyArray<AccountProfile>) =>
@@ -274,7 +279,9 @@ function DriverOrder(props: {
   readonly onChange: (profile: AccountProfile) => void;
 }) {
   const gt = useGT();
-  const ordered = orderInstancesForDriver(props.profile, props.providers, props.driver);
+  const ordered = orderInstancesForDriver(props.profile, props.providers, props.driver).filter(
+    isListedProfileAccount,
+  );
   const ids = ordered.map((provider) => provider.instanceId);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
   const driverName = PROVIDER_DISPLAY_NAMES[props.driver] ?? props.driver;
@@ -366,10 +373,6 @@ function AccountRow(props: {
       {props.limited ? (
         <span className="rounded-sm bg-warning/12 px-1 text-2xs text-warning">
           <T>At limit</T>
-        </span>
-      ) : !props.provider.enabled ? (
-        <span className="text-2xs text-muted-foreground">
-          <T>Off</T>
         </span>
       ) : null}
       {props.readOnly ? null : (

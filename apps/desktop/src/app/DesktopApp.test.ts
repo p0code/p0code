@@ -331,12 +331,12 @@ it.effect.each([false, true])(
 );
 
 it.effect(
-  "points a stale t3 launcher at the updated AppImage and accepts t3 <dir> with Local environment off",
+  "points a stale p0 launcher at the updated AppImage and accepts p0 <dir> with Local environment off",
   () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-desktop-app-" });
+      const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "p0-desktop-app-" });
       const launcher = DesktopCliShim.launcherPath({
         path,
         baseDir,
@@ -379,11 +379,11 @@ it.effect(
       assert.include(
         content,
         `app='${updatedAppImage}'`,
-        "startup left the t3 launcher pointing at the removed AppImage",
+        "startup left the p0 launcher pointing at the removed AppImage",
       );
       assert.isTrue(
         yield* Deferred.isDone(activationStarted),
-        "startup left the t3 <dir> control socket closed",
+        "startup left the p0 <dir> control socket closed",
       );
     }).pipe(Effect.provide(Layer.mergeAll(DesktopShutdown.layer, NodeServices.layer))),
 );

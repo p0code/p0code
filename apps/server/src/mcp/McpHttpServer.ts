@@ -65,9 +65,11 @@ import * as ProjectHandlers from "./toolkits/project/handlers.ts";
 import { AttachmentToolkit } from "./toolkits/attachment/tools.ts";
 import * as AttachmentHandlers from "./toolkits/attachment/handlers.ts";
 import { ThreadToolkit } from "./toolkits/thread/tools.ts";
+import { P0CodeToolkit } from "./toolkits/p0Code/tools.ts";
 import { WorkflowToolkit } from "./toolkits/workflow/tools.ts";
 import * as WorkflowHandlers from "./toolkits/workflow/handlers.ts";
 import * as ThreadHandlers from "./toolkits/thread/handlers.ts";
+import * as P0CodeHandlers from "./toolkits/p0Code/handlers.ts";
 import * as ThreadMetadataMcpService from "./ThreadMetadataMcpService.ts";
 import * as McpSessionRegistry from "./McpSessionRegistry.ts";
 import * as PreviewAutomationBroker from "./PreviewAutomationBroker.ts";
@@ -127,7 +129,7 @@ const unauthorized = (input: {
   return HttpServerResponse.jsonUnsafe(
     {
       error: "invalid_mcp_credential",
-      message: "A valid T3 Code MCP credential is required.",
+      message: "A valid p0code MCP credential is required.",
     },
     {
       status: 401,
@@ -1205,6 +1207,7 @@ export const layerOrchestratorToolkit = toolkitRegistration(
 ).pipe(Layer.provide(OrchestratorMcpService.layer), Layer.provide(ThreadMetadataMcpService.layer));
 
 export const layerThreadToolkit = toolkitRegistration(ThreadToolkit, ThreadHandlers.layer);
+const layerP0CodeToolkit = toolkitRegistration(P0CodeToolkit, P0CodeHandlers.layer);
 const layerWorkflowToolkit = toolkitRegistration(WorkflowToolkit, WorkflowHandlers.layer);
 
 export const layerMessageToolkit = toolkitRegistration(MessageToolkit, MessageHandlers.layer);
@@ -1280,7 +1283,7 @@ export const layerInProcessMcpServer = McpServer.middleware<{
 
 export const layerMcpTransport = <RA, RE, RR>(registrations: Layer.Layer<RA, RE, RR>) =>
   McpServer.layerHttp({
-    name: "T3 Code",
+    name: "p0code",
     version: packageJson.version,
     path: MCP_HTTP_PATH,
     protocols: mcpProtocols,
@@ -1293,6 +1296,7 @@ export const layerTools = Layer.mergeAll(
   layerPreviewToolkit,
   layerOrchestratorToolkit,
   layerThreadToolkit,
+  layerP0CodeToolkit,
   layerWorkflowToolkit,
   layerAttachmentToolkit,
   layerProjectRegistration,

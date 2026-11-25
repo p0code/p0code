@@ -18,6 +18,8 @@ import {
   GitCommandError,
   PullRequestDetail,
   PullRequestOperationError,
+  type EnvironmentId,
+  type ProjectId,
   type PullRequestAction,
   type PullRequestActor,
   type PullRequestBaseComparison,
@@ -42,6 +44,7 @@ import {
   type ThreadPullRequestLink,
   type VcsRef,
 } from "@t3tools/contracts";
+import type { EnvironmentConnectionPhase } from "@t3tools/client-runtime/connection";
 import {
   legacyThreadPullRequestKey,
   resolveThreadCurrentPullRequestLink,
@@ -55,6 +58,11 @@ import { m, type MessageResolver } from "~/i18n/messages";
 import { inferReviewCommentFenceLanguage, type ReviewCommentContext } from "~/reviewCommentContext";
 
 import { changeRequestTermKind } from "./changeRequestTerm";
+import { findProjectForRepository } from "./pullRequestList.logic";
+import {
+  resolvePickableEnvironments,
+  type AssignableProject,
+} from "./pullRequestProjectAssignment.logic";
 
 export const PULL_REQUEST_MERGE_METHOD_LABELS: Record<PullRequestMergeMethod, string> = {
   merge: msg("Merge"),
@@ -123,6 +131,139 @@ export function resolvePullRequestPrimaryControl(input: {
     return "enable-auto-merge";
   }
   return input.canMerge ? "merge" : null;
+}
+
+function isPullRequestForkBranchUnavailable(input: {
+  readonly headRepositoryNameWithOwner?: string | null | undefined;
+  readonly provider?: SourceControlProviderKind | undefined;
+  readonly repository?: string | undefined;
+}): boolean {
+  if (input.headRepositoryNameWithOwner === null) return true;
+  if (
+    input.provider === "azure-devops" &&
+    input.headRepositoryNameWithOwner !== undefined &&
+    input.repository !== undefined &&
+    input.headRepositoryNameWithOwner.toLowerCase() !== input.repository.toLowerCase()
+  ) {
+    return true;
+  }
+  return false;
+}
+
+export function pullRequestStartAgentDisabledReason(
+  input: {
+    readonly environmentConnected: boolean;
+    readonly checkoutRoot: string | null;
+    readonly headRepositoryNameWithOwner?: string | null | undefined;
+    readonly provider?: SourceControlProviderKind | undefined;
+    readonly repository?: string | undefined;
+    readonly canWriteSourceControl: boolean;
+    readonly canOperateThread: boolean;
+  },
+  resolve: MessageResolver = m,
+): string | null {
+  if (!input.environmentConnected) {
+    return resolve(msg("Environment is disconnected"));
+  }
+  if (input.checkoutRoot === null || input.checkoutRoot.trim().length === 0) {
+    return resolve(msg("No local project for this repository"));
+  }
+  if (isPullRequestForkBranchUnavailable(input)) {
+    return resolve(msg("Fork branch is unavailable"));
+  }
+  if (!input.canWriteSourceControl || !input.canOperateThread) {
+    return resolve(msg("This connection needs permission to check out branches and start threads"));
+  }
+  return null;
+}
+
+export interface PullRequestRowCheckoutProject extends AssignableProject {
+  readonly repositoryIdentity?: RepositoryIdentity | null | undefined;
+  readonly workspaceRoot: string;
+  readonly isScratch?: boolean | undefined;
+}
+
+export interface PullRequestRowCheckoutEnvironment {
+  readonly environmentId: EnvironmentId;
+  readonly label: string;
+  readonly connection: { readonly phase: EnvironmentConnectionPhase };
+}
+
+export function resolvePullRequestRowCheckoutTarget(
+  entry: {
+    readonly environmentId: EnvironmentId;
+    readonly projectId: ProjectId;
+    readonly repository: string;
+    readonly host?: string | undefined;
+  },
+  projects: ReadonlyArray<PullRequestRowCheckoutProject>,
+  environments: ReadonlyArray<PullRequestRowCheckoutEnvironment>,
+): {
+  readonly environmentId: EnvironmentId;
+  readonly projectId: ProjectId;
+  readonly checkoutRoot: string | null;
+  readonly environmentConnected: boolean;
+} {
+  const nonScratch = projects.filter((project) => !project.isScratch);
+  const isConnected = (environmentId: EnvironmentId) => {
+    const environment = environments.find((candidate) => candidate.environmentId === environmentId);
+    return environment === undefined || environment.connection.phase === "connected";
+  };
+  const ownProject = nonScratch.find(
+    (project) => project.environmentId === entry.environmentId && project.id === entry.projectId,
+  );
+  const ownConnected = isConnected(entry.environmentId);
+  if (ownProject !== undefined) {
+    if (ownConnected) {
+      return {
+        environmentId: entry.environmentId,
+        projectId: ownProject.id,
+        checkoutRoot: ownProject.workspaceRoot,
+        environmentConnected: true,
+      };
+    }
+    const alternative = resolvePickableEnvironments(
+      { environmentId: entry.environmentId, projectId: ownProject.id },
+      nonScratch,
+      environments,
+    ).find(
+      (candidate) =>
+        candidate.environmentId !== entry.environmentId && isConnected(candidate.environmentId),
+    );
+    if (alternative !== undefined) {
+      return {
+        environmentId: alternative.environmentId,
+        projectId: alternative.projectId,
+        checkoutRoot: alternative.workspaceRoot,
+        environmentConnected: true,
+      };
+    }
+    return {
+      environmentId: entry.environmentId,
+      projectId: ownProject.id,
+      checkoutRoot: ownProject.workspaceRoot,
+      environmentConnected: false,
+    };
+  }
+  const fallback = findProjectForRepository(nonScratch, {
+    repository: entry.repository,
+    host: entry.host,
+    selectedEnvironmentId: entry.environmentId,
+  });
+  if (fallback !== undefined) {
+    return {
+      environmentId: fallback.environmentId,
+      projectId: fallback.id,
+      checkoutRoot: fallback.workspaceRoot,
+      environmentConnected: isConnected(fallback.environmentId),
+    };
+  }
+  return {
+    environmentId: entry.environmentId,
+    projectId: entry.projectId,
+    checkoutRoot: null,
+    environmentConnected: ownConnected,
+  };
 }
 
 export function pullRequestCheckoutCommand(

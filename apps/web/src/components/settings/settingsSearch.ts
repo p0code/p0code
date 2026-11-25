@@ -1008,7 +1008,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "cli-command",
-    title: msg("t3 command"),
+    title: msg("p0 command"),
     to: "/settings/about",
     searchTerms: [msg("cli terminal shell path install command line")],
     desktopOnly: true,
@@ -1254,7 +1254,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "pull-request-links-open-in-app",
-    title: msg("Open pull requests in T3 Code"),
+    title: msg("Open pull requests in p0code"),
     to: "/settings/diffs",
     searchTerms: [
       `pr commit links ${SOURCE_CONTROL_HOST_LABELS} browser external click default pull request view panel`,

@@ -181,7 +181,7 @@ export function SelfRelaySettings({ environmentId }: { environmentId: Environmen
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              <T>Scan with T3 Code mobile. Revoke the link or paired client in Sharing & access.</T>
+              <T>Scan with p0code mobile. Revoke the link or paired client in Sharing & access.</T>
             </p>
             <h3 className="text-sm font-medium">
               <T>Expose a local port</T>

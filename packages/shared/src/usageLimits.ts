@@ -122,7 +122,7 @@ export const CHATGPT_WORKSPACE_USAGE_LIMIT_CODE =
   "subscription_sharing_workplace_individual_usage_limit_exceeded";
 /** OpenAI's partner guidelines fix this wording; the user sends it to their admin themselves. */
 export const CHATGPT_WORKSPACE_ADMIN_REQUEST =
-  "I've reached the limit for using my ChatGPT plan in T3 Code. Could you increase our workspace's usage limits so I can continue?\n\nGo to admin.openai.com → Workspace → Usage limits. Thank you!";
+  "I've reached the limit for using my ChatGPT plan in p0code. Could you increase our workspace's usage limits so I can continue?\n\nGo to admin.openai.com → Workspace → Usage limits. Thank you!";
 
 export function usesChatGptSharing(provider: ServerProvider | null | undefined): boolean {
   return provider?.auth.status === "authenticated" && provider.auth.subscriptionSharing === true;
@@ -362,6 +362,8 @@ function hubIdentity(environmentId: EnvironmentId, source: UsageLimitSourceSnaps
 
 export interface LimitAccount {
   readonly key: string;
+  /** The provider instance that reads this account; absent for rows only a usage hub reports. */
+  readonly instanceId?: ProviderInstanceId | undefined;
   readonly driver: ServerProvider["driver"];
   readonly displayName: string | null;
   readonly email: string | undefined;
@@ -459,6 +461,7 @@ export function collectLimitAccounts(presentations: LimitPresentations): readonl
       if (!provider.usageLimits || limitsNotice(provider.usageLimits) !== null) continue;
       merge(nativeRowKey(resolveKey, environmentId, provider), {
         key: `${environmentId}:${provider.instanceId}`,
+        instanceId: provider.instanceId,
         driver: provider.driver,
         displayName: provider.displayName?.trim() || null,
         email: provider.auth.email,

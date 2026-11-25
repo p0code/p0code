@@ -157,6 +157,12 @@ row to see when it resets and your pace. Turn on **Context window** to also show
 context use against the model's limit. A tick on the bar marks where the provider compacts
 automatically, when it reports that point.
 
+With **Usage limits** on, the card and the composer's context ring also show what the project and
+this thread have cost, across every provider and model used in them. The figure is an estimate
+from token counts at API list prices, so subscription plans show the API-equivalent cost rather
+than what you pay. Models without a known price are left out and the total reads `~$X`. You can
+add your own under **Usage → Model prices**.
+
 OpenCode Go reports its session, weekly, and monthly allowance when OpenCode runs locally in
 the environment. T3 cannot report limits for external OpenCode servers because their credentials
 belong to the remote server. Limits need an OpenCode Go API key, or an OpenCode Console connected
@@ -224,6 +230,10 @@ Add **Subscription usage** from your iOS or Android widget gallery to see remain
 Claude quotas. Tap it to open **Usage → Limits**; on Android this works while T3 is running in
 the background, otherwise open the app from the launcher. On iOS, use **Edit Widget** to choose
 Session, Weekly, or both for each provider. Reopen T3 to refresh expired readings.
+
+## Let agents read usage
+
+Agents running in p0code can answer questions like "which chat cost the most this week?" or "how much of my Claude weekly limit is left?" on their own. They look up the `p0` API with tool search, then run one short script with the `p0_code` tool that reads your account limits and the spend of the current chat, its project, or all chats. Costs are estimates at API list prices, whatever your subscription is. The script can only read usage; it cannot change anything.
 
 ## Keyboard shortcuts
 

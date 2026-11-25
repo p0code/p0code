@@ -108,7 +108,7 @@ export function renderBootServiceUnit(plan: BootServicePlan): string {
   // The user manager has no reliable network-online target; server networking retries itself.
   return [
     "[Unit]",
-    "Description=T3 Code server",
+    "Description=p0code server",
     "StartLimitIntervalSec=300",
     "StartLimitBurst=5",
     "",
@@ -135,7 +135,7 @@ export function renderBootServiceUnit(plan: BootServicePlan): string {
     // protection of user.slice and user@.service, which only root can grant.
     "MemoryLow=1536M",
     // A user manager's own score, the lowest it may set: below its other services (200) and agents (800).
-    // `t3 service protect` lowers it further through a drop-in.
+    // `p0 service protect` lowers it further through a drop-in.
     "OOMScoreAdjust=100",
     // systemd-oomd ignores this preference when the watched cgroup is root-owned, as user-1000.slice usually is.
     "ManagedOOMPreference=avoid",
@@ -234,7 +234,7 @@ export function renderBootServiceTask(
   return [
     `<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">`,
     `  <RegistrationInfo>`,
-    `    <Description>T3 Code server</Description>`,
+    `    <Description>p0code server</Description>`,
     `  </RegistrationInfo>`,
     `  <Triggers>`,
     `    <LogonTrigger>`,
@@ -657,7 +657,7 @@ export class BootServiceInstallError extends Schema.TaggedError<BootServiceInsta
   { cause: Schema.Defect() },
 ) {
   override get message(): string {
-    return "Could not set up the T3 Code background service.";
+    return "Could not set up the p0code background service.";
   }
 }
 
@@ -674,8 +674,8 @@ type BootServiceProblem = typeof BootServiceProblem.Type;
 export function formatBootServiceProblem(
   problem: BootServiceProblem,
   commands: { readonly install: string; readonly restart: string } = {
-    install: "t3 service install",
-    restart: "t3 service restart",
+    install: "p0 service install",
+    restart: "p0 service restart",
   },
 ): string {
   switch (problem) {
@@ -684,7 +684,7 @@ export function formatBootServiceProblem(
     case "linger-unavailable":
       return 'Cannot check whether this user can run services after logout. Run `loginctl show-user "$(id -un)" --property=Linger` and check that systemd-logind is available.';
     case "linger-disabled":
-      return 'Lingering is disabled. T3 Code will stop when your last login session ends and will not start at boot. Run `sudo loginctl enable-linger "$(id -un)"` on this machine, then retry the service command as your normal user.';
+      return 'Lingering is disabled. p0code will stop when your last login session ends and will not start at boot. Run `sudo loginctl enable-linger "$(id -un)"` on this machine, then retry the service command as your normal user.';
     case "service-disabled":
       return `The service is not enabled to start automatically. Run \`${commands.install}\` to repair it.`;
     case "service-stopped":
@@ -723,7 +723,7 @@ export class BootServiceDowngradeRefusedError extends Schema.TaggedError<BootSer
   },
 ) {
   override get message(): string {
-    return `Refusing to replace t3@${this.installedVersion} with older t3@${this.targetVersion}. Run the command again with --allow-downgrade to continue.`;
+    return `Refusing to replace p0@${this.installedVersion} with older p0@${this.targetVersion}. Run the command again with --allow-downgrade to continue.`;
   }
 }
 
@@ -738,7 +738,7 @@ export class BootServiceOtherBaseDirError extends Schema.TaggedError<BootService
   },
 ) {
   override get message(): string {
-    return `The T3 Code service on this machine serves ${this.installedBaseDir}, not ${this.baseDir}. Pass ${formatBootServiceBaseDirOption(this.installedBaseDir)} to manage it, or run \`t3 service uninstall ${formatBootServiceBaseDirOption(this.installedBaseDir)}\` first to move it; both data directories are kept.`;
+    return `The p0code service on this machine serves ${this.installedBaseDir}, not ${this.baseDir}. Pass ${formatBootServiceBaseDirOption(this.installedBaseDir)} to manage it, or run \`p0 service uninstall ${formatBootServiceBaseDirOption(this.installedBaseDir)}\` first to move it; both data directories are kept.`;
   }
 
   // A refusal the user fixes by rerunning, so the CLI prints the message, not a stack trace.
@@ -752,7 +752,7 @@ export class BootServiceBaseDirUnsupportedError extends Schema.TaggedError<BootS
   { baseDir: Schema.String },
 ) {
   override get message(): string {
-    return `systemd cannot run T3 Code from ${JSON.stringify(this.baseDir)}: the path contains a quote, backslash or control character. Choose another T3 home with --base-dir.`;
+    return `systemd cannot run p0code from ${JSON.stringify(this.baseDir)}: the path contains a quote, backslash or control character. Choose another T3 home with --base-dir.`;
   }
 
   override get [CliError.userMessage]() {
@@ -1316,7 +1316,7 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
             Effect.mapError(
               (cause) =>
                 new PinnedRuntimeInstallError({
-                  step: "verifying the pinned t3 runtime",
+                  step: "verifying the pinned p0 runtime",
                   cause,
                 }),
             ),
@@ -1326,7 +1326,7 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
                 ? Effect.void
                 : Effect.fail(
                     new PinnedRuntimeInstallError({
-                      step: "verifying the pinned t3 runtime",
+                      step: "verifying the pinned p0 runtime",
                       exitCode: Number(result.code),
                       stdoutLength: result.stdout.length,
                       stderrLength: result.stderr.length,

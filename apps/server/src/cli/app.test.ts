@@ -156,7 +156,7 @@ const withTempDirectory = <A, E, R>(
     (root) => Effect.promise(() => NodeFSP.rm(root, { recursive: true, force: true })),
   );
 
-describe("t3 server command safety", () => {
+describe("p0 server command safety", () => {
   it.effect("rejects unknown command words without creating a home or project", () =>
     withTempDirectory("t3-cli-unknown-", (root) =>
       Effect.gen(function* () {
@@ -226,7 +226,7 @@ describe("t3 server command safety", () => {
             ),
             Effect.flip,
           );
-          expect(String(error)).toContain("A T3 Code server is already running");
+          expect(String(error)).toContain("A p0code server is already running");
           expect(yield* Effect.promise(() => NodeFSP.readFile(statePath, "utf8"))).toBe(record);
           expect(yield* pathExists(newDirectory)).toBe(false);
           expect(yield* Effect.promise(() => NodeFSP.readdir(stateDir))).toEqual([
@@ -238,7 +238,7 @@ describe("t3 server command safety", () => {
   );
 });
 
-describe("t3 app", () => {
+describe("p0 app", () => {
   it.live.each(["permissions", "owner", "symlink", "missing owner"] as const)(
     "rejects unsafe %s on the socket directory before sending",
     (unsafe) =>
@@ -246,7 +246,7 @@ describe("t3 app", () => {
         const platform = yield* HostProcess.Platform;
         if (platform === "win32") return;
         yield* withTempDirectory(
-          "t3-app-unsafe-",
+          "p0-app-unsafe-",
           (root) =>
             Effect.gen(function* () {
               yield* Effect.acquireRelease(
@@ -287,9 +287,9 @@ describe("t3 app", () => {
   );
 
   it.effect("uses T3CODE_HOME or --base-dir and sends the default or explicit path", () =>
-    withTempDirectory("t3-app-command-test-", (root) =>
+    withTempDirectory("p0-app-command-test-", (root) =>
       Effect.gen(function* () {
-        const baseDir = NodePath.join(root, "t3-home");
+        const baseDir = NodePath.join(root, "p0-home");
         const explicitPath = NodePath.join(root, "project");
         const platform = yield* HostProcess.Platform;
         const workingDirectory = yield* HostProcess.WorkingDirectory;
@@ -308,7 +308,7 @@ describe("t3 app", () => {
   );
 
   it.effect("prefers the installed desktop app when a dev desktop is also running", () =>
-    withTempDirectory("t3-app-preferred-test-", (root) =>
+    withTempDirectory("p0-app-preferred-test-", (root) =>
       Effect.gen(function* () {
         const baseDir = NodePath.join(root, ".p0code");
         const desktop = yield* fakeDesktop({ baseDir });
@@ -323,7 +323,7 @@ describe("t3 app", () => {
   );
 
   it.effect("finds the dev desktop when the default desktop socket is absent", () =>
-    withTempDirectory("t3-app-dev-test-", (root) =>
+    withTempDirectory("p0-app-dev-test-", (root) =>
       Effect.gen(function* () {
         const baseDir = NodePath.join(root, ".p0code");
         const development = yield* fakeDesktop({ baseDir, stateSubdirectory: "dev" });
@@ -338,7 +338,7 @@ describe("t3 app", () => {
   );
 
   it.effect("never searches a dev state directory for an explicit T3 home", () =>
-    withTempDirectory("t3-app-explicit-test-", (root) =>
+    withTempDirectory("p0-app-explicit-test-", (root) =>
       Effect.gen(function* () {
         const baseDir = NodePath.join(root, ".p0code");
         const development = yield* fakeDesktop({ baseDir, stateSubdirectory: "dev" });
@@ -356,7 +356,7 @@ describe("t3 app", () => {
   it.effect.each(["failure", "invalid"] as const)(
     "never falls back after the default desktop sends a %s response",
     (responseKind) =>
-      withTempDirectory("t3-app-response-test-", (root) =>
+      withTempDirectory("p0-app-response-test-", (root) =>
         Effect.gen(function* () {
           const baseDir = NodePath.join(root, ".p0code");
           const desktop = yield* fakeDesktop({

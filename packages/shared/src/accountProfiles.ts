@@ -13,6 +13,7 @@ import {
   type ThreadId,
 } from "@t3tools/contracts";
 
+import { isModelSelectionProviderEnabled } from "./serverSettings.ts";
 import { exhaustedUsageWindow } from "./usageLimits.ts";
 
 type ProfileSettings = Pick<
@@ -24,6 +25,23 @@ function activeAccountProfile(
   settings: Pick<ServerSettings, "accountProfiles" | "activeAccountProfileId">,
 ): AccountProfile | undefined {
   return settings.accountProfiles.find((profile) => profile.id === settings.activeAccountProfileId);
+}
+
+/** An account the profile-order UI lists: it exists and is on — enabled, installed, signed in, offered. */
+export function isListedProfileAccount(provider: ServerProvider): boolean {
+  return (
+    provider.enabled &&
+    provider.installed &&
+    isProviderAvailable(provider) &&
+    provider.auth.status !== "unauthenticated"
+  );
+}
+
+/** Drivers with at least one listed account, in settings order. */
+export function listedProfileDrivers(
+  providers: ReadonlyArray<ServerProvider>,
+): ProviderDriverKind[] {
+  return [...new Set(providers.filter(isListedProfileAccount).map((provider) => provider.driver))];
 }
 
 /** The driver's instances, highest priority first: the profile's list, then the rest in settings order. */
@@ -260,4 +278,51 @@ export function newThreadAccountProfilePatch(
   if (thread.projectId !== null && explicitProjectAccountProfile(settings, thread.projectId))
     return undefined;
   return { threadAccountProfileIds: { [thread.id]: active.id } };
+}
+
+type SyncedProfileSettings = Pick<ServerSettings, "accountProfiles" | "activeAccountProfileId">;
+
+/** Stable JSON: object keys sorted, so profiles decoded in a different key order still compare equal. */
+function canonicalJson(value: unknown): string {
+  return JSON.stringify(value, (_key, entry: unknown) =>
+    entry !== null && typeof entry === "object" && !Array.isArray(entry)
+      ? Object.fromEntries(Object.entries(entry).sort(([a], [b]) => (a < b ? -1 : 1)))
+      : entry,
+  );
+}
+
+/**
+ * The patch that makes `target`'s profiles match the primary's, or undefined when they do. Account
+ * order, exclusions and filing stay per environment, as does a default model the target can't run.
+ * A source without profiles never wipes a target's.
+ */
+export function syncedAccountProfilesPatch(
+  source: SyncedProfileSettings,
+  target: ServerSettings,
+): Pick<ServerSettingsPatch, "accountProfiles" | "activeAccountProfileId"> | undefined {
+  if (source.accountProfiles.length === 0) return undefined;
+  const accountProfiles = source.accountProfiles.map((profile): AccountProfile => {
+    const existing = target.accountProfiles.find((candidate) => candidate.id === profile.id);
+    const { instanceOrder: _order, excludedInstanceIds: _excluded, ...shared } = profile;
+    const synced: AccountProfile = {
+      ...shared,
+      instanceOrder: existing?.instanceOrder ?? [],
+      excludedInstanceIds: existing?.excludedInstanceIds ?? [],
+    };
+    const model = profile.defaultModelSelection;
+    if (model == null || isModelSelectionProviderEnabled(target, model)) return synced;
+    const { defaultModelSelection: _model, ...withoutModel } = synced;
+    return existing?.defaultModelSelection === undefined
+      ? withoutModel
+      : { ...withoutModel, defaultModelSelection: existing.defaultModelSelection };
+  });
+  const patch: Pick<ServerSettingsPatch, "accountProfiles" | "activeAccountProfileId"> = {
+    ...(canonicalJson(accountProfiles) === canonicalJson(target.accountProfiles)
+      ? {}
+      : { accountProfiles }),
+    ...(source.activeAccountProfileId === target.activeAccountProfileId
+      ? {}
+      : { activeAccountProfileId: source.activeAccountProfileId }),
+  };
+  return Object.keys(patch).length === 0 ? undefined : patch;
 }

@@ -41,7 +41,7 @@ it.effect("links a file of environments, reports each line, and fails when one d
   Effect.scoped(
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
-      const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-environment-cli-" });
+      const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "p0-environment-cli-" });
       const { settingsPath } = yield* ServerConfig.deriveServerPaths(baseDir, undefined);
       yield* fs.makeDirectory(NodePath.dirname(settingsPath), { recursive: true });
       yield* fs.writeFileString(settingsPath, JSON.stringify({ linkedEnvironmentsEnabled: true }));

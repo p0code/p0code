@@ -28,7 +28,7 @@ export interface IssueListPreferences {
 }
 
 const DEFAULT_ISSUE_LIST_PREFERENCES = {
-  who: "all",
+  who: "involves",
   status: "open",
 } as const satisfies IssueListPreferences;
 
@@ -69,7 +69,8 @@ export function issueListPreferences(search: {
   readonly order?: "created" | undefined;
 }): IssueListPreferences {
   return {
-    who: search.who,
+    // A remembered `all` predates the page's own list: the same issues come back under `involves`.
+    who: search.who === "all" ? "involves" : search.who,
     status: search.status,
     ...(search.hideProjects?.length
       ? { hideProjects: search.hideProjects.slice(0, ISSUE_LIST_MAX_EXCLUDED_PROJECTS) }

@@ -99,6 +99,8 @@ export const make = Effect.gen(function* () {
       applicationName: environment.displayName,
       applicationVersion: environment.appVersion,
       version: Option.getOrElse(commitHash, () => "unknown"),
+      credits:
+        "p0code is an independent, unofficial fork of p0code. Not affiliated with or endorsed by T3 Tools, Inc. 'p0code' is a trademark of T3 Tools, Inc.",
     });
 
     if (environment.platform === "win32") {

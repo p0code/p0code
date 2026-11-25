@@ -60,7 +60,7 @@ export function IssueFiltersMenu(props: {
   const [open, setOpen] = useState(false);
   const count = [
     props.state !== "open",
-    props.involvement !== "all",
+    props.involvement !== "involves",
     props.hiddenProjects.size > 0,
     props.assignee,
     ...props.labels,

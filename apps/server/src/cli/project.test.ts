@@ -122,9 +122,9 @@ it.effect(
   "adds, renames, and removes projects, and tracks folders on add, through the V2 project CLI domain",
   () =>
     Effect.gen(function* () {
-      const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-v2-project-cli-"));
+      const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "p0-v2-project-cli-"));
       const workspaceRoot = NodeFS.mkdtempSync(
-        NodePath.join(NodeOS.tmpdir(), "t3-v2-project-workspace-"),
+        NodePath.join(NodeOS.tmpdir(), "p0-v2-project-workspace-"),
       );
 
       yield* runCli(["project", "add", workspaceRoot, "--title", "Alpha", "--base-dir", baseDir]);
@@ -139,12 +139,12 @@ it.effect(
       assert.deepEqual((yield* readProjects(baseDir)).projects, []);
 
       // Repositories inside the folder are found; `--track` adds one from outside it.
-      const shared = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-v2-project-shared-"));
-      const homeShared = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-v2-project-home-"));
+      const shared = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "p0-v2-project-shared-"));
+      const homeShared = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "p0-v2-project-home-"));
       NodeFS.mkdirSync(NodePath.join(workspaceRoot, "api", ".git"), { recursive: true });
       NodeFS.mkdirSync(NodePath.join(workspaceRoot, "notes"));
       // Names are cut to 128 UTF-16 units, never between the halves of an emoji.
-      const named = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-v2-project-names-"));
+      const named = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "p0-v2-project-names-"));
       const straddling = NodePath.join(named, `${"a".repeat(127)}🚀`);
       const fitting = NodePath.join(named, `${"b".repeat(126)}🚀`);
       const padded = NodePath.join(named, `${" ".repeat(127)}🚀`);
@@ -182,7 +182,7 @@ it.effect.each(["snapshot", "mutation"] as const)(
   (slowRequest) =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
-      const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-live-project-cli-" });
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "p0-live-project-cli-" });
       const baseDir = NodePath.join(root, "state");
       const workspaceRoot = NodePath.join(root, "workspace");
       yield* fs.makeDirectory(workspaceRoot);
@@ -240,7 +240,7 @@ it.effect.each(["snapshot", "mutation"] as const)(
 it.effect("does not send a token to whatever took over a dead server's port", () =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
-    const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-dead-project-cli-" });
+    const root = yield* fs.makeTempDirectoryScoped({ prefix: "p0-dead-project-cli-" });
     const baseDir = NodePath.join(root, "state");
     const workspaceRoot = NodePath.join(root, "workspace");
     yield* fs.makeDirectory(workspaceRoot);
@@ -270,7 +270,7 @@ it.effect("does not send a token to whatever took over a dead server's port", ()
 
 const makeProjectLookupFixture = Effect.fn("ProjectCliTest.makeProjectLookupFixture")(function* () {
   const fs = yield* FileSystem.FileSystem;
-  const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-v2-project-lookup-" });
+  const root = yield* fs.makeTempDirectoryScoped({ prefix: "p0-v2-project-lookup-" });
   const baseDir = NodePath.join(root, "state");
   const workspaceRoot = NodePath.join(root, "workspace");
   yield* fs.makeDirectory(workspaceRoot);
@@ -549,7 +549,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))(
         const { baseDir, workspaceRoot, project } = yield* makeProjectLookupFixture();
         yield* fs.rename(workspaceRoot, `${workspaceRoot}-removed`);
         const replacementDir = yield* fs.makeTempDirectoryScoped({
-          prefix: "t3-v2-project-empty-",
+          prefix: "p0-v2-project-empty-",
         });
         const error = yield* runCli([
           "project",

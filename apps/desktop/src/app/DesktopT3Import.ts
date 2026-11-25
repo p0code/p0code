@@ -73,7 +73,7 @@ export const offerT3Import = Effect.fn("desktop.offerT3Import")(function* () {
     message: m(msg("Bring your T3 Code threads, settings and providers over?")),
     detail: m(
       msg(
-        "p0code keeps its data in {home}, separate from T3 Code in {stock}. Importing copies everything you need and never changes T3 Code's data. You can also do this later with `t3 migrate from-t3`.",
+        "p0code keeps its data in {home}, separate from T3 Code in {stock}. Importing copies everything you need and never changes T3 Code's data. You can also do this later with `p0 migrate from-t3`.",
       ),
       { home: environment.baseDir, stock: stockHome },
     ),
@@ -103,7 +103,7 @@ export const offerT3Import = Effect.fn("desktop.offerT3Import")(function* () {
       m(msg("Could not import from T3 Code")),
       m(
         msg(
-          "{reason} Quit p0code and run `t3 migrate from-t3 --force` in a terminal to try again.",
+          "{reason} Quit p0code and run `p0 migrate from-t3 --force` in a terminal to try again.",
         ),
         { reason: failure },
       ),
@@ -201,7 +201,7 @@ export const runT3ImportOnTheFly = Effect.fn("desktop.runT3ImportOnTheFly")(func
         m(msg("Could not import from T3 Code")),
         m(
           msg(
-            "{reason} Quit p0code and run `t3 migrate from-t3 --force` in a terminal to try again.",
+            "{reason} Quit p0code and run `p0 migrate from-t3 --force` in a terminal to try again.",
           ),
           { reason: failure },
         ),

@@ -12,7 +12,7 @@ Unified release workflow: `.github/workflows/release.yml`. Beta is a product lab
 
 ## Critical release invariants
 
-- **Server self-update ordering:** Connected servers update to the exact client version by downloading the GitHub Release CLI archive (or `npx t3@<version>`). Keep the release graph order strictly: `release` (CLI archives + `SHA256SUMS` + desktop installers) → `publish_cli` (`t3` npm launcher) → `deploy_web` (hosted channel alias). Never publish clients before the archives and npm launcher exist.
+- **Server self-update ordering:** Connected servers update to the exact client version by downloading the GitHub Release CLI archive (or `npx p0@<version>`). Keep the release graph order strictly: `release` (CLI archives + `SHA256SUMS` + desktop installers) → `publish_cli` (`p0` npm launcher) → `deploy_web` (hosted channel alias). Never publish clients before the archives and npm launcher exist.
 - **Standalone CLI archives & Node pin:** `engines.node` in root `package.json` must stay exact (Node SEA builds reject mismatches). There is no macOS x64 CLI archive (SEA is unsupported there; x64 desktop uses Electron).
 - **Smoke fixture:** `scripts/fixtures/desktop-launch` is intentionally an old SQLite snapshot to verify forward migrations on packaged builds—never regenerate it on schema changes.
 - **Hosted web:** Vercel Git auto-deployments stay disabled (`apps/web/vercel.ts`). Releases build with `--skip-domain` and alias `app.t3.codes` / `latest.app.t3.codes` (stable) or `nightly.app.t3.codes` (nightly) only after publication.

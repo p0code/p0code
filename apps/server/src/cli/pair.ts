@@ -50,7 +50,7 @@ import { authScopesFlag } from "./authScopes.ts";
 import { baseDirFlag, DurationFromString } from "./config.ts";
 import { hostShellWord, resolveHostCliCommand } from "./invocation.ts";
 
-const WELL_KNOWN_ENVIRONMENT_PATH = "/.well-known/t3/environment";
+const WELL_KNOWN_ENVIRONMENT_PATH = "/.well-known/p0/environment";
 const PAIR_PROBE_TIMEOUT = Duration.millis(2_500);
 // Tailscale's first HTTPS request may take seconds to provision a certificate.
 const TAILSCALE_PROBE_ATTEMPTS = 5;
@@ -72,7 +72,7 @@ export class NoRunningServerError extends Schema.TaggedError<NoRunningServerErro
 ) {
   override get message(): string {
     return [
-      "No running T3 Code server found.",
+      "No running p0code server found.",
       ...this.checkedStatePaths.map((statePath) => `  checked ${statePath}`),
       ...(this.inLinkedWorktree
         ? ["In a linked worktree, pass --base-dir to pair with a server outside it."]
@@ -92,7 +92,7 @@ export class IncompatibleServerProtocolError extends Schema.TaggedError<Incompat
 ) {
   override get message(): string {
     return [
-      `The running T3 Code server (${this.serverVersion}) speaks orchestration protocol ${String(this.serverProtocolVersion)}, but this CLI speaks protocol ${String(ORCHESTRATION_PROTOCOL_VERSION)}.`,
+      `The running p0code server (${this.serverVersion}) speaks orchestration protocol ${String(this.serverProtocolVersion)}, but this CLI speaks protocol ${String(ORCHESTRATION_PROTOCOL_VERSION)}.`,
       `Pair with the matching CLI instead: \`${this.pairCommand}\`.`,
     ].join("\n");
   }
@@ -130,7 +130,7 @@ export class ServesOtherEnvironmentError extends Schema.TaggedError<ServesOtherE
   { servePort: Schema.Number },
 ) {
   override get message(): string {
-    return `Tailscale Serve on HTTPS port ${String(this.servePort)} already fronts a different T3 Code server. Pass --tailscale-serve-port to publish this one on another port.`;
+    return `Tailscale Serve on HTTPS port ${String(this.servePort)} already fronts a different p0code server. Pass --tailscale-serve-port to publish this one on another port.`;
   }
 }
 
@@ -166,7 +166,7 @@ export class ServePortOccupiedError extends Schema.TaggedError<ServePortOccupied
   { servePort: Schema.Number },
 ) {
   override get message(): string {
-    return `HTTPS port ${String(this.servePort)} on the tailnet already serves something that is not a T3 Code server. Pass --tailscale-serve-port to publish this one on another port.`;
+    return `HTTPS port ${String(this.servePort)} on the tailnet already serves something that is not a p0code server. Pass --tailscale-serve-port to publish this one on another port.`;
   }
 }
 
@@ -235,7 +235,7 @@ const formatPairOutput = (input: {
 type EnvironmentProbeResult =
   | { readonly _tag: "descriptor"; readonly descriptor: ExecutionEnvironmentDescriptor }
   | { readonly _tag: "unreachable" }
-  | { readonly _tag: "not-a-t3-server" };
+  | { readonly _tag: "not-a-p0-server" };
 
 const probeEnvironmentDescriptor: (
   baseUrl: string,
@@ -255,7 +255,7 @@ const probeEnvironmentDescriptor: (
     }
     const descriptor = yield* HttpClientResponse.filterStatusOk(response).pipe(
       Effect.flatMap(HttpClientResponse.schemaBodyJson(ExecutionEnvironmentDescriptor)),
-      Effect.mapError(() => ({ _tag: "not-a-t3-server" }) as const),
+      Effect.mapError(() => ({ _tag: "not-a-p0-server" }) as const),
     );
     return { _tag: "descriptor", descriptor } as const;
   },
@@ -424,7 +424,7 @@ const resolveTailscalePairingBase = Effect.fn("pair.resolveTailscalePairingBase"
         return { baseUrl, notes };
       }
     }
-    if (existing._tag === "not-a-t3-server") {
+    if (existing._tag === "not-a-p0-server") {
       return yield* new ServePortOccupiedError({ servePort: input.servePort });
     }
 
@@ -489,7 +489,7 @@ const mintPairingLink = Effect.fn("pair.mintPairingLink")(function* (input: {
     return yield* environmentAuth.createPairingLink({
       scopes: input.scopes,
       subject: "one-time-token",
-      label: Option.getOrElse(input.label, () => "t3 pair"),
+      label: Option.getOrElse(input.label, () => "p0 pair"),
       ...(Option.isSome(input.ttl) ? { ttl: input.ttl.value } : {}),
     });
   }).pipe(
@@ -537,7 +537,7 @@ export const pairCommand = Command.make("pair", {
   tailscaleServePort: tailscaleServePortFlag,
 }).pipe(
   Command.withDescription(
-    "Mint a pairing token for a running T3 Code server and print it as a QR code.",
+    "Mint a pairing token for a running p0code server and print it as a QR code.",
   ),
   Command.withHandler((flags) =>
     Effect.gen(function* () {
@@ -559,7 +559,7 @@ export const pairCommand = Command.make("pair", {
         return yield* new IncompatibleServerProtocolError({
           serverVersion: target.descriptor.serverVersion,
           serverProtocolVersion,
-          pairCommand: `npx t3@${target.descriptor.serverVersion} pair${baseDirArgs}`,
+          pairCommand: `npx p0@${target.descriptor.serverVersion} pair${baseDirArgs}`,
         });
       }
 
@@ -586,7 +586,7 @@ export const pairCommand = Command.make("pair", {
           resolveDirectPairingBaseUrl(target.state, yield* HostProcess.Platform);
         if (isLoopbackHost(new URL(pairingBaseUrl).hostname)) {
           notes.push(
-            "This URL is only reachable from this machine. To reach it from your other devices, run `t3 up`, or re-run with --tailscale.",
+            "This URL is only reachable from this machine. To reach it from your other devices, run `p0 up`, or re-run with --tailscale.",
           );
         } else if (target.state.privateNetworkOnly) {
           notes.push(

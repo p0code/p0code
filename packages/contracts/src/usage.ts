@@ -1,6 +1,12 @@
 import * as Schema from "effect/Schema";
 
-import { ForwardCompatibleArray, NonNegativeInt, TrimmedNonEmptyString } from "./baseSchemas.ts";
+import {
+  ForwardCompatibleArray,
+  NonNegativeInt,
+  ProjectId,
+  ThreadId,
+  TrimmedNonEmptyString,
+} from "./baseSchemas.ts";
 
 /** Bump for incompatible UsageSummary changes; skipped unknown array variants need no bump. */
 export const USAGE_CONTRACT_VERSION = 6 as const;
@@ -170,5 +176,40 @@ export class UsageReadError extends Schema.TaggedError<UsageReadError>()("UsageR
 }) {
   override get message(): string {
     return `Usage read failed (${this.reason}): ${this.detail}`;
+  }
+}
+
+export const ProjectCostInput = Schema.Struct({
+  projectId: ProjectId,
+  /** Also report this thread's own cost. */
+  threadId: Schema.optional(ThreadId),
+});
+export type ProjectCostInput = typeof ProjectCostInput.Type;
+
+export const ProjectCostAmount = Schema.Struct({
+  /** Token counts times list prices; no provider bills this exact figure. */
+  costUsd: Schema.Number,
+  /** Some models have no known price, so the real cost is higher. */
+  partial: Schema.Boolean,
+  unpricedModels: Schema.Array(TrimmedNonEmptyString),
+});
+export type ProjectCostAmount = typeof ProjectCostAmount.Type;
+
+export const ProjectCost = Schema.Struct({
+  project: ProjectCostAmount,
+  /** Present when the input named a thread. */
+  thread: Schema.optional(ProjectCostAmount),
+});
+export type ProjectCost = typeof ProjectCost.Type;
+
+export class ProjectCostReadError extends Schema.TaggedError<ProjectCostReadError>()(
+  "ProjectCostReadError",
+  {
+    projectId: ProjectId,
+    cause: Schema.Defect(),
+  },
+) {
+  override get message(): string {
+    return "Failed to read the project's cost.";
   }
 }

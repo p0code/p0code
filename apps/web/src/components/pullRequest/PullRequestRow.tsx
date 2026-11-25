@@ -6,6 +6,7 @@ import { SearchIcon } from "lucide-react";
 import { PullRequestChangeBreakdownStat } from "./PullRequestChangeBreakdownStat";
 import { PullRequestStackPopover } from "./PullRequestStackPopover";
 import {
+  PullRequestRowStartAgentButton,
   PullRequestSpeedActions,
   type PullRequestSpeedActionResult,
 } from "./PullRequestSpeedActions";
@@ -114,7 +115,7 @@ function PullRequestRowImpl({
       data-pull-request-stats-key={statsKey}
       data-pull-request-key={statsKey}
       className={cn(
-        "flex items-center rounded-md [content-visibility:auto] [contain-intrinsic-block-size:56.5px]",
+        "group/pr-row flex items-center rounded-md [content-visibility:auto] [contain-intrinsic-block-size:56.5px]",
         selected ? "bg-accent" : "hover:bg-accent/60",
       )}
     >
@@ -259,6 +260,7 @@ function PullRequestRowImpl({
           updatedAt={entry.updatedAt}
         />
       </button>
+      <PullRequestRowStartAgentButton entry={entry} />
       {hostActions.size > 0 ? (
         <PullRequestSpeedActions
           entry={entry}

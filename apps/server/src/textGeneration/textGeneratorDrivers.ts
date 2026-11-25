@@ -95,7 +95,7 @@ const sendJson = Effect.fn("TextGenerator.sendJson")(function* <S extends Schema
     Effect.mapError(
       (cause) =>
         new TextGeneratorRequestError({
-          detail: `${label} returned a reply T3 Code couldn't read.`,
+          detail: `${label} returned a reply p0code couldn't read.`,
           cause,
         }),
     ),

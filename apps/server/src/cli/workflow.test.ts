@@ -54,7 +54,7 @@ const makeRun = (status: WorkflowRun["status"]): WorkflowRun => ({
   endedAt: ["running", "waiting", "paused"].includes(status) ? null : "2026-11-20T00:00:00.000Z",
 });
 
-/** Runs `t3 workflow <args>` against a live-looking server whose t3_workflow is `call`. */
+/** Runs `p0 workflow <args>` against a live-looking server whose t3_workflow is `call`. */
 const runCli = (
   args: ReadonlyArray<string>,
   call: McpBridge.McpToolSession["call"] = () => Effect.die("no tool call expected"),
@@ -62,7 +62,7 @@ const runCli = (
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-workflow-cli-" });
+    const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "p0-workflow-cli-" });
     yield* persistServerRuntimeState({
       path: path.join(baseDir, "userdata", "server-runtime.json"),
       state: yield* makePersistedServerRuntimeState({
@@ -145,7 +145,7 @@ it.effect("reports what the server refused instead of calling it unreachable", (
     const refused = yield* runCli(["start", "review", "--key", "r1"], () =>
       Effect.fail(
         new McpBridge.AcpMcpBridgeError({
-          message: "T3 Code MCP tools/call failed.",
+          message: "p0code MCP tools/call failed.",
           rpcError: {
             code: -32602,
             message: 'Expected a non-blank string\n  at ["idempotencyKey"]',

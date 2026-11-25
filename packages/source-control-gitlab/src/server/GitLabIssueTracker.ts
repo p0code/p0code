@@ -16,6 +16,7 @@ import {
   IssueTrackerError,
   type IssueInvolvementFilter,
   type IssueTrackerApi,
+  type TrackerIssueSummary,
 } from "@t3tools/source-control-core/server/IssueTracker";
 
 import * as GitLabCli from "./GitLabCli.ts";
@@ -149,8 +150,9 @@ function involvementParams(
       // viewer by dropping rows.
       return input.assignee === undefined ? [["assignee_username", input.viewer]] : [];
     // GitLab's `my_reaction_emoji` and `iteration` filters aside, nothing narrows to mentions, so
-    // the listing stays as wide as `all` rather than guessing.
+    // the listing stays as wide as `all` rather than guessing. `involves` is narrowed on the rows.
     case "mentioned":
+    case "involves":
     case "all":
       return [];
   }
@@ -453,6 +455,12 @@ export const make: Effect.Effect<IssueTrackerApi, never, GitLabCli.GitLabCli> = 
           input.involvement === "assigned" && input.assignee !== undefined
             ? input.viewer.toLowerCase()
             : null;
+        // GitLab can narrow to an author or an assignee but not to a mention, so `involves` sends
+        // no involvement parameter and the rows the account is not on are dropped below instead.
+        const involvesViewer = input.involvement === "involves" ? input.viewer.toLowerCase() : null;
+        const onIssue = (issue: TrackerIssueSummary) =>
+          issue.author?.login.toLowerCase() === involvesViewer ||
+          issue.assignees.some((actor) => actor.login.toLowerCase() === involvesViewer);
         return yield* read({
           cwd: input.cwd,
           host: input.host,
@@ -479,11 +487,13 @@ export const make: Effect.Effect<IssueTrackerApi, never, GitLabCli.GitLabCli> = 
         }).pipe(
           Effect.map((list) => ({
             items:
-              alsoAssignedTo === null
-                ? list.items
-                : list.items.filter((issue) =>
-                    issue.assignees.some((actor) => actor.login.toLowerCase() === alsoAssignedTo),
-                  ),
+              involvesViewer !== null
+                ? list.items.filter(onIssue)
+                : alsoAssignedTo === null
+                  ? list.items
+                  : list.items.filter((issue) =>
+                      issue.assignees.some((actor) => actor.login.toLowerCase() === alsoAssignedTo),
+                    ),
             nextCursor: list.rawCount < perPage ? null : String(page + 1),
           })),
         );

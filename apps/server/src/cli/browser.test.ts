@@ -106,7 +106,7 @@ const LOAD = `apparmor_parser -r ${PreviewBrowserHost.APPARMOR_PROFILE_PATH}`;
 
 const CUSTOMIZED_PROFILE = PreviewBrowserHost.APPARMOR_PROFILE.replace(
   "  userns,\n",
-  "  userns,\n  deny /tmp/t3-admin-private/** rw,\n",
+  "  userns,\n  deny /tmp/p0-admin-private/** rw,\n",
 );
 
 it.effect.each([
@@ -128,7 +128,7 @@ it.effect.each([
     written: CUSTOMIZED_PROFILE,
     said: "Reloaded the AppArmor profile",
   },
-])("t3 browser setup as root $label", (input) =>
+])("p0 browser setup as root $label", (input) =>
   Effect.gen(function* () {
     const result = yield* runSetupAsRoot({ profile: input.profile });
     expect(result.loads).toEqual([LOAD]);

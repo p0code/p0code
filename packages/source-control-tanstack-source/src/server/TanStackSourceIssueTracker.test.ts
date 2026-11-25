@@ -175,6 +175,33 @@ describe("TanStackSourceIssueTracker", () => {
     });
   });
 
+  it.effect("keeps the rows the viewer authored or is assigned when `involves` is asked", () => {
+    const { tracker, paths } = withApi({
+      "/repos/TanStack/ai/issues?state=open": {
+        items: [
+          row(1, "open", 10),
+          { ...row(2, "open", 20), author: "bob", assignees: ["Alice"] },
+          { ...row(3, "open", 30), author: "bob", assignees: [] },
+        ],
+        next: null,
+      },
+    });
+    return Effect.gen(function* () {
+      const issues = yield* tracker;
+      const page = yield* issues.listIssues({
+        ...target,
+        involvement: "involves",
+        viewer: "Alice",
+        state: "open",
+        limit: 50,
+        sort: "updated",
+      });
+      // Source ANDs its parameters, so the union is matched on the rows, not in the query.
+      assert.deepStrictEqual(page.items.map((issue) => issue.key).sort(), ["1", "2"]);
+      assert.deepStrictEqual(paths, ["/repos/TanStack/ai/issues?state=open"]);
+    });
+  });
+
   it.effect("writes each changed field on its own route, clearing labels and assignees", () => {
     const { tracker, writes } = withApi({});
     return Effect.gen(function* () {

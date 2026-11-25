@@ -104,6 +104,7 @@ import {
   PullRequestCheckoutMenu,
   PullRequestPrimaryAction,
   PullRequestResolveConflictsButton,
+  PullRequestStartAgentButton,
 } from "./PullRequestDetailActions";
 import { PullRequestBaseBranch } from "./PullRequestBaseBranch";
 import { PullRequestDetailCrumbs } from "./PullRequestDetailCrumbs";
@@ -150,6 +151,7 @@ import {
   allowsSinglePullRequestMerge,
   canDeletePullRequestBranch,
   isPullRequestConflicting,
+  pullRequestStartAgentDisabledReason,
   resolveBaseFreshness,
   resolvePullRequestMergeMethod,
   type PullRequestChatSubject,
@@ -1523,19 +1525,43 @@ export function PullRequestDetailPanel({
         ).length
       : 0;
 
+  const startAgentDisabledReason = pullRequestStartAgentDisabledReason(
+    {
+      environmentConnected: environments.some(
+        (environment) =>
+          environment.environmentId === actingEnvironmentId &&
+          environment.connection.phase === "connected",
+      ),
+      checkoutRoot,
+      headRepositoryNameWithOwner: detail?.headRepositoryNameWithOwner,
+      provider: handoffSummary?.provider,
+      repository: handoffSummary?.repository,
+      canWriteSourceControl: prepareThread.isAllowed,
+      canOperateThread,
+    },
+    resolve,
+  );
+
   const checkoutControl =
     context === "page" ? (
-      <PullRequestCheckoutMenu
-        term={changeRequestTermKind(terminology)}
-        handoff={handoff}
-        checkoutRoot={checkoutRoot}
-        canPrepareWorktree={canPrepareWorktree}
-        canCheckoutHere={prepareThread.isAllowed}
-        onCheckout={startCheckout}
-        pickableEnvironments={pickableEnvironments}
-        actingEnvironmentId={actingEnvironmentId}
-        onActingEnvironmentChange={selectActingEnvironment}
-      />
+      <>
+        <PullRequestStartAgentButton
+          handoff={handoff}
+          disabledReason={startAgentDisabledReason}
+          onStartAgent={() => startCheckout("worktree")}
+        />
+        <PullRequestCheckoutMenu
+          term={changeRequestTermKind(terminology)}
+          handoff={handoff}
+          checkoutRoot={checkoutRoot}
+          canPrepareWorktree={canPrepareWorktree}
+          canCheckoutHere={prepareThread.isAllowed}
+          onCheckout={startCheckout}
+          pickableEnvironments={pickableEnvironments}
+          actingEnvironmentId={actingEnvironmentId}
+          onActingEnvironmentChange={selectActingEnvironment}
+        />
+      </>
     ) : null;
 
   const resolveConflictsControl = (
@@ -1651,6 +1677,7 @@ export function PullRequestDetailPanel({
                 mergeBlockedReason={mergeBlockedReason}
                 pullRequestKey={pullRequestKey}
                 primaryAction={primaryAction}
+                prominent={context !== "page"}
                 autoMergeArmed={autoMergeArmed}
                 armedAutoMergeLabel={armedAutoMergeLabel}
                 pendingAutoMergeLabel={pendingAutoMergeLabel}

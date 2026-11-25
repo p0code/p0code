@@ -26,7 +26,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))((it) => {
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const statePath = (yield* Path.Path).join(
-        yield* fs.makeTempDirectoryScoped({ prefix: "t3-policy-show-" }),
+        yield* fs.makeTempDirectoryScoped({ prefix: "p0-policy-show-" }),
         "server-runtime.json",
       );
       const loaded = (organization: string) =>
@@ -47,14 +47,14 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))((it) => {
           return yield* describeRunningServer(statePath, current);
         });
 
-      assert.include(yield* describeRunningServer(statePath, installed), "No T3 Code server");
+      assert.include(yield* describeRunningServer(statePath, installed), "No p0code server");
       assert.include(yield* running(installed), "loaded this policy.");
       assert.include(
         yield* running(yield* loaded("Other Corp")),
         "loaded Other Corp's policy from /etc/t3code/policy.json",
       );
-      assert.include(yield* running(null), "loaded no policy. Restart T3 Code");
-      assert.include(yield* running(installed, null), "Restart T3 Code to apply");
+      assert.include(yield* running(null), "loaded no policy. Restart p0code");
+      assert.include(yield* running(installed, null), "Restart p0code to apply");
       assert.include(yield* running(null, null), "runs without a policy, as installed");
       assert.include(yield* running(undefined), "does not report which policy it loaded");
     }),
@@ -64,8 +64,8 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))((it) => {
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const home = yield* fs.makeTempDirectoryScoped({ prefix: "t3-policy-templates-" });
-      const cwd = yield* fs.makeTempDirectoryScoped({ prefix: "t3-policy-templates-cwd-" });
+      const home = yield* fs.makeTempDirectoryScoped({ prefix: "p0-policy-templates-" });
+      const cwd = yield* fs.makeTempDirectoryScoped({ prefix: "p0-policy-templates-cwd-" });
       yield* Effect.acquireRelease(
         Effect.sync(() => {
           const previous = process.cwd();
@@ -100,7 +100,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))((it) => {
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const home = yield* fs.makeTempDirectoryScoped({ prefix: "t3-policy-check-" });
+      const home = yield* fs.makeTempDirectoryScoped({ prefix: "p0-policy-check-" });
       const file = path.join(home, "policy.json");
       yield* fs.writeFileString(
         file,

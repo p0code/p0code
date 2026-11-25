@@ -58,7 +58,7 @@ it.effect("list includes delegated threads across pages and still leaves out sub
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-thread-list-" });
+    const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "p0-thread-list-" });
     yield* persistServerRuntimeState({
       path: path.join(baseDir, "userdata", "server-runtime.json"),
       state: yield* makePersistedServerRuntimeState({
@@ -158,7 +158,7 @@ it.effect(
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const root = yield* fs
-        .makeTempDirectoryScoped({ prefix: "t3-thread-project-path-" })
+        .makeTempDirectoryScoped({ prefix: "p0-thread-project-path-" })
         .pipe(Effect.flatMap((directory) => fs.realPath(directory)));
       const home = path.join(root, "home");
       const cwd = path.join(root, "current");
@@ -243,7 +243,7 @@ it.effect("does not sign in to whatever took over a dead server's port", () =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-thread-dead-server-" });
+    const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "p0-thread-dead-server-" });
     const state = yield* makePersistedServerRuntimeState({
       config: { host: "127.0.0.1", devUrl: undefined },
       port: 3_773,
@@ -529,7 +529,7 @@ it.effect("--output-schema reads a ~/ path from the home directory", () =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const home = yield* fs.makeTempDirectoryScoped({ prefix: "t3-thread-schema-" });
+    const home = yield* fs.makeTempDirectoryScoped({ prefix: "p0-thread-schema-" });
     yield* fs.writeFileString(path.join(home, "schema.json"), '{"type":"object"}');
 
     const output = yield* readOutputSchema(Option.some("~/schema.json")).pipe(
@@ -729,11 +729,11 @@ it.live("resolves a path inside a git worktree of the project's repository to th
   Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const root = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-thread-worktree-" });
+    const root = yield* fileSystem.makeTempDirectoryScoped({ prefix: "p0-thread-worktree-" });
     const repo = path.join(root, "sample");
-    const worktree = path.join(root, "worktrees", "sample", "t3-8ff64c24");
+    const worktree = path.join(root, "worktrees", "sample", "p0-8ff64c24");
     const feature = path.join(root, "wt", "feature");
-    const featureWorktree = path.join(root, "worktrees", "feature", "t3-1a2b3c4d");
+    const featureWorktree = path.join(root, "worktrees", "feature", "p0-1a2b3c4d");
     yield* fileSystem.makeDirectory(path.join(repo, "pkg"), { recursive: true });
     yield* fileSystem.writeFileString(path.join(repo, "pkg", "index.ts"), "export {};\n");
     yield* git(repo, ["init", "--quiet", "-b", "main"]);

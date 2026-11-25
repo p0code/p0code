@@ -8,6 +8,7 @@ import {
   type UsagePricing,
   type UsageSummary,
   type UsageSummaryInput,
+  type UsageTokenTotals,
   UsageReadError,
 } from "@t3tools/contracts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
@@ -49,6 +50,7 @@ import {
   createOverrideRateTable,
   isUnlistedModel,
   parseRateTable,
+  priceUsage,
   type RateTable,
 } from "./usagePricing.ts";
 import {
@@ -166,6 +168,10 @@ export class UsageService extends Context.Service<
   {
     readonly readSummary: (input: UsageSummaryInput) => Effect.Effect<UsageSummary, UsageReadError>;
     readonly refreshRates: Effect.Effect<UsagePricing>;
+    /** API-equivalent list-price cost per entry, or null when the model has no known price. */
+    readonly priceModelTotals: (
+      inputs: ReadonlyArray<{ readonly model: string; readonly totals: UsageTokenTotals }>,
+    ) => Effect.Effect<ReadonlyArray<number | null>>;
   }
 >()("t3/usage/UsageService") {}
 
@@ -349,6 +355,26 @@ export const make = Effect.gen(function* () {
     Effect.map(pricing),
     Effect.withSpan("UsageService.refreshRates"),
   );
+
+  const priceModelTotals = Effect.fn("UsageService.priceModelTotals")(function* (
+    inputs: ReadonlyArray<{ readonly model: string; readonly totals: UsageTokenTotals }>,
+  ) {
+    // Saved rates answer without the network; only a server that never fetched a table waits for one.
+    yield* loadSavedRates;
+    if (rates.size === 0) yield* ensureRates(false);
+    const overrides = yield* settingsService.getSettings.pipe(
+      Effect.map((settings) => createOverrideRateTable(settings.usagePriceOverrides)),
+      Effect.orElseSucceed((): RateTable => new Map()),
+    );
+    return inputs.map(({ model, totals }) => {
+      const priced = priceUsage(
+        rates,
+        { model, totals, speed: "standard", reportedCostUsd: null },
+        overrides,
+      );
+      return priced.costSource === "unpriced" ? null : priced.costUsd;
+    });
+  });
 
   const readSettings = settingsService.getSettings.pipe(
     Effect.catchCause(
@@ -1269,7 +1295,7 @@ export const make = Effect.gen(function* () {
     return yield* Deferred.await(deferred);
   });
 
-  return { readSummary, refreshRates, awaitPersisted } as const;
+  return { readSummary, refreshRates, priceModelTotals, awaitPersisted } as const;
 });
 
 export const layer = Layer.effect(UsageService, make);

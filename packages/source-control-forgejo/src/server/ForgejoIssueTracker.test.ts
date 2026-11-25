@@ -363,4 +363,40 @@ describe("ForgejoIssueTracker", () => {
       expect(page.nextCursor).toBe("3");
     }),
   );
+
+  it.effect("keeps only the rows the account is on when the listing asks for `involves`", () =>
+    Effect.gen(function* () {
+      const paths: string[] = [];
+      const api = yield* tracker((input) => {
+        paths.push(input.path);
+        return {
+          stdout: encode([
+            ISSUE,
+            { ...ISSUE, number: 43, user: { login: "renovate", full_name: "", avatar_url: "" } },
+            {
+              ...ISSUE,
+              number: 44,
+              user: { login: "renovate", full_name: "", avatar_url: "" },
+              assignees: [],
+            },
+          ]),
+        };
+      });
+      const page = yield* api.listIssues({
+        cwd: "/w",
+        host: "forgejo.test:3000",
+        scope: "acme/web",
+        state: "open",
+        involvement: "involves",
+        viewer: "Theo",
+        sort: "updated",
+        limit: 50,
+      });
+      // No involvement parameter narrows to all three at once: the wide listing is filtered here.
+      expect(paths).toEqual([
+        "repos/acme/web/issues?type=issues&state=open&sort=recentupdate&limit=50&page=1",
+      ]);
+      expect(page.items.map((item) => item.key)).toEqual(["42", "43"]);
+    }),
+  );
 });

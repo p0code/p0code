@@ -466,7 +466,7 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-launcher
-          path: npm-packages/t3.tgz
+          path: npm-packages/p0.tgz
           if-no-files-found: error
           retention-days: 30
 
@@ -671,7 +671,7 @@ jobs:
           set -euo pipefail
           cd release-assets
           shopt -s nullglob
-          archives=(t3-*.tar.gz t3-*.zip)
+          archives=(p0-*.tar.gz p0-*.zip)
           if [[ ${#archives[@]} -eq 0 ]]; then
             echo "No CLI archives were produced." >&2
             exit 1
@@ -951,9 +951,9 @@ jobs:
         env:
           RELEASE_VERSION: ${{ needs.preflight.outputs.version }}
         run: |
-          built="$(tar -xzOf npm-packages/t3.tgz package/package.json | jq -r .version)"
+          built="$(tar -xzOf npm-packages/p0.tgz package/package.json | jq -r .version)"
           if [[ "$built" != "$RELEASE_VERSION" ]]; then
-            echo "::error::npm-launcher holds t3@$built, expected t3@$RELEASE_VERSION." >&2
+            echo "::error::npm-launcher holds p0@$built, expected p0@$RELEASE_VERSION." >&2
             exit 1
           fi
 
@@ -964,7 +964,7 @@ jobs:
         run: |
           echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > "$HOME/.npmrc"
           # The ./ keeps npm from reading the path as a GitHub owner/repo spec.
-          npm publish --access public --tag "$DIST_TAG" --provenance ./npm-packages/t3.tgz
+          npm publish --access public --tag "$DIST_TAG" --provenance ./npm-packages/p0.tgz
 
   # Commits the version bump as the Release App when RELEASE_APP_ID and
   # RELEASE_APP_PRIVATE_KEY are set, else as github-actions[bot]. It installs

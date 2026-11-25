@@ -1593,6 +1593,14 @@ export default function ChatView(props: ChatViewProps) {
     activeThreadLiveTokenUsage,
     activeProviderThread,
   );
+  const activeCostTarget =
+    isServerThread && activeThread
+      ? {
+          environmentId: activeThread.environmentId,
+          projectId: activeThread.projectId,
+          threadId: activeThread.id,
+        }
+      : null;
   const pendingBackgroundTasks = deriveThreadPendingBackgroundTasks(serverProjection);
   const activeWorkStartedAt =
     deriveActiveWorkStartedAt(activeActivityRun, activeRuntime, localDispatchStartedAt) ??
@@ -3060,7 +3068,7 @@ export default function ChatView(props: ChatViewProps) {
         : serverConfig === null
           ? gt("Side chats are not ready yet. Try again in a moment.")
           : serverConfig.environment.capabilities.sideChats !== true
-            ? gt("Update this environment's T3 Code server to use side chats.")
+            ? gt("Update this environment's p0code server to use side chats.")
             : sideChatsOffered && !isServerThread
               ? gt("Side chats start after the first message.")
               : sideChat.available &&
@@ -3873,6 +3881,7 @@ export default function ChatView(props: ChatViewProps) {
                                   sources:
                                     serverConfig?.usageLimitSources ?? EMPTY_USAGE_LIMIT_SOURCES,
                                   contextWindow: activeContextWindow,
+                                  costTarget: activeCostTarget,
                                 }}
                                 reportedModelSelection={reportedModelSelection}
                                 multipleModelSelections={multipleModelSelections}
@@ -4214,6 +4223,7 @@ export default function ChatView(props: ChatViewProps) {
                     providers: providerStatuses,
                     sources: serverConfig?.usageLimitSources ?? EMPTY_USAGE_LIMIT_SOURCES,
                     contextWindow: activeContextWindow,
+                    costTarget: activeCostTarget,
                   }}
                 />
 

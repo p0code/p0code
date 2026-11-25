@@ -648,7 +648,7 @@ const encodeLocalServiceSecretsJson = Schema.encodeEffect(
 );
 const LOCAL_SERVICE_SECRET_PATTERN = /^[0-9a-f]{64}$/;
 
-export const readOrCreateLocalServiceSecrets = Effect.fn(
+const readOrCreateLocalServiceSecrets = Effect.fn(
   "desktop.backendService.readOrCreateLocalServiceSecrets",
 )(function* (input: {
   readonly fileSystem: FileSystem.FileSystem;
@@ -689,33 +689,33 @@ export const readOrCreateLocalServiceSecrets = Effect.fn(
 });
 
 /** True only for the backend holding `readinessSecret`, never for another app on the same port. */
-export const proveLocalServiceIdentity = Effect.fn(
-  "desktop.backendService.proveLocalServiceIdentity",
-)(function* (
-  input: {
-    readonly httpClient: HttpClient.HttpClient;
-    readonly mac: Mac.Mac["Service"];
-    readonly random: SecureRandom.SecureRandom["Service"];
-    readonly readinessSecret: string;
+const proveLocalServiceIdentity = Effect.fn("desktop.backendService.proveLocalServiceIdentity")(
+  function* (
+    input: {
+      readonly httpClient: HttpClient.HttpClient;
+      readonly mac: Mac.Mac["Service"];
+      readonly random: SecureRandom.SecureRandom["Service"];
+      readonly readinessSecret: string;
+    },
+    baseUrl: URL,
+  ): Effect.fn.Return<boolean> {
+    const challenge = Hex.encode(yield* input.random.randomBytes(16).pipe(Effect.orDie));
+    const proofUrl = new URL(
+      `${DESKTOP_READINESS_PROOF_PATH}?${DESKTOP_READINESS_CHALLENGE_PARAM}=${challenge}`,
+      baseUrl,
+    );
+    const body = yield* input.httpClient.execute(HttpClientRequest.get(proofUrl)).pipe(
+      Effect.flatMap((response) => (response.status === 200 ? response.text : Effect.succeed(""))),
+      Effect.timeoutOption(HEALTH_PROBE_TIMEOUT),
+      Effect.map((result) => Option.getOrElse(result, () => "")),
+      Effect.orElseSucceed(() => ""),
+    );
+    if (body.length === 0) return false;
+    return yield* isValidDesktopReadinessProof(input.readinessSecret, challenge, body).pipe(
+      Effect.provideService(Mac.Mac, input.mac),
+    );
   },
-  baseUrl: URL,
-): Effect.fn.Return<boolean> {
-  const challenge = Hex.encode(yield* input.random.randomBytes(16).pipe(Effect.orDie));
-  const proofUrl = new URL(
-    `${DESKTOP_READINESS_PROOF_PATH}?${DESKTOP_READINESS_CHALLENGE_PARAM}=${challenge}`,
-    baseUrl,
-  );
-  const body = yield* input.httpClient.execute(HttpClientRequest.get(proofUrl)).pipe(
-    Effect.flatMap((response) => (response.status === 200 ? response.text : Effect.succeed(""))),
-    Effect.timeoutOption(HEALTH_PROBE_TIMEOUT),
-    Effect.map((result) => Option.getOrElse(result, () => "")),
-    Effect.orElseSucceed(() => ""),
-  );
-  if (body.length === 0) return false;
-  return yield* isValidDesktopReadinessProof(input.readinessSecret, challenge, body).pipe(
-    Effect.provideService(Mac.Mac, input.mac),
-  );
-});
+);
 
 const encodeBootstrapJson = Schema.encodeEffect(Schema.fromJsonString(DesktopBackendBootstrap));
 

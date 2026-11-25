@@ -1,8 +1,13 @@
 import type {
+  EnvironmentId,
+  ProjectCost,
+  ProjectCostAmount,
+  ProjectId,
   ProviderInstanceId,
   ServerProvider,
   ServerProviderUsageLimits,
   ServerProviderUsageWindow,
+  ThreadId,
   UsageLimitSourceSnapshots,
 } from "@t3tools/contracts";
 import {
@@ -12,6 +17,7 @@ import {
   paceRemainingPercent,
   remainingPercent,
 } from "@t3tools/shared/usageLimits";
+import { formatUsd } from "@t3tools/shared/usageFormat";
 import { formatDuration, limitsNotice } from "@t3tools/shared/usageLimitsCopy";
 import { Link } from "@tanstack/react-router";
 import { msg, useGT, useLocale, useMessages } from "gt-react";
@@ -21,6 +27,8 @@ import { usePrimarySettings } from "../../hooks/useSettings";
 import { useNowMinute } from "../../hooks/useNowMinute";
 import type { ContextWindowSnapshot } from "@t3tools/client-runtime/state/context-window";
 import { formatContextWindowTokens } from "../../lib/contextWindow";
+import { useEnvironmentQuery } from "../../state/query";
+import { serverEnvironment } from "../../state/server";
 import { cn } from "../../lib/utils";
 import { formatUpcomingTimestamp } from "../../timestampFormat";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
@@ -34,7 +42,15 @@ const PACE_LABEL: Record<LimitPace, string> = {
   under: msg("Under pace"),
 };
 
+/** The thread whose project cost the details show; null for a draft, which has none yet. */
+export interface ThreadDetailsCostTarget {
+  readonly environmentId: EnvironmentId;
+  readonly projectId: ProjectId;
+  readonly threadId: ThreadId;
+}
+
 export interface ThreadDetailsUsageInput {
+  readonly costTarget: ThreadDetailsCostTarget | null;
   readonly providerInstanceId: ProviderInstanceId | null;
   readonly model: string | null;
   readonly providers: readonly ServerProvider[];
@@ -57,7 +73,7 @@ export function ThreadDetailsUsage({
   providers,
   sources,
   compact = false,
-}: Omit<ThreadDetailsUsageInput, "contextWindow"> & { readonly compact?: boolean }) {
+}: Omit<ThreadDetailsUsageInput, "contextWindow" | "costTarget"> & { readonly compact?: boolean }) {
   const gt = useGT();
   const nowMinute = useNowMinute();
   const now = Date.parse(`${nowMinute}:00Z`);
@@ -181,6 +197,83 @@ export function ThreadDetailsContext({
   );
 }
 
+/**
+ * What the project and this thread cost. The query mounts with the card, so it runs when the
+ * popover or panel opens and never in the background.
+ */
+export function ThreadDetailsCost({
+  target,
+  compact = false,
+}: {
+  readonly target: ThreadDetailsCostTarget | null;
+  readonly compact?: boolean;
+}) {
+  const query = useEnvironmentQuery<ProjectCost, unknown>(
+    target === null
+      ? null
+      : serverEnvironment.projectCost({
+          environmentId: target.environmentId,
+          input: { projectId: target.projectId, threadId: target.threadId },
+        }),
+  );
+  const gt = useGT();
+  if (target === null || query.error !== null) return null;
+  const cost = query.data;
+  return (
+    <ThreadDetailsSection
+      headingId="thread-details-cost-heading"
+      title={gt("Cost")}
+      showHeading={false}
+      compact={compact}
+    >
+      <div className="grid grid-cols-[auto_minmax(3rem,1fr)_auto] gap-x-3 text-xs">
+        <CostRow label={gt("This project")} amount={cost?.project ?? null} strong />
+        {cost?.thread ? <CostRow label={gt("This thread")} amount={cost.thread} /> : null}
+      </div>
+    </ThreadDetailsSection>
+  );
+}
+
+function CostRow({
+  label,
+  amount,
+  strong = false,
+}: {
+  readonly label: string;
+  /** Null while the first answer is loading. */
+  readonly amount: ProjectCostAmount | null;
+  readonly strong?: boolean;
+}) {
+  const gt = useGT();
+  const locale = useLocale();
+  const value =
+    amount === null ? "…" : `${amount.partial ? "~" : ""}${formatUsd(amount.costUsd, locale)}`;
+  return (
+    <UsageRow
+      label={label}
+      fill={null}
+      tone={null}
+      strong={strong}
+      value={value}
+      tooltip={
+        <>
+          <span className="text-foreground">{gt("{label}: {value}", { label, value })}</span>
+          <span className="text-muted-foreground">
+            {gt("Estimate: token counts at API list prices, whatever you pay your provider")}
+          </span>
+          {amount?.partial ? (
+            <span className="text-muted-foreground">
+              {gt("Left out, no known price: {models}", {
+                models: amount.unpricedModels.join(", "),
+              })}
+            </span>
+          ) : null}
+        </>
+      }
+    />
+  );
+}
+
 function LimitRow({
   window,
   now,
@@ -298,6 +391,7 @@ function UsageRow({
   ariaValue = value,
   tooltip,
   muted = false,
+  strong = false,
   opensUsage = false,
 }: {
   readonly label: string;
@@ -310,6 +404,8 @@ function UsageRow({
   readonly ariaValue?: string;
   readonly tooltip: ReactNode;
   readonly muted?: boolean;
+  /** Text-only rows read as quiet by default; a strong one carries the section. */
+  readonly strong?: boolean;
   readonly opensUsage?: boolean;
 }) {
   const gt = useGT();
@@ -368,7 +464,9 @@ function UsageRow({
               : tone === "warning"
                 ? "text-warning-foreground"
                 : fill === null
-                  ? "text-muted-foreground"
+                  ? strong
+                    ? "text-foreground/80"
+                    : "text-muted-foreground"
                   : "text-foreground/80",
           )}
         >

@@ -1,5 +1,6 @@
 import { SourceControlProviderKind } from "@t3tools/contracts";
 import {
+  EnvironmentId,
   GitCommandError,
   ProjectId,
   type PullRequestCheck,
@@ -31,6 +32,8 @@ import {
   buildPullRequestCommentContext,
   buildFixFindingHandoff,
   canDeletePullRequestBranch,
+  pullRequestStartAgentDisabledReason,
+  resolvePullRequestRowCheckoutTarget,
   buildFixFindingsHandoff,
   groupPullRequestTimelineConversations,
   filterPullRequestConversationItems,
@@ -2087,5 +2090,70 @@ describe("readableFailure", () => {
     expect(readableFailure(new Error("Branch is protected."), "Try again.")).toBe(
       "Branch is protected.",
     );
+  });
+});
+
+describe("pullRequestStartAgentDisabledReason", () => {
+  const ready = {
+    environmentConnected: true,
+    checkoutRoot: "/repo",
+    headRepositoryNameWithOwner: "owner/repo",
+    provider: SourceControlProviderKind.make("github"),
+    repository: "owner/repo",
+    canWriteSourceControl: true,
+    canOperateThread: true,
+  };
+
+  it("allows a connected environment with a local project", () => {
+    expect(pullRequestStartAgentDisabledReason(ready)).toBeNull();
+  });
+
+  it("names why it cannot run", () => {
+    expect(pullRequestStartAgentDisabledReason({ ...ready, environmentConnected: false })).toBe(
+      "Environment is disconnected",
+    );
+    expect(pullRequestStartAgentDisabledReason({ ...ready, checkoutRoot: null })).toBe(
+      "No local project for this repository",
+    );
+    expect(
+      pullRequestStartAgentDisabledReason({ ...ready, headRepositoryNameWithOwner: null }),
+    ).toBe("Fork branch is unavailable");
+    expect(
+      pullRequestStartAgentDisabledReason({
+        ...ready,
+        provider: SourceControlProviderKind.make("azure-devops"),
+        headRepositoryNameWithOwner: "fork/repo",
+      }),
+    ).toBe("Fork branch is unavailable");
+    expect(pullRequestStartAgentDisabledReason({ ...ready, canOperateThread: false })).toBe(
+      "This connection needs permission to check out branches and start threads",
+    );
+  });
+});
+
+describe("resolvePullRequestRowCheckoutTarget", () => {
+  const environmentId = EnvironmentId.make("environment");
+  const projectId = ProjectId.make("project");
+  const entry = { environmentId, projectId, repository: "owner/repo" };
+  const project = { id: projectId, environmentId, workspaceRoot: "/repo" };
+
+  it("uses the entry's own project", () => {
+    expect(resolvePullRequestRowCheckoutTarget(entry, [project], [])).toEqual({
+      environmentId,
+      projectId,
+      checkoutRoot: "/repo",
+      environmentConnected: true,
+    });
+  });
+
+  it("reports a missing local project and a disconnected environment", () => {
+    expect(resolvePullRequestRowCheckoutTarget(entry, [], []).checkoutRoot).toBeNull();
+    expect(
+      resolvePullRequestRowCheckoutTarget(
+        entry,
+        [project],
+        [{ environmentId, label: "Remote", connection: { phase: "offline" } }],
+      ).environmentConnected,
+    ).toBe(false);
   });
 });

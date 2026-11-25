@@ -3,14 +3,19 @@
   <id>com.t3tools.t3code</id>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>MIT</project_license>
-  <name>T3 Code</name>
+  <name>p0code</name>
   <summary>Desktop GUI for coding agents</summary>
-  <developer id="com.t3tools">
-    <name>T3 Tools Inc.</name>
+  <developer id="dev.p0code">
+    <name>The p0code contributors</name>
   </developer>
   <description>
     <p>
-      T3 Code is an open-source desktop app for coding agents. Work with your
+      p0code is an independent, unofficial fork of T3 Code. It is not
+      affiliated with, endorsed by, or sponsored by T3 Tools, Inc. "T3 Code"
+      is a trademark of T3 Tools, Inc.
+    </p>
+    <p>
+      p0code is an open-source desktop app for coding agents. Work with your
       existing agent subscriptions, review code changes, and run commands in
       your projects.
     </p>
@@ -26,7 +31,7 @@
   <categories>
     <category>Development</category>
   </categories>
-  <url type="homepage">https://t3.codes</url>
+  <url type="homepage">https://github.com/p0code/p0code</url>
   <url type="bugtracker">https://github.com/p0code/p0code/issues</url>
   <url type="vcs-browser">https://github.com/p0code/p0code</url>
 </component>

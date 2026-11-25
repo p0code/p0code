@@ -16,7 +16,7 @@ export const upCommand = Command.make("up", {
   lan: Flag.Boolean("lan").pipe(Flag.optional),
 }).pipe(
   Command.withDescription(
-    "Install the background service. Use --lan for LAN access and `t3 relay link` for public HTTPS access.",
+    "Install the background service. Use --lan for LAN access and `p0 relay link` for public HTTPS access.",
   ),
   Command.withHandler(
     Effect.fn("cli.up")(function* (flags) {
@@ -32,7 +32,7 @@ export const upCommand = Command.make("up", {
         if (!changed.changed && Option.isSome(flags.lan) && before.installed)
           yield* service.restart;
         yield* Console.log(
-          "Background service ready. Run `t3 pair` for a pairing QR, or `t3 relay link https://relay-host --token TOKEN` for public HTTPS.",
+          "Background service ready. Run `p0 pair` for a pairing QR, or `p0 relay link https://relay-host --token TOKEN` for public HTTPS.",
         );
       }).pipe(
         Effect.provide(
@@ -47,7 +47,7 @@ export const statusCommand = Command.make("status", {
   json: Flag.Boolean("json").pipe(Flag.withDefault(false)),
 }).pipe(
   Command.withDescription(
-    "Show the background service status. Use `t3 relay status` for relay exposure.",
+    "Show the background service status. Use `p0 relay status` for relay exposure.",
   ),
   Command.withHandler(
     Effect.fn("cli.status")(function* (flags) {
@@ -59,7 +59,7 @@ export const statusCommand = Command.make("status", {
       yield* Console.log(
         flags.json
           ? encodeStatus(status)
-          : `Service: ${status.installed ? "installed" : "not installed"}\nRelay: t3 relay status`,
+          : `Service: ${status.installed ? "installed" : "not installed"}\nRelay: p0 relay status`,
       );
     }),
   ),

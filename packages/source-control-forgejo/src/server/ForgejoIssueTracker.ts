@@ -9,7 +9,6 @@ import * as Schema from "effect/Schema";
 import {
   IssueTrackerKind,
   type IssueCapabilities,
-  type IssueInvolvement,
   type IssueLinkedPullRequest,
   type IssueViewerPermissions,
 } from "@t3tools/contracts";
@@ -62,7 +61,8 @@ const PAGE_SIZE = 50;
 /** How many pages of a listing with no cursor of its own are read before giving up on the rest. */
 const MAX_PAGES = 10;
 
-const INVOLVEMENT_PARAM: Record<Exclude<IssueInvolvement, "all">, string> = {
+/** `involves` has no one parameter, so it is narrowed on the rows instead of here. */
+const INVOLVEMENT_PARAM: Record<"assigned" | "authored" | "mentioned", string> = {
   assigned: "assigned_by",
   authored: "created_by",
   mentioned: "mentioned_by",
@@ -407,7 +407,9 @@ export const make: Effect.Effect<IssueTrackerApi, never, ForgejoCli.ForgejoCli> 
         if (labels.length > 0) params.set("labels", labels.join(","));
         const text = input.query?.trim() ?? "";
         if (text.length > 0) params.set("q", text);
-        if (input.involvement !== "all") {
+        // `involves` has no one parameter: the request stays wide and the rows the account is not
+        // on are dropped below. A mention-only issue is missed, as Forgejo rows carry no mentions.
+        if (input.involvement !== "all" && input.involvement !== "involves") {
           params.set(INVOLVEMENT_PARAM[input.involvement], input.viewer);
         }
         if (input.assignee !== undefined) params.set("assigned_by", input.assignee);
@@ -416,6 +418,7 @@ export const make: Effect.Effect<IssueTrackerApi, never, ForgejoCli.ForgejoCli> 
           input.involvement === "assigned" && input.assignee !== undefined
             ? input.viewer.toLowerCase()
             : null;
+        const involvesViewer = input.involvement === "involves" ? input.viewer.toLowerCase() : null;
         const { rows, nextCursor } = yield* readPage(
           input,
           "listIssues",
@@ -431,7 +434,10 @@ export const make: Effect.Effect<IssueTrackerApi, never, ForgejoCli.ForgejoCli> 
               (issue) =>
                 labels.every((label) => issue.labels.some((carried) => carried.name === label)) &&
                 (alsoAssignedTo === null ||
-                  issue.assignees.some((actor) => actor.login.toLowerCase() === alsoAssignedTo)),
+                  issue.assignees.some((actor) => actor.login.toLowerCase() === alsoAssignedTo)) &&
+                (involvesViewer === null ||
+                  issue.author?.login.toLowerCase() === involvesViewer ||
+                  issue.assignees.some((actor) => actor.login.toLowerCase() === involvesViewer)),
             ),
           nextCursor,
         };

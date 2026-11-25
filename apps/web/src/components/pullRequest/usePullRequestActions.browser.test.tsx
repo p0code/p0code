@@ -165,3 +165,57 @@ it("stops a pull request handoff when its loading toast is dismissed", async () 
     "",
   );
 });
+
+function StartAgentButton() {
+  const { startHandoff } = usePullRequestHandoffs({
+    environmentId: EnvironmentId.make("environment"),
+    detail: {
+      projectId: ProjectId.make("project"),
+      workspaceRoot: "/repo",
+      url: "https://github.com/owner/repo/pull/1",
+    },
+  });
+  return (
+    <button type="button" onClick={() => void startHandoff("checkout:worktree", null, "worktree")}>
+      Start agent
+    </button>
+  );
+}
+
+it("starts an agent thread in the pull request's own worktree without writing a prompt", async () => {
+  setup();
+  state.newThread
+    .mockResolvedValueOnce({ draftId: "draft-1", threadId: ThreadId.make("thread-1") })
+    .mockResolvedValueOnce({ draftId: "draft-2", threadId: ThreadId.make("thread-2") });
+  state.prepareThread.mockResolvedValueOnce({
+    _tag: "Success",
+    value: {
+      branch: "feature",
+      worktreePath: "/repo-worktrees/pr-1",
+      isOnPullRequestHead: true,
+      pullRequest: { url: "https://github.com/owner/repo/pull/1" },
+    },
+  });
+  await using screen = await render(
+    <ToastProvider>
+      <StartAgentButton />
+    </ToastProvider>,
+  );
+
+  await userEvent.click(screen.getByRole("button", { name: "Start agent" }));
+
+  await vi.waitFor(() => expect(state.newThread).toHaveBeenCalledTimes(2));
+  expect(state.prepareThread).toHaveBeenCalledWith({
+    reference: "https://github.com/owner/repo/pull/1",
+    mode: "worktree",
+    threadId: ThreadId.make("thread-1"),
+  });
+  expect(state.newThread.mock.calls[1]?.[1]).toEqual({
+    branch: "feature",
+    worktreePath: "/repo-worktrees/pr-1",
+    envMode: "worktree",
+  });
+  expect(useComposerDraftStore.getState().getComposerDraft("draft-2" as never)?.prompt ?? "").toBe(
+    "",
+  );
+});

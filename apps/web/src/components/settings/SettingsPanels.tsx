@@ -2635,6 +2635,13 @@ export function AboutSettingsPanel() {
 
       <SettingsSection id="legal" title={gt("Legal")}>
         <SettingsRow
+          id="unofficial-fork-notice"
+          title={gt("Unofficial fork")}
+          description={gt(
+            "p0code is an independent, unofficial fork of T3 Code. It is not affiliated with, endorsed by, or sponsored by T3 Tools, Inc. 'T3 Code' is a trademark of T3 Tools, Inc.",
+          )}
+        />
+        <SettingsRow
           {...setting("privacy-policy")}
           description={gt("How we handle your data.")}
           control={
@@ -2649,7 +2656,7 @@ export function AboutSettingsPanel() {
         />
         <SettingsRow
           {...setting("open-source-licenses")}
-          description={gt("Notices for dependencies, assets, and optional tools used by T3 Code.")}
+          description={gt("Notices for dependencies, assets, and optional tools used by p0code.")}
           control={
             <Button
               render={<Link to="/settings/open-source-licenses" />}

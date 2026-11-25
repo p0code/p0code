@@ -250,6 +250,8 @@ export const make = Effect.gen(function* () {
       else if (input.involvement === "assigned") query.set("assignee", "@me");
       if (input.involvement === "authored") query.set("author", "@me");
       if (input.involvement === "mentioned") query.set("mention", "@me");
+      // Source ANDs its query parameters, so `involves` cannot ask for the union: the request
+      // stays wide and the rows the account is not on are dropped below.
       const viewer = input.involvement === "all" ? null : input.viewer.toLowerCase();
       const listing = yield* Listing.readMerged({
         states: input.state === "all" ? ["open", "closed"] : [input.state],
@@ -267,6 +269,11 @@ export const make = Effect.gen(function* () {
           moreLabels.every((name) => issue.labels?.includes(name) === true) &&
           (input.involvement !== "assigned" ||
             input.assignee === undefined ||
+            (issue.assignees ?? []).some(
+              (assignee) => assigneeLogin(assignee).toLowerCase() === viewer,
+            )) &&
+          (input.involvement !== "involves" ||
+            issue.author?.toLowerCase() === viewer ||
             (issue.assignees ?? []).some(
               (assignee) => assigneeLogin(assignee).toLowerCase() === viewer,
             )),

@@ -56,7 +56,7 @@ const resolveMigrationKeychain = async (
 const fromT3Command = Command.make("from-t3", {
   from: Flag.String("from").pipe(
     Flag.withDescription(
-      "Stock T3 Code home to import from. Default: ~/.t3. Only read, never changed.",
+      "Stock p0code home to import from. Default: ~/.t3. Only read, never changed.",
     ),
     Flag.optional,
   ),
@@ -76,7 +76,7 @@ const fromT3Command = Command.make("from-t3", {
   ),
   keepEnvironmentId: Flag.Boolean("keep-environment-id").pipe(
     Flag.withDescription(
-      "Keep the T3 Code environment id and signing keys so paired clients keep working. Then never run both apps at once.",
+      "Keep the p0code environment id and signing keys so paired clients keep working. Then never run both apps at once.",
     ),
     Flag.withDefault(false),
   ),
@@ -86,7 +86,7 @@ const fromT3Command = Command.make("from-t3", {
   ),
 }).pipe(
   Command.withDescription(
-    "Import settings, threads, providers and secrets from a stock T3 Code home into this p0code home.",
+    "Import settings, threads, providers and secrets from a stock p0code home into this p0code home.",
   ),
   Command.withHandler((flags) =>
     Effect.gen(function* () {

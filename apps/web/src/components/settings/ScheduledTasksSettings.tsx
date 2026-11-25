@@ -1631,7 +1631,7 @@ function ScheduledTaskEditorForm({
       reportFailure(
         gt("Once is not available here"),
         gt(
-          "This environment runs an older T3 Code. Update it to schedule a one-time task, or pick another schedule.",
+          "This environment runs an older p0code. Update it to schedule a one-time task, or pick another schedule.",
         ),
       );
       return;

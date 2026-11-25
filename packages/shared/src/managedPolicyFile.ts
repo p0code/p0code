@@ -28,7 +28,7 @@ export class ManagedPolicyFileError extends Schema.TaggedError<ManagedPolicyFile
   override readonly [Runtime.errorExitCode] = SERVER_EXIT_CODE_MANAGED_POLICY;
 
   override get message(): string {
-    return `T3 Code cannot use the managed policy at ${this.path}: ${this.reason}. It will not start until an administrator fixes this.`;
+    return `p0code cannot use the managed policy at ${this.path}: ${this.reason}. It will not start until an administrator fixes this.`;
   }
 }
 
@@ -112,7 +112,6 @@ export const WINDOWS_POLICY_VALUES = {
   MaxRuntimeMode: { type: "string", path: ["limits", "maxRuntimeMode"] },
   Connect: { type: "boolean", path: ["limits", "connect"] },
   WebhookTasks: { type: "boolean", path: ["limits", "webhookTasks"] },
-  Telemetry: { type: "boolean", path: ["limits", "telemetry"] },
   BrowserCookieImport: { type: "boolean", path: ["limits", "browserCookieImport"] },
   PreviewTunnel: { type: "boolean", path: ["limits", "previewTunnel"] },
   ProviderInstances: { type: "json", path: ["limits", "providers", "instances"] },
@@ -428,7 +427,7 @@ function windowsPolicyDocument(
     }
     if (Object.hasOwn(WINDOWS_POLICY_GROUPS, value.name)) continue;
     if (!Object.hasOwn(WINDOWS_POLICY_VALUES, value.name)) {
-      return { error: `${value.name} is not a T3 Code policy value` };
+      return { error: `${value.name} is not a p0code policy value` };
     }
     const field = WINDOWS_POLICY_VALUES[value.name as keyof typeof WINDOWS_POLICY_VALUES];
     if (field.type === "boolean") {
@@ -455,7 +454,7 @@ function windowsPolicyDocument(
   if (Object.keys(document).length === 1) return { document: undefined };
   // The schema would name `["organization"]`, which an admin cannot map to a Group Policy setting.
   if (document.organization === undefined) {
-    return { error: "set the Organization policy whenever another T3 Code policy is set" };
+    return { error: "set the Organization policy whenever another p0code policy is set" };
   }
   return { document };
 }
@@ -529,7 +528,7 @@ const readPlatformPolicy = Effect.fnUntraced(function* (
               path,
               reason:
                 cause.code === undefined
-                  ? "this T3 Code install cannot load its registry reader; reinstall T3 Code"
+                  ? "this p0code install cannot load its registry reader; reinstall p0code"
                   : `the registry cannot be read (${cause.message})`,
               cause,
             }),
@@ -562,11 +561,11 @@ const readPlatformPolicy = Effect.fnUntraced(function* (
       const list = Object.keys(WINDOWS_POLICY_LISTS).find(
         (name) => name.toLowerCase() === subkey.toLowerCase(),
       );
-      if (list === undefined) return yield* refuse(`${subkey} is not a T3 Code policy key`);
+      if (list === undefined) return yield* refuse(`${subkey} is not a p0code policy key`);
       const checkboxes = yield* readKey(`${WINDOWS_POLICY_SUBKEY}\\${subkey}`);
       if (checkboxes === undefined) continue;
       if (checkboxes.subkeys.length > 0) {
-        return yield* refuse(`${subkey}\\${checkboxes.subkeys[0]} is not a T3 Code policy key`);
+        return yield* refuse(`${subkey}\\${checkboxes.subkeys[0]} is not a p0code policy key`);
       }
       values.push(...checkboxes.values.map((value) => ({ ...value, key: list })));
     }

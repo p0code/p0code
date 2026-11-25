@@ -97,7 +97,7 @@ export function FirstRunGate({
   }));
   const { decision, stalled } = gateState;
   const settingsReadFailed = hydrationStatus === "failed" || hydrationStatus === "retrying";
-  // The server's sole cwd-bootstrap project/thread still counts as fresh so npx t3 users see onboarding.
+  // The server's sole cwd-bootstrap project/thread still counts as fresh so npx p0 users see onboarding.
   const serverCwd = serverConfig?.cwd ?? null;
   const primaryEnvironmentId = serverConfig?.environment.environmentId ?? null;
   const workspaceFresh =
@@ -199,7 +199,7 @@ function FirstRunRecovery({
         <p className="mt-2 text-sm text-muted-foreground">
           {settingsReadFailed
             ? gt("Your saved settings could not be loaded.")
-            : gt("T3 Code could not confirm this workspace.")}
+            : gt("p0code could not confirm this workspace.")}
         </p>
         <Button
           className="mt-5"

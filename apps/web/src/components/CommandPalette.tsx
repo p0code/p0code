@@ -270,6 +270,7 @@ import {
   PORT_FORWARD_GROUP_PREFIX,
   useCommandPalettePortForwardItem,
 } from "./CommandPalettePortForwardItems";
+import { useCommandPalettePullRequestStartAgentItem } from "./CommandPalettePullRequestItems";
 import {
   buildNewThreadInProjectItems,
   buildProjectSearchItems,
@@ -570,6 +571,12 @@ function OpenCommandPaletteDialog(props: {
   const portForwardItem = useCommandPalettePortForwardItem({
     activeThread: activeThread ?? null,
     query: deferredQuery,
+  });
+  const startPullRequestAgentItem = useCommandPalettePullRequestStartAgentItem({
+    referenceThreadRef,
+    openPanelPullRequestUrl,
+    projects,
+    environments,
   });
   const currentView = viewStack.at(-1)?.view ?? null;
   const threadSearchQuery = currentView === null && !isActionsOnly ? deferredQuery : "";
@@ -1415,7 +1422,7 @@ function OpenCommandPaletteDialog(props: {
       value: "action:triage",
       searchTerms: ["triage", "bug", "issue", "report", "broken", "debug", "help", "support"],
       title: gt("Triage an issue"),
-      description: gt("An agent investigates a T3 Code problem and helps file an issue"),
+      description: gt("An agent investigates a p0code problem and helps file an issue"),
       icon: <BugIcon className={ITEM_ICON_CLASS} />,
       run: () => startTriage(triageEnvironmentId),
     });
@@ -1519,6 +1526,8 @@ function OpenCommandPaletteDialog(props: {
       run: copyActiveThreadReference,
     });
   }
+
+  if (startPullRequestAgentItem !== null) actionItems.push(startPullRequestAgentItem);
 
   if (
     activeThread !== null &&
@@ -1792,7 +1801,7 @@ function OpenCommandPaletteDialog(props: {
       "openclaw",
       "hermes",
     ],
-    title: gt("Use T3 Code in another app (MCP)"),
+    title: gt("Use p0code in another app (MCP)"),
     icon: <PlugIcon className={ITEM_ICON_CLASS} />,
     run: async () => {
       openUseInAnotherApp(

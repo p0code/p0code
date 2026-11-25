@@ -67,7 +67,17 @@ export type IssueState = typeof IssueState.Type;
 export const IssueListState = Schema.Literals(["all", "open", "closed"]);
 export type IssueListState = typeof IssueListState.Type;
 
-export const IssueInvolvement = Schema.Literals(["all", "assigned", "authored", "mentioned"]);
+/**
+ * `involves` is GitHub's `involves:@me`: authored, assigned or mentioned, whichever the tracker
+ * can ask for. `all` stays a valid listing value for older clients, but no surface offers it.
+ */
+export const IssueInvolvement = Schema.Literals([
+  "all",
+  "assigned",
+  "authored",
+  "mentioned",
+  "involves",
+]);
 export type IssueInvolvement = typeof IssueInvolvement.Type;
 
 /** Newest first by the named date. */

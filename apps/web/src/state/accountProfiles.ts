@@ -23,8 +23,8 @@ import { environmentProjects } from "./projects";
 import { serverEnvironment } from "./server";
 
 /**
- * Quick switches act on the primary environment: it holds the accounts on this machine. Other
- * environments keep their own active profile, edited in their provider settings.
+ * Quick switches act on the primary environment: it holds the accounts on this machine.
+ * AccountProfileSyncCoordinator spreads the switch to the other connected environments.
  */
 function readPrimaryAccountProfiles() {
   const environmentId = readPrimaryEnvironmentId();

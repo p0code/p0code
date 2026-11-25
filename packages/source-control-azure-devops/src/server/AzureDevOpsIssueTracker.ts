@@ -163,10 +163,12 @@ function involvementClause(involvement: IssueInvolvement): string {
     case "authored":
       return " AND [System.CreatedBy] = @Me";
     // WIQL over REST has no way to ask who was mentioned (`@RecentMentions` is a web portal
-    // macro), so a mention filter has nothing to narrow by.
+    // macro), so a mention filter has nothing to narrow by, and `involves` covers the rest.
     case "mentioned":
     case "all":
       return "";
+    case "involves":
+      return " AND ([System.AssignedTo] = @Me OR [System.CreatedBy] = @Me)";
   }
 }
 

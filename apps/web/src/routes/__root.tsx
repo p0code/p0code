@@ -37,6 +37,7 @@ import { DesktopWebLinkCoordinator } from "../components/desktop/DesktopWebLinkC
 import { RunningThreadKeepAlive } from "../components/desktop/RunningThreadKeepAlive";
 import { SnapShotCoordinator } from "../components/desktop/SnapShotCoordinator";
 import { SshPasswordPromptDialog } from "../components/desktop/SshPasswordPromptDialog";
+import { AccountProfileSyncCoordinator } from "../components/AccountProfileSyncCoordinator";
 import { ProjectCloneToastCoordinator } from "../components/ProjectCloneToastCoordinator";
 import { useHostedPromptLinkLanding } from "../components/promptLinks/HostedPromptLinkLanding";
 import { ReopenClosedViewShortcut } from "../components/ReopenClosedViewShortcut";
@@ -200,6 +201,7 @@ function RootRouteBranch() {
       <CustomSnoozeDialogHost />
       <GuestShareDialogHost />
       <ProjectCloneToastCoordinator />
+      <AccountProfileSyncCoordinator />
 
       <AddProjectToMachineDialogHost />
       <UseInAnotherAppDialogHost />

@@ -56,7 +56,7 @@ const make = Effect.gen(function* () {
     yield* fs.readFileString(reclaimFiles.failure).pipe(Effect.option),
   );
 
-  // The notice shows host-shell quoting verbatim; desktop needs its launcher because t3 is absent from PATH.
+  // The notice shows host-shell quoting verbatim; desktop needs its launcher because p0 is absent from PATH.
   const { command: compactCommand } = yield* resolveHostCliCommand("doctor", [
     "--base-dir",
     config.baseDir,
@@ -196,7 +196,7 @@ const make = Effect.gen(function* () {
   const requestReclaim = Effect.gen(function* () {
     if (restart === null || !doctorTargetsThisDatabase) {
       return yield* new DatabaseReclaimError({
-        reason: `Stop T3 Code on this machine, then run: ${compactCommand}`,
+        reason: `Stop p0code on this machine, then run: ${compactCommand}`,
       });
     }
     // Only databases without automatic shrinking need it; a stale dialog can ask after another client's repair.

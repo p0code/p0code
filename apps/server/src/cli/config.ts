@@ -48,7 +48,7 @@ const hostFlag = Flag.String("host").pipe(
 );
 export const baseDirFlag = Flag.String("base-dir").pipe(
   Flag.withDescription(
-    "Explicit T3 Code data directory; runtime state is stored under userdata (equivalent to P0CODE_HOME).",
+    "Explicit p0code data directory; runtime state is stored under userdata (equivalent to P0CODE_HOME).",
   ),
   Flag.optional,
 );
@@ -348,13 +348,13 @@ export const resolveServerConfig = Effect.fn("config.resolveServerConfig")(funct
       (runtime.value.ownerId === undefined ||
         isServerOwnershipHeld(derivedPaths.serverRuntimeStatePath))
     ) {
-      // Bare `t3 pair` prefers a linked worktree's `.t3`, so always name this home.
+      // Bare `p0 pair` prefers a linked worktree's `.t3`, so always name this home.
       const { command: pairCommand } = yield* resolveHostCliCommand("pair", [
         "--base-dir",
         baseDir,
       ]);
       return yield* new CliError.UserError({
-        cause: `A T3 Code server is already running for ${baseDir} (pid ${runtime.value.pid}, ${runtime.value.origin}). To open it, run \`${pairCommand}\` and open the pairing URL it prints. To start another server, stop this one first or use a different --base-dir.`,
+        cause: `A p0code server is already running for ${baseDir} (pid ${runtime.value.pid}, ${runtime.value.origin}). To open it, run \`${pairCommand}\` and open the pairing URL it prints. To start another server, stop this one first or use a different --base-dir.`,
       });
     }
   }
@@ -368,7 +368,7 @@ export const resolveServerConfig = Effect.fn("config.resolveServerConfig")(funct
     const stockHome = path.join(yield* HostProcess.HomeDirectory, STOCK_T3_HOME_DIRECTORY_NAME);
     if (yield* Effect.promise(() => shouldOfferT3Import({ appHome: baseDir, stockHome }))) {
       yield* Effect.logWarning(
-        `Found T3 Code data in ${stockHome}. p0code keeps its own data in ${baseDir} and has not imported anything. To bring threads, settings and providers over, stop this server and run \`t3 migrate from-t3 --force\` (the new, empty ${baseDir} is moved aside, not deleted).`,
+        `Found T3 Code data in ${stockHome}. p0code keeps its own data in ${baseDir} and has not imported anything. To bring threads, settings and providers over, stop this server and run \`p0 migrate from-t3 --force\` (the new, empty ${baseDir} is moved aside, not deleted).`,
       );
     }
   }
@@ -438,7 +438,7 @@ export const resolveServerConfig = Effect.fn("config.resolveServerConfig")(funct
     Option.fromUndefinedOr(bootstrap?.host),
   );
   // Private networks only, so clients learn a LAN address and prefer it over
-  // self-hosted relay. `t3 service install` writes T3CODE_LAN=false for a new
+  // self-hosted relay. `p0 service install` writes T3CODE_LAN=false for a new
   // service; one installed before T3CODE_LAN existed keeps listening.
   const lan = resolveOptionPrecedence(normalizedFlags.lan, Option.fromUndefinedOr(env.lan));
   const privateNetworkOnly =

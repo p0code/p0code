@@ -1,22 +1,39 @@
 import { useAtomValue } from "@effect/atom-react";
-import type { PullRequestAction, PullRequestSummary } from "@t3tools/contracts";
+import {
+  AuthOrchestrationOperateScope,
+  AuthSourceControlWriteScope,
+  type PullRequestAction,
+  type PullRequestSummary,
+} from "@t3tools/contracts";
+import { SquarePenIcon } from "lucide-react";
 import { msg, useGT, useMessages } from "gt-react";
 import { createContext, use, type ReactNode } from "react";
 import type { ChangeRequestTerminology } from "@t3tools/client-runtime/source-control-clients";
 
 import { m } from "~/i18n/messages";
+import { cn } from "~/lib/utils";
 import { useShortcutModifierState } from "~/shortcutModifierState";
+import { useProjects } from "~/state/entities";
+import { useEnvironments } from "~/state/environments";
 import { pullRequestEnvironment } from "~/state/pullRequests";
+import { useEnvironmentScope } from "~/state/session";
 import { useUiStateStore } from "~/uiStateStore";
 import { Button } from "../ui/button";
 import { Spinner } from "../ui/spinner";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
-import { resolvePullRequestMergeMethod } from "./pullRequestDetail.logic";
+import {
+  pullRequestStartAgentDisabledReason,
+  resolvePullRequestMergeMethod,
+  resolvePullRequestRowCheckoutTarget,
+  type PullRequestRowCheckoutEnvironment,
+  type PullRequestRowCheckoutProject,
+} from "./pullRequestDetail.logic";
 import { PullRequestGlyph } from "./pullRequestIcons";
 import { pullRequestQuickActions, type EnvironmentPullRequestEntry } from "./pullRequestList.logic";
 import {
   usePullRequestActionRunner,
   usePullRequestDefaultMergeMethodResolver,
+  usePullRequestHandoffs,
 } from "./usePullRequestActions";
 
 import { changeRequestTermKind } from "./changeRequestTerm";
@@ -139,18 +156,161 @@ export function PullRequestSpeedActions<Entry extends PullRequestSpeedActionEntr
   );
 }
 
+interface PullRequestRowWorkspaceSnapshot {
+  readonly projects: ReadonlyArray<PullRequestRowCheckoutProject>;
+  readonly environments: ReadonlyArray<PullRequestRowCheckoutEnvironment>;
+}
+
+const PullRequestRowWorkspaceContext = createContext<PullRequestRowWorkspaceSnapshot | null>(null);
+
 /**
  * Whether Shift is held, as context rather than a row prop: a Shift press then re-renders each
  * row's action group, not the rows or their buttons, in one commit.
  */
 export const PullRequestSpeedModeContext = createContext(false);
 
-/** Tracks Shift for the quick actions below it. */
+/** Tracks Shift and workspace lookups once for the rows below it. */
 export function PullRequestSpeedModeProvider({ children }: { children: ReactNode }) {
   const modifiers = useShortcutModifierState(true);
+  const projects = useProjects();
+  const { environments } = useEnvironments();
   const speedMode =
     modifiers.shiftKey && !modifiers.metaKey && !modifiers.ctrlKey && !modifiers.altKey;
-  return <PullRequestSpeedModeContext value={speedMode}>{children}</PullRequestSpeedModeContext>;
+  return (
+    <PullRequestRowWorkspaceContext value={{ projects, environments }}>
+      <PullRequestSpeedModeContext value={speedMode}>{children}</PullRequestSpeedModeContext>
+    </PullRequestRowWorkspaceContext>
+  );
+}
+
+export type PullRequestRowStartAgentEntry = Pick<
+  EnvironmentPullRequestEntry,
+  "environmentId" | "projectId" | "host" | "repository" | "provider" | "url"
+> & {
+  readonly headRepositoryNameWithOwner?: string | null | undefined;
+};
+
+export function PullRequestRowStartAgentButton({
+  entry,
+  hidden = false,
+}: {
+  entry: PullRequestRowStartAgentEntry;
+  hidden?: boolean;
+}) {
+  const workspace = use(PullRequestRowWorkspaceContext);
+  if (workspace === null) {
+    return <StandalonePullRequestRowStartAgentButton entry={entry} hidden={hidden} />;
+  }
+  return <PullRequestRowStartAgentButtonBody entry={entry} hidden={hidden} workspace={workspace} />;
+}
+
+function StandalonePullRequestRowStartAgentButton({
+  entry,
+  hidden,
+}: {
+  entry: PullRequestRowStartAgentEntry;
+  hidden: boolean;
+}) {
+  const projects = useProjects();
+  const { environments } = useEnvironments();
+  return (
+    <PullRequestRowStartAgentButtonBody
+      entry={entry}
+      hidden={hidden}
+      workspace={{ projects, environments }}
+    />
+  );
+}
+
+function PullRequestRowStartAgentButtonBody({
+  entry,
+  hidden,
+  workspace,
+}: {
+  entry: PullRequestRowStartAgentEntry;
+  hidden: boolean;
+  workspace: PullRequestRowWorkspaceSnapshot;
+}) {
+  const gt = useGT();
+  const resolve = useMessages();
+  const speedMode = use(PullRequestSpeedModeContext);
+  const target = resolvePullRequestRowCheckoutTarget(
+    entry,
+    workspace.projects,
+    workspace.environments,
+  );
+  const canWriteSourceControl = useEnvironmentScope(
+    target.environmentId,
+    AuthSourceControlWriteScope,
+  );
+  const canOperateThread = useEnvironmentScope(target.environmentId, AuthOrchestrationOperateScope);
+  const { handoff, startHandoff } = usePullRequestHandoffs({
+    environmentId: target.environmentId,
+    detail:
+      target.checkoutRoot === null
+        ? null
+        : {
+            projectId: target.projectId,
+            workspaceRoot: target.checkoutRoot,
+            url: entry.url,
+          },
+  });
+  const disabledReason = pullRequestStartAgentDisabledReason(
+    {
+      environmentConnected: target.environmentConnected,
+      checkoutRoot: target.checkoutRoot,
+      headRepositoryNameWithOwner: entry.headRepositoryNameWithOwner,
+      provider: entry.provider,
+      repository: entry.repository,
+      canWriteSourceControl,
+      canOperateThread,
+    },
+    resolve,
+  );
+  const checkingOut = handoff !== null;
+  const label = checkingOut ? gt("Checking out...") : gt("Start agent on this branch");
+  return (
+    <div
+      className={cn(
+        "flex shrink-0 items-center pr-2 transition-opacity",
+        checkingOut || speedMode
+          ? "pointer-events-auto opacity-100"
+          : [
+              "pointer-events-none opacity-0",
+              "group-hover/pr-row:pointer-events-auto group-hover/pr-row:opacity-100",
+              "focus-within:pointer-events-auto focus-within:opacity-100",
+              "has-[[data-popup-open]]:pointer-events-auto has-[[data-popup-open]]:opacity-100",
+              "pointer-coarse:pointer-events-auto pointer-coarse:opacity-100",
+            ],
+        hidden && "hidden",
+      )}
+      data-pull-request-action-pending={checkingOut}
+    >
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <span className="inline-flex">
+              <Button
+                variant="ghost-muted"
+                size="icon-xs"
+                disabled={checkingOut || disabledReason !== null}
+                aria-description={disabledReason ?? undefined}
+                aria-label={label}
+                onClick={() => void startHandoff("checkout:worktree", null, "worktree")}
+              >
+                {checkingOut ? (
+                  <Spinner size="xs" />
+                ) : (
+                  <SquarePenIcon aria-hidden className="size-3.5" />
+                )}
+              </Button>
+            </span>
+          }
+        />
+        <TooltipPopup>{disabledReason ?? label}</TooltipPopup>
+      </Tooltip>
+    </div>
+  );
 }
 
 function SpeedModeGroup({

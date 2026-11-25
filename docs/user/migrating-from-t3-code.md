@@ -12,8 +12,8 @@ settings and providers. Choose **Start fresh** to begin empty; you can still imp
 From a terminal, with p0code stopped:
 
 ```sh
-t3 migrate from-t3 --dry-run   # show what would be copied, write nothing
-t3 migrate from-t3             # import ~/.t3 into ~/.p0code
+p0 migrate from-t3 --dry-run   # show what would be copied, write nothing
+p0 migrate from-t3             # import ~/.t3 into ~/.p0code
 ```
 
 | Flag                    | What it does                                                                                                      |

@@ -96,7 +96,7 @@ export function cliArchivePlatformKey(platform: BuildPlatform, arch: BuildArch):
 }
 
 export function cliArchiveStem(version: string, platform: BuildPlatform, arch: BuildArch): string {
-  return `t3-${version}-${cliArchivePlatformKey(platform, arch)}`;
+  return `p0-${version}-${cliArchivePlatformKey(platform, arch)}`;
 }
 
 export function cliArchiveFileName(version: string, platform: BuildPlatform, arch: BuildArch) {
@@ -261,7 +261,7 @@ const stageWebClient = Effect.fn("stageWebClient")(function* (source: string, ta
   }
 });
 
-/** Node links libatomic.so.1, which Ubuntu server and container images lack, so t3 carries its own. */
+/** Node links libatomic.so.1, which Ubuntu server and container images lack, so p0 carries its own. */
 const bundleLinuxLibatomic = Effect.fn("bundleLinuxLibatomic")(function* (input: {
   readonly repoRoot: string;
   readonly contentDir: string;
@@ -408,7 +408,7 @@ const requireAccepted = Effect.fn("requireAccepted")(function* (
       status: submission.status ?? "without a status",
     });
   }
-  yield* Effect.log(`[cli-archive] Notarized t3 (${submission.id}).`);
+  yield* Effect.log(`[cli-archive] Notarized p0 (${submission.id}).`);
 });
 
 /** Apple Silicon requires signed binaries; notarization's hardened runtime also requires every native addon signed. */
@@ -476,7 +476,7 @@ export const signMacArchiveContents = Effect.fn("signMacArchiveContents")(functi
   // The ticket lives with Apple, not in the archive, so the archive bytes are final before approval.
   yield* fs.writeFileString(deferred, submission.id);
   yield* Effect.log(
-    `[cli-archive] Submitted t3 for notarization (${submission.id}). Run await-notarization before publishing.`,
+    `[cli-archive] Submitted p0 for notarization (${submission.id}). Run await-notarization before publishing.`,
   );
 });
 
@@ -562,7 +562,7 @@ const signWindowsExecutable = Effect.fn("signWindowsExecutable")(function* (
   yield* stripStaleAuthenticodeEntry(executablePath);
   if ((yield* HostProcess.Platform) !== "win32") {
     yield* signWithJsign(executablePath);
-    yield* Effect.log("[cli-archive] Signed t3.exe (Azure Trusted Signing via jsign).");
+    yield* Effect.log("[cli-archive] Signed p0.exe (Azure Trusted Signing via jsign).");
     return;
   }
   const quote = (value: string) => `'${value.replaceAll("'", "''")}'`;
@@ -579,9 +579,9 @@ const signWindowsExecutable = Effect.fn("signWindowsExecutable")(function* (
   ].join(" ");
   yield* runCommand(
     ChildProcess.make("pwsh", ["-NoProfile", "-NonInteractive", "-Command", script]),
-    "Invoke-TrustedSigning t3.exe",
+    "Invoke-TrustedSigning p0.exe",
   );
-  yield* Effect.log("[cli-archive] Signed t3.exe (Azure Trusted Signing).");
+  yield* Effect.log("[cli-archive] Signed p0.exe (Azure Trusted Signing).");
 });
 
 const buildCliArchive = Effect.fn("buildCliArchive")(function* (input: {
@@ -596,7 +596,7 @@ const buildCliArchive = Effect.fn("buildCliArchive")(function* (input: {
   const path = yield* Path.Path;
   const repoRoot = yield* RepoRoot;
   const serverDir = path.join(repoRoot, "apps/server");
-  const executableName = input.platform === "win" ? "t3.exe" : "t3";
+  const executableName = input.platform === "win" ? "p0.exe" : "p0";
   // tsdown suffixes cross-built executables; prefer the exact target over the plain host build.
   const targetKey = `${input.platform === "mac" ? "darwin" : input.platform}-${input.arch}`;
   const targetExecutable = path.join(
@@ -734,7 +734,7 @@ const command = Command.make(
   },
   (input) => buildCliArchive(input).pipe(Effect.scoped),
 ).pipe(
-  Command.withDescription("Package the t3 single-executable into a per-platform archive."),
+  Command.withDescription("Package the p0 single-executable into a per-platform archive."),
   Command.withSubcommands([
     Command.make(
       "await-notarization",

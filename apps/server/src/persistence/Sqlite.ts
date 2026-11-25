@@ -21,7 +21,7 @@ export class ServerOwnsDatabaseError extends Schema.TaggedError<ServerOwnsDataba
   { stateDir: Schema.String },
 ) {
   override get message(): string {
-    return `Another T3 Code process, usually a running server, owns ${this.stateDir}, and this CLI would change its database schema. Use the \`t3\` that matches the running server, or stop that server, then retry. The database was not changed.`;
+    return `Another p0code process, usually a running server, owns ${this.stateDir}, and this CLI would change its database schema. Use the \`p0\` that matches the running server, or stop that server, then retry. The database was not changed.`;
   }
 }
 
@@ -47,7 +47,7 @@ const damagedDatabaseError = (dbPath: string, cause: SqlError.SqlError) =>
     reason: new SqlError.UnknownError({
       cause,
       operation: "open",
-      message: `The T3 Code database at ${dbPath} is damaged or is not a SQLite database, so T3 Code cannot start. To recover, quit T3 Code, then move that file and any -wal and -shm files next to it out of the folder, or replace them with a backup. T3 Code creates a new database on the next start.`,
+      message: `The p0code database at ${dbPath} is damaged or is not a SQLite database, so p0code cannot start. To recover, quit p0code, then move that file and any -wal and -shm files next to it out of the folder, or replace them with a backup. p0code creates a new database on the next start.`,
     }),
   });
 

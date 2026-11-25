@@ -59,13 +59,13 @@ exit 7
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const key = `${yield* HostProcess.Platform}-${yield* HostProcess.Architecture}`;
-  const stem = `t3-${VERSION}-${key}`;
+  const stem = `p0-${VERSION}-${key}`;
   const archiveName = `${stem}.tar.gz`;
   yield* fs.makeDirectory(path.join(root, "release", stem, "node_modules/native"), {
     recursive: true,
   });
-  yield* fs.writeFileString(path.join(root, "release", stem, "t3"), executable);
-  yield* fs.chmod(path.join(root, "release", stem, "t3"), 0o755);
+  yield* fs.writeFileString(path.join(root, "release", stem, "p0"), executable);
+  yield* fs.chmod(path.join(root, "release", stem, "p0"), 0o755);
   const tar = yield* run("tar", ["-czf", archiveName, stem], {
     cwd: path.join(root, "release"),
     env: { PATH: (yield* HostProcess.Environment).PATH },
@@ -121,7 +121,7 @@ it.layer(NodeServices.layer)("build-npm-launcher", (it) => {
         // macOS temp directories sit under /var, a link to /private/var, and the launcher
         // reports the resolved path it runs from.
         const root = yield* fs.realPath(
-          yield* fs.makeTempDirectoryScoped({ prefix: "t3-npm-launcher-test-" }),
+          yield* fs.makeTempDirectoryScoped({ prefix: "p0-npm-launcher-test-" }),
         );
         const output = yield* buildNpmLauncher({
           version: VERSION,
@@ -131,9 +131,9 @@ it.layer(NodeServices.layer)("build-npm-launcher", (it) => {
         const manifest = yield* decodeManifest(
           yield* fs.readFileString(path.join(output.packageDir, "package.json")),
         );
-        assert.equal(manifest.name, "t3");
+        assert.equal(manifest.name, "p0");
         assert.equal(manifest.version, VERSION);
-        assert.deepStrictEqual(manifest.bin, { t3: "./bin/t3.mjs" });
+        assert.deepStrictEqual(manifest.bin, { p0: "./bin/p0.mjs" });
         assert.isUndefined(manifest.dependencies);
         assert.isUndefined(manifest.optionalDependencies);
         assert.isAbove(npmReleaseDatabaseMigration(manifest) ?? 0, 0);
@@ -157,7 +157,7 @@ it.layer(NodeServices.layer)("build-npm-launcher", (it) => {
           T3CODE_TEST_CALLS: path.join(root, "calls"),
           T3CODE_RELEASE_BASE_URL: release.baseUrl,
         };
-        const launcher = path.join(packageDir, "bin/t3.mjs");
+        const launcher = path.join(packageDir, "bin/p0.mjs");
         const first = yield* run(process.execPath, [launcher, "serve", "a b"], {
           cwd: root,
           env,
@@ -188,7 +188,7 @@ it.layer(NodeServices.layer)("build-npm-launcher", (it) => {
           ["--version|", `serve a b|${launcher}`, `--version|${launcher}`],
         );
 
-        yield* fs.writeFileString(path.join(versionDir, "t3"), "#!/t3-test-missing-loader\n");
+        yield* fs.writeFileString(path.join(versionDir, "p0"), "#!/p0-test-missing-loader\n");
         for (const _attempt of [1, 2]) {
           const cached = yield* run(process.execPath, [launcher, "serve"], { cwd: root, env });
           assert.equal(cached.exitCode, 1, cached.stderr);
@@ -200,7 +200,7 @@ it.layer(NodeServices.layer)("build-npm-launcher", (it) => {
           );
         }
 
-        const ipcServer = path.join(home, "runtime/versions", VERSION, "t3");
+        const ipcServer = path.join(home, "runtime/versions", VERSION, "p0");
         yield* fs.writeFileString(
           ipcServer,
           `#!${process.execPath}\nprocess.on("SIGTERM", () => process.exit(23));\nprocess.on("message", (m) => process.send({ reply: m }));\nprocess.send({ args: process.argv.slice(2) });\n`,
@@ -240,10 +240,10 @@ it.layer(NodeServices.layer)("build-npm-launcher", (it) => {
         const staleDir = path.join(staleHome, "runtime/versions", VERSION);
         const peerDir = path.join(root, "peer-runtime");
         yield* fs.makeDirectory(staleDir, { recursive: true });
-        yield* fs.writeFileString(path.join(staleDir, "t3"), "");
+        yield* fs.writeFileString(path.join(staleDir, "p0"), "");
         yield* fs.makeDirectory(peerDir);
-        yield* fs.writeFileString(path.join(peerDir, "t3"), '#!/bin/sh\necho "peer $*"\nexit 7\n');
-        yield* fs.chmod(path.join(peerDir, "t3"), 0o755);
+        yield* fs.writeFileString(path.join(peerDir, "p0"), '#!/bin/sh\necho "peer $*"\nexit 7\n');
+        yield* fs.chmod(path.join(peerDir, "p0"), 0o755);
         yield* fs.writeFileString(path.join(peerDir, ".install-complete"), `${VERSION}\n`);
         yield* fs.writeFileString(path.join(peerDir, "sidecar"), "peer sidecar");
         const peerChecks = path.join(root, "peer-checks.txt");
@@ -258,7 +258,7 @@ const { readFileSync, renameSync, rmSync } = fs;
 let checking = false;
 let published = false;
 const checkPeer = () => {
-  const child = spawnSync(dir + "/t3", ["--version"], { encoding: "utf8" });
+  const child = spawnSync(dir + "/p0", ["--version"], { encoding: "utf8" });
   let sidecar;
   try {
     sidecar = readFileSync(dir + "/sidecar", "utf8");
@@ -319,7 +319,7 @@ fs.readFileSync = (file, ...rest) => {
         const staleOnlyHome = path.join(root, "stale-only-home");
         const staleOnlyDir = path.join(staleOnlyHome, "runtime/versions", VERSION);
         yield* fs.makeDirectory(staleOnlyDir, { recursive: true });
-        yield* fs.writeFileString(path.join(staleOnlyDir, "t3"), "incomplete");
+        yield* fs.writeFileString(path.join(staleOnlyDir, "p0"), "incomplete");
         yield* fs.makeDirectory(`${staleOnlyDir}.lock`);
         const locked = yield* run(process.execPath, [launcher, "--version"], {
           cwd: root,
@@ -327,7 +327,7 @@ fs.readFileSync = (file, ...rest) => {
         });
         assert.equal(locked.exitCode, 1);
         assert.include(locked.stderr, `delete ${staleOnlyDir}.lock`);
-        assert.equal(yield* fs.readFileString(path.join(staleOnlyDir, "t3")), "incomplete");
+        assert.equal(yield* fs.readFileString(path.join(staleOnlyDir, "p0")), "incomplete");
 
         // Without a peer, the stale folder is replaced by our own download.
         yield* fs.remove(`${staleOnlyDir}.lock`, { recursive: true });
@@ -362,12 +362,12 @@ fs.readFileSync = (file, ...rest) => {
         const fs = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
         for (const executable of [
-          "#!/t3-test-missing-loader\n",
+          "#!/p0-test-missing-loader\n",
           '#!/bin/sh\necho "runtime loader failed" >&2\nexit 42\n',
           "#!/bin/sh\nkill -TERM $$\n",
           '#!/bin/sh\ntrap \'echo caught > "$T3CODE_TEST_TERM"; exit 42\' TERM\necho ready > "$T3CODE_TEST_READY"\nwhile :; do :; done\n',
         ]) {
-          const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-npm-validation-test-" });
+          const root = yield* fs.makeTempDirectoryScoped({ prefix: "p0-npm-validation-test-" });
           const output = yield* buildNpmLauncher({
             version: VERSION,
             outputDir: path.join(root, "out"),
@@ -393,7 +393,7 @@ syncBuiltinESMExports();
             T3CODE_TEST_READY: path.join(root, "probe-ready"),
             T3CODE_TEST_TERM: path.join(root, "probe-term"),
           };
-          const launcher = path.join(output.packageDir, "bin/t3.mjs");
+          const launcher = path.join(output.packageDir, "bin/p0.mjs");
           const failed = yield* run(
             process.execPath,
             ["--import", probeTimeoutHook, launcher, "serve"],
@@ -423,7 +423,7 @@ syncBuiltinESMExports();
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
-        const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-npm-launcher-test-" });
+        const root = yield* fs.makeTempDirectoryScoped({ prefix: "p0-npm-launcher-test-" });
         const output = yield* buildNpmLauncher({
           version: VERSION,
           outputDir: path.join(root, "out"),
@@ -448,7 +448,7 @@ syncBuiltinESMExports();
         const orphaned = "provider outlived the runtime by 30s";
         const provider = `process.on("SIGTERM", () => {}); setTimeout(() => { console.log(${JSON.stringify(orphaned)}); process.exit(0); }, 30_000);`;
         yield* fs.writeFileString(
-          path.join(versionDir, "t3"),
+          path.join(versionDir, "p0"),
           `#!${process.execPath}
 const provider = require("node:child_process").spawn(process.execPath, ["-e", ${JSON.stringify(provider)}], { stdio: "inherit" });
 process.on("SIGTERM", () => setTimeout(() => { console.log(${JSON.stringify(stuck)}); process.exit(0); }, 30_000));
@@ -456,11 +456,11 @@ setInterval(() => {}, 1 << 30);
 console.log(process.pid, provider.pid);
 `,
         );
-        yield* fs.chmod(path.join(versionDir, "t3"), 0o755);
+        yield* fs.chmod(path.join(versionDir, "p0"), 0o755);
 
         const launcher = NodeChildProcess.spawn(
           process.execPath,
-          [path.join(installed, "package/bin/t3.mjs"), "serve"],
+          [path.join(installed, "package/bin/p0.mjs"), "serve"],
           { cwd: root, env: { PATH: hostPath, T3CODE_HOME: home }, stdio: "pipe" },
         );
         let pids: Array<number> = [];

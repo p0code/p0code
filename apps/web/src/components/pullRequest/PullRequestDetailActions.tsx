@@ -4,7 +4,14 @@ import type {
   PullRequestMergeMethod,
   PullRequestUpdateMethod,
 } from "@t3tools/contracts";
-import { CheckIcon, ChevronDownIcon, FolderGit2Icon, GitBranchIcon, PlayIcon } from "lucide-react";
+import {
+  CheckIcon,
+  ChevronDownIcon,
+  FolderGit2Icon,
+  GitBranchIcon,
+  PlayIcon,
+  SquarePenIcon,
+} from "lucide-react";
 import { Branch, T, useGT } from "gt-react";
 import type { ReactNode } from "react";
 
@@ -22,6 +29,7 @@ import {
   MenuSeparator,
   MenuTrigger,
 } from "../ui/menu";
+import { Spinner } from "../ui/spinner";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import type { resolvePullRequestPrimaryControl } from "./pullRequestDetail.logic";
 import { PullRequestGlyph } from "./pullRequestIcons";
@@ -75,11 +83,52 @@ export function ActOnEnvironmentPicker({
   );
 }
 
+export function PullRequestStartAgentButton({
+  handoff,
+  disabledReason,
+  onStartAgent,
+}: {
+  handoff: string | null;
+  disabledReason: string | null;
+  onStartAgent: () => void;
+}) {
+  const gt = useGT();
+  const checkingOut = handoff === "checkout:worktree";
+  const label = checkingOut ? gt("Checking out...") : gt("Start agent on this branch");
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span className="inline-flex shrink-0">
+            <Button
+              size="xs"
+              variant="default"
+              disabled={handoff !== null || disabledReason !== null}
+              aria-description={disabledReason ?? undefined}
+              aria-label={label}
+              onClick={onStartAgent}
+            >
+              {checkingOut ? (
+                <Spinner size="xs" />
+              ) : (
+                <SquarePenIcon aria-hidden className="size-3.5" />
+              )}
+              <span className="@max-[32rem]/pr-header:hidden">{label}</span>
+            </Button>
+          </span>
+        }
+      />
+      <TooltipPopup side="top">{disabledReason ?? label}</TooltipPopup>
+    </Tooltip>
+  );
+}
+
 export function PullRequestCheckoutMenu({
   handoff,
   checkoutRoot,
   canPrepareWorktree,
   canCheckoutHere,
+  disabledReason = null,
   onCheckout,
   pickableEnvironments,
   actingEnvironmentId,
@@ -90,6 +139,7 @@ export function PullRequestCheckoutMenu({
   checkoutRoot: string | null;
   canPrepareWorktree: boolean;
   canCheckoutHere: boolean;
+  disabledReason?: string | null;
   onCheckout: (mode: "worktree" | "local") => void;
   pickableEnvironments: ReadonlyArray<PickableEnvironment>;
   actingEnvironmentId: EnvironmentId;
@@ -97,38 +147,46 @@ export function PullRequestCheckoutMenu({
   term: ChangeRequestTermKind;
 }) {
   const gt = useGT();
+  const unavailable = !canPrepareWorktree && !canCheckoutHere && pickableEnvironments.length === 0;
   return (
     <Menu>
       <Tooltip>
         <TooltipTrigger
           render={
-            <MenuTrigger
-              disabled={handoff !== null || checkoutRoot === null}
-              render={
-                <Button
-                  size="xs"
-                  variant="outline"
-                  aria-label={
-                    handoff?.startsWith("checkout") ? gt("Checking out...") : gt("Check out")
-                  }
-                >
-                  <GitBranchIcon aria-hidden className="size-3.5" />
-                  <span className="@max-[35rem]/pr-header:hidden">
-                    {handoff?.startsWith("checkout") ? gt("Checking out...") : gt("Check out")}
-                  </span>
-                  <ChevronDownIcon aria-hidden className="size-3.5 text-muted-foreground" />
-                </Button>
-              }
-            />
+            <span className="inline-flex shrink-0">
+              <MenuTrigger
+                disabled={handoff !== null || checkoutRoot === null || unavailable}
+                render={
+                  <Button
+                    size="xs"
+                    variant="outline"
+                    aria-description={unavailable ? (disabledReason ?? undefined) : undefined}
+                    aria-label={
+                      handoff?.startsWith("checkout") ? gt("Checking out...") : gt("Check out")
+                    }
+                  >
+                    <GitBranchIcon aria-hidden className="size-3.5" />
+                    <span className="@max-[44rem]/pr-header:hidden">
+                      {handoff?.startsWith("checkout") ? gt("Checking out...") : gt("Check out")}
+                    </span>
+                    <ChevronDownIcon aria-hidden className="size-3.5 text-muted-foreground" />
+                  </Button>
+                }
+              />
+            </span>
           }
         />
         <TooltipPopup>
-          <T>
-            Check out this{" "}
-            <Branch branch={term} mr="merge request" cr="change request">
-              pull request
-            </Branch>
-          </T>
+          {unavailable && disabledReason !== null ? (
+            disabledReason
+          ) : (
+            <T>
+              Check out this{" "}
+              <Branch branch={term} mr="merge request" cr="change request">
+                pull request
+              </Branch>
+            </T>
+          )}
         </TooltipPopup>
       </Tooltip>
       <MenuPopup align="end" side="bottom">
@@ -208,6 +266,7 @@ export function PullRequestResolveConflictsButton({
 export function PullRequestPrimaryAction({
   pullRequestKey,
   primaryAction,
+  prominent = true,
   mergeBlockedReason,
   autoMergeArmed,
   armedAutoMergeLabel,
@@ -221,6 +280,7 @@ export function PullRequestPrimaryAction({
 }: {
   pullRequestKey: string;
   primaryAction: ReturnType<typeof resolvePullRequestPrimaryControl> | null;
+  prominent?: boolean;
   mergeBlockedReason: string | null;
   autoMergeArmed: boolean;
   armedAutoMergeLabel: string;
@@ -235,6 +295,7 @@ export function PullRequestPrimaryAction({
   const gt = useGT();
   const inlineConfirm = useInlineActionConfirm(pullRequestKey);
   const actionPending = pendingAction !== null;
+  const actionVariant = prominent ? "default" : "outline";
   return (
     <>
       {autoMergeArmed && primaryAction !== "auto-merge-armed" ? (
@@ -263,7 +324,7 @@ export function PullRequestPrimaryAction({
               <span className="inline-flex shrink-0">
                 <Button
                   size="xs"
-                  variant="default"
+                  variant={actionVariant}
                   disabled={actionPending}
                   onClick={() => void perform("ready")}
                   aria-label={gt("Ready for review")}
@@ -287,7 +348,7 @@ export function PullRequestPrimaryAction({
               <span className="inline-flex shrink-0">
                 <Button
                   size="xs"
-                  variant="default"
+                  variant={actionVariant}
                   disabled={actionPending}
                   aria-disabled={mergeBlockedReason !== null || undefined}
                   aria-description={mergeBlockedReason ?? undefined}
@@ -360,7 +421,7 @@ export function PullRequestPrimaryAction({
               <span className="inline-flex shrink-0">
                 <Button
                   size="xs"
-                  variant="default"
+                  variant={actionVariant}
                   disabled={actionPending}
                   aria-disabled={mergeBlockedReason !== null || undefined}
                   aria-description={mergeBlockedReason ?? undefined}

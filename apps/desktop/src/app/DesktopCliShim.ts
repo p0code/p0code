@@ -10,7 +10,12 @@ import { makeComponentLogger } from "./DesktopObservability.ts";
 // AppImage mounts change each run; the launcher must mount the image itself.
 const { logInfo, logWarning } = makeComponentLogger("desktop-cli-shim");
 
-export const MARKER = "Written by T3 Code: runs the desktop app's bundled t3 CLI.";
+export const MARKER = "Written by T3 Code: runs the desktop app's bundled p0 CLI.";
+/** Earlier versions of this app wrote `t3`; stock T3 Code can share the text, so callers check paths too. */
+const PREVIOUS_MARKER = "Written by T3 Code: runs the desktop app's bundled t3 CLI.";
+
+export const isOurShimContent = (content: string) =>
+  content.includes(MARKER) || content.includes(PREVIOUS_MARKER);
 
 const SERVER_ENTRY = "apps/server/dist/bin.mjs";
 
@@ -141,6 +146,16 @@ export const launcherPath = (environment: DesktopEnvironment.DesktopEnvironment[
   environment.path.join(
     environment.baseDir,
     "bin",
+    environment.platform === "win32" ? "p0.cmd" : "p0",
+  );
+
+/** The `t3` launcher this app wrote before the command was renamed; it lives in this app's own home. */
+export const previousLauncherPath = (
+  environment: DesktopEnvironment.DesktopEnvironment["Service"],
+) =>
+  environment.path.join(
+    environment.baseDir,
+    "bin",
     environment.platform === "win32" ? "t3.cmd" : "t3",
   );
 
@@ -166,9 +181,16 @@ export const install = Effect.gen(function* () {
 
   return yield* Effect.gen(function* () {
     const existing = yield* fs.readFileString(shimPath).pipe(Effect.option);
-    if (Option.isSome(existing) && !existing.value.includes(MARKER)) {
-      yield* logWarning("leaving a t3 launcher the app did not write", { shimPath });
+    if (Option.isSome(existing) && !isOurShimContent(existing.value)) {
+      yield* logWarning("leaving a p0 launcher the app did not write", { shimPath });
       return Option.none<string>();
+    }
+    // Replaced by the p0 launcher below; this path is inside this app's home, never stock T3 Code's.
+    const previous = previousLauncherPath(environment);
+    const previousContent = yield* fs.readFileString(previous).pipe(Effect.option);
+    if (Option.isSome(previousContent) && isOurShimContent(previousContent.value)) {
+      yield* fs.remove(previous).pipe(Effect.ignore);
+      yield* logInfo("removed the previous t3 launcher", { previous });
     }
     if (Option.getOrUndefined(existing) !== content) {
       yield* fs.makeDirectory(path.dirname(shimPath), { recursive: true });
@@ -176,12 +198,12 @@ export const install = Effect.gen(function* () {
       const staging = `${shimPath}.${process.pid}.${yield* Random.nextIntBetween(0, 0xffffff)}.tmp`;
       yield* fs.writeFileString(staging, content, { mode: 0o755 });
       yield* fs.rename(staging, shimPath);
-      yield* logInfo("installed t3 launcher", { shimPath });
+      yield* logInfo("installed p0 launcher", { shimPath });
     }
     return Option.some(shimPath);
   }).pipe(
     Effect.catchCause((cause) =>
-      logWarning("could not install t3 launcher", { shimPath, cause: Cause.pretty(cause) }).pipe(
+      logWarning("could not install p0 launcher", { shimPath, cause: Cause.pretty(cause) }).pipe(
         Effect.as(Option.none<string>()),
       ),
     ),

@@ -6,6 +6,13 @@ import { EnvironmentId, ProjectId } from "@t3tools/contracts";
 import { issueFilterProjects, issueListTargets, issuesSearchFromUrl } from "./issuesSearch.logic";
 
 describe("issuesSearchFromUrl", () => {
+  it("defaults to the viewer's own issues and takes an old `all` link there too", () => {
+    expect(issuesSearchFromUrl({}).who).toBe("involves");
+    expect(issuesSearchFromUrl({ who: "all" }).who).toBe("involves");
+    expect(issuesSearchFromUrl({ who: "assigned" }).who).toBe("assigned");
+    expect(issuesSearchFromUrl({ who: "everyone" }).who).toBe("involves");
+  });
+
   it("replaces a malformed filter instead of letting the raw value through", () => {
     // The router lays the validated keys over the raw search, so a key left out keeps its raw value.
     const raw = { label: true, order: "oldest", assignee: "   ", host: true };
