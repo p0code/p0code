@@ -89,6 +89,7 @@ import { EnvironmentsMap } from "./EnvironmentsMap";
 import { FoldedSettingsSection } from "./FoldedSettingsSection";
 import { LinkedEnvironmentsSettings } from "./LinkedEnvironmentsSettings";
 import { LoadBalancingSettings } from "./LoadBalancingSettings";
+import { DesktopBackendSettings } from "./DesktopBackendSettings";
 import { LocalEnvironmentSetting } from "./LocalEnvironmentSetting";
 import { PullRequestRoutingSettings } from "./PullRequestRoutingSettings";
 import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
@@ -1766,6 +1767,7 @@ function ConnectionsSettingsContent({
           <LocalEnvironmentSetting />
         </SettingsSection>
       ) : null}
+      {desktopBridge ? <DesktopBackendSettings /> : null}
       <SettingsSection
         {...searchableSetting("remote-environments")}
         title={gt("Environments")}

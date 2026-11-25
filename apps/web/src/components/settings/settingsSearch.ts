@@ -1402,6 +1402,15 @@ export const SETTINGS_SEARCH_ITEMS = [
     desktopOnly: true,
   },
   {
+    id: "desktop-backend",
+    title: msg("Backend"),
+    to: "/settings/connections",
+    searchTerms: [
+      msg("hhhd local service remote url legacy embedded daemon pid start stop restart"),
+    ],
+    desktopOnly: true,
+  },
+  {
     id: "network-access",
     title: msg("Network access"),
     to: "/settings/access",
