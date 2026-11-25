@@ -25,8 +25,8 @@ const loadSystemKeychain: KeychainLoader = (platform) => {
 
 const secretBackend = Config.String("P0CODE_SECRET_BACKEND").pipe(
   Config.orElse(() => Config.String("HHHCODE_SECRET_BACKEND")),
-  Config.map((value) => value.trim().toLowerCase() || "auto"),
-  Config.withDefault("auto"),
+  Config.map((value) => value.trim().toLowerCase() || "file"),
+  Config.withDefault("file"),
 );
 
 const runMigrateKeychain = Effect.fn("cli.secrets.migrateKeychain")(function* (
@@ -39,11 +39,11 @@ const runMigrateKeychain = Effect.fn("cli.secrets.migrateKeychain")(function* (
       userMessage: `P0CODE_SECRET_BACKEND must be "keychain" or "file", got "${backend}".`,
     });
   }
-  if (backend === "file") {
+  if (backend !== "keychain") {
     return yield* new CliError.UserError({
-      cause: "P0CODE_SECRET_BACKEND=file",
+      cause: `P0CODE_SECRET_BACKEND=${backend}`,
       userMessage:
-        "This home keeps credentials as files, not in the OS keychain, so there is nothing to move.",
+        "This home keeps credentials as files, not in the OS keychain, so there is nothing to move. Set P0CODE_SECRET_BACKEND=keychain to manage the old keychain service instead.",
     });
   }
 

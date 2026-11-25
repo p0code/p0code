@@ -21,6 +21,33 @@ import * as ServerSecretStore from "./ServerSecretStore.ts";
 const encode = (text: string) => new TextEncoder().encode(text);
 const decode = (bytes: Uint8Array) => new TextDecoder().decode(bytes);
 
+/** A fake keychain that records every call, so a test can prove nothing touched it. */
+const countingKeychain = (store: KeychainStore) => {
+  const calls = { get: 0, set: 0, delete: 0, accounts: 0 };
+  return {
+    calls,
+    store: {
+      ...store,
+      get: (account) => {
+        calls.get += 1;
+        return store.get(account);
+      },
+      set: (account, value) => {
+        calls.set += 1;
+        return store.set(account, value);
+      },
+      delete: (account) => {
+        calls.delete += 1;
+        return store.delete(account);
+      },
+      accounts: () => {
+        calls.accounts += 1;
+        return store.accounts();
+      },
+    } satisfies KeychainStore,
+  };
+};
+
 /** Builds the store over a fresh home, after `prepare` has seeded its secrets folder. */
 const withStore = <A, E, E2 = never>(
   keychain: KeychainStore | "unavailable",
@@ -49,7 +76,12 @@ const withStore = <A, E, E2 = never>(
     Effect.provide(
       Layer.mergeAll(
         ServerConfig.layerTest(process.cwd(), { prefix: "t3-secret-keychain-test-" }),
-        ConfigProvider.layer(ConfigProvider.fromEnv({ env: options.env ?? {} })),
+        ConfigProvider.layer(
+          ConfigProvider.fromEnv({
+            // These tests exercise the keychain, which now needs an explicit opt-in.
+            env: options.env ?? { P0CODE_SECRET_BACKEND: "keychain" },
+          }),
+        ),
       ),
     ),
   );
@@ -298,26 +330,81 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))(
       );
     });
 
-    it.effect("falls back to files when no keychain is available", () =>
-      withStore("unavailable", (store, secretsDir) =>
-        Effect.gen(function* () {
-          assert.deepEqual(store.storage, {
-            backend: "file",
-            label: "files (no keychain available)",
-          });
-          yield* store.set("server-signing-key", encode("file"));
-          assert.include(yield* files(secretsDir), "server-signing-key.bin");
-        }),
+    it.effect("uses owner-only files in an owner-only directory by default", () => {
+      const keychain = countingKeychain(memoryKeychainStore());
+      return withStore(
+        keychain.store,
+        (store, secretsDir) =>
+          Effect.gen(function* () {
+            assert.deepEqual(store.storage, { backend: "file", label: "files" });
+            yield* store.set("server-signing-key", encode("signing"));
+            assert.equal(
+              decode(Option.getOrThrow(yield* store.get("server-signing-key"))),
+              "signing",
+            );
+            assert.deepEqual([...(yield* store.list!("server-"))], ["server-signing-key"]);
+
+            const fileSystem = yield* FileSystem.FileSystem;
+            const path = yield* Path.Path;
+            assert.equal(
+              (yield* fileSystem.stat(path.join(secretsDir, "server-signing-key.bin"))).mode &
+                0o777,
+              0o600,
+            );
+            assert.equal((yield* fileSystem.stat(secretsDir)).mode & 0o777, 0o700);
+            assert.deepEqual(keychain.calls, { get: 0, set: 0, delete: 0, accounts: 0 });
+          }),
+        { env: {} },
+      );
+    });
+
+    it.effect("treats a missing file as signed out without reading the keychain", () => {
+      const backing = memoryKeychainStore();
+      const keychain = countingKeychain(backing);
+      return withStore(
+        keychain.store,
+        (store) =>
+          Effect.gen(function* () {
+            assert.isTrue(Option.isNone(yield* store.get("server-signing-key")));
+            assert.deepEqual(keychain.calls, { get: 0, set: 0, delete: 0, accounts: 0 });
+          }),
+        {
+          env: {},
+          prepare: (secretsDir) =>
+            Effect.promise(async () => {
+              const namespace = await credentialNamespace(secretsDir);
+              await keychainSecrets(backing, namespace).set("server-signing-key", encode("old"));
+            }),
+        },
+      );
+    });
+
+    it.effect("uses files by default even when no keychain is available", () =>
+      withStore(
+        "unavailable",
+        (store, secretsDir) =>
+          Effect.gen(function* () {
+            assert.deepEqual(store.storage, { backend: "file", label: "files" });
+            yield* store.set("server-signing-key", encode("file"));
+            assert.include(yield* files(secretsDir), "server-signing-key.bin");
+          }),
+        { env: {} },
       ),
     );
 
-    it.effect("refuses to start without the keychain a home already uses", () =>
-      withStore("unavailable", () => Effect.void, {
-        prepare: (secretsDir) =>
-          writeSecretFile(secretsDir, KEYCHAIN_MARKER_FILE, "macOS Keychain"),
-      }).pipe(
-        Effect.flip,
-        Effect.map((error) => assert.equal(error._tag, "SecretStoreBackendError")),
+    it.effect("ignores a keychain marker when using files", () =>
+      withStore(
+        "unavailable",
+        (store) =>
+          Effect.gen(function* () {
+            assert.equal(store.storage?.backend, "file");
+            assert.isTrue(Option.isNone(yield* store.get("server-signing-key")));
+          }),
+        {
+          env: {},
+          prepare: (secretsDir) =>
+            writeSecretFile(secretsDir, KEYCHAIN_MARKER_FILE, "macOS Keychain"),
+        },
       ),
     );
 
