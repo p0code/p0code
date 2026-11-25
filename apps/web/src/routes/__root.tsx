@@ -62,6 +62,7 @@ import { useUiStateStore } from "../uiStateStore";
 import { isChunkLoadError } from "../lib/chunkReloadGuard";
 import { getDesktopSnapShotBridge } from "../lib/desktopSnapShot";
 import { shouldResumeSnapShotSetupOnStartup } from "../lib/snapShotSetupResume";
+import { reportBootStage } from "../lib/startupProgress";
 
 export const Route = createRootRoute({
   beforeLoad: async ({ location }) => {
@@ -84,6 +85,7 @@ export const Route = createRootRoute({
     }
 
     if (isLocalEnvironmentDisabled() || isHostedStaticApp(new URL(window.location.href))) {
+      reportBootStage("connecting");
       return {
         authGateState: {
           status: "hosted-static",
@@ -93,6 +95,7 @@ export const Route = createRootRoute({
 
     const authGateState = await resolveInitialServerAuthGateState();
     if (authGateState.status === "authenticated") {
+      reportBootStage("connecting");
       // Idempotent, so every navigation can ask for it.
       void configureClientTracing();
     }

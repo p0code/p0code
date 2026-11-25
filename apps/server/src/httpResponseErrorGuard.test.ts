@@ -241,6 +241,8 @@ describe("rejectRequestsUntilServing", () => {
     );
     const startupHtml = startup.body;
     expect(startupHtml).toContain("Upgrading database (2 of 7)");
+    expect(startupHtml).toContain('role="progressbar"');
+    expect(startupHtml).toContain('aria-valuenow="34"');
     expect(startupHtml).not.toContain("<script>");
     expect(startup.headers["cache-control"]).toBe("no-store");
     expect(startup.headers["content-security-policy"]).toContain("default-src 'none'");

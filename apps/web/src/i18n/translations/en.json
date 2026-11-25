@@ -2434,6 +2434,7 @@
       "v": "v"
     }
   ],
+  "5fa4bc74fa5e9a8e": "{appName} startup screen",
   "b4b98a0287c282e2": "On another machine, so this machine's agent can't read it. Remove it or switch back to send.",
   "5bbac0e5afeec779": "Current thread",
   "33c7e68fca089036": "Thread, {title}",
@@ -2857,6 +2858,11 @@
   "c8440b29bc95ca71": "Invalid keybinding.",
   "f9e2c203389660f8": "No environment is selected.",
   "372f4d4a1c650763": "This connection cannot restart the resource monitor.",
+  "9cac8a8e72ee1257": "Starting server",
+  "b378ab0abbce35d4": "Updating database ({current}/{total})",
+  "9668ede5c3e72d7a": "Updating database",
+  "a044effb791c0a10": "Loading threads",
+  "333885e895f94647": "Ready",
   "08da470047ab82f5": "Close terminal \"{label}\"?",
   "4f14e3fc3a216f44": "This stops the running process and clears its history.",
   "16ce8443044b45fd": "Close {count, plural, one {{count} terminal} other {{count} terminals}}?",

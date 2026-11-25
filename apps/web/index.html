@@ -423,10 +423,10 @@
         position: relative;
         z-index: 1;
         display: flex;
+        flex-direction: column;
         align-items: center;
         justify-content: center;
-        width: 96px;
-        height: 96px;
+        gap: 16px;
       }
 
       #boot-shell-logo {
@@ -436,13 +436,51 @@
         border-radius: 22.37%;
       }
 
+      #boot-shell-loader {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        width: min(220px, 72vw);
+      }
+
+      #boot-shell-bar {
+        width: 100%;
+        height: 3px;
+        border-radius: 9999px;
+        overflow: hidden;
+        background: color-mix(in srgb, currentColor 15%, transparent);
+      }
+
+      #boot-shell-bar-fill {
+        width: 15%;
+        height: 100%;
+        border-radius: inherit;
+        background: #4f46e5;
+        transition: width 200ms ease-out;
+      }
+
+      html.dark #boot-shell-bar-fill {
+        background: #818cf8;
+      }
+
+      html[data-theme-selected="true"] #boot-shell-bar-fill {
+        background: var(--boot-accent);
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        #boot-shell-bar-fill {
+          transition: none;
+        }
+      }
+
       #boot-shell-progress {
-        position: absolute;
-        top: 100%;
-        width: min(360px, 80vw);
+        margin: 0;
         text-align: center;
-        font: 13px system-ui;
-        opacity: 0.7;
+        font-size: 12px;
+        line-height: 16px;
+        font-variant-numeric: tabular-nums;
+        opacity: 0.65;
       }
 
       /* App CSS locks body and #root scrolling once main loads, so the error screen scrolls itself. */
@@ -688,25 +726,54 @@
       <div id="boot-shell">
         <div id="boot-shell-card" aria-label="p0code splash screen">
           <img id="boot-shell-logo" src="/apple-touch-icon.png" alt="p0code" />
-          <p id="boot-shell-progress" role="status" aria-live="polite"></p>
+          <div id="boot-shell-loader">
+            <div
+              id="boot-shell-bar"
+              role="progressbar"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-valuenow="15"
+              aria-valuetext="Starting server"
+            >
+              <div id="boot-shell-bar-fill"></div>
+            </div>
+            <p id="boot-shell-progress" role="status" aria-live="polite">Starting server</p>
+          </div>
         </div>
       </div>
     </div>
     <script>
+      const bootBar = document.getElementById("boot-shell-bar");
+      const bootBarFill = document.getElementById("boot-shell-bar-fill");
       const migrationLabel = document.getElementById("boot-shell-progress");
       const readMigrationProgress = window.desktopBridge?.getDatabaseMigrationProgress;
-      if (readMigrationProgress && migrationLabel) {
+      if (readMigrationProgress && bootBar && bootBarFill && migrationLabel) {
         const updateMigrationProgress = async () => {
           if (!migrationLabel.isConnected) return;
           try {
             const progress = await readMigrationProgress();
-            migrationLabel.textContent = progress
-              ? `Upgrading database (${progress.current} of ${progress.total})`
-              : "";
-          } catch {
-            migrationLabel.textContent = "";
-          }
-          if (migrationLabel.isConnected) setTimeout(updateMigrationProgress, 1000);
+            const currentPercent = Number(bootBar.getAttribute("aria-valuenow")) || 0;
+            if (
+              progress &&
+              Number.isSafeInteger(progress.current) &&
+              Number.isSafeInteger(progress.total) &&
+              progress.current > 0 &&
+              progress.total > 0 &&
+              currentPercent < 70
+            ) {
+              const current = Math.min(progress.current, progress.total);
+              const nextPercent = Math.max(
+                currentPercent,
+                25 + Math.round((current / progress.total) * 30),
+              );
+              const text = `Updating database (${current}/${progress.total})`;
+              bootBar.setAttribute("aria-valuenow", String(nextPercent));
+              bootBar.setAttribute("aria-valuetext", text);
+              bootBarFill.style.width = `${nextPercent}%`;
+              migrationLabel.textContent = text;
+            }
+          } catch {}
+          if (migrationLabel.isConnected) setTimeout(updateMigrationProgress, 400);
         };
         void updateMigrationProgress();
       }

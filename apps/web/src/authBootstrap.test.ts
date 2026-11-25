@@ -6,13 +6,16 @@ import {
   type DesktopBridge,
 } from "@t3tools/contracts";
 import { createBrowserHistory } from "@tanstack/react-router";
+import type * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
-import { HttpClientError, HttpClientRequest } from "effect/http";
+import { HttpClientError, HttpClientRequest, HttpClientResponse } from "effect/http";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
+import { PrimaryEnvironmentHttpClient } from "./environments/primary/httpClient";
 import { installEnvironmentHttpTest } from "../test/environmentHttpTest";
 import { __setPrimaryHttpRunnerForTests } from "./lib/runtime";
+import { __resetBootStartupProgressForTests, getBootStartupProgress } from "./lib/startupProgress";
 
 type TestWindow = {
   location: URL;
@@ -129,6 +132,7 @@ describe("resolveInitialServerAuthGateState", () => {
     disposeHttpTest = undefined;
     const { __resetServerAuthBootstrapForTests } = await import("./environments/primary");
     __resetServerAuthBootstrapForTests();
+    __resetBootStartupProgressForTests();
     __setPrimaryHttpRunnerForTests();
     vi.unstubAllEnvs();
     vi.useRealTimers();
@@ -212,6 +216,50 @@ describe("resolveInitialServerAuthGateState", () => {
       vi.advanceTimersByTimeAsync(1_000),
     ]);
     expect(testApi.calls.browserSession).toEqual([{ credential: "desktop-bootstrap-token" }]);
+  });
+
+  it("reports database migration progress from a 503 startup status response while retrying", async () => {
+    const testApi = await installAuthApi({
+      session: () => authenticatedSession(LOOPBACK_AUTH),
+    });
+    const request = HttpClientRequest.get("http://localhost/api/auth/session");
+    const migratingResponse = HttpClientResponse.fromWeb(
+      request,
+      new Response(JSON.stringify({ status: "starting", migration: { current: 2, total: 5 } }), {
+        status: 503,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    const migratingError = new HttpClientError.HttpClientError({
+      reason: new HttpClientError.StatusCodeError({ request, response: migratingResponse }),
+    });
+    let startupAttempts = 1;
+    __setPrimaryHttpRunnerForTests((effect) => {
+      if (startupAttempts > 0) {
+        startupAttempts -= 1;
+        return testApi.run(
+          effect.pipe(
+            Effect.provideService(PrimaryEnvironmentHttpClient, {
+              auth: { session: () => Effect.fail(migratingError) },
+            } as unknown as Context.Service.Shape<typeof PrimaryEnvironmentHttpClient>),
+          ),
+        );
+      }
+      return testApi.run(effect);
+    });
+
+    const { resolveInitialServerAuthGateState } = await import("./environments/primary");
+
+    vi.useFakeTimers({ toFake: ["setTimeout", "Date"] });
+    await Promise.all([
+      expect(resolveInitialServerAuthGateState()).resolves.toEqual({ status: "authenticated" }),
+      vi.advanceTimersByTimeAsync(1_000),
+    ]);
+    expect(getBootStartupProgress()).toEqual({
+      stage: "updating-database",
+      percent: 37,
+      migration: { current: 2, total: 5 },
+    });
   });
 
   it("takes a pairing token from the location hash and strips it immediately", async () => {

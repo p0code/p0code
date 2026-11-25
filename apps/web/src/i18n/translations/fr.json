@@ -2434,6 +2434,7 @@
       "v": "v"
     }
   ],
+  "5fa4bc74fa5e9a8e": "Écran de démarrage de {appName}",
   "b4b98a0287c282e2": "Sur une autre machine, l’agent de cette machine ne peut donc pas le lire. Retirez-le ou revenez en arrière pour envoyer.",
   "5bbac0e5afeec779": "Fil actuel",
   "33c7e68fca089036": "Fil, {title}",
@@ -2857,6 +2858,11 @@
   "c8440b29bc95ca71": "Raccourci clavier non valide.",
   "f9e2c203389660f8": "Aucun environnement n’est sélectionné.",
   "372f4d4a1c650763": "Cette connexion ne peut pas redémarrer le moniteur de ressources.",
+  "9cac8a8e72ee1257": "Démarrage du serveur",
+  "b378ab0abbce35d4": "Mise à jour de la base de données ({current}/{total})",
+  "9668ede5c3e72d7a": "Mise à jour de la base de données",
+  "a044effb791c0a10": "Chargement des fils",
+  "333885e895f94647": "Prêt",
   "08da470047ab82f5": "Fermer le terminal « {label} » ?",
   "4f14e3fc3a216f44": "Cela arrête le processus en cours et efface son historique.",
   "16ce8443044b45fd": "Fermer {count, plural, one {{count} terminal} other {{count} terminaux}} ?",

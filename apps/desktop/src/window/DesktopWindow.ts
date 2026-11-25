@@ -275,13 +275,22 @@ function buildConnectingSplashDataUrl(
 ): string {
   const background = getInitialWindowBackgroundColor(shouldUseDarkColors);
   const label = shouldUseDarkColors ? "#9ca3af" : "#6b7280";
-  const accent = shouldUseDarkColors ? "#f8fafc" : "#1f2937";
+  const accent = shouldUseDarkColors ? "#818cf8" : "#4f46e5";
 
   const track = shouldUseDarkColors ? "rgba(248,250,252,0.18)" : "rgba(31,41,55,0.18)";
+  const hasValidProgress =
+    progress !== null &&
+    Number.isSafeInteger(progress.current) &&
+    Number.isSafeInteger(progress.total) &&
+    progress.current > 0 &&
+    progress.total > 0;
+  const percent = hasValidProgress
+    ? 25 + Math.round((Math.min(progress.current, progress.total) / progress.total) * 30)
+    : 15;
   const message = progress
     ? `Upgrading database (${progress.current} of ${progress.total})`
     : "Connecting to WSL…";
-  const html = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'"><style>html,body{margin:0;height:100%}body{background:${background};color:${label};font-family:system-ui,-apple-system,'Segoe UI',sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;-webkit-user-select:none;user-select:none;-webkit-app-region:drag}.spinner{width:26px;height:26px;border:3px solid ${track};border-top-color:${accent};border-radius:50%;animation:spin .8s linear infinite}.label{font-size:13px}@keyframes spin{to{transform:rotate(360deg)}}</style></head><body><div class="spinner"></div><div class="label">${message}</div></body></html>`;
+  const html = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'"><style>html,body{margin:0;height:100%}body{background:${background};color:${label};font-family:system-ui,-apple-system,'Segoe UI',sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;-webkit-user-select:none;user-select:none;-webkit-app-region:drag}.bar{width:200px;height:3px;border-radius:9999px;overflow:hidden;background:${track}}.fill{width:${percent}%;height:100%;border-radius:inherit;background:${accent};transition:width 200ms ease-out}@media (prefers-reduced-motion:reduce){.fill{transition:none}}.label{font-size:13px;font-variant-numeric:tabular-nums}</style></head><body><div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}" aria-valuetext="${message}"><div class="fill"></div></div><div class="label" role="status" aria-live="polite">${message}</div></body></html>`;
   return `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
 }
 

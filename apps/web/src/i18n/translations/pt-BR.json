@@ -2434,6 +2434,7 @@
       "v": "v"
     }
   ],
+  "5fa4bc74fa5e9a8e": "Tela inicial do {appName}",
   "b4b98a0287c282e2": "Está em outra máquina, então o agente desta máquina não consegue lê-lo. Remova-o ou volte para enviar.",
   "5bbac0e5afeec779": "Thread atual",
   "33c7e68fca089036": "Thread, {title}",
@@ -2857,6 +2858,11 @@
   "c8440b29bc95ca71": "Atalho de teclado inválido.",
   "f9e2c203389660f8": "Nenhum ambiente selecionado.",
   "372f4d4a1c650763": "Esta conexão não pode reiniciar o monitor de recursos.",
+  "9cac8a8e72ee1257": "Iniciando servidor",
+  "b378ab0abbce35d4": "Atualizando banco de dados ({current}/{total})",
+  "9668ede5c3e72d7a": "Atualizando banco de dados",
+  "a044effb791c0a10": "Carregando threads",
+  "333885e895f94647": "Pronto",
   "08da470047ab82f5": "Fechar o terminal \"{label}\"?",
   "4f14e3fc3a216f44": "Isso encerra o processo em execução e apaga o histórico dele.",
   "16ce8443044b45fd": "Fechar {count, plural, one {{count} terminal} other {{count} terminais}}?",
