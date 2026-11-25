@@ -25,6 +25,7 @@ import {
   ScreenReaderAnnouncements,
   SidebarProjectSortOrder,
   ToolCallVisibility,
+  type UsageDisplayMode,
 } from "@t3tools/contracts/settings";
 import { desktopUpdateChannelOf } from "@t3tools/shared/cliRelease";
 import { createModelSelection, pickModelSelection } from "@t3tools/shared/model";
@@ -158,6 +159,11 @@ const TIMESTAMP_FORMAT_LABELS = {
   locale: msg("System default"),
   "12-hour": msg("12-hour"),
   "24-hour": msg("24-hour"),
+};
+
+const USAGE_DISPLAY_MODE_LABELS: Record<UsageDisplayMode, string> = {
+  left: msg("Left", { $context: "usage display mode option: remaining usage" }),
+  used: msg("Used", { $context: "usage display mode option: consumed usage" }),
 };
 
 const DIFF_LAYOUT_LABELS: Record<DiffLayout, string> = {
@@ -536,6 +542,9 @@ export function useSettingsRestore(onRestored?: () => void) {
     ...(settings.timestampFormat !== DEFAULT_UNIFIED_SETTINGS.timestampFormat
       ? [gt("Time format")]
       : []),
+    ...(settings.usageDisplayMode !== DEFAULT_UNIFIED_SETTINGS.usageDisplayMode
+      ? [gt("Show usage as")]
+      : []),
     ...(settings.notificationMode !== DEFAULT_UNIFIED_SETTINGS.notificationMode
       ? [gt("Thread notifications")]
       : []),
@@ -724,6 +733,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       mathRenderingEnabled: DEFAULT_UNIFIED_SETTINGS.mathRenderingEnabled,
       language: DEFAULT_UNIFIED_SETTINGS.language,
       timestampFormat: DEFAULT_UNIFIED_SETTINGS.timestampFormat,
+      usageDisplayMode: DEFAULT_UNIFIED_SETTINGS.usageDisplayMode,
       notificationMode: DEFAULT_UNIFIED_SETTINGS.notificationMode,
       inAppNotificationsEnabled: DEFAULT_UNIFIED_SETTINGS.inAppNotificationsEnabled,
       wordWrap: DEFAULT_UNIFIED_SETTINGS.wordWrap,
@@ -1233,6 +1243,46 @@ export function GeneralSettingsPanel() {
                 </SelectItem>
                 <SelectItem hideIndicator value="24-hour">
                   {m(TIMESTAMP_FORMAT_LABELS["24-hour"])}
+                </SelectItem>
+              </SelectPopup>
+            </Select>
+          }
+        />
+        <SettingsRow
+          {...setting("usage-display-mode")}
+          description={
+            <T>Show usage limits and context windows as what is left or what has been used.</T>
+          }
+          resetAction={
+            settings.usageDisplayMode !== DEFAULT_UNIFIED_SETTINGS.usageDisplayMode ? (
+              <SettingResetButton
+                ariaLabel={gt("Reset usage display mode to default")}
+                onClick={() =>
+                  updateSettings({
+                    usageDisplayMode: DEFAULT_UNIFIED_SETTINGS.usageDisplayMode,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Select
+              value={settings.usageDisplayMode}
+              onValueChange={(value) => {
+                if (value === "left" || value === "used") {
+                  updateSettings({ usageDisplayMode: value });
+                }
+              }}
+            >
+              <SelectTrigger size="sm" className="w-full sm:w-40" aria-label={gt("Show usage as")}>
+                <SelectValue>{m(USAGE_DISPLAY_MODE_LABELS[settings.usageDisplayMode])}</SelectValue>
+              </SelectTrigger>
+              <SelectPopup align="end" alignItemWithTrigger={false}>
+                <SelectItem hideIndicator value="left">
+                  {m(USAGE_DISPLAY_MODE_LABELS.left)}
+                </SelectItem>
+                <SelectItem hideIndicator value="used">
+                  {m(USAGE_DISPLAY_MODE_LABELS.used)}
                 </SelectItem>
               </SelectPopup>
             </Select>

@@ -1,4 +1,5 @@
 import { normalizeProviderAccentColor } from "@t3tools/client-runtime/state/provider-instance-display";
+import { DEFAULT_USAGE_DISPLAY_MODE, type UsageDisplayMode } from "@t3tools/contracts/settings";
 import {
   collectLimitAccounts,
   collectLimitPools,
@@ -7,6 +8,7 @@ import {
   type LimitPoolWindow,
   type LimitPresentations,
 } from "@t3tools/shared/usageLimits";
+import { formatUsageModeWord } from "@t3tools/shared/usageLimitsCopy";
 import { msg } from "gt-react-native";
 
 import { m, type MessageResolver } from "../i18n/messages";
@@ -50,6 +52,7 @@ export interface WidgetLimitAccount {
 export interface SubscriptionUsageSnapshot {
   theme?: WidgetTheme;
   url?: string;
+  displayMode?: UsageDisplayMode;
   text?: SubscriptionUsageText;
   checkedAt: number;
   providers: Array<{
@@ -157,17 +160,27 @@ const resetTime = (at: number) =>
 function subscriptionUsageText(
   resolve: MessageResolver,
   maxHiddenWindows: number,
+  displayMode: UsageDisplayMode,
 ): SubscriptionUsageText {
+  const used = displayMode === "used";
   return {
     refresh: resolve(msg("Open {app} to refresh", { app: "p0code" })),
     noSessionLimit: resolve(msg("No session limit reported")),
     noWeeklyLimit: resolve(msg("No weekly limit reported")),
-    subscriptionRemaining: resolve(msg("Subscription remaining")),
-    percentLeft: resolve(msg("{remaining}% left", { remaining: "{remaining}" })),
-    windowPercentLeft: resolve(
-      msg("{window} · {remaining}% left", { window: "{window}", remaining: "{remaining}" }),
-    ),
-    left: resolve(msg("left", { $context: "follows a bold percentage, as in 40% left" })),
+    subscriptionRemaining: used
+      ? resolve(msg("Subscription used"))
+      : resolve(msg("Subscription remaining")),
+    percentLeft: used
+      ? resolve(msg("{remaining}% used", { remaining: "{remaining}" }))
+      : resolve(msg("{remaining}% left", { remaining: "{remaining}" })),
+    windowPercentLeft: used
+      ? resolve(
+          msg("{window} · {remaining}% used", { window: "{window}", remaining: "{remaining}" }),
+        )
+      : resolve(
+          msg("{window} · {remaining}% left", { window: "{window}", remaining: "{remaining}" }),
+        ),
+    left: formatUsageModeWord(displayMode, resolve),
     notApplicable: resolve(msg("N/A", { $context: "no usage limit for the chosen period" })),
     openApp: resolve(msg("Open {app}", { app: "p0code" })),
     noLimits: resolve(msg("No subscription limits available.")),
@@ -177,16 +190,27 @@ function subscriptionUsageText(
       // oxlint-disable-next-line t3code/no-untranslated-copy -- placeholders the widget fills in
       msg("{provider}. {detail}.", { provider: "{provider}", detail: "{detail}" }),
     ),
-    windowAccessibility: resolve(
-      msg("{provider}, {window}, {remaining} percent remaining. {reset}. {detail}.", {
-        provider: "{provider}",
-        window: "{window}",
-        remaining: "{remaining}",
-        reset: "{reset}",
-        // oxlint-disable-next-line t3code/no-untranslated-copy -- placeholders the widget fills in
-        detail: "{detail}",
-      }),
-    ),
+    windowAccessibility: used
+      ? resolve(
+          msg("{provider}, {window}, {remaining} percent used. {reset}. {detail}.", {
+            provider: "{provider}",
+            window: "{window}",
+            remaining: "{remaining}",
+            reset: "{reset}",
+            // oxlint-disable-next-line t3code/no-untranslated-copy -- placeholders the widget fills in
+            detail: "{detail}",
+          }),
+        )
+      : resolve(
+          msg("{provider}, {window}, {remaining} percent remaining. {reset}. {detail}.", {
+            provider: "{provider}",
+            window: "{window}",
+            remaining: "{remaining}",
+            reset: "{reset}",
+            // oxlint-disable-next-line t3code/no-untranslated-copy -- placeholders the widget fills in
+            detail: "{detail}",
+          }),
+        ),
     moreInApp: Object.fromEntries(
       Array.from({ length: maxHiddenWindows }, (_, index) => [
         String(index + 1),
@@ -207,6 +231,7 @@ function subscriptionUsageProps(
   configuredDrivers: ReadonlySet<string>,
   maxWindowsPerProvider: number,
   resolve: MessageResolver,
+  displayMode: UsageDisplayMode,
 ): SubscriptionUsageSnapshot {
   const pools = collectLimitPools(accounts, now);
   const checked = accounts
@@ -268,7 +293,9 @@ function subscriptionUsageProps(
                     },
                   ),
                 )
-              : resolve(msg("Subscription remaining")),
+              : displayMode === "used"
+                ? resolve(msg("Subscription used"))
+                : resolve(msg("Subscription remaining")),
           expiresAt: fresh ? expiresAt : 0,
           totalWindows: fresh ? pool.windows.length : 0,
           windows: fresh
@@ -294,6 +321,7 @@ export function buildSubscriptionUsageSnapshot(
   url: string,
   maxWindowsPerProvider = 6,
   resolve: MessageResolver = m,
+  displayMode: UsageDisplayMode = DEFAULT_USAGE_DISPLAY_MODE,
 ): SubscriptionUsageSnapshot {
   const configuredDrivers = new Set(
     [...presentations.values()].flatMap((presentation) =>
@@ -314,14 +342,17 @@ export function buildSubscriptionUsageSnapshot(
     configuredDrivers,
     maxWindowsPerProvider,
     resolve,
+    displayMode,
   );
   return {
     ...props,
     url,
+    displayMode,
     // The Android widget counts hidden rows across providers, a note row included.
     text: subscriptionUsageText(
       resolve,
       props.providers.reduce((sum, provider) => sum + Math.max(1, provider.totalWindows), 0),
+      displayMode,
     ),
   };
 }

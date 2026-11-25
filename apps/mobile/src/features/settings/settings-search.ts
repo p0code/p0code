@@ -97,6 +97,11 @@ const SETTINGS_SEARCH_TERMS = {
     msg("working section", { $context: "settings search keyword" }),
     msg("new threads", { $context: "settings search keyword" }),
     msg("last project", { $context: "settings search keyword" }),
+    msg("show usage as", { $context: "settings search keyword" }),
+    msg("usage limits", { $context: "settings search keyword" }),
+    msg("left", { $context: "settings search keyword" }),
+    msg("used", { $context: "settings search keyword" }),
+    msg("context window", { $context: "settings search keyword" }),
   ],
   SettingsThreads: [
     msg("new threads", { $context: "settings search keyword" }),

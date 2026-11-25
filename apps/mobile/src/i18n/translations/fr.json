@@ -1167,6 +1167,20 @@
   "522713f306fbe418": "dans {duration}",
   "391f43ef06ab0614": "↻ {duration}",
   "c47ebef856c52c5f": "réinitialisation dans {duration}",
+  "060b77448f13f63a": "{percent} % utilisé",
+  "df130193fd8be551": "{percent} % restant",
+  "22b8a13abfe621b3": "{percent} % de la fenêtre écoulée",
+  "5be59cbeb4303948": "{percent} % de la fenêtre restante",
+  "0fb11606e028c4bb": "{percent} % utilisé à ce stade",
+  "a23059a594ce34d8": "{percent} % restant à ce stade",
+  "ae1ecc39cf087f78": "utilisé",
+  "ef3dba1a8c5ccbf7": "restant",
+  "351f9a02c93fc616": "{left} restant sur {max}",
+  "47dd3a79477db74d": "{used} / {max} utilisé",
+  "f7bd708b6710047a": "{used} utilisé",
+  "b3a88de58850f36d": "Contexte : {left} restant sur {max}",
+  "5a879586f6e062e0": "Contexte : {used} / {max} utilisé",
+  "e045e018a6f69317": "Contexte : {used} utilisé",
   "0a75e464d833bca8": "Paramètres",
   "b5adbf54cbefee38": "Environnements",
   "6d9bf91f0d4b7ba3": "Conversations",
@@ -1591,16 +1605,19 @@
   "9a4907d3650b1250": "Ouvrez {app} pour actualiser",
   "a0b256b49573c479": "Aucune limite de session signalée",
   "bdb25fc7329e1ea7": "Aucune limite hebdomadaire signalée",
+  "4de5fcfb9d79a954": "Abonnement utilisé",
   "2a868f5893b8a3d0": "Abonnement restant",
+  "a34c676b80bfa56e": "{remaining} % utilisé",
   "07f5912af296f9ea": "{remaining} % restant",
+  "7d07d773ef7b25dc": "{window} · {remaining} % utilisé",
   "f60ed5fcf4fd471c": "{window} · {remaining} % restants",
-  "30106fc3a8643199": "restant",
   "bd8554c7671b01a1": "N/D",
   "8963e62b7e4f94cf": "Ouvrir {app}",
   "b6ce773a43c1b2a9": "Aucune limite d’abonnement disponible.",
   "6974bbcf31d9230a": "À {time}",
   "29519653f14c6817": "Touchez pour vous connecter dans {app}",
   "0a3b9942c9a76f23": "{provider}. {detail}.",
+  "c86f27b5191cb017": "{provider}, {window}, {remaining} pour cent utilisés. {reset}. {detail}.",
   "5270189c209360dd": "{provider}, {window}, {remaining} pour cent restants. {reset}. {detail}.",
   "f7288c2957dc484a": "{count, plural, one {{count} de plus dans {app}} other {{count} de plus dans {app}}}",
   "67651da8154563a1": "Aucune limite disponible",
@@ -3272,6 +3289,11 @@
   "6c0baae0cb823c61": "Garder les chemins de monorepo séparés.",
   "27b88cb89b5cb56d": "Garder séparés",
   "21e3a43e89b1cf74": "Afficher chaque espace de travail comme un projet distinct.",
+  "c94200c47834c81e": "Restant",
+  "0f7b199bbe545ca0": "Afficher les limites d'utilisation et le contexte restants.",
+  "ab1b99ab3395dcea": "Utilisé",
+  "ff8245f14dba4296": "Afficher les limites d'utilisation et le contexte utilisés jusqu'ici.",
+  "a9bd3aba080887fa": "Afficher l'utilisation comme",
   "cd5452cc9e13c818": "Regroupement des projets",
   "b88b9f277cd45075": "Échec de la mise à jour du projet",
   "91decca53812ee0f": "Cette connexion ne peut plus le modifier.",
@@ -3770,6 +3792,11 @@
   "69d7f7a05be41dc6": "section en cours",
   "8904cb0b34fca351": "nouveaux fils",
   "ec3e27b261ec1fdc": "dernier projet",
+  "d040aabca7f00e55": "afficher l'utilisation comme",
+  "de6a1645307ae9f4": "limites d’utilisation",
+  "a76e2fff097f99d0": "restant",
+  "dd021842b243f91a": "utilisé",
+  "a29c9a056921665c": "fenêtre de contexte",
   "2b1b6a77ea4e48b2": "espace de travail par défaut",
   "bc3f78610c8510ef": "autorisations par défaut",
   "d0f938923abcda05": "accès",
@@ -3779,7 +3806,6 @@
   "c5c44c33381fd92b": "clôture automatique",
   "b8804bb452387717": "clore",
   "5c243705c81dcbf5": "report",
-  "de6a1645307ae9f4": "limites d’utilisation",
   "765476de2079311a": "reprise automatique",
   "c53a7db7fa6e18b4": "comportement des fils",
   "dcc002d055e544b4": "relances",
@@ -4841,35 +4867,20 @@
   "b16fdf56b16d99c9": "Dans le rythme",
   "90f977e97ae8b6c6": "En dessous du rythme",
   "897aceb6c7196649": "Compte",
-  "811008ce95331531": "Segment {index}, {account}, {remaining} % restant",
-  "bfb2d0ef476d295b": "Segment {index}, {account}, {remaining} % restant, {timeLeft} % de la fenêtre restant",
+  "c2257dce280d4be5": "Segment {index}, {account}, {usage}",
+  "4836a36132553c86": "Segment {index}, {account}, {usage}, {pace}",
   "e71c96e5114f7718": "Afficher les détails du compte",
-  "27cd137302298f71": "Segment {index}, {account}, {remaining} % restant, {resetsIn}, {credits, plural, one {{credits} crédit de réinitialisation en réserve} other {{credits} crédits de réinitialisation en réserve}}",
-  "288ade531cfcf90c": "Segment {index}, {account}, {remaining} % restant, {resetsIn}",
-  "f78edbddd70ee41d": "Segment {index}, {account}, {remaining} % restant, {credits, plural, one {{credits} crédit de réinitialisation en réserve} other {{credits} crédits de réinitialisation en réserve}}",
+  "43ccb8b46daf0f06": "Segment {index}, {account}, {usage}, {resetsIn}, {credits, plural, one {{credits} crédit de réinitialisation en réserve} other {{credits} crédits de réinitialisation en réserve}}",
+  "75b29afcaf4b1abe": "Segment {index}, {account}, {usage}, {resetsIn}",
+  "29d1e40ada6f47be": "Segment {index}, {account}, {usage}, {credits, plural, one {{credits} crédit de réinitialisation en réserve} other {{credits} crédits de réinitialisation en réserve}}",
   "d2d071e45a2d6b89": "Sélectionnez un environnement pour voir les limites.",
   "f411a8cef140a5ea": "Aucun fournisseur des environnements sélectionnés ne signale de limites d’abonnement.",
   "b29a752dd8ee9aa7": "Compte",
   "55a38e69338c54ee": "Masquer l’e-mail du compte",
   "0d3e9f1f27c0e780": "Afficher l’e-mail du compte",
+  "20a3e1f63941fcea": "Rythme régulier : {pace}",
   "9217e0c91cee3cf8": "Connecté",
   "5f12a194d158f9b1": "Source",
-  "65a7507ffde6d3f8": [
-    {
-      "c": [
-        {
-          "i": 2,
-          "k": "_gt_value_2",
-          "v": "v"
-        },
-        " %"
-      ],
-      "i": 1,
-      "t": "Text"
-    },
-    " ",
-    "restants"
-  ],
   "6af5e3cf03861f55": [
     {
       "i": 1,
@@ -4879,14 +4890,6 @@
     " n’a pas pu actualiser les limites. Affichage des dernières valeurs connues."
   ],
   "726ece0c7139ce8a": "Ce compte ne signale plus de limites dans les environnements sélectionnés.",
-  "412e3b93454812aa": [
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    " % restant"
-  ],
   "82d204e1a9e7da17": [
     "Réinitialisation",
     " ",
@@ -4895,15 +4898,6 @@
       "k": "_gt_value_1",
       "v": "v"
     }
-  ],
-  "23d0be01844d163c": [
-    "Rythme régulier : ",
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    " % restant à ce stade"
   ],
   "a6ae2f414eb6349a": [
     "Restaure ",

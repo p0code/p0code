@@ -1167,6 +1167,20 @@
   "522713f306fbe418": "還需 {duration}",
   "391f43ef06ab0614": "↻ {duration}",
   "c47ebef856c52c5f": "{duration} 後重置",
+  "060b77448f13f63a": "已用 {percent}%",
+  "df130193fd8be551": "剩餘 {percent}%",
+  "22b8a13abfe621b3": "週期已過 {percent}%",
+  "5be59cbeb4303948": "週期剩餘 {percent}%",
+  "0fb11606e028c4bb": "此時應已用 {percent}%",
+  "a23059a594ce34d8": "此時應剩餘 {percent}%",
+  "ae1ecc39cf087f78": "已用",
+  "ef3dba1a8c5ccbf7": "剩餘",
+  "351f9a02c93fc616": "剩餘 {left} / {max}",
+  "47dd3a79477db74d": "已用 {used} / {max}",
+  "f7bd708b6710047a": "已用 {used}",
+  "b3a88de58850f36d": "上下文 剩餘 {left} / {max}",
+  "5a879586f6e062e0": "上下文 已用 {used} / {max}",
+  "e045e018a6f69317": "上下文 已用 {used}",
   "0a75e464d833bca8": "設定",
   "b5adbf54cbefee38": "環境",
   "6d9bf91f0d4b7ba3": "會話",
@@ -1592,16 +1606,19 @@
   "9a4907d3650b1250": "開啟 {app} 以重新整理",
   "a0b256b49573c479": "未報告會話限制",
   "bdb25fc7329e1ea7": "未報告每週限制",
+  "4de5fcfb9d79a954": "訂閱已用",
   "2a868f5893b8a3d0": "訂閱剩餘",
+  "a34c676b80bfa56e": "已用 {remaining}%",
   "07f5912af296f9ea": "剩餘 {remaining}%",
+  "7d07d773ef7b25dc": "{window} · 已用 {remaining}%",
   "f60ed5fcf4fd471c": "{window} · 剩餘 {remaining}%",
-  "30106fc3a8643199": "剩餘",
   "bd8554c7671b01a1": "不適用",
   "8963e62b7e4f94cf": "開啟 {app}",
   "b6ce773a43c1b2a9": "沒有可用的訂閱限制。",
   "6974bbcf31d9230a": "截至 {time}",
   "29519653f14c6817": "點按以在 {app} 中連線",
   "0a3b9942c9a76f23": "{provider}。{detail}。",
+  "c86f27b5191cb017": "{provider}，{window}，已用 {remaining}%。{reset}。{detail}。",
   "5270189c209360dd": "{provider}，{window}，剩餘 {remaining}%。{reset}。{detail}。",
   "f7288c2957dc484a": "{count, plural, other {{app} 中還有 {count} 個}}",
   "67651da8154563a1": "沒有可用的限制",
@@ -3274,6 +3291,11 @@
   "6c0baae0cb823c61": "保持 monorepo 路徑分開。",
   "27b88cb89b5cb56d": "保持獨立",
   "21e3a43e89b1cf74": "將每個工作區顯示為獨立專案。",
+  "c94200c47834c81e": "剩餘",
+  "0f7b199bbe545ca0": "顯示剩餘用量限額與可用上下文。",
+  "ab1b99ab3395dcea": "已用",
+  "ff8245f14dba4296": "顯示目前已用的限額與上下文。",
+  "a9bd3aba080887fa": "用量顯示方式",
   "cd5452cc9e13c818": "專案分組",
   "b88b9f277cd45075": "更新專案失敗",
   "91decca53812ee0f": "此連線已無法更改它。",
@@ -3772,6 +3794,11 @@
   "69d7f7a05be41dc6": "執行中分組",
   "8904cb0b34fca351": "新會話",
   "ec3e27b261ec1fdc": "上次的專案",
+  "d040aabca7f00e55": "用量顯示方式",
+  "de6a1645307ae9f4": "用量限制",
+  "a76e2fff097f99d0": "剩餘",
+  "dd021842b243f91a": "已用",
+  "a29c9a056921665c": "上下文視窗",
   "2b1b6a77ea4e48b2": "預設工作區",
   "bc3f78610c8510ef": "預設許可權",
   "d0f938923abcda05": "訪問",
@@ -3781,7 +3808,6 @@
   "c5c44c33381fd92b": "自動收尾",
   "b8804bb452387717": "收尾",
   "5c243705c81dcbf5": "暫緩",
-  "de6a1645307ae9f4": "用量限制",
   "765476de2079311a": "自動繼續",
   "c53a7db7fa6e18b4": "會話行為",
   "dcc002d055e544b4": "後續訊息",
@@ -4829,35 +4855,20 @@
   "b16fdf56b16d99c9": "用量消耗適中",
   "90f977e97ae8b6c6": "用量消耗偏慢",
   "897aceb6c7196649": "賬戶",
-  "811008ce95331531": "分段 {index}，{account}，剩餘 {remaining}%",
-  "bfb2d0ef476d295b": "分段 {index}，{account}，剩餘 {remaining}%，視窗剩餘 {timeLeft}%",
+  "c2257dce280d4be5": "分段 {index}，{account}，{usage}",
+  "4836a36132553c86": "分段 {index}，{account}，{usage}，{pace}",
   "e71c96e5114f7718": "顯示賬戶詳情",
-  "27cd137302298f71": "分段 {index}，{account}，剩餘 {remaining}%，{resetsIn}，{credits, plural, other {已存有 {credits} 個重置額度}}",
-  "288ade531cfcf90c": "分段 {index}，{account}，剩餘 {remaining}%，{resetsIn}",
-  "f78edbddd70ee41d": "分段 {index}，{account}，剩餘 {remaining}%，{credits, plural, other {已存有 {credits} 個重置額度}}",
+  "43ccb8b46daf0f06": "分段 {index}，{account}，{usage}，{resetsIn}，{credits, plural, other {已存 {credits} 次重設額度}}",
+  "75b29afcaf4b1abe": "分段 {index}，{account}，{usage}，{resetsIn}",
+  "29d1e40ada6f47be": "分段 {index}，{account}，{usage}，{credits, plural, other {已存 {credits} 次重設額度}}",
   "d2d071e45a2d6b89": "選擇一個環境即可檢視限制。",
   "f411a8cef140a5ea": "選中的環境上沒有提供方報告訂閱限制。",
   "b29a752dd8ee9aa7": "賬戶",
   "55a38e69338c54ee": "隱藏賬戶郵箱",
   "0d3e9f1f27c0e780": "顯示賬戶郵箱",
+  "20a3e1f63941fcea": "勻速進度：{pace}",
   "9217e0c91cee3cf8": "已登入",
   "5f12a194d158f9b1": "來源",
-  "65a7507ffde6d3f8": [
-    "剩餘",
-    " ",
-    {
-      "c": [
-        {
-          "i": 2,
-          "k": "_gt_value_2",
-          "v": "v"
-        },
-        "%"
-      ],
-      "i": 1,
-      "t": "Text"
-    }
-  ],
   "6af5e3cf03861f55": [
     {
       "i": 1,
@@ -4867,15 +4878,6 @@
     " 無法重新整理限制。正在顯示最近已知的值。"
   ],
   "726ece0c7139ce8a": "此賬戶已不再在所選環境上報告限制。",
-  "412e3b93454812aa": [
-    "剩餘 ",
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    "%"
-  ],
   "82d204e1a9e7da17": [
     "重置",
     " ",
@@ -4884,15 +4886,6 @@
       "k": "_gt_value_1",
       "v": "v"
     }
-  ],
-  "23d0be01844d163c": [
-    "均勻進度：此時應剩餘 ",
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    "%"
   ],
   "a6ae2f414eb6349a": [
     "恢復池的 ",

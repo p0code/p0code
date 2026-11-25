@@ -270,6 +270,13 @@ export const OrchestrationV2ProviderTurnTokenUsage = Schema.Struct({
 export type OrchestrationV2ProviderTurnTokenUsage =
   typeof OrchestrationV2ProviderTurnTokenUsage.Type;
 
+/** Compact latest context window snapshot carried on thread shells and subagent rows. */
+export const OrchestrationV2ThreadContextUsage = Schema.Struct({
+  usedTokens: NonNegativeInt,
+  maxTokens: Schema.optional(PositiveInt),
+});
+export type OrchestrationV2ThreadContextUsage = typeof OrchestrationV2ThreadContextUsage.Type;
+
 export const OrchestrationV2ContextTransfer = Schema.Struct({
   id: ContextTransferId,
   type: OrchestrationV2ContextTransferType,
@@ -1085,6 +1092,7 @@ export const OrchestrationV2Subagent = Schema.Struct({
   ]),
   progress: Schema.optional(Schema.String),
   workflow: Schema.optional(OrchestrationV2SubagentWorkflow),
+  contextUsage: Schema.optional(OrchestrationV2ThreadContextUsage),
   result: Schema.NullOr(Schema.String),
   startedAt: Schema.NullOr(Schema.DateTimeUtc),
   completedAt: Schema.NullOr(Schema.DateTimeUtc),
@@ -2484,6 +2492,7 @@ export const OrchestrationV2ThreadShell = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed([])),
   ),
   goal: Schema.optional(Schema.NullOr(OrchestrationV2ProviderGoal)),
+  contextUsage: Schema.optional(OrchestrationV2ThreadContextUsage),
   itemCount: NonNegativeInt,
   visibleItemCount: NonNegativeInt,
   createdAt: Schema.DateTimeUtc,

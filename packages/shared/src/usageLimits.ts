@@ -16,6 +16,7 @@ import {
   type UsageLimitSourceAccount,
   type UsageLimitSourceSnapshot,
   type UsageLimitSourceSnapshots,
+  type UsageDisplayMode,
 } from "@t3tools/contracts";
 
 import * as DateTime from "effect/DateTime";
@@ -864,8 +865,26 @@ export function tightestSubscriptionWindow(
   return tightest;
 }
 
-export function remainingPercent(window: ServerProviderUsageWindow): number {
+export function remainingPercent(window: Pick<ServerProviderUsageWindow, "usedPercent">): number {
   return Math.round(100 - Math.max(0, Math.min(100, window.usedPercent)));
+}
+
+export function usedPercent(window: Pick<ServerProviderUsageWindow, "usedPercent">): number {
+  return 100 - remainingPercent(window);
+}
+
+export function displayUsagePercent(
+  window: Pick<ServerProviderUsageWindow, "usedPercent">,
+  mode: UsageDisplayMode,
+): number {
+  return mode === "used" ? usedPercent(window) : remainingPercent(window);
+}
+
+export function displayPoolUsagePercent(
+  pool: Pick<LimitPoolWindow, "remainingPercent" | "usedPercent">,
+  mode: UsageDisplayMode,
+): number {
+  return mode === "used" ? 100 - pool.remainingPercent : pool.remainingPercent;
 }
 
 function resetMillis(window: ServerProviderUsageWindow): number | null {
@@ -889,6 +908,80 @@ export function paceRemainingPercent(
 ): number | null {
   const elapsed = elapsedShare(window, now);
   return elapsed === null ? null : Math.round((1 - elapsed) * 100);
+}
+
+export function paceDisplayPercent(
+  window: ServerProviderUsageWindow,
+  now: number,
+  mode: UsageDisplayMode,
+): number | null {
+  const elapsed = elapsedShare(window, now);
+  if (elapsed === null) return null;
+  return mode === "used" ? Math.round(elapsed * 100) : Math.round((1 - elapsed) * 100);
+}
+
+export function formatContextWindowTokens(value: number | null): string {
+  if (value === null || !Number.isFinite(value)) {
+    return "0";
+  }
+  if (value < 1_000) {
+    return `${Math.round(value)}`;
+  }
+  if (value < 10_000) {
+    return `${(value / 1_000).toFixed(1).replace(/\.0$/, "")}k`;
+  }
+  if (value < 999_500) {
+    return `${Math.round(value / 1_000)}k`;
+  }
+  return `${(value / 1_000_000).toFixed(1).replace(/\.0$/, "")}m`;
+}
+
+export interface ContextWindowDisplayMetrics {
+  readonly usedTokens: number;
+  readonly maxTokens: number | null;
+  readonly remainingTokens: number | null;
+  readonly usedPercent: number | null;
+  readonly remainingPercent: number | null;
+  readonly fillPercent: number | null;
+  readonly tickPercent: number | null;
+}
+
+export function contextWindowDisplay(
+  usage: {
+    readonly usedTokens: number;
+    readonly maxTokens?: number | null | undefined;
+    readonly autoCompactThreshold?: number | null | undefined;
+  },
+  mode: UsageDisplayMode,
+): ContextWindowDisplayMetrics {
+  const usedTokens = Math.max(0, usage.usedTokens);
+  const maxTokens =
+    usage.maxTokens != null && Number.isFinite(usage.maxTokens) && usage.maxTokens > 0
+      ? usage.maxTokens
+      : null;
+  const remainingTokens =
+    maxTokens !== null ? Math.max(0, Math.round(maxTokens - usedTokens)) : null;
+  const usedPct =
+    maxTokens !== null
+      ? Math.round(Math.max(0, Math.min(100, (usedTokens / maxTokens) * 100)))
+      : null;
+  const remainingPct = usedPct !== null ? 100 - usedPct : null;
+  const threshold = usage.autoCompactThreshold ?? null;
+  const tickPercent =
+    maxTokens !== null && threshold !== null && threshold > 0 && threshold < maxTokens
+      ? mode === "left"
+        ? ((maxTokens - threshold) / maxTokens) * 100
+        : (threshold / maxTokens) * 100
+      : null;
+  return {
+    usedTokens,
+    maxTokens,
+    remainingTokens,
+    usedPercent: usedPct,
+    remainingPercent: remainingPct,
+    fillPercent: usedPct === null ? null : mode === "left" ? remainingPct : usedPct,
+    tickPercent,
+  };
 }
 
 export type LimitPace = "ahead" | "on" | "under";
