@@ -27,14 +27,14 @@ sharing too.
 
 ## What the guest sees
 
-The guest sees the thread's recent history and everything after, in the same timeline you see, as
-it streams: messages and their files, the agent's replies with the images they show from your
-machine, its reasoning, plans, questions, and its work, with command output when they expand a
-command. Their composer shows the thread's model, but they cannot change it. They do not see diffs, and they cannot act on the thread: no forking,
-reverting, opening files on your machine, or answering the agent for you.
+The guest sees recent user messages and assistant replies, the thread's working status, and which
+files changed. File changes hide the diff and file contents. Their composer shows the thread's
+model, but they cannot change it. Command output, tool details, reasoning, plans, subagents,
+checkpoints, repository paths, branches, and linked pull requests stay private.
 
-Anything the agent read or printed can show, such as a value from a file. Share only threads you
-are comfortable showing.
+Messages and assistant replies can still contain sensitive text. Share only threads whose
+conversation you are comfortable showing. A guest message waits for you and does not start a run
+or change whether the thread is settled.
 
 ## Guest attachments
 

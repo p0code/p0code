@@ -15,7 +15,6 @@ import {
   GuestSubmitRequest,
   guestSessionCookieName,
   isProviderSendTurnSupportedImageMimeType,
-  OrchestrationV2CommandOutputFrame,
   OrchestrationV2GetTurnItemResult,
   OrchestrationV2ThreadHistoryPage,
 } from "@t3tools/contracts";
@@ -47,9 +46,6 @@ const decodeSubmit = Schema.decodeUnknownEffect(GuestSubmitRequest);
 // The owner's thread types hold DateTime values; the JSON codec writes them as strings.
 const encodeStreamEvent = Schema.encodeEffect(
   Schema.fromJsonString(Schema.toCodecJson(GuestStreamEvent)),
-);
-const encodeOutputFrame = Schema.encodeEffect(
-  Schema.fromJsonString(OrchestrationV2CommandOutputFrame),
 );
 const encodeItem = Schema.encodeEffect(Schema.toCodecJson(OrchestrationV2GetTurnItemResult));
 const encodeHistoryPage = Schema.encodeEffect(Schema.toCodecJson(OrchestrationV2ThreadHistoryPage));
@@ -286,20 +282,10 @@ const historyRoute = HttpRouter.add(
   }),
 );
 
-// Ends when the command settles; the page closes its EventSource on that last frame, so the
-// browser does not reconnect.
 const commandOutputRoute = HttpRouter.add(
   "GET",
   GUEST_COMMAND_OUTPUT_ROUTE,
-  Effect.gen(function* () {
-    const itemId = yield* itemParam;
-    if (!itemId) return yield* badRequest;
-    const guestShares = yield* GuestShareService;
-    return yield* guestShares.commandOutput(yield* sessionToken, itemId).pipe(
-      Effect.map((frames) => eventStreamResponse(frames, encodeOutputFrame)),
-      Effect.catchTags({ GuestShareAccessError: errorResponse }),
-    );
-  }),
+  Effect.succeed(HttpServerResponse.empty({ status: 404, headers: NO_STORE })),
 );
 
 // Images of the four checked types load inline; anything else downloads as bytes, so a guest's

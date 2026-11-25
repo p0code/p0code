@@ -47,6 +47,8 @@ model.
   RPC, WebSocket, or MCP route can accept one. Closing, replacing, or archiving the share revokes
   every token. Guest routes also require the environment to still serve the link's hostname through its relay link or public origin (never rely
   on the request `Host` header alone).
+  Guest snapshots, live events, history, and item details use an explicit public projection; unknown
+  events are dropped. Command output is owner-only and the guest output route returns 404.
 - **MCP clients (`mcp-client`) are a separate audience.** Outside agents authenticate on `/mcp` via
   PKCE OAuth ([McpOAuth](../../apps/server/src/auth/McpOAuth.ts)), with stateless client
   registration so unauthenticated callers cannot grow server state. Users grant read-only access or

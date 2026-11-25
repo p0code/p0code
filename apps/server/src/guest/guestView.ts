@@ -5,6 +5,8 @@ import type {
   ServerProvider,
 } from "@t3tools/contracts";
 
+import { guestAttachment } from "./guestProjection.ts";
+
 /** The thread's model as the owner's composer labels it, from the configured providers. */
 export function guestThreadModel(
   selection: OrchestrationV2AppThread["modelSelection"],
@@ -15,8 +17,8 @@ export function guestThreadModel(
   return {
     driver: provider?.driver ?? null,
     name: model?.name ?? selection.model,
-    ...(model?.shortName === undefined ? {} : { shortName: model.shortName }),
-    ...(model?.subProvider === undefined ? {} : { subProvider: model.subProvider }),
+    shortName: model?.shortName,
+    subProvider: model?.subProvider,
   };
 }
 
@@ -32,7 +34,13 @@ export function guestShareView(
     title: thread.title,
     guestName: share.guestName,
     expiresAt: share.expiresAt,
-    messages: share.messages,
+    messages: share.messages.map((message) => ({
+      id: message.id,
+      text: message.text,
+      status: message.status,
+      submittedAt: message.submittedAt,
+      attachments: message.attachments?.map(guestAttachment),
+    })),
     model,
   };
 }

@@ -1,4 +1,11 @@
 import {
+  EventId,
+  ProjectId,
+  ProviderInstanceId,
+  type GuestThreadStreamItem,
+  type OrchestrationV2AppThread,
+  type OrchestrationV2Run,
+  type OrchestrationV2ThreadStreamItem,
   GUEST_ATTACHMENT_ROUTE,
   GUEST_MEDIA_ROUTE,
   GUEST_MESSAGE_MAX_ATTACHMENT_BYTES,
@@ -83,6 +90,97 @@ export type GuestHistoryPageLoaded = {
   readonly page: OrchestrationV2ThreadHistoryPage;
 };
 
+// Adapt the public records to the shared timeline locally; owner metadata never crosses the wire.
+const timelineThread = (
+  thread: Extract<GuestThreadStreamItem, { kind: "snapshot" }>["projection"]["thread"],
+): OrchestrationV2AppThread => ({
+  ...thread,
+  projectId: ProjectId.make("guest"),
+  providerInstanceId: ProviderInstanceId.make("guest"),
+  modelSelection: { instanceId: ProviderInstanceId.make("guest"), model: "guest" },
+  runtimeMode: "approval-required",
+  interactionMode: "default",
+  branch: null,
+  worktreePath: null,
+  activeProviderThreadId: null,
+  lineage: { parentThreadId: null, relationshipToParent: null, rootThreadId: thread.id },
+  forkedFrom: null,
+  createdAt: thread.updatedAt,
+  archivedAt: null,
+  deletedAt: null,
+  lastVisitedAt: null,
+  createdBy: "user",
+  creationSource: "web",
+});
+const timelineRun = (
+  run: Extract<GuestThreadStreamItem, { kind: "snapshot" }>["projection"]["runs"][number],
+): OrchestrationV2Run => ({
+  ...run,
+  providerInstanceId: ProviderInstanceId.make("guest"),
+  modelSelection: { instanceId: ProviderInstanceId.make("guest"), model: "guest" },
+  providerThreadId: null,
+  rootNodeId: null,
+  activeAttemptId: null,
+  checkpointId: null,
+  contextHandoffId: null,
+});
+function timelineItem(item: GuestThreadStreamItem): OrchestrationV2ThreadStreamItem {
+  if (item.kind === "snapshot")
+    return {
+      ...item,
+      projection: {
+        thread: timelineThread(item.projection.thread),
+        runs: item.projection.runs.map(timelineRun),
+        visibleTurnItems: item.projection.visibleTurnItems,
+        turnItems: item.projection.visibleTurnItems.map((row) => row.item),
+        attempts: [],
+        nodes: [],
+        subagents: [],
+        providerSessions: [],
+        providerThreads: [],
+        providerTurns: [],
+        runtimeRequests: [],
+        messages: [],
+        plans: [],
+        checkpointScopes: [],
+        checkpoints: [],
+        contextHandoffs: [],
+        contextTransfers: [],
+        updatedAt: item.projection.thread.updatedAt,
+      },
+    };
+  const event = item.event;
+  const base = {
+    id: EventId.make("guest:" + item.sequence),
+    threadId: event.type === "thread.metadata-updated" ? event.payload.id : event.payload.threadId,
+    occurredAt:
+      event.type === "thread.metadata-updated" || event.type === "turn-item.updated"
+        ? event.payload.updatedAt
+        : event.payload.requestedAt,
+  };
+  switch (event.type) {
+    case "thread.metadata-updated":
+      return {
+        kind: "event",
+        sequence: item.sequence,
+        event: { ...base, type: event.type, payload: timelineThread(event.payload) },
+      };
+    case "run.created":
+    case "run.updated":
+      return {
+        kind: "event",
+        sequence: item.sequence,
+        event: { ...base, type: event.type, payload: timelineRun(event.payload) },
+      };
+    case "turn-item.updated":
+      return {
+        kind: "event",
+        sequence: item.sequence,
+        event: { ...base, type: event.type, payload: event.payload },
+      };
+  }
+}
+
 /**
  * Applies the share's stream: its thread items go through the reducer every stream-only view of a
  * thread shares, and the share's own state is tracked beside it.
@@ -115,7 +213,7 @@ export function applyGuestStreamEvent(
         awaitingRowIds: withPendingFrom(state.awaitingRowIds, event.view),
       };
     case "thread": {
-      const next = applyThreadStreamItem(state, event.item);
+      const next = applyThreadStreamItem(state, timelineItem(event.item));
       if (next === state) return state;
       const placed =
         event.item.kind === "snapshot"

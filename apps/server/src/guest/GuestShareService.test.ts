@@ -463,7 +463,7 @@ const writeItem = (
     return TurnItemId.make(id);
   });
 
-it.effect("gives the guest a command's detail and output, but no file diffs", () =>
+it.effect("refuses command details and output, and redacts file diffs", () =>
   Effect.gen(function* () {
     const { guestShares, credential } = yield* shareThread;
     const { token: session } = yield* guestShares.redeem({ credential, name: "Sam" });
@@ -475,7 +475,14 @@ it.effect("gives the guest a command's detail and output, but no file diffs", ()
     });
 
     const detail = (yield* guestShares.item(session, command)).item;
-    assert.deepInclude(detail, { input: "ls /work/src", output: "/work/src/auth.ts\n" });
+    assert.isNull(detail);
+    const outputHub = yield* CommandOutputHub.CommandOutputHub;
+    const ownerFrames = Array.from(
+      yield* Stream.runCollect(outputHub.subscribe({ threadId, itemId: command })),
+    );
+    assert.deepEqual(ownerFrames, [
+      { kind: "replace", text: "/work/src/auth.ts\n", truncated: false, running: false },
+    ]);
     const edit = yield* writeItem("item:edit", {
       type: "file_change",
       status: "completed",
@@ -497,12 +504,7 @@ it.effect("gives the guest a command's detail and output, but no file diffs", ()
       assert.deepInclude(change, { type: "file_change", fileName });
       assert.doesNotHaveAnyKeys(change, ["diffStr", "oldStr", "newStr"]);
     }
-    const frames = Array.from(
-      yield* Stream.runCollect(yield* guestShares.commandOutput(session, command)),
-    );
-    assert.deepEqual(frames, [
-      { kind: "replace", text: "/work/src/auth.ts\n", truncated: false, running: false },
-    ]);
+    assert.isTrue(Exit.isFailure(yield* Effect.exit(guestShares.commandOutput(session, command))));
     // Only with a session, and only for an item of this thread.
     const refused: ReadonlyArray<Effect.Effect<unknown, GuestShareService.GuestShareAccessError>> =
       [
@@ -541,10 +543,7 @@ it.effect("gives the guest a failed edit without the text it tried to write", ()
     const changes = received.flatMap((event) => {
       if (event.type !== "thread") return [];
       if (event.item.kind === "snapshot") {
-        return [
-          ...event.item.projection.turnItems,
-          ...event.item.projection.visibleTurnItems.map((row) => row.item),
-        ];
+        return event.item.projection.visibleTurnItems.map((row) => row.item);
       }
       return event.item.kind === "event" && event.item.event.type === "turn-item.updated"
         ? [event.item.event.payload]
@@ -622,13 +621,8 @@ it.effect("gives a fork's guest the commands the fork shows from its source thre
     });
 
     const detail = (yield* guestShares.item(session, command)).item;
-    assert.deepInclude(detail, { input: "ls /work/src", output: "/work/src/auth.ts\n" });
-    const frames = Array.from(
-      yield* Stream.runCollect(yield* guestShares.commandOutput(session, command)),
-    );
-    assert.deepEqual(frames, [
-      { kind: "replace", text: "/work/src/auth.ts\n", truncated: false, running: false },
-    ]);
+    assert.isNull(detail);
+    assert.isTrue(Exit.isFailure(yield* Effect.exit(guestShares.commandOutput(session, command))));
     assert.deepEqual(yield* guestShares.render(session, render), {
       path: resolveAttachmentPathById({ attachmentsDir, attachmentId: page })!,
       title: "Plan",
@@ -727,26 +721,15 @@ it.effect("pages the guest back through turns older than the stream's snapshot",
   }).pipe(Effect.scoped, Effect.provide(layerTest)),
 );
 
-it.effect("ends a running command's output once the owner stops sharing", () =>
+it.effect("refuses even a running command's output", () =>
   Effect.gen(function* () {
-    const { orchestrator, guestShares, credential } = yield* shareThread;
+    const { guestShares, credential } = yield* shareThread;
     const { token: session } = yield* guestShares.redeem({ credential, name: "Sam" });
     const command = yield* writeItem("item:running", {
       type: "command_execution",
       status: "running",
-      input: "ls /work/src",
+      input: "cat .env",
     });
-    const collecting = yield* Stream.runCollect(
-      yield* guestShares.commandOutput(session, command),
-    ).pipe(Effect.forkChild);
-    yield* orchestrator.dispatch({
-      type: "thread.guest-share.close",
-      commandId: CommandId.make("close-during-command"),
-      threadId,
-    });
-    yield* TestClock.adjust("30 seconds");
-    const frames = Array.from(yield* Fiber.join(collecting));
-    assert.isTrue(frames.every((frame) => frame.running));
     assert.isTrue(Exit.isFailure(yield* Effect.exit(guestShares.commandOutput(session, command))));
   }).pipe(Effect.provide(layerTest)),
 );
