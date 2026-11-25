@@ -14,7 +14,7 @@ import {
 const RADIUS = 6;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
-export function contextUsedPercent(
+function contextUsedPercent(
   contextWindow: ThreadDetailsUsageInput["contextWindow"],
 ): number | null {
   if (!contextWindow || contextWindow.usedPercentage === null) return null;
