@@ -1,4 +1,5 @@
 // @effect-diagnostics nodeBuiltinImport:off -- Shared by the server, the CLI migration and the Electron main process, outside an Effect runtime.
+// @effect-diagnostics globalConsole:off -- The move below reports a debug line; a logger is not reachable from the Electron main process.
 import * as NodeCrypto from "node:crypto";
 import * as NodeOS from "node:os";
 import * as NodeFSP from "node:fs/promises";
@@ -7,11 +8,20 @@ import * as NodePath from "node:path";
 import { previousAppHomePath } from "./appHomeMigration.ts";
 
 /**
- * OS keychain service `hhhcode` (pre-rename name, kept so stored credentials stay found), one
- * entry per secret, account `<namespace>:<secret name>`. The namespace hashes the resolved
- * secrets folder, so every home (`~/.p0code`, `P0CODE_HOME`, `--base-dir`, dev) keeps its own.
+ * OS keychain service `p0code`, one entry per secret, account `<namespace>:<secret name>`. The
+ * namespace hashes the resolved secrets folder, so every home (`~/.p0code`, `P0CODE_HOME`,
+ * `--base-dir`, dev) keeps its own.
  */
-const KEYCHAIN_SERVICE = "hhhcode";
+const KEYCHAIN_SERVICE = "p0code";
+
+/**
+ * The service name stored credentials lived under before the rename. Only the one-time move in
+ * `keychainSecrets` reads it, so `grep hhhcode` finds every place the old name still matters.
+ */
+const LEGACY_KEYCHAIN_SERVICE = "hhhcode";
+
+/** Debug sink for the move; it receives counts and fixed messages, never secret material. */
+export type KeychainLog = (line: string) => void;
 
 /** Written into a secrets folder once its credentials live in the keychain. */
 export const KEYCHAIN_MARKER_FILE = "keychain-backend";
@@ -40,6 +50,13 @@ export interface KeychainStore {
   readonly set: (account: string, value: string) => Promise<void>;
   readonly delete: (account: string) => Promise<void>;
   readonly accounts: () => Promise<ReadonlyArray<string>>;
+  /**
+   * The pre-rename service. Entries missing from the primary service are read from here once,
+   * copied under the primary name and then deleted.
+   */
+  readonly legacy?: KeychainStore;
+  /** Debug sink for the move. Never receives account values. */
+  readonly log?: KeychainLog;
 }
 
 /** The part of `@napi-rs/keyring` (2.x) used here; callers load the native module themselves. */
@@ -66,29 +83,41 @@ const keychainLabel = (platform: NodeJS.Platform): string =>
       : "Secret Service";
 
 export function keyringStore(keyring: KeyringModule, platform: NodeJS.Platform): KeychainStore {
-  // The binding otherwise falls back to the Linux kernel keyring, which forgets everything on reboot.
-  const entry = (account: string) =>
-    new keyring.AsyncEntry(KEYCHAIN_SERVICE, account, { linux: { store: "secret-service" } });
+  const storeFor = (service: string, label: string): KeychainStore => {
+    // The binding otherwise falls back to the Linux kernel keyring, which forgets everything on reboot.
+    const entry = (account: string) =>
+      new keyring.AsyncEntry(service, account, { linux: { store: "secret-service" } });
+    return {
+      label,
+      get: async (account) => (await entry(account).getPassword()) ?? undefined,
+      set: (account, value) => entry(account).setPassword(value),
+      delete: async (account) => {
+        await entry(account).deleteCredential();
+      },
+      accounts: async () =>
+        (await keyring.findCredentialsAsync(service)).map((credential) => credential.account),
+    };
+  };
   return {
-    label: keychainLabel(platform),
-    get: async (account) => (await entry(account).getPassword()) ?? undefined,
-    set: (account, value) => entry(account).setPassword(value),
-    delete: async (account) => {
-      await entry(account).deleteCredential();
-    },
-    accounts: async () =>
-      (await keyring.findCredentialsAsync(KEYCHAIN_SERVICE)).map(
-        (credential) => credential.account,
-      ),
+    ...storeFor(KEYCHAIN_SERVICE, keychainLabel(platform)),
+    legacy: storeFor(LEGACY_KEYCHAIN_SERVICE, "previous keychain service"),
+    log: (line) => console.debug(line),
   };
 }
 
 /** An in-memory keychain for tests; never touches the OS keychain. */
-export function memoryKeychainStore(): KeychainStore & { readonly entries: Map<string, string> } {
+export function memoryKeychainStore(
+  options: {
+    readonly legacy?: KeychainStore;
+    readonly log?: KeychainLog;
+  } = {},
+): KeychainStore & { readonly entries: Map<string, string> } {
   const entries = new Map<string, string>();
   return {
     label: "Test keychain",
     entries,
+    ...(options.legacy === undefined ? {} : { legacy: options.legacy }),
+    ...(options.log === undefined ? {} : { log: options.log }),
     get: async (account) => entries.get(account),
     set: async (account, value) => {
       entries.set(account, value);
@@ -132,6 +161,10 @@ export interface KeychainSecrets {
   readonly names: () => Promise<ReadonlyArray<string>>;
   /** Write, read back and delete a throwaway entry; rejects when the keychain is unusable. */
   readonly probe: () => Promise<void>;
+  /** Names moved out of the pre-rename service by this adapter, in the order they moved. */
+  readonly movedFromLegacy: () => ReadonlyArray<string>;
+  /** True when an old copy could not be deleted; its value is already safe under p0code. */
+  readonly legacyCopyLeft: () => boolean;
 }
 
 type Head =
@@ -164,51 +197,100 @@ export function keychainSecrets(store: KeychainStore, namespace: string): Keycha
     const value = await store.get(headAccount(name));
     return value === undefined ? undefined : parseHead(value);
   };
+  const readBody = async (name: string, head: Head): Promise<Uint8Array> => {
+    if (head.kind === "inline") return Uint8Array.from(Buffer.from(head.base64, "base64"));
+    const chunks = await Promise.all(
+      Array.from({ length: head.count }, (_, index) =>
+        store.get(chunkAccount(name, head.generation, index)),
+      ),
+    );
+    if (chunks.some((chunk) => chunk === undefined)) {
+      throw new Error(`Keychain entry ${name} is incomplete.`);
+    }
+    return Uint8Array.from(Buffer.from(chunks.join(""), "base64"));
+  };
+  const writeBody = async (name: string, value: Uint8Array) => {
+    const base64 = Buffer.from(value).toString("base64");
+    if (base64.length + 2 <= CHUNK_CHARACTERS) {
+      await store.set(headAccount(name), `b:${base64}`);
+      return;
+    }
+    const generation = NodeCrypto.randomBytes(4).toString("hex");
+    const count = Math.ceil(base64.length / CHUNK_CHARACTERS);
+    for (let index = 0; index < count; index += 1) {
+      await store.set(
+        chunkAccount(name, generation, index),
+        base64.slice(index * CHUNK_CHARACTERS, (index + 1) * CHUNK_CHARACTERS),
+      );
+    }
+    await store.set(headAccount(name), `c:${generation}:${count}`);
+  };
+
+  const legacyStore = store.legacy;
+  const legacy = legacyStore === undefined ? undefined : keychainSecrets(legacyStore, namespace);
+  const log = store.log ?? (() => {});
+  // A name missing from the old service stays missing: nothing writes that service any more.
+  const absentFromLegacy = new Set<string>();
+  const moved: Array<string> = [];
+  let legacyDeleteFailed = false;
+
+  const deleteLegacy = async (name: string) => {
+    if (legacy === undefined) return;
+    try {
+      await legacy.remove(name);
+    } catch {
+      // The value is already under p0code; a leftover old copy must not fail the caller.
+      if (!legacyDeleteFailed) {
+        legacyDeleteFailed = true;
+        log("Could not delete a secret from the old keychain service; its p0code copy is safe.");
+      }
+    }
+  };
+
+  // Moves the whole value at once so an interrupted move never leaves chunks under p0code only.
+  const moveFromLegacy = async (name: string): Promise<Uint8Array | undefined> => {
+    if (legacy === undefined || absentFromLegacy.has(name)) return undefined;
+    const value = await legacy.get(name);
+    if (value === undefined) {
+      absentFromLegacy.add(name);
+      return undefined;
+    }
+    await writeBody(name, value);
+    moved.push(name);
+    log(`Moved ${moved.length} secret(s) from the old keychain service to p0code.`);
+    await deleteLegacy(name);
+    return value;
+  };
 
   return {
     label: store.label,
     get: async (name) => {
       const head = await readHead(name);
-      if (head === undefined) return undefined;
-      if (head.kind === "inline") return Uint8Array.from(Buffer.from(head.base64, "base64"));
-      const chunks = await Promise.all(
-        Array.from({ length: head.count }, (_, index) =>
-          store.get(chunkAccount(name, head.generation, index)),
-        ),
-      );
-      if (chunks.some((chunk) => chunk === undefined)) {
-        throw new Error(`Keychain entry ${name} is incomplete.`);
-      }
-      return Uint8Array.from(Buffer.from(chunks.join(""), "base64"));
+      if (head === undefined) return moveFromLegacy(name);
+      return readBody(name, head);
     },
     set: async (name, value) => {
       const previous = await readHead(name).catch(() => undefined);
-      const base64 = Buffer.from(value).toString("base64");
-      if (base64.length + 2 <= CHUNK_CHARACTERS) {
-        await store.set(headAccount(name), `b:${base64}`);
-      } else {
-        const generation = NodeCrypto.randomBytes(4).toString("hex");
-        const count = Math.ceil(base64.length / CHUNK_CHARACTERS);
-        for (let index = 0; index < count; index += 1) {
-          await store.set(
-            chunkAccount(name, generation, index),
-            base64.slice(index * CHUNK_CHARACTERS, (index + 1) * CHUNK_CHARACTERS),
-          );
-        }
-        await store.set(headAccount(name), `c:${generation}:${count}`);
-      }
+      await writeBody(name, value);
       await deleteChunks(name, previous).catch(() => undefined);
     },
     remove: async (name) => {
       const head = await readHead(name).catch(() => undefined);
       await store.delete(headAccount(name));
       await deleteChunks(name, head);
+      await deleteLegacy(name);
     },
     names: async () => {
       const prefix = `${namespace}:`;
-      return (await store.accounts())
-        .filter((account) => account.startsWith(prefix))
-        .map((account) => account.slice(prefix.length));
+      const headNames = (accounts: ReadonlyArray<string>) =>
+        accounts
+          .filter((account) => account.startsWith(prefix))
+          .map((account) => account.slice(prefix.length));
+      const primary = headNames(await store.accounts());
+      if (legacyStore === undefined) return primary;
+      // Entries not read yet are still owned by the old service; listing must see them.
+      const previous = await legacyStore.accounts().catch(() => [] as ReadonlyArray<string>);
+      return [...new Set([...primary, ...headNames(previous)])];
     },
     probe: async () => {
       const account = `${namespace}#probe`;
@@ -222,7 +304,100 @@ export function keychainSecrets(store: KeychainStore, namespace: string): Keycha
         await store.delete(account);
       }
     },
+    movedFromLegacy: () => [...moved],
+    legacyCopyLeft: () => legacyDeleteFailed,
   };
+}
+
+export interface KeychainServiceMigration {
+  /** Head names copied from the old service to p0code. */
+  readonly moved: ReadonlyArray<string>;
+  /** Names already under p0code whose old copy was removed. */
+  readonly alreadyPresent: ReadonlyArray<string>;
+  /** Names that could not be copied; they stay readable from the old service. */
+  readonly failed: ReadonlyArray<string>;
+  /** Names whose value is safe under p0code but whose old copy could not be deleted. */
+  readonly leftBehind: ReadonlyArray<string>;
+}
+
+const NAMESPACE_ACCOUNT = /^([^:#]+):(.+)$/;
+
+/**
+ * Moves every credential of the old keychain service, across every home's namespace, to p0code.
+ * Values are moved whole and verified before the old copy is deleted, so `p0 secrets
+ * migrate-keychain` is safe to run repeatedly and a crash leaves each credential readable once.
+ */
+export async function migrateKeychainService(
+  store: KeychainStore,
+  options: { readonly log?: KeychainLog } = {},
+): Promise<KeychainServiceMigration> {
+  const moved: Array<string> = [];
+  const alreadyPresent: Array<string> = [];
+  const failed: Array<string> = [];
+  const leftBehind: Array<string> = [];
+  const log = options.log ?? (() => {});
+  const legacyStore = store.legacy;
+  if (legacyStore === undefined) return { moved, alreadyPresent, failed, leftBehind };
+
+  const byNamespace = new Map<string, Array<string>>();
+  for (const account of await legacyStore.accounts()) {
+    const match = NAMESPACE_ACCOUNT.exec(account);
+    if (match?.[1] === undefined || match[2] === undefined) continue;
+    const names = byNamespace.get(match[1]) ?? [];
+    names.push(match[2]);
+    byNamespace.set(match[1], names);
+  }
+
+  const primaryOnly: KeychainStore = {
+    label: store.label,
+    get: store.get,
+    set: store.set,
+    delete: store.delete,
+    accounts: store.accounts,
+  };
+  let deleteWarningLogged = false;
+  for (const [namespace, names] of byNamespace) {
+    const primary = keychainSecrets(primaryOnly, namespace);
+    const legacy = keychainSecrets(legacyStore, namespace);
+    for (const name of names) {
+      const account = `${namespace}:${name}`;
+      let value: Uint8Array | undefined;
+      try {
+        value = await legacy.get(name);
+      } catch {
+        failed.push(account);
+        continue;
+      }
+      if (value === undefined) continue;
+      try {
+        if ((await primary.get(name)) === undefined) {
+          await primary.set(name, value);
+          const stored = await primary.get(name);
+          if (stored === undefined || !Buffer.from(stored).equals(Buffer.from(value))) {
+            failed.push(account);
+            continue;
+          }
+          moved.push(account);
+        } else {
+          alreadyPresent.push(account);
+        }
+      } catch {
+        failed.push(account);
+        continue;
+      }
+      try {
+        await legacy.remove(name);
+      } catch {
+        leftBehind.push(account);
+        if (!deleteWarningLogged) {
+          deleteWarningLogged = true;
+          log("Could not delete a secret from the old keychain service; its p0code copy is safe.");
+        }
+      }
+    }
+  }
+  log(`Moved ${moved.length} secret(s) from the old keychain service to p0code.`);
+  return { moved, alreadyPresent, failed, leftBehind };
 }
 
 const SECRET_FILE = /^(.+)\.bin$/;

@@ -177,6 +177,38 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))(
       );
     });
 
+    it.effect("moves a credential from the old keychain service on its first read", () => {
+      const legacy = memoryKeychainStore();
+      const keychain = memoryKeychainStore({ legacy });
+      return withStore(
+        keychain,
+        (store) =>
+          Effect.gen(function* () {
+            assert.equal(
+              decode(Option.getOrThrow(yield* store.get("server-signing-key"))),
+              "old-key",
+            );
+            assert.equal(
+              decode(Option.getOrThrow(yield* store.get("server-signing-key"))),
+              "old-key",
+            );
+            assert.equal(legacy.entries.size, 0);
+            assert.isTrue(
+              [...keychain.entries.keys()].some((account) =>
+                account.endsWith(":server-signing-key"),
+              ),
+            );
+          }),
+        {
+          prepare: (secretsDir) =>
+            Effect.promise(async () => {
+              const namespace = await credentialNamespace(secretsDir);
+              await keychainSecrets(legacy, namespace).set("server-signing-key", encode("old-key"));
+            }),
+        },
+      );
+    });
+
     it.effect("finishes a move interrupted between the keychain write and the file delete", () => {
       const keychain = memoryKeychainStore();
       return withStore(

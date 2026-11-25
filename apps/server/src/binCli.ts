@@ -38,6 +38,7 @@ import { claudeHistoryCommand } from "./cli/claudeHistory.ts";
 import { sshHelperCommand } from "./cli/sshHelper.ts";
 import { serviceCommand } from "./cli/service.ts";
 import { migrateCommand } from "./cli/migrate.ts";
+import { secretsCommand } from "./cli/secrets.ts";
 import { servicePreflightCommand } from "./cli/servicePreflight.ts";
 import { themeCommand } from "./cli/theme.ts";
 import { traceCommand } from "./cli/trace.ts";
@@ -96,6 +97,7 @@ export const makeCli = (_options: { cloudEnabled?: boolean } = {}) =>
       policyCommand,
       triageCommand,
       migrateCommand,
+      secretsCommand,
     ]),
   );
 
