@@ -36,7 +36,7 @@ function ToggleGroup({
           : "*:pointer-coarse:after:min-h-auto",
         variant === "segmented"
           ? fill
-            ? "gap-0 rounded-lg bg-input/40 p-0 *:rounded-lg *:before:rounded-lg"
+            ? "gap-0 rounded-lg bg-input/40 p-0 *:rounded-none *:before:rounded-none *:first:rounded-s-lg *:first:before:rounded-s-lg *:last:rounded-e-lg *:last:before:rounded-e-lg"
             : "gap-0.5 rounded-lg bg-input/40 p-0.5"
           : variant === "default"
             ? "gap-0.5"
