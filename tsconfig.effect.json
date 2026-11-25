@@ -127,21 +127,6 @@
               "packages/provider-testing/**/*"
             ],
             "options": { "diagnosticSeverity": { "effectFnOpportunity": "off" } }
-          },
-          {
-            // The Tokscale plugin is a vendored submodule whose source predates these
-            // host-wide style rules; it is ignored by fmt/lint for the same reason, and
-            // its plain `new Date(now)`/`createHash` reads are not ambient-clock or
-            // crypto usages the rules are meant to catch. Type errors still fail.
-            "include": ["plugins/tokscale-auto-publish-plugin/**/*"],
-            "options": {
-              "diagnosticSeverity": {
-                "effectFnOpportunity": "off",
-                "nodeBuiltinImport": "off",
-                "globalDate": "off",
-                "globalDateInEffect": "off"
-              }
-            }
           }
         ]
       }
