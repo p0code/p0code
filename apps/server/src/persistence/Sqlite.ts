@@ -9,6 +9,7 @@ import * as SqlError from "effect/sql/SqlError";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 
 import { hasPendingMigrations, runMigrations } from "./Migrations.ts";
+import { enableIncrementalVacuum } from "./EnableIncrementalVacuum.ts";
 import { initializeV2Database } from "./initializeV2Database.ts";
 import * as ServerConfig from "../config.ts";
 import * as ServerOwnership from "../serverOwnership.ts";
@@ -64,14 +65,17 @@ const runMigrationsAsOwner = Effect.fn("SqlitePersistence.runMigrationsAsOwner")
   yield* runMigrations();
 }, Effect.scoped);
 
-const makeLayerSetup = <E, R>(migrate: Effect.Effect<unknown, E, R>) =>
+const makeLayerSetup = <E, R, R2 = never>(
+  migrate: Effect.Effect<unknown, E, R>,
+  beforeMigrate: Effect.Effect<unknown, never, R2> = Effect.void,
+) =>
   Layer.effectDiscard(
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
       // CLI and server write from separate processes; wait rather than fail with SQLITE_BUSY.
       yield* sql`PRAGMA busy_timeout = 5000;`;
       yield* sql`PRAGMA foreign_keys = ON;`;
-      // Existing databases need doctor's offline VACUUM to add pointer maps for this mode.
+      // Existing databases get this mode from a one-time VACUUM (see enableIncrementalVacuum).
       const tables = yield* sql<{
         readonly count: number;
       }>`SELECT COUNT(*) AS count FROM sqlite_schema WHERE type = 'table'`;
@@ -87,6 +91,7 @@ const makeLayerSetup = <E, R>(migrate: Effect.Effect<unknown, E, R>) =>
       yield* sql`PRAGMA temp_store = MEMORY;`;
       // PASSIVE checkpoints retain peak WAL size until the last connection closes.
       yield* sql.unsafe(`PRAGMA journal_size_limit = ${WAL_SIZE_LIMIT_BYTES};`);
+      yield* beforeMigrate;
       yield* migrate;
       // Collecting stats scans every page, and stale small-table stats cause scans after growth; use indexes by default.
       // Connections cache stats; reload after deleting them.
@@ -132,7 +137,10 @@ const makeLayerFromPath = <E, R>(makeSetup: (dbPath: string) => Layer.Layer<neve
     );
   }, Layer.unwrap);
 
-export const layerFromPath = makeLayerFromPath(() => layerSetup);
+// Only the server vacuums; a CLI command must not hold the writer for minutes behind a running server.
+export const layerFromPath = makeLayerFromPath((dbPath) =>
+  makeLayerSetup(runMigrations(), enableIncrementalVacuum(dbPath)),
+);
 
 export const layerMemory = Layer.provideMerge(
   layerSetup,

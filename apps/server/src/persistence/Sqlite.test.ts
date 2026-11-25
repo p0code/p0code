@@ -242,3 +242,37 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("layerCliConfig",
     }).pipe(Effect.scoped, Effect.provide(layerT3Home)),
   );
 });
+
+it.effect("switches an existing database to incremental auto_vacuum at startup", () => {
+  const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-sqlite-vacuum-"));
+  const dbPath = NodePath.join(tempDir, "state.sqlite");
+  const persistence = SqlitePersistence.layerFromPath(dbPath).pipe(
+    Layer.provide(NodeServices.layer),
+  );
+
+  return Effect.gen(function* () {
+    yield* Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      yield* sql`PRAGMA journal_mode = WAL;`;
+      yield* sql`CREATE TABLE retained (value TEXT)`;
+      yield* sql`INSERT INTO retained VALUES ('keep')`;
+      yield* sql`CREATE TABLE discarded (value BLOB)`;
+      yield* sql`INSERT INTO discarded VALUES (zeroblob(1048576))`;
+      yield* sql`DROP TABLE discarded`;
+      assert.deepEqual(yield* sql`PRAGMA auto_vacuum`, [{ auto_vacuum: 0 }]);
+      const free = yield* sql<{ readonly freelist_count: number }>`PRAGMA freelist_count`;
+      assert.isAbove(free[0]?.freelist_count ?? 0, 200);
+    }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: dbPath })));
+
+    yield* Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      assert.deepEqual(yield* sql`PRAGMA auto_vacuum`, [{ auto_vacuum: 2 }]);
+      // The 1 MiB table's 256 pages are gone; migrations leave a few free pages of their own.
+      const free = yield* sql<{ readonly freelist_count: number }>`PRAGMA freelist_count`;
+      assert.isBelow(free[0]?.freelist_count ?? Number.POSITIVE_INFINITY, 64);
+      assert.deepEqual(yield* sql`SELECT value FROM retained`, [{ value: "keep" }]);
+    }).pipe(Effect.provide(persistence));
+  }).pipe(
+    Effect.ensuring(Effect.sync(() => NodeFS.rmSync(tempDir, { recursive: true, force: true }))),
+  );
+});

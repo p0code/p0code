@@ -150,6 +150,8 @@ const make = Effect.gen(function* () {
       sliceStarted = yield* Clock.monotonicTimeNanos;
     });
     const result = yield* maintenance.pruneEventStore(betweenPages);
+    // The checkpoint worker never truncates, so the WAL file keeps its peak size until a restart.
+    yield* sql`PRAGMA wal_checkpoint(TRUNCATE)`.pipe(Effect.ignore({ log: true }));
     const completedAt = yield* Clock.currentTimeMillis;
     yield* fs.writeFileString(compactedAtPath, String(completedAt)).pipe(Effect.ignore);
     if (result.deletedEventCount > 0 || result.deletedReceiptCount > 0) {
