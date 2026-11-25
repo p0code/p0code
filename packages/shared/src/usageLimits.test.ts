@@ -620,6 +620,87 @@ describe("pools", () => {
     ).toEqual([1, 1, 1]);
   });
 
+  it("shows one bar when two v2 reads report the same OpenCode workspace", () => {
+    const goLimits = (readAt: string, rollingResetsAt: string): ServerProviderUsageLimits => ({
+      checkedAt: readAt,
+      credentialFingerprint: "opencode-workspace",
+      windows: [
+        {
+          id: "go_rolling",
+          kind: "session",
+          label: "Go · Session",
+          usedPercent: 0,
+          windowDurationMins: 300,
+          resetsAt: rollingResetsAt,
+        },
+        {
+          id: "go_weekly",
+          kind: "weekly",
+          label: "Go · Weekly",
+          usedPercent: 36,
+          windowDurationMins: 7 * 24 * 60,
+          resetsAt: "2026-09-08T00:00:00.000Z",
+        },
+        {
+          id: "go_monthly",
+          kind: "monthly",
+          label: "Go · Monthly",
+          usedPercent: 64,
+          resetsAt: "2026-10-01T00:00:00.000Z",
+        },
+      ],
+    });
+    const instance = (
+      instanceId: string,
+      displayName: string,
+      usageLimits: ServerProviderUsageLimits,
+    ) =>
+      provider({
+        driver: ProviderDriverKind.make("opencode"),
+        instanceId: ProviderInstanceId.make(instanceId),
+        displayName,
+        usageLimits,
+      });
+    const accounts = collectLimitAccounts(
+      new Map([
+        [
+          EnvironmentId.make("env-a"),
+          {
+            ...laptop,
+            serverConfig: {
+              providers: [
+                instance(
+                  "opencode",
+                  "OpenCode",
+                  goLimits("2026-09-03T11:00:00.000Z", "2026-09-03T17:00:00.862Z"),
+                ),
+              ],
+            },
+          },
+        ],
+        [
+          EnvironmentId.make("env-b"),
+          {
+            entry: { target: { label: "Desktop" } },
+            serverConfig: {
+              providers: [
+                instance(
+                  "opencode_remote",
+                  "OpenCode Go",
+                  goLimits("2026-09-03T11:05:00.000Z", "2026-09-03T17:00:07.451Z"),
+                ),
+              ],
+            },
+          },
+        ],
+      ]),
+    );
+    expect(accounts).toHaveLength(1);
+    expect(
+      collectLimitPools(accounts, now)[0]?.windows.map((window) => window.members.length),
+    ).toEqual([1, 1, 1]);
+  });
+
   it("shows one bar when a hub and an instance read the same OpenCode Go plan", () => {
     const goWindows = (rollingResetsAt: string): ServerProviderUsageLimits["windows"] => [
       {
