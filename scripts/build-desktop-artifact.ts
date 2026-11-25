@@ -2888,7 +2888,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     const repoRoot = yield* RepoRoot;
     buildConfig.afterPack = path.join(repoRoot, "scripts/linux-after-pack.ts");
     buildConfig.linux = {
-      target: target === "AppImage" ? [target, "deb"] : [target],
+      target: target === "AppImage" ? [target, "deb", "rpm"] : [target],
       executableName: "p0code",
       icon: "icons",
       category: "Development",
@@ -2932,6 +2932,26 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
         "libuuid1",
         "libxss1",
         "libxtst6",
+        "xdg-utils",
+      ],
+    };
+    buildConfig.rpm = {
+      fpm: [
+        `${path.join(repoRoot, "apps/desktop/resources/linux/com.t3tools.t3code.metainfo.xml")}=/usr/share/metainfo/com.t3tools.t3code.metainfo.xml`,
+        `${path.join(repoRoot, "LICENSE")}=/usr/share/licenses/p0code/LICENSE`,
+      ],
+      // Fedora package names for the same libraries the deb depends on.
+      depends: [
+        "alsa-lib",
+        "at-spi2-core",
+        "gtk3",
+        "libnotify",
+        "libsecret",
+        "libuuid",
+        "libXScrnSaver",
+        "libXtst",
+        "mesa-libgbm",
+        "nss",
         "xdg-utils",
       ],
     };
