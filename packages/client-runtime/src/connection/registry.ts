@@ -93,12 +93,21 @@ export class PlatformEnvironmentRemovalError extends Schema.TaggedError<Platform
   }
 }
 
+/** Why the saved environments could not be read, surfaced so the app can stop pretending. */
+export interface EnvironmentCatalogError {
+  readonly detail: string;
+  /** The storage key or path the unreadable value was kept at, when the platform knows it. */
+  readonly preservedKey: string | null;
+}
+
 export class EnvironmentRegistry extends Context.Service<
   EnvironmentRegistry,
   {
     readonly entries: SubscriptionRef.SubscriptionRef<
       ReadonlyMap<EnvironmentId, ConnectionCatalogEntry>
     >;
+    /** Null when the saved catalog loaded; set when it could not be read. */
+    readonly catalogError: SubscriptionRef.SubscriptionRef<EnvironmentCatalogError | null>;
     readonly networkStatus: SubscriptionRef.SubscriptionRef<NetworkStatus>;
     readonly start: Effect.Effect<void>;
     /**
@@ -222,8 +231,46 @@ export const make = Effect.gen(function* () {
   const driver = yield* ConnectionDriver.ConnectionDriver;
   const wakeups = yield* ConnectionWakeups.ConnectionWakeups;
   const ssh = yield* ClientCapabilities.SshEnvironmentGateway;
-  const persistedTargets = yield* storage.list;
-  const disabledEnvironmentIds = new Set(yield* storage.listDisabled);
+  const catalogProblem = yield* Persistence.ConnectionCatalogProblemStore;
+  // A failed catalog leaves the app standing, with no targets, so it can name the problem instead
+  // of looking like a fresh install.
+  const loadedTargets = yield* storage.list.pipe(
+    Effect.match({
+      onFailure: (error) => ({ _tag: "failed", error }) as const,
+      onSuccess: (targets) => ({ _tag: "loaded", targets }) as const,
+    }),
+  );
+  const loadedDisabled = yield* storage.listDisabled.pipe(
+    Effect.match({
+      onFailure: (error) => ({ _tag: "failed", error }) as const,
+      onSuccess: (targets) => ({ _tag: "loaded", targets }) as const,
+    }),
+  );
+  const catalogFailure =
+    loadedTargets._tag === "failed"
+      ? loadedTargets.error
+      : loadedDisabled._tag === "failed"
+        ? loadedDisabled.error
+        : null;
+  const reportedProblem = catalogFailure === null ? Option.none() : yield* catalogProblem.read;
+  const catalogError = yield* SubscriptionRef.make<EnvironmentCatalogError | null>(
+    catalogFailure === null
+      ? null
+      : {
+          detail: Option.match(reportedProblem, {
+            onNone: () => catalogFailure.message,
+            onSome: (problem) => problem.detail,
+          }),
+          preservedKey: Option.match(reportedProblem, {
+            onNone: () => null,
+            onSome: (problem) => problem.preservedKey,
+          }),
+        },
+  );
+  const persistedTargets = loadedTargets._tag === "loaded" ? loadedTargets.targets : [];
+  const disabledEnvironmentIds = new Set(
+    loadedDisabled._tag === "loaded" ? loadedDisabled.targets : [],
+  );
   const loadRoute = Effect.fn("EnvironmentRegistry.loadRoute")(function* (
     target: ConnectionTarget,
   ) {
@@ -1196,6 +1243,7 @@ export const make = Effect.gen(function* () {
 
   return EnvironmentRegistry.of({
     entries,
+    catalogError,
     networkStatus,
     start,
     register,

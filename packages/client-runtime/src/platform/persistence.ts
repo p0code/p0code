@@ -57,6 +57,24 @@ export class ConnectionTargetStore extends Context.Service<
   }
 >()("@t3tools/client-runtime/platform/persistence/ConnectionTargetStore") {}
 
+/** Why the saved connection catalog could not be read, and where the unreadable value was kept. */
+export interface ConnectionCatalogProblem {
+  readonly detail: string;
+  readonly preservedKey: string | null;
+}
+
+/**
+ * Reports the saved catalog as unreadable when the target list fails because of it. The registry
+ * still starts, with no targets, so the app can show the problem instead of an empty workspace.
+ */
+export class ConnectionCatalogProblemStore extends Context.Reference<{
+  readonly read: Effect.Effect<Option.Option<ConnectionCatalogProblem>>;
+}>("@t3tools/client-runtime/platform/persistence/ConnectionCatalogProblemStore", {
+  defaultValue: () => ({
+    read: Effect.succeed(Option.none<ConnectionCatalogProblem>()),
+  }),
+}) {}
+
 export class ConnectionRegistrationStore extends Context.Service<
   ConnectionRegistrationStore,
   {

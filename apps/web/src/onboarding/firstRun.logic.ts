@@ -55,6 +55,17 @@ export function isFirstRunWorkspaceProvenanceAuthoritative(input: {
   return input.welcomeReceived && input.bootstrapStatus !== "pending";
 }
 
+/**
+ * A failed saved catalog takes over the whole gate, before any startup timeout or returning-user
+ * shortcut can reveal the app. Settings stays reachable so a machine can be reconnected.
+ */
+export function shouldShowSavedCatalogRecovery(input: {
+  readonly catalogError: { readonly detail: string } | null;
+  readonly pathname: string;
+}): boolean {
+  return input.catalogError !== null && !input.pathname.startsWith("/settings");
+}
+
 export function transitionFirstRunGateState(
   state: FirstRunGateState,
   event: FirstRunGateEvent,

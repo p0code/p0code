@@ -30,6 +30,7 @@ import {
   isFreshFirstRunWorkspace,
   resolveFirstRunDecision,
   resolveHostedFirstRunDecision,
+  shouldShowSavedCatalogRecovery,
   transitionFirstRunGateState,
   type FirstRunGateState,
 } from "../../onboarding/firstRun.logic";
@@ -42,6 +43,7 @@ import { environmentShell } from "../../state/shell";
 import { environmentThreadShells } from "../../state/threads";
 import { StartupLoadingScreen } from "../StartupLoadingScreen";
 import { Button } from "../ui/button";
+import { SavedCatalogRecovery } from "./SavedCatalogRecovery";
 
 /** Pending blocks all rendering, including EventRouter welcome navigation. */
 
@@ -149,13 +151,35 @@ export function FirstRunGate({
   readonly hostedStatic: boolean;
   readonly children: React.ReactNode;
 }) {
+  const pathname = useLocation({ select: (location) => location.pathname });
+  const { catalogError } = useEnvironments();
+  // Checked before the gate settles, so the startup timeout cannot reveal the app shell instead.
+  if (catalogError !== null && shouldShowSavedCatalogRecovery({ catalogError, pathname })) {
+    return <SavedCatalogRecovery error={catalogError} />;
+  }
+  return (
+    <FirstRunGateContent enabled={enabled} hostedStatic={hostedStatic}>
+      {children}
+    </FirstRunGateContent>
+  );
+}
+
+function FirstRunGateContent({
+  enabled,
+  hostedStatic,
+  children,
+}: {
+  readonly enabled: boolean;
+  readonly hostedStatic: boolean;
+  readonly children: React.ReactNode;
+}) {
   const navigate = useNavigate();
   const pathname = useLocation({ select: (location) => location.pathname });
   const hydrationStatus = useClientSettingsHydrationStatus();
   const hydrated = hydrationStatus === "ready";
   const onboardingCompletedAt = useClientSettings((settings) => settings.onboardingCompletedAt);
   const bootstrapped = useAllEnvironmentShellsBootstrapped();
-  const { isReady: environmentCatalogReady } = useEnvironments();
+  const { isReady: environmentCatalogReady, catalogError } = useEnvironments();
   const projects = useProjects();
   const threadCount = useAtomValue(threadCountAtom);
   const soleThread = useAtomValue(soleThreadAtom);
@@ -232,6 +256,7 @@ export function FirstRunGate({
         hydrated,
         firstRunDecision: decision,
         catalogReady: environmentCatalogReady,
+        catalogUnavailable: catalogError !== null,
         enabledEnvironmentCount: startupReadiness.enabledEnvironmentCount,
         primaryEnvironmentDiscovered: startupReadiness.primaryEnvironmentDiscovered,
         primaryConnectionPhase: startupReadiness.primaryConnectionPhase,

@@ -130,6 +130,9 @@ const makeHarness = Effect.fn("TestThreadAtoms.makeHarness")(function* (options?
       new Map(),
     ),
     networkStatus: yield* SubscriptionRef.make<NetworkStatus>("online"),
+    catalogError: yield* SubscriptionRef.make<EnvironmentRegistry.EnvironmentCatalogError | null>(
+      null,
+    ),
     start: Effect.void,
     register: () => Effect.die("Unexpected environment registration"),
     assertKnownAddress: () => Effect.die("Unexpected address check"),

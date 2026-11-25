@@ -70,3 +70,85 @@ describe("IndexedDB query cache", () => {
     }).pipe(Effect.provide(ConnectionStorage.layer)),
   );
 });
+
+const CATALOG_TEST_DATABASE = "t3code:connection-runtime";
+const CATALOG_TEST_STORE = "catalog";
+
+function openCatalogTestDatabase(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(CATALOG_TEST_DATABASE, 5);
+    request.addEventListener("upgradeneeded", () => {
+      if (!request.result.objectStoreNames.contains(CATALOG_TEST_STORE)) {
+        request.result.createObjectStore(CATALOG_TEST_STORE);
+      }
+    });
+    request.addEventListener("success", () => resolve(request.result));
+    request.addEventListener("error", () => reject(request.error));
+  });
+}
+
+function deleteCatalogTestDatabase(): Effect.Effect<void> {
+  return Effect.promise(
+    () =>
+      new Promise<void>((resolve) => {
+        const request = indexedDB.deleteDatabase(CATALOG_TEST_DATABASE);
+        request.addEventListener("success", () => resolve());
+        request.addEventListener("error", () => resolve());
+        request.addEventListener("blocked", () => resolve());
+      }),
+  );
+}
+
+function readCatalogTestValues(): Effect.Effect<Readonly<Record<string, unknown>>> {
+  return Effect.promise(async () => {
+    const database = await openCatalogTestDatabase();
+    try {
+      return await new Promise<Record<string, unknown>>((resolve, reject) => {
+        const transaction = database.transaction(CATALOG_TEST_STORE, "readonly");
+        const values: Record<string, unknown> = {};
+        const request = transaction.objectStore(CATALOG_TEST_STORE).openCursor();
+        request.addEventListener("success", () => {
+          const cursor = request.result;
+          if (cursor === null) return;
+          values[String(cursor.key)] = cursor.value;
+          cursor.continue();
+        });
+        transaction.addEventListener("complete", () => resolve(values));
+        transaction.addEventListener("abort", () => reject(transaction.error));
+      });
+    } finally {
+      database.close();
+    }
+  });
+}
+
+describe("IndexedDB catalog recovery", () => {
+  it.effect("keeps the unreadable value and reports where it was kept", () =>
+    Effect.gen(function* () {
+      yield* deleteCatalogTestDatabase();
+      const database = yield* Effect.promise(openCatalogTestDatabase);
+      yield* Effect.callback<void>((resume) => {
+        const transaction = database.transaction(CATALOG_TEST_STORE, "readwrite");
+        transaction.objectStore(CATALOG_TEST_STORE).put("{not-json", "document");
+        transaction.addEventListener("complete", () => resume(Effect.void));
+        transaction.addEventListener("abort", () => resume(Effect.die(transaction.error)));
+      });
+      database.close();
+
+      yield* Effect.gen(function* () {
+        const targets = yield* (yield* Persistence.ConnectionTargetStore).list.pipe(Effect.flip);
+        expect(targets.message).toContain("saved connections could not be read");
+        const problem = yield* (yield* Persistence.ConnectionCatalogProblemStore).read;
+        expect(Option.getOrThrow(problem).preservedKey).toMatch(/^catalog:unreadable:/);
+      }).pipe(Effect.provide(ConnectionStorage.layer));
+
+      const stored = yield* readCatalogTestValues();
+      // The original value is still there and no empty catalog replaced it.
+      expect(stored.document).toBe("{not-json");
+      expect(
+        Object.keys(stored).filter((key) => key.startsWith("catalog:unreadable:")),
+      ).toHaveLength(1);
+      yield* deleteCatalogTestDatabase();
+    }).pipe(Effect.scoped),
+  );
+});

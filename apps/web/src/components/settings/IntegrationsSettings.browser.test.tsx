@@ -87,6 +87,7 @@ vi.mock(import("../../state/environments"), async (original) => ({
   ...(await original()),
   useEnvironments: () => ({
     isReady: true,
+    catalogError: null,
     networkStatus: "online" as const,
     environments,
     presentationById: new Map(),

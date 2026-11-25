@@ -40,6 +40,7 @@ function projectEnvironmentPresentation(
 
 export function useEnvironments() {
   const catalog = useAtomValue(environmentCatalog.catalogValueAtom);
+  const catalogError = useAtomValue(environmentCatalog.catalogErrorValueAtom);
   const networkStatus = useAtomValue(environmentCatalog.networkStatusValueAtom);
   const presentationById = useAtomValue(environmentPresentations.presentationsAtom);
 
@@ -49,6 +50,7 @@ export function useEnvironments() {
 
   return {
     isReady: catalog.isReady,
+    catalogError,
     networkStatus,
     environments,
     presentationById,

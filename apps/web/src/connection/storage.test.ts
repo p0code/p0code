@@ -22,7 +22,6 @@ const emptyCatalog = {
   remoteDpopTokens: [],
   disabledEnvironmentIds: [],
 } as const;
-const decodeCatalog = Schema.decodeUnknownSync(Schema.fromJsonString(ConnectionCatalogDocument));
 const encodeCatalog = Schema.encodeSync(Schema.fromJsonString(ConnectionCatalogDocument));
 
 afterEach(() => {
@@ -31,20 +30,32 @@ afterEach(() => {
 });
 
 describe("ConnectionStorage.makeCatalogStore", () => {
-  it.effect("quarantines malformed catalogs and starts from an empty document", () =>
+  it.effect("keeps an unreadable catalog as it is and reports it instead of starting empty", () =>
     Effect.gen(function* () {
       const writes: string[] = [];
       const quarantined: string[] = [];
       const store = yield* ConnectionStorage.makeCatalogStore({
         read: Effect.succeed("{not-json"),
         write: (raw) => Effect.sync(() => writes.push(raw)),
-        quarantine: (raw) => Effect.sync(() => quarantined.push(raw)),
+        quarantine: (raw) =>
+          Effect.sync(() => {
+            quarantined.push(raw);
+            return "catalog:unreadable:1";
+          }),
       });
 
-      expect(yield* store.read).toEqual(emptyCatalog);
+      expect(yield* store.read).toMatchObject({
+        _tag: "unreadable",
+        preservedKey: "catalog:unreadable:1",
+      });
       expect(quarantined).toEqual(["{not-json"]);
-      expect(writes).toHaveLength(1);
-      expect(decodeCatalog(writes[0]!)).toEqual(emptyCatalog);
+      // The unreadable value is never replaced by an empty catalog.
+      expect(writes).toHaveLength(0);
+      // A write through the store fails instead of overwriting it either.
+      expect(yield* store.update((document) => document).pipe(Effect.flip)).toBeInstanceOf(
+        ConnectionTransientError,
+      );
+      expect(writes).toHaveLength(0);
     }),
   );
 
