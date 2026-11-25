@@ -91,7 +91,7 @@ function PluginSection({
     >
       <div className="space-y-3 px-3 py-3 text-sm sm:px-4">
         {panel?.Disclosure ? <panel.Disclosure /> : <p>{plugin.manifest.description}</p>}
-        {status ? (
+        {status && !(plugin.state === "running" && panel?.Panel) ? (
           <p
             role={plugin.state === "failed" ? "alert" : "status"}
             className={plugin.state === "failed" ? "text-destructive" : "text-muted-foreground"}

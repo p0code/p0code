@@ -80,6 +80,10 @@ export function T3ConnectBridgePanel({ environmentId }: { readonly environmentId
         <p role="alert" className="text-destructive">
           {status.error}
         </p>
+      ) : message ? (
+        <p role="status" className="text-muted-foreground">
+          {message}
+        </p>
       ) : null}
       {status.pendingSignIn ? (
         <div className="flex flex-wrap items-center gap-3">
