@@ -6,6 +6,7 @@ import { assert, it } from "@effect/vitest";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
+  AccountProfileId,
   CommandId,
   type Project,
   ProjectId,
@@ -630,6 +631,27 @@ it.layer(layerTest)("ProjectService", (it) => {
       assert.deepEqual(
         (yield* settings.getSettings).projectSettingsOverrides[projectId]?.defaultProjectScripts,
         [script],
+      );
+    }),
+  );
+
+  it.effect("files a new project under the active account profile until it is deleted", () =>
+    Effect.gen(function* () {
+      const service = yield* ProjectService.ProjectService;
+      const settings = yield* ServerSettings.ServerSettingsService;
+      const projectId = ProjectId.make("project:profile");
+      yield* settings.updateSettings({ activeAccountProfileId: AccountProfileId.make("work") });
+      yield* service.create({
+        commandId: CommandId.make("command:profile:create"),
+        projectId,
+        title: "Profile",
+        workspaceRoot: "/work/profile",
+      });
+      assert.strictEqual((yield* settings.getSettings).projectAccountProfileIds[projectId], "work");
+      yield* service.delete({ commandId: CommandId.make("command:profile:delete"), projectId });
+      assert.strictEqual(
+        (yield* settings.getSettings).projectAccountProfileIds[projectId],
+        undefined,
       );
     }),
   );

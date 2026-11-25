@@ -7,7 +7,12 @@ import { useEnvironmentsWithScope } from "../../state/session";
 import { mapAtomCommandResult, settlePromise } from "@t3tools/client-runtime/state/runtime";
 import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { planProjectRemoval } from "@t3tools/client-runtime/state/projects";
-import { type EnvironmentId, type SidebarProjectGroupingMode } from "@t3tools/contracts";
+import {
+  AccountProfileId,
+  type EnvironmentId,
+  type SidebarProjectGroupingMode,
+} from "@t3tools/contracts";
+import { useAtomValue } from "@effect/atom-react";
 import {
   checkProjectAccess,
   reportProjectFailure,
@@ -34,6 +39,11 @@ import { useEnvironments, usePrimaryEnvironmentId } from "../../state/environmen
 import { useThreadShells, waitForProjectRemoval } from "../../state/entities";
 import { refreshProjectFaviconUrl } from "../../state/assets";
 import { projectEnvironment } from "../../state/projects";
+import { serverEnvironment } from "../../state/server";
+import {
+  projectAccountProfileChoices,
+  setProjectAccountProfile,
+} from "../../state/accountProfiles";
 import { ProjectFavicon } from "../ProjectFavicon";
 import { Alert, AlertDescription } from "../ui/alert";
 import { Button } from "../ui/button";
@@ -147,6 +157,53 @@ function CheckoutGroupingSelect({ member }: { member: SidebarProjectGroupMember 
         </SelectItem>
       </SelectPopup>
     </Select>
+  );
+}
+
+const ALL_PROFILES = "all-profiles";
+
+function ProjectAccountProfileRow({
+  members,
+}: {
+  members: ReadonlyArray<SidebarProjectGroupMember>;
+}) {
+  const gt = useGT();
+  const first = members[0]!;
+  const settings = useAtomValue(serverEnvironment.settingsValueAtom(first.environmentId));
+  const choices = projectAccountProfileChoices(settings, first.id);
+  if (choices === null) return null;
+  const assigned = choices.profiles.find((profile) => profile.id === choices.assignedId);
+  return (
+    <SettingsRow
+      title={gt("Account profile")}
+      description={gt("Only this profile lists the project and its threads.")}
+      control={
+        <Select
+          value={choices.assignedId ?? ALL_PROFILES}
+          onValueChange={(value) => {
+            if (typeof value !== "string") return;
+            void setProjectAccountProfile(
+              members.map((member) => scopeProjectRef(member.environmentId, member.id)),
+              value === ALL_PROFILES ? null : AccountProfileId.make(value),
+            );
+          }}
+        >
+          <SelectTrigger size="sm" aria-label={gt("Account profile")}>
+            <SelectValue>{assigned?.name ?? gt("Show in all profiles")}</SelectValue>
+          </SelectTrigger>
+          <SelectPopup align="end" alignItemWithTrigger={false}>
+            <SelectItem hideIndicator value={ALL_PROFILES}>
+              <T>Show in all profiles</T>
+            </SelectItem>
+            {choices.profiles.map((profile) => (
+              <SelectItem hideIndicator key={profile.id} value={profile.id}>
+                {profile.name}
+              </SelectItem>
+            ))}
+          </SelectPopup>
+        </Select>
+      }
+    />
   );
 }
 
@@ -690,6 +747,7 @@ function ProjectDetail({
               />
             </>
           ) : null}
+          <ProjectAccountProfileRow members={group.memberProjects} />
         </SettingsSection>
         <ProjectDefaultsSettings category="project" />
         <ProjectActionsSettings />

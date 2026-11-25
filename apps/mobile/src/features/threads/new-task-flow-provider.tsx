@@ -26,6 +26,7 @@ import { isTriagePrompt, replaceTriagePlaybookLink } from "@t3tools/shared/triag
 import * as Arr from "effect/Array";
 import { pipe } from "effect/Function";
 
+import { useProfileProjects } from "../../state/account-profile-projects";
 import { useProjects, useServerConfigs, useThreadShells } from "../../state/entities";
 import type { TurnCommandMetadata } from "../../lib/commandMetadata";
 import type { DraftComposerAttachment } from "../../lib/composerImages";
@@ -244,6 +245,7 @@ export function NewTaskFlowProvider(
   }>,
 ) {
   const projects = useProjects();
+  const pickableProjects = useProfileProjects();
   const messages = useMessages();
   const threads = useThreadShells();
   const { savedConnectionsById } = useSavedRemoteConnections();
@@ -252,7 +254,7 @@ export function NewTaskFlowProvider(
   const projectScopes = sortHomeProjectScopes({
     scopes: buildHomeProjectScopes(
       {
-        projects,
+        projects: pickableProjects,
         environmentId: null,
         projectGroupingMode: groupingSettings.sidebarProjectGroupingMode,
       },

@@ -183,6 +183,7 @@ import {
   useDelegatedUnderParent,
   useEnvironmentThreadRefs,
   useHiddenThreadKeys,
+  useProfileThreads,
   useProjects,
   useServerConfigs,
   useVisibleThreadShells,
@@ -554,7 +555,7 @@ function OpenCommandPaletteDialog(props: {
   };
   // Threads the sidebar shows under their parent open there, so opening a project never lands on one.
   const delegatedUnderParent = useDelegatedUnderParent();
-  const threads = useVisibleThreadShells().filter(
+  const threads = useProfileThreads(useVisibleThreadShells()).filter(
     (thread) =>
       !isShownUnderParent(
         { environmentId: thread.environmentId, threadId: thread.id },

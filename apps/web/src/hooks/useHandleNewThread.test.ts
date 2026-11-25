@@ -240,6 +240,7 @@ vi.mock("../state/entities", () => {
     readProjects: () => [project],
     readThreadShell: () => null,
     readThreadShells: () => [],
+    useProfileProjects: <T>(projects: T) => projects,
     useProjects: () => [],
     useThread: () => null,
   };

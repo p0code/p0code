@@ -1,6 +1,7 @@
 import * as WorktreeBranchSync from "./WorktreeBranchSync.ts";
 import * as GuestShareService from "../guest/GuestShareService.ts";
 import * as UsageLimitRecoveryWorker from "./UsageLimitRecoveryWorker.ts";
+import * as AccountProfileThreadFiling from "./AccountProfileThreadFiling.ts";
 import * as HiddenAutoArchiveWorker from "./HiddenAutoArchiveWorker.ts";
 import * as Scheduler from "../scheduling/Scheduler.ts";
 import * as Layer from "effect/Layer";
@@ -455,6 +456,7 @@ export const layerProduction = Layer.mergeAll(
       ),
     ),
   ),
+  AccountProfileThreadFiling.layer.pipe(Layer.provide(layerOrchestratorProvided)),
   HiddenAutoArchiveWorker.layer.pipe(
     Layer.provide(Layer.mergeAll(ProjectionStore.layer, layerOrchestratorProvided)),
   ),

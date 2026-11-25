@@ -1,4 +1,5 @@
 import {
+  AccountProfileId,
   DEFAULT_SERVER_SETTINGS,
   ProjectId,
   ProviderDriverKind,
@@ -228,6 +229,23 @@ describe("serverSettings helpers", () => {
     ]);
     expect(resolveProjectScripts(reset, secondProject)).toEqual([secondAction]);
     expect(resolveProjectScripts(secondUpdate, firstProject)).toEqual([firstAction]);
+  });
+
+  it("files projects under account profiles one entry at a time", () => {
+    const first = ProjectId.make("first-project");
+    const second = ProjectId.make("second-project");
+    const work = AccountProfileId.make("work");
+    const filed = applyServerSettingsPatch(
+      applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, {
+        projectAccountProfileIds: { [first]: work },
+      }),
+      { projectAccountProfileIds: { [second]: work } },
+    );
+    expect(filed.projectAccountProfileIds).toEqual({ [first]: work, [second]: work });
+    const unfiled = applyServerSettingsPatch(filed, {
+      projectAccountProfileIds: { [first]: null },
+    });
+    expect(unfiled.projectAccountProfileIds).toEqual({ [second]: work });
   });
 
   it("preserves other projects' boolean overrides across separate updates and resets", () => {

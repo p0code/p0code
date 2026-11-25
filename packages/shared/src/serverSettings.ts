@@ -409,6 +409,8 @@ export function applyServerSettingsPatch(
     usageModelAliases: usageModelAliasesPatch,
     // Entry replacement: deepMerge would keep keys the client meant to clear.
     projectSettingsOverrides: projectSettingsOverridesPatch,
+    projectAccountProfileIds: projectAccountProfileIdsPatch,
+    threadAccountProfileIds: threadAccountProfileIdsPatch,
     projectAgentBrowserAccessOverrides: _legacyBrowserAccess,
     projectAutoPullOverrides: _legacyAutoPull,
     projectScriptOverrides: _legacyScripts,
@@ -617,6 +619,22 @@ export function applyServerSettingsPatch(
           usageLimitSources: mergeSettingsEntries(
             current.usageLimitSources,
             usageLimitSourcesPatch,
+          ),
+        }
+      : {}),
+    ...(projectAccountProfileIdsPatch !== undefined
+      ? {
+          projectAccountProfileIds: mergeSettingsEntries(
+            current.projectAccountProfileIds,
+            projectAccountProfileIdsPatch,
+          ),
+        }
+      : {}),
+    ...(threadAccountProfileIdsPatch !== undefined
+      ? {
+          threadAccountProfileIds: mergeSettingsEntries(
+            current.threadAccountProfileIds,
+            threadAccountProfileIdsPatch,
           ),
         }
       : {}),

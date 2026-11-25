@@ -40,6 +40,7 @@ import { SettingsScreen } from "./components/SettingsScreen";
 import { SettingsSection } from "./components/SettingsSection";
 import { ListActionRow as SettingsActionRow } from "../../components/ui/ListActionRow";
 import { SettingsSwitchRow } from "./components/SettingsSwitchRow";
+import { ProjectAccountProfileSection } from "./ProjectAccountProfileSection";
 import { ProjectRepositoriesSection } from "./ProjectRepositoriesSection";
 import { useSettingsEnvironmentMenu } from "./components/SettingsEnvironmentFilterHeader";
 import { useSettingsEnvironmentFilter, type SettingsTarget } from "./settings-environment-filter";
@@ -401,6 +402,24 @@ function ProjectOverviewContent(props: {
           />
         </SettingsSection>
       ) : null}
+
+      {props.members.map((member) => {
+        const environment = props.environments.find(
+          (entry) => entry.environmentId === member.environmentId,
+        );
+        return environment ? (
+          <ProjectAccountProfileSection
+            key={`${member.environmentId}:${member.id}`}
+            member={member}
+            environment={environment}
+            title={
+              props.members.length === 1
+                ? gt("Account profile")
+                : gt("Account profile · {environment}", { environment: environment.label })
+            }
+          />
+        ) : null;
+      })}
 
       <SettingsSection title={gt("Checkouts")}>
         {props.members.map((member, index) => {

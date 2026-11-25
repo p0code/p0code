@@ -189,6 +189,11 @@ that is not at its usage limit for the model you chose. Picking an account in th
 always wins. Switch profiles from the sidebar's profile button, the command palette
 (**Switch account profile**), `mod+alt+shift+p`, or **Settings → Providers** on mobile.
 
+Profiles also separate projects. A project you add belongs to the active profile, and only that
+profile lists it and its threads. Projects from before stay in every profile until you move them:
+right-click a project folder and pick **Move to profile**, or set **Account profile** in the
+project's settings. **Show in all profiles** undoes it.
+
 When a thread hits a usage limit, its notice offers **Continue on** the profile's next account.
 Turn on **Switch accounts at usage limits** for a profile to do that without asking; switching
 takes priority over waiting for the reset. The new account receives the conversation as a

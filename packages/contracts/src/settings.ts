@@ -1531,6 +1531,14 @@ export const ServerSettings = Schema.Struct({
   activeAccountProfileId: Schema.NullOr(AccountProfileId).pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_ACTIVE_ACCOUNT_PROFILE_ID)),
   ),
+  /** A project shows only under its profile; an unassigned project (or a deleted profile's) shows in every one. */
+  projectAccountProfileIds: Schema.Record(ProjectId, AccountProfileId).pipe(
+    Schema.withDecodingDefault(Effect.succeed({})),
+  ),
+  /** Used only while the thread's project is unassigned, e.g. "No project" threads. */
+  threadAccountProfileIds: Schema.Record(ThreadId, AccountProfileId).pipe(
+    Schema.withDecodingDefault(Effect.succeed({})),
+  ),
   defaultRuntimeMode: RuntimeMode.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_RUNTIME_MODE)),
   ),
@@ -1999,6 +2007,13 @@ export const ServerSettingsPatch = Schema.Struct({
   fallbackModelSelection: Schema.optionalKey(Schema.NullOr(ModelSelection)),
   accountProfiles: Schema.optionalKey(Schema.Array(AccountProfile)),
   activeAccountProfileId: Schema.optionalKey(Schema.NullOr(AccountProfileId)),
+  /** Merges per project; null shows the project in every profile again. */
+  projectAccountProfileIds: Schema.optionalKey(
+    Schema.Record(ProjectId, Schema.NullOr(AccountProfileId)),
+  ),
+  threadAccountProfileIds: Schema.optionalKey(
+    Schema.Record(ThreadId, Schema.NullOr(AccountProfileId)),
+  ),
   /** Replaces each project's override set; null removes it. Omitted providerInstances retains its stored value. */
   projectSettingsOverrides: Schema.optionalKey(
     Schema.Record(

@@ -49,6 +49,7 @@ import {
   readProjects,
   readThreadShell,
   readThreadShells,
+  useProfileProjects,
   useProjects,
   useQuietThreadShell,
 } from "../state/entities";
@@ -540,7 +541,8 @@ export function useHandleNewThread() {
         : useComposerDraftStore.getState().getDraftSession(routeTarget.draftId)
       : null,
   );
-  const projects = useProjects();
+  // A new thread defaults to a project the active account profile shows.
+  const projects = useProfileProjects(useProjects());
   const handleNewThread = useNewThreadHandler();
   const groupingSettings = useClientSettings(selectProjectGroupingSettings);
   const defaultProjectRef = resolveDefaultProjectRef(

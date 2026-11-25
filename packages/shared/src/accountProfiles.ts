@@ -1,5 +1,6 @@
 import {
   type AccountProfile,
+  type AccountProfileId,
   isProviderAvailable,
   type ModelSelection,
   type ProjectId,
@@ -8,6 +9,8 @@ import {
   resolveProjectProviderInstanceEnabled,
   type ServerProvider,
   type ServerSettings,
+  type ServerSettingsPatch,
+  type ThreadId,
 } from "@t3tools/contracts";
 
 import { exhaustedUsageWindow } from "./usageLimits.ts";
@@ -141,4 +144,100 @@ export function nextAccountProfile(
     (profile) => profile.id === settings.activeAccountProfileId,
   );
   return settings.accountProfiles[(index + 1) % settings.accountProfiles.length];
+}
+
+type ProjectProfileSettings = Pick<
+  ServerSettings,
+  "accountProfiles" | "activeAccountProfileId" | "projectAccountProfileIds"
+>;
+type ThreadProfileSettings = ProjectProfileSettings &
+  Pick<ServerSettings, "threadAccountProfileIds">;
+interface ProfiledThread {
+  readonly id: ThreadId;
+  readonly projectId: ProjectId | null;
+}
+
+function existingProfile(
+  settings: Pick<ServerSettings, "accountProfiles">,
+  profileId: AccountProfileId | undefined,
+): AccountProfile | undefined {
+  return profileId === undefined
+    ? undefined
+    : settings.accountProfiles.find((profile) => profile.id === profileId);
+}
+
+/** The existing profile a project is assigned to; undefined means it shows in every profile. */
+export function projectAccountProfile(
+  settings: ProjectProfileSettings,
+  projectId: ProjectId,
+): AccountProfile | undefined {
+  return existingProfile(settings, settings.projectAccountProfileIds[projectId]);
+}
+
+/** A thread follows its project's profile; only a thread in an unassigned project uses its own. */
+export function threadAccountProfile(
+  settings: ThreadProfileSettings,
+  thread: ProfiledThread,
+): AccountProfile | undefined {
+  return (
+    (thread.projectId === null ? undefined : projectAccountProfile(settings, thread.projectId)) ??
+    existingProfile(settings, settings.threadAccountProfileIds[thread.id])
+  );
+}
+
+function shownUnderActiveProfile(
+  settings: Pick<ServerSettings, "accountProfiles" | "activeAccountProfileId">,
+  assigned: AccountProfile | undefined,
+): boolean {
+  if (settings.accountProfiles.length < 2) return true;
+  const active = activeAccountProfile(settings);
+  return active === undefined || assigned === undefined || assigned.id === active.id;
+}
+
+/** Whether a project shows under the active profile. Never hides with fewer than two profiles. */
+export function isProjectInActiveAccountProfile(
+  settings: ProjectProfileSettings | null | undefined,
+  projectId: ProjectId,
+): boolean {
+  return (
+    settings == null ||
+    shownUnderActiveProfile(settings, projectAccountProfile(settings, projectId))
+  );
+}
+
+/** Whether a thread shows under the active profile. Never hides with fewer than two profiles. */
+export function isThreadInActiveAccountProfile(
+  settings: ThreadProfileSettings | null | undefined,
+  thread: ProfiledThread,
+): boolean {
+  return (
+    settings == null || shownUnderActiveProfile(settings, threadAccountProfile(settings, thread))
+  );
+}
+
+function activeProfileWhenSeparating(settings: ProjectProfileSettings) {
+  return settings.accountProfiles.length < 2 ? undefined : activeAccountProfile(settings);
+}
+
+/** The patch that files a new project under the active profile, or undefined when there is nothing to separate. */
+export function newProjectAccountProfilePatch(
+  settings: ProjectProfileSettings,
+  projectId: ProjectId,
+): Pick<ServerSettingsPatch, "projectAccountProfileIds"> | undefined {
+  const active = activeProfileWhenSeparating(settings);
+  return active === undefined
+    ? undefined
+    : { projectAccountProfileIds: { [projectId]: active.id } };
+}
+
+/** Files a new thread under the active profile unless its project already places it. */
+export function newThreadAccountProfilePatch(
+  settings: ThreadProfileSettings,
+  thread: ProfiledThread,
+): Pick<ServerSettingsPatch, "threadAccountProfileIds"> | undefined {
+  const active = activeProfileWhenSeparating(settings);
+  if (active === undefined) return undefined;
+  if (thread.projectId !== null && projectAccountProfile(settings, thread.projectId))
+    return undefined;
+  return { threadAccountProfileIds: { [thread.id]: active.id } };
 }

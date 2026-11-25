@@ -1,7 +1,7 @@
 import { createEnvironmentProjectAtoms } from "@t3tools/client-runtime/state/projects";
 import { createProjectEnvironmentAtoms } from "@t3tools/client-runtime/state/projects";
 import { createEnvironmentRpcQueryAtomFamily } from "@t3tools/client-runtime/state/runtime";
-import { WS_METHODS } from "@t3tools/contracts";
+import { type EnvironmentId, type ServerSettings, WS_METHODS } from "@t3tools/contracts";
 
 import { environmentCatalog } from "../connection/catalog";
 import { connectionAtomRuntime } from "../connection/runtime";
@@ -9,13 +9,42 @@ import { environmentShell, environmentSnapshotAtom, expectsPrimaryEnvironment } 
 import { parseScopedProjectKey } from "@t3tools/client-runtime/environment";
 import { AVAILABLE_CONNECTION_STATE } from "@t3tools/client-runtime/connection";
 import { AsyncResult, Atom } from "effect/reactivity";
-import { serverEnvironment } from "./server";
+import { environmentServerConfigsAtom, serverEnvironment } from "./server";
+import { isProjectInActiveAccountProfile } from "@t3tools/shared/accountProfiles";
 
 export const environmentProjects = createEnvironmentProjectAtoms({
   catalogValueAtom: environmentCatalog.catalogValueAtom,
   snapshotAtom: environmentSnapshotAtom,
   serverConfigValueAtom: serverEnvironment.configValueAtom,
 });
+/** `environmentId:projectId` keys of projects their environment's active account profile hides. */
+export const profileHiddenProjectKeysAtom = Atom.make((get) => {
+  const hidden = new Set<string>();
+  for (const project of get(environmentProjects.projectsAtom)) {
+    const settings = get(serverEnvironment.settingsValueAtom(project.environmentId));
+    if (!isProjectInActiveAccountProfile(settings, project.id)) {
+      hidden.add(`${project.environmentId}:${project.id}`);
+    }
+  }
+  return hidden;
+}).pipe(
+  // Settings pushes rebuild the set; keep it stable while the hidden projects stay the same.
+  Atom.withEquality(
+    (a: ReadonlySet<string>, b: ReadonlySet<string>) =>
+      a.size === b.size && [...a].every((key) => b.has(key)),
+  ),
+  Atom.withLabel("web-profile-hidden-project-keys"),
+);
+
+/** Settings of each environment whose account profiles separate projects and threads. */
+export const profileSeparatingSettingsAtom = Atom.make((get) => {
+  const separating = new Map<EnvironmentId, ServerSettings>();
+  for (const [environmentId, config] of get(environmentServerConfigsAtom)) {
+    if (config.settings.accountProfiles.length >= 2) separating.set(environmentId, config.settings);
+  }
+  return separating;
+}).pipe(Atom.withLabel("web-profile-separating-settings"));
+
 export const projectEnvironment = createProjectEnvironmentAtoms(connectionAtomRuntime, {
   projectAtom: environmentProjects.projectAtom,
 });

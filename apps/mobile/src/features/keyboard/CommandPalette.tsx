@@ -45,13 +45,11 @@ import { deriveBottomControlInsets } from "../../lib/reserved-regions";
 import { scopedProjectKey, scopedThreadKey } from "../../lib/scopedEntities";
 import { useNativeLayoutMetrics } from "../../native/native-layout-metrics";
 import { T3KeyboardCommands } from "../../native/T3KeyboardCommands";
+import { useDelegatedUnderParent, useServerConfigs, useThreadShell } from "../../state/entities";
 import {
-  useDelegatedUnderParent,
-  useProjects,
-  useServerConfigs,
-  useThreadShell,
-  useVisibleThreadShells,
-} from "../../state/entities";
+  useProfileProjects,
+  useProfileVisibleThreadShells,
+} from "../../state/account-profile-projects";
 import { useThreadSearch } from "../../state/queries";
 import { requestThreadMessageJump } from "../threads/threadMessageJump";
 import { useCanShareWithGuest } from "../threads/useCanShareWithGuest";
@@ -232,8 +230,8 @@ export function CommandPalette(props: {
   const { themeVariables } = useAppearancePreferences();
   const selectDetail = useSelectWorkspaceDetail();
   const runCommand = props.onCommand;
-  const projects = useProjects();
-  const threads = useVisibleThreadShells();
+  const projects = useProfileProjects();
+  const threads = useProfileVisibleThreadShells();
   const delegatedUnderParent = useDelegatedUnderParent();
   const activeThreadRef = parseActiveThreadPath(props.pathname);
   const activeThread = useThreadShell(activeThreadRef);

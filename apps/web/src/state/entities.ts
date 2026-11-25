@@ -31,8 +31,13 @@ import type {
 } from "@t3tools/contracts";
 import type { ThreadCheckpointSummary } from "@t3tools/client-runtime/state/thread-checkpoints";
 import { Atom } from "effect/reactivity";
+import { isThreadInActiveAccountProfile } from "@t3tools/shared/accountProfiles";
 import { appAtomRegistry } from "../rpc/atomRegistry";
-import { environmentProjects } from "./projects";
+import {
+  environmentProjects,
+  profileHiddenProjectKeysAtom,
+  profileSeparatingSettingsAtom,
+} from "./projects";
 import { environmentPresentations } from "./presentation";
 import { environmentServerConfigsAtom } from "./server";
 import {
@@ -104,6 +109,21 @@ export function useProjects(): ReadonlyArray<EnvironmentProject> {
   return useAtomValue(environmentProjects.projectsAtom);
 }
 
+/** Keys (`environmentId:projectId`) of projects the active account profile hides. */
+export function useProfileHiddenProjectKeys(): ReadonlySet<string> {
+  return useAtomValue(profileHiddenProjectKeysAtom);
+}
+
+/** `projects` minus those the active account profile hides, for lists users browse and pick from. */
+export function useProfileProjects<T extends Pick<EnvironmentProject, "environmentId" | "id">>(
+  projects: ReadonlyArray<T>,
+): ReadonlyArray<T> {
+  const hidden = useProfileHiddenProjectKeys();
+  return hidden.size === 0
+    ? projects
+    : projects.filter((project) => !hidden.has(`${project.environmentId}:${project.id}`));
+}
+
 /** Providers are left out; read them with `useEnvironmentProviders()`. */
 export function useServerConfigs() {
   return useAtomValue(environmentPresentations.serverConfigsAtom);
@@ -130,6 +150,18 @@ export function useVisibleThreadShells(enabled = true): ReadonlyArray<Environmen
   return useAtomValue(
     enabled ? environmentThreadShells.visibleThreadShellsAtom : EMPTY_THREAD_SHELLS_ATOM,
   );
+}
+
+/** `threads` minus those the active account profile hides, by their project or their own filing. */
+export function useProfileThreads<
+  T extends Pick<EnvironmentThreadShell, "environmentId" | "id" | "projectId">,
+>(threads: ReadonlyArray<T>): ReadonlyArray<T> {
+  const separating = useAtomValue(profileSeparatingSettingsAtom);
+  if (separating.size === 0) return threads;
+  const visible = threads.filter((thread) =>
+    isThreadInActiveAccountProfile(separating.get(thread.environmentId), thread),
+  );
+  return visible.length === threads.length ? threads : visible;
 }
 
 export function useAllEnvironmentShellsBootstrapped(): boolean {

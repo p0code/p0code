@@ -15,7 +15,7 @@ export function SidebarAccountProfileToggle() {
   }));
   if (environmentId === null || accountProfiles.length < 2) return null;
   return (
-    <div className="px-1.5 pb-1">
+    <div className="pb-1">
       <ToggleGroup
         aria-label={gt("Account profile")}
         variant="segmented"

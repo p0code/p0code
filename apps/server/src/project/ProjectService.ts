@@ -10,6 +10,7 @@ import {
   type ProjectSnapshot,
   type ThreadId,
 } from "@t3tools/contracts";
+import { newProjectAccountProfilePatch } from "@t3tools/shared/accountProfiles";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as KeyedLock from "@t3tools/shared/KeyedLock";
 import * as Clock from "effect/Clock";
@@ -583,37 +584,44 @@ export const make = Effect.gen(function* () {
           ),
         );
 
-  const create: ProjectService["Service"]["create"] = Effect.fn("ProjectService.create")(
-    function* (input) {
-      yield* rejectWslSharePath(input.projectId, input.workspaceRoot);
-      const workspaceRoot = yield* normalizeWorkspaceRoot({
+  const createProject = Effect.fn("ProjectService.create")(function* (
+    input: Parameters<ProjectService["Service"]["create"]>[0],
+    // Bootstrapped projects, like the shared "No project", stay in every account profile.
+    fileUnderProfile: boolean,
+  ) {
+    yield* rejectWslSharePath(input.projectId, input.workspaceRoot);
+    const workspaceRoot = yield* normalizeWorkspaceRoot({
+      projectId: input.projectId,
+      workspaceRoot: input.workspaceRoot,
+      createIfMissing: input.createWorkspaceRootIfMissing ?? false,
+    });
+    yield* rejectWorktreeContainer(input.projectId, workspaceRoot);
+    const trackedFolders = yield* normalizeTrackedFolders(
+      input.projectId,
+      workspaceRoot,
+      input.trackedFolders ?? [],
+    );
+    yield* commit(
+      {
+        type: "project.create",
+        commandId: input.commandId,
         projectId: input.projectId,
-        workspaceRoot: input.workspaceRoot,
-        createIfMissing: input.createWorkspaceRootIfMissing ?? false,
-      });
-      yield* rejectWorktreeContainer(input.projectId, workspaceRoot);
-      const trackedFolders = yield* normalizeTrackedFolders(
-        input.projectId,
+        title: input.title,
         workspaceRoot,
-        input.trackedFolders ?? [],
-      );
-      yield* commit(
-        {
-          type: "project.create",
-          commandId: input.commandId,
-          projectId: input.projectId,
-          title: input.title,
-          workspaceRoot,
-          ...(input.scripts === undefined ? {} : { scripts: input.scripts }),
-          trackedFolders,
-        },
-        undefined,
-        saveProjectSettings(input.projectId, { scripts: input.scripts }),
-      );
-      yield* projectEnrichment.invalidate([workspaceRoot]);
-      return yield* readCommitted(input.projectId);
-    },
-  );
+        ...(input.scripts === undefined ? {} : { scripts: input.scripts }),
+        trackedFolders,
+      },
+      undefined,
+      saveProjectSettings(input.projectId, { scripts: input.scripts }).pipe(
+        Effect.andThen(
+          fileUnderProfile ? fileUnderActiveAccountProfile(input.projectId) : Effect.void,
+        ),
+      ),
+    );
+    yield* projectEnrichment.invalidate([workspaceRoot]);
+    return yield* readCommitted(input.projectId);
+  });
+  const create: ProjectService["Service"]["create"] = (input) => createProject(input, true);
 
   const update: ProjectService["Service"]["update"] = Effect.fn("ProjectService.update")(
     function* (input) {
@@ -705,7 +713,7 @@ export const make = Effect.gen(function* () {
     function* (input) {
       const existing = yield* getByWorkspaceRoot(input.workspaceRoot);
       if (Option.isSome(existing)) return { project: existing.value, created: false };
-      return { project: yield* create(input), created: true };
+      return { project: yield* createProject(input, false), created: true };
     },
   );
 
@@ -793,6 +801,18 @@ export const make = Effect.gen(function* () {
     );
   });
 
+  const fileUnderActiveAccountProfile = (projectId: ProjectId) =>
+    serverSettings.getSettings.pipe(
+      Effect.flatMap((settings) => {
+        const patch = newProjectAccountProfilePatch(settings, projectId);
+        return patch === undefined ? Effect.void : serverSettings.updateSettings(patch);
+      }),
+      Effect.asVoid,
+      Effect.catchCause((cause) =>
+        Effect.logWarning(`Failed to file project ${projectId} under the active profile.`, cause),
+      ),
+    );
+
   // Best-effort cleanup releases disabled instances kept alive by overrides; crashes have no replay to revisit deletion.
   const clearProjectSettingsOverrides = (projectId: ProjectId) =>
     serverSettings.getSettings.pipe(
@@ -801,6 +821,7 @@ export const make = Effect.gen(function* () {
           projectSettingsOverrides: {
             [projectId]: deletedProjectOverridePatch(projectSettingsOverrides[projectId]),
           },
+          projectAccountProfileIds: { [projectId]: null },
         }),
       ),
       Effect.asVoid,

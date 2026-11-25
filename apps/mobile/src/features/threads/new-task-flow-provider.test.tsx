@@ -50,6 +50,9 @@ vi.mock("../../state/entities", () => ({
   useEnvironmentServerConfig: () => mocks.serverConfig() ?? null,
   useServerConfigs: () => new Map(),
 }));
+vi.mock("../../state/account-profile-projects", () => ({
+  useProfileProjects: mocks.projects,
+}));
 vi.mock("../../state/vcs", () => ({
   vcsEnvironment: { status: mocks.status, listRefs: mocks.refs },
 }));

@@ -24,7 +24,11 @@ import {
   deriveProviderInstanceEntries,
   type ProviderInstanceEntry,
 } from "../providerInstances";
-import { useDelegatedUnderParent, useVisibleThreadShells } from "../state/entities";
+import {
+  useDelegatedUnderParent,
+  useProfileThreads,
+  useVisibleThreadShells,
+} from "../state/entities";
 import {
   useEnvironmentProviders,
   useEnvironments,
@@ -102,7 +106,7 @@ export function useCommandPaletteThreadItems(input: {
   const messages = useMessages();
   const gt = useGT();
   const navigate = useNavigate();
-  const threads = useVisibleThreadShells();
+  const threads = useProfileThreads(useVisibleThreadShells());
   const delegatedUnderParent = useDelegatedUnderParent();
   const { projectEnvironmentLocationById } = useEnvironmentLookups();
   const providerEntryByEnvironmentAndInstanceId = useProviderEntryByEnvironmentAndInstanceId();

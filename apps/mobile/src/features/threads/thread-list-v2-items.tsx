@@ -97,6 +97,7 @@ import {
 import { canTurnThreadIntoProject, turnThreadIntoProject } from "./turnThreadIntoProject";
 import { useNewTaskProjectDefaults } from "./use-new-task-project-defaults";
 import { useCanShareWithGuest } from "./useCanShareWithGuest";
+import { useThreadAccountProfileMenu } from "./thread-account-profile-menu";
 
 interface StatusLabel {
   // Null when the icon and timer carry the status on their own.
@@ -1076,6 +1077,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         : [],
     [gt, props.autoSettleOptOutSupported, thread.autoSettleDisabledAt],
   );
+  const profileMenu = useThreadAccountProfileMenu(thread);
   const canTurnIntoProject = canTurnThreadIntoProject(thread);
   const titleMenuItems = useMemo<MenuAction[]>(
     () => [
@@ -1150,6 +1152,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
           secondary: [
             ...titleMenuItems,
             ...autoSettleMenuItems,
+            ...profileMenu.items,
             localized(LEGACY_MENU_ACTIONS[0]!),
             localized(SNOOZED_MENU_ACTIONS[1]!),
           ],
@@ -1164,7 +1167,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
           direct: [...direct, localized(LEGACY_MENU_ACTIONS[0]!)],
           reorder: reorderMenuItems,
           pin: pinMenuItems,
-          secondary: [...titleMenuItems, localized(LEGACY_MENU_ACTIONS[1]!)],
+          secondary: [...titleMenuItems, ...profileMenu.items, localized(LEGACY_MENU_ACTIONS[1]!)],
         },
         m,
       );
@@ -1181,6 +1184,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
           secondary: [
             ...titleMenuItems,
             ...autoSettleMenuItems,
+            ...profileMenu.items,
             localized(LEGACY_MENU_ACTIONS[0]!),
             localized(SLIM_MENU_ACTIONS[1]!),
           ],
@@ -1210,6 +1214,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         secondary: [
           ...titleMenuItems,
           ...autoSettleMenuItems,
+          ...profileMenu.items,
           localized(LEGACY_MENU_ACTIONS[0]!),
           localized(CARD_MENU_ACTIONS[1]!),
         ],
@@ -1222,6 +1227,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     canShareWithGuest,
     canUnsettle,
     pinMenuItems,
+    profileMenu.items,
     props.settlementSupported,
     reorderMenuItems,
     snoozePresetActions,
@@ -1253,6 +1259,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
           },
         });
       }
+      if (profileMenu.handle(nativeEvent.event)) return;
       if (nativeEvent.event === "new-thread-on-branch") onNewThreadOnBranch(thread);
       if (nativeEvent.event === "settle") handleSettle();
       if (nativeEvent.event === "unsettle") handleUnsettle();
@@ -1320,6 +1327,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       gt,
       m,
       onNewThreadOnBranch,
+      profileMenu,
       thread,
       navigation,
       handleArchive,

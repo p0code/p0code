@@ -2,14 +2,20 @@ import {
   AccountProfileId,
   DEFAULT_SERVER_SETTINGS,
   ProviderDriverKind,
+  ProjectId,
   ProviderInstanceId,
   type ServerProvider,
+  ThreadId,
 } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  isProjectInActiveAccountProfile,
+  isThreadInActiveAccountProfile,
   limitFailoverSelection,
   moveProfileInstance,
+  newProjectAccountProfilePatch,
+  newThreadAccountProfilePatch,
   nextAccountProfile,
   routeSelectionToAccountProfile,
 } from "./accountProfiles.ts";
@@ -193,5 +199,84 @@ describe("profile editing", () => {
     expect(nextAccountProfile(settings("personal"))?.id).toBe("work");
     expect(nextAccountProfile(settings("work"))?.id).toBe("personal");
     expect(nextAccountProfile(settings(null))?.id).toBe("personal");
+  });
+});
+
+describe("project separation", () => {
+  const work = AccountProfileId.make("work");
+  const workProject = ProjectId.make("project-work");
+  const sharedProject = ProjectId.make("project-shared");
+  const orphanedProject = ProjectId.make("project-orphaned");
+  const projectSettings = (activeAccountProfileId: string) => ({
+    ...DEFAULT_SERVER_SETTINGS,
+    activeAccountProfileId: AccountProfileId.make(activeAccountProfileId),
+    projectAccountProfileIds: {
+      [workProject]: work,
+      [orphanedProject]: AccountProfileId.make("deleted"),
+    },
+  });
+
+  it("shows a project only under its profile, and unassigned ones everywhere", () => {
+    expect(isProjectInActiveAccountProfile(projectSettings("work"), workProject)).toBe(true);
+    expect(isProjectInActiveAccountProfile(projectSettings("personal"), workProject)).toBe(false);
+    expect(isProjectInActiveAccountProfile(projectSettings("personal"), sharedProject)).toBe(true);
+    expect(isProjectInActiveAccountProfile(projectSettings("personal"), orphanedProject)).toBe(
+      true,
+    );
+  });
+
+  it("hides nothing with a single profile", () => {
+    const single = {
+      ...projectSettings("personal"),
+      accountProfiles: DEFAULT_SERVER_SETTINGS.accountProfiles.slice(0, 1),
+    };
+    expect(isProjectInActiveAccountProfile(single, workProject)).toBe(true);
+    expect(newProjectAccountProfilePatch(single, sharedProject)).toBeUndefined();
+  });
+
+  it("files a new project under the active profile", () => {
+    expect(newProjectAccountProfilePatch(projectSettings("work"), sharedProject)).toEqual({
+      projectAccountProfileIds: { [sharedProject]: work },
+    });
+  });
+
+  it("files a thread by its project, else by its own profile, else everywhere", () => {
+    const thread = ThreadId.make("thread-1");
+    const filed = {
+      ...projectSettings("personal"),
+      threadAccountProfileIds: { [thread]: work },
+    };
+    expect(isThreadInActiveAccountProfile(filed, { id: thread, projectId: sharedProject })).toBe(
+      false,
+    );
+    expect(
+      isThreadInActiveAccountProfile(
+        { ...filed, activeAccountProfileId: work },
+        { id: thread, projectId: sharedProject },
+      ),
+    ).toBe(true);
+    // The project's profile wins over the thread's own.
+    expect(
+      isThreadInActiveAccountProfile(
+        { ...filed, threadAccountProfileIds: { [thread]: AccountProfileId.make("personal") } },
+        { id: thread, projectId: workProject },
+      ),
+    ).toBe(false);
+    expect(
+      isThreadInActiveAccountProfile(filed, { id: ThreadId.make("other"), projectId: null }),
+    ).toBe(true);
+  });
+
+  it("files a new thread only when its project does not place it", () => {
+    const thread = ThreadId.make("thread-new");
+    expect(
+      newThreadAccountProfilePatch(projectSettings("work"), {
+        id: thread,
+        projectId: sharedProject,
+      }),
+    ).toEqual({ threadAccountProfileIds: { [thread]: work } });
+    expect(
+      newThreadAccountProfilePatch(projectSettings("work"), { id: thread, projectId: workProject }),
+    ).toBeUndefined();
   });
 });
