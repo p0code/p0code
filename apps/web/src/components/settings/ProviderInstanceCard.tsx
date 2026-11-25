@@ -41,6 +41,7 @@ import {
 import { cn } from "../../lib/utils";
 import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
 import { useStableCallback } from "../../hooks/useStableCallback";
+import { normalizeProviderInstanceBadge } from "@t3tools/client-runtime/state/provider-instance-display";
 import { normalizeProviderAccentColor } from "../../providerInstances";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -708,6 +709,8 @@ interface ProviderInstanceCardProps {
   readonly instance: ProviderInstanceConfig;
   readonly driverOption: ProviderClientDefinition | undefined;
   readonly liveProvider: ServerProvider | undefined;
+  /** The badge this instance shows when none is set, which depends on its sibling accounts. */
+  readonly defaultBadge?: string | undefined;
   readonly mode: "list" | "editor";
   readonly selected?: boolean | undefined;
   readonly onSelect?: (() => void) | undefined;
@@ -782,6 +785,7 @@ export function ProviderInstanceCard({
   instance,
   driverOption,
   liveProvider,
+  defaultBadge,
   mode,
   selected = false,
   onSelect,
@@ -858,6 +862,7 @@ export function ProviderInstanceCard({
   const displayName =
     instance.displayName?.trim() || driverOption?.label || String(instance.driver);
   const accentColor = normalizeProviderAccentColor(instance.accentColor);
+  const instanceBadge = normalizeProviderInstanceBadge(instance.instanceBadge);
   const managedPolicy = useManagedPolicy(environmentId);
   const instanceLocks = managedInstanceLocks(managedPolicy, instance.driver, m);
   const managedDriverReason = isManagedDriverAllowed(managedPolicy, instance.driver)
@@ -938,6 +943,16 @@ export function ProviderInstanceCard({
     );
   };
 
+  const updateInstanceBadge = (value: string) => {
+    const normalized = normalizeProviderInstanceBadge(value);
+    const { instanceBadge: _omit, ...rest } = instance;
+    onUpdate(
+      normalized
+        ? ({ ...rest, instanceBadge: normalized } as ProviderInstanceConfig)
+        : (rest as ProviderInstanceConfig),
+    );
+  };
+
   const updateConfig = (nextConfig: Record<string, unknown> | undefined) => {
     const { config: _omit, ...rest } = instance;
     onUpdate(
@@ -987,6 +1002,7 @@ export function ProviderInstanceCard({
     <ProviderInstanceIcon
       driverKind={driverKind ?? instance.driver}
       displayName={displayName}
+      badgeLabel={instanceBadge ?? defaultBadge}
       accentColor={accentColor}
       acpRegistryAgentId={
         readConfigString(instance.config, "source") === "local"
@@ -998,7 +1014,7 @@ export function ProviderInstanceCard({
           ? undefined
           : (readConfigString(instance.config, "registryIconUrl") ?? undefined)
       }
-      showBadge={Boolean(accentColor)}
+      showBadge={Boolean(accentColor || instanceBadge)}
       className="size-5"
       iconClassName="size-4 text-foreground/80"
       badgeClassName="right-[-0.125rem] bottom-[-0.125rem] h-3 min-w-3 px-0.5 text-5xs"
@@ -1387,6 +1403,23 @@ export function ProviderInstanceCard({
                 spellCheck={false}
               />
             </div>
+          }
+        />
+        <SettingsRow
+          title={gt("Badge", { $context: "short mark on a provider account's icon" })}
+          control={
+            <DraftInput
+              id={`provider-instance-${instanceId}-badge`}
+              size="sm"
+              className="w-20 text-center"
+              value={instance.instanceBadge ?? ""}
+              onCommit={updateInstanceBadge}
+              placeholder={defaultBadge}
+              aria-label={gt("Badge", { $context: "short mark on a provider account's icon" })}
+              disabled={readOnly}
+              spellCheck={false}
+              autoComplete="off"
+            />
           }
         />
       </SettingsSection>

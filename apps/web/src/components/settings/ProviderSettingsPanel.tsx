@@ -1,4 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
+import { resolveProviderInstanceBadges } from "@t3tools/client-runtime/state/provider-instance-display";
 import { connectionErrorText, connectionStatusTitle } from "@t3tools/client-runtime/connection";
 import {
   errorDisplayMessage,
@@ -1339,6 +1340,12 @@ function ProviderInstanceRow({
   const gt = useGT();
   const allProjects = useProjects();
   const secretSources = useSecretSources(environmentId);
+  const serverProviders = useAtomValue(providersIgnoringCheckedAtAtom(environmentId));
+  const defaultBadge = resolveProviderInstanceBadges(
+    serverProviders.map((provider) =>
+      provider.instanceId === instanceId ? { ...provider, instanceBadge: undefined } : provider,
+    ),
+  ).get(instanceId);
   const acpProjects =
     mode === "editor" && liveProvider?.driver === "acpRegistry"
       ? allProjects.filter((project) => project.environmentId === environmentId)
@@ -1387,6 +1394,7 @@ function ProviderInstanceRow({
       instance={instance}
       driverOption={driverOption}
       liveProvider={liveProvider}
+      defaultBadge={defaultBadge}
       mode={mode}
       selected={selected}
       onSelect={mode === "list" ? () => actions.selectInstance(instanceId) : undefined}

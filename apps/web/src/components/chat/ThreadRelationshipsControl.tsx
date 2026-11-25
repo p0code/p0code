@@ -929,6 +929,7 @@ export function ThreadRelationshipsPanel(props: {
           providerEntries={providerEntries}
           fallbackIcon={RelationshipIcon}
           status={rowStatus}
+          onTooltipOpenChange={onRingTooltipOpenChange}
         />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-left text-sm font-medium leading-4 text-foreground/85">

@@ -17,6 +17,7 @@ import { cn } from "~/lib/utils";
 import type { MessageResolver } from "../../i18n/messages";
 import {
   isProviderInstancePickerReady,
+  providerInstanceAccountName,
   shouldShowInstanceBadge,
   type ProviderInstanceEntry,
 } from "../../providerInstances";
@@ -194,7 +195,7 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
               ? describeUnavailableInstance(entry, m)
               : isContextDisabled
                 ? (props.getDisabledInstanceTooltip?.(entry) ?? entry.displayName)
-                : entry.displayName;
+                : providerInstanceAccountName(entry);
             const tooltip =
               usageSummary === null ? baseTooltip : `${baseTooltip} · ${usageSummary}`;
 
@@ -227,6 +228,7 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
                 <ProviderInstanceIcon
                   driverKind={entry.driverKind}
                   displayName={entry.displayName}
+                  badgeLabel={entry.badgeLabel}
                   accentColor={entry.accentColor}
                   acpRegistryAgentId={entry.acpRegistryAgentId}
                   acpRegistryIconUrl={entry.acpRegistryIconUrl}

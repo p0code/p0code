@@ -112,6 +112,7 @@ function WorkflowMemberRow({
             provider={provider}
             providerEntries={providerEntries}
             status={member.status}
+            onTooltipOpenChange={setRingTooltipOpen}
           />
           <span className="min-w-0 flex-1 truncate">{member.title}</span>
           <span className="sr-only">{member.status}</span>

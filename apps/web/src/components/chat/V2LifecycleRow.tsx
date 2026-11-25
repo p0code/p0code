@@ -243,6 +243,7 @@ function SubagentAvatar({
   displayName,
   iconUrl,
   accentColor,
+  badgeLabel,
   showBadge,
   anyInstanceBadge,
   status,
@@ -252,6 +253,7 @@ function SubagentAvatar({
   displayName?: string | undefined;
   iconUrl?: string | undefined;
   accentColor?: string | undefined;
+  badgeLabel?: string | undefined;
   showBadge: boolean;
   anyInstanceBadge: boolean;
   status?: OrchestrationV2TurnItem["status"] | undefined;
@@ -270,6 +272,7 @@ function SubagentAvatar({
           driverKind={driver}
           displayName={displayName ?? driver}
           accentColor={accentColor}
+          badgeLabel={badgeLabel}
           acpRegistryIconUrl={iconUrl}
           showBadge={showBadge}
           size="compact"
@@ -329,6 +332,11 @@ export function EnvironmentSubagentAvatar({
     (providers) =>
       entries(providers).find((entry) => entry.instanceId === providerInstanceId)?.accentColor,
   );
+  const badgeLabel = useAtomValue(
+    providersAtom,
+    (providers) =>
+      entries(providers).find((entry) => entry.instanceId === providerInstanceId)?.badgeLabel,
+  );
   const showBadge = useAtomValue(providersAtom, (providers) => {
     const all = entries(providers);
     const entry = all.find((candidate) => candidate.instanceId === providerInstanceId);
@@ -349,6 +357,7 @@ export function EnvironmentSubagentAvatar({
       displayName={displayName}
       iconUrl={iconUrl}
       accentColor={accentColor}
+      badgeLabel={badgeLabel}
       showBadge={showBadge}
       anyInstanceBadge={anyInstanceBadge}
     />
@@ -750,6 +759,7 @@ function HandoffEndpoint(props: {
             <ProviderInstanceIcon
               driverKind={entry?.driverKind ?? ProviderDriverKind.make(props.instanceId)}
               displayName={entry?.displayName ?? props.instanceId}
+              badgeLabel={entry?.badgeLabel}
               accentColor={entry?.accentColor}
               acpRegistryAgentId={entry?.acpRegistryAgentId}
               acpRegistryIconUrl={entry?.acpRegistryIconUrl}

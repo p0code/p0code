@@ -5,9 +5,11 @@ import { m, type MessageResolver } from "../../i18n/messages";
 import { cn } from "../../lib/utils";
 import {
   hasInstanceBadge,
+  providerInstanceAccountName,
   shouldShowInstanceBadge,
   type ProviderInstanceEntry,
 } from "../../providerInstances";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { ProviderInstanceIcon } from "./ProviderInstanceIcon";
 
 export function threadRelationshipStatusLabel(
@@ -59,6 +61,7 @@ export function ThreadRelationshipIcon({
   anyInstanceBadge = hasInstanceBadge(providerEntries),
   status,
   fallbackIcon: FallbackIcon = BotIcon,
+  onTooltipOpenChange,
 }: {
   driver?: ProviderDriverKind | undefined;
   provider?: ServerProvider | undefined;
@@ -67,18 +70,22 @@ export function ThreadRelationshipIcon({
   anyInstanceBadge?: boolean;
   status: string | null;
   fallbackIcon?: LucideIcon;
+  /** Rows hide their own tooltip while this one names the account. */
+  onTooltipOpenChange?: ((open: boolean) => void) | undefined;
 }) {
   const iconClassName = "size-4 shrink-0 text-muted-foreground";
   const entry = driver
     ? providerEntries.find((candidate) => candidate.instanceId === provider?.instanceId)
     : undefined;
   const showInstanceBadge = entry !== undefined && shouldShowInstanceBadge(entry, providerEntries);
-  return (
+  const accountName = entry ? providerInstanceAccountName(entry) : undefined;
+  const icon = (
     <span className="relative inline-flex size-4 shrink-0 items-center justify-center">
       {driver ? (
         <ProviderInstanceIcon
           driverKind={driver}
           displayName={entry?.displayName ?? provider?.displayName ?? driver}
+          badgeLabel={entry?.badgeLabel}
           accentColor={entry?.accentColor}
           acpRegistryAgentId={entry?.acpRegistryAgentId}
           acpRegistryIconUrl={entry?.acpRegistryIconUrl ?? provider?.iconUrl}
@@ -108,5 +115,12 @@ export function ThreadRelationshipIcon({
         aria-hidden="true"
       />
     </span>
+  );
+  if (!accountName) return icon;
+  return (
+    <Tooltip {...(onTooltipOpenChange ? { onOpenChange: onTooltipOpenChange } : {})}>
+      <TooltipTrigger render={icon} />
+      <TooltipPopup side="top">{accountName}</TooltipPopup>
+    </Tooltip>
   );
 }

@@ -14,6 +14,9 @@ import {
 } from "@t3tools/contracts";
 import {
   normalizeProviderAccentColor,
+  normalizeProviderInstanceBadge,
+  providerInstanceAccountDetail,
+  resolveProviderInstanceBadges,
   resolveProviderInstanceDisplayName,
   shouldShowInstanceBadge,
 } from "@t3tools/client-runtime/state/provider-instance-display";
@@ -31,6 +34,9 @@ export interface ProviderInstanceEntry {
   readonly driverKind: ProviderDriverKind;
   readonly displayName: string;
   readonly accentColor?: string | undefined;
+  /** The badge set in settings; `badgeLabel` is what shows, set or derived. */
+  readonly instanceBadge?: string | undefined;
+  readonly badgeLabel: string;
   readonly acpRegistryAgentId?: string | undefined;
   readonly acpRegistryIconUrl?: string | undefined;
   readonly continuationGroupKey?: string | undefined;
@@ -41,6 +47,14 @@ export interface ProviderInstanceEntry {
   readonly isAvailable: boolean;
   readonly snapshot: ServerProvider;
   readonly models: ReadonlyArray<ServerProviderModel>;
+}
+
+/** The instance's name with the account it is signed in as, when the provider reports one. */
+export function providerInstanceAccountName(
+  entry: Pick<ProviderInstanceEntry, "displayName" | "snapshot">,
+): string {
+  const detail = providerInstanceAccountDetail(entry.snapshot.auth);
+  return detail ? `${entry.displayName} · ${detail}` : entry.displayName;
 }
 
 /** Status dots share one corner per user, so a badge on one row can't move only that row's dot. */
@@ -88,6 +102,7 @@ export function isProviderInstancePickerVisible(entry: ProviderInstanceEntry): b
 export function deriveProviderInstanceEntries(
   providers: ReadonlyArray<ServerProvider>,
 ): ReadonlyArray<ProviderInstanceEntry> {
+  const badges = resolveProviderInstanceBadges(providers);
   return providers.map((snapshot) => {
     const instanceId = snapshot.instanceId;
     const driverKind = snapshot.driver;
@@ -98,6 +113,8 @@ export function deriveProviderInstanceEntries(
       driverKind,
       displayName: resolveProviderInstanceDisplayName(snapshot),
       accentColor: normalizeProviderAccentColor(snapshot.accentColor),
+      instanceBadge: normalizeProviderInstanceBadge(snapshot.instanceBadge),
+      badgeLabel: badges.get(instanceId) ?? "",
       ...(driverKind === "acpRegistry" && snapshot.iconUrl
         ? { acpRegistryIconUrl: snapshot.iconUrl }
         : {}),

@@ -151,6 +151,8 @@ export type SidebarProviderEntry = Pick<
   | "enabled"
   | "displayName"
   | "accentColor"
+  | "instanceBadge"
+  | "badgeLabel"
   | "acpRegistryAgentId"
   | "acpRegistryIconUrl"
   | "models"
@@ -241,6 +243,7 @@ function SidebarProviderStack(props: {
     <ProviderInstanceIcon
       driverKind={currentEntry.driverKind}
       displayName={currentEntry.displayName}
+      badgeLabel={currentEntry.badgeLabel}
       accentColor={currentEntry.accentColor}
       acpRegistryAgentId={currentEntry.acpRegistryAgentId}
       acpRegistryIconUrl={currentEntry.acpRegistryIconUrl}
@@ -262,6 +265,7 @@ function SidebarProviderStack(props: {
             key={instanceId}
             driverKind={entry.driverKind}
             displayName={entry.displayName}
+            badgeLabel={entry.badgeLabel}
             acpRegistryAgentId={entry.acpRegistryAgentId}
             acpRegistryIconUrl={entry.acpRegistryIconUrl}
             iconClassName="size-3 opacity-35 grayscale"
@@ -367,6 +371,7 @@ function SidebarThreadTooltip({
               displayName={
                 providerEntry?.displayName ?? thread.runtime?.providerName ?? modelInstanceId
               }
+              badgeLabel={providerEntry?.badgeLabel}
               accentColor={providerEntry?.accentColor}
               acpRegistryAgentId={providerEntry?.acpRegistryAgentId}
               acpRegistryIconUrl={providerEntry?.acpRegistryIconUrl}

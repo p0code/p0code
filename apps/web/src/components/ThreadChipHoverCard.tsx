@@ -1,5 +1,9 @@
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
-import { resolveProviderInstanceDisplayName } from "@t3tools/client-runtime/state/provider-instance-display";
+import {
+  resolveProviderInstanceBadges,
+  resolveProviderInstanceDisplayName,
+  shouldShowInstanceBadge,
+} from "@t3tools/client-runtime/state/provider-instance-display";
 import { CircleAlertIcon, GitBranchIcon } from "lucide-react";
 import { useGT } from "gt-react";
 
@@ -30,11 +34,19 @@ export function ThreadChipHoverCard(props: {
   const instanceId = shell
     ? (shell.runtime?.providerInstanceId ?? shell.modelSelection.instanceId)
     : null;
-  const provider =
-    shell && instanceId
-      ? (providers.get(shell.environmentId)?.find((entry) => entry.instanceId === instanceId) ??
-        null)
-      : null;
+  const environmentProviders = shell ? (providers.get(shell.environmentId) ?? []) : [];
+  const provider = environmentProviders.find((entry) => entry.instanceId === instanceId) ?? null;
+  const providerDisplayName = provider ? resolveProviderInstanceDisplayName(provider) : null;
+  // The account matters only when another instance of the same driver could have run it.
+  const namesAccount =
+    provider !== null &&
+    shouldShowInstanceBadge(
+      { driverKind: provider.driver, enabled: provider.enabled },
+      environmentProviders.map((candidate) => ({
+        driverKind: candidate.driver,
+        enabled: candidate.enabled,
+      })),
+    );
   const model = shell
     ? provider?.models.find((entry) => entry.slug === shell.modelSelection.model)
     : undefined;
@@ -68,11 +80,21 @@ export function ThreadChipHoverCard(props: {
         <div className="flex min-w-0 items-center gap-2">
           <ProviderInstanceIcon
             driverKind={provider.driver}
-            displayName={resolveProviderInstanceDisplayName(provider)}
+            displayName={providerDisplayName ?? provider.driver}
+            badgeLabel={
+              namesAccount
+                ? resolveProviderInstanceBadges(environmentProviders).get(provider.instanceId)
+                : undefined
+            }
+            showBadge={namesAccount}
+            accentColor={provider.accentColor}
             acpRegistryIconUrl={provider.iconUrl}
+            size="compact"
             iconClassName="size-3 shrink-0 opacity-60"
           />
-          <div className="min-w-0 truncate text-foreground/75">{modelLabel}</div>
+          <div className="min-w-0 truncate text-foreground/75">
+            {namesAccount ? `${modelLabel} · ${providerDisplayName}` : modelLabel}
+          </div>
         </div>
       ) : null}
       {props.unreadable ? (
