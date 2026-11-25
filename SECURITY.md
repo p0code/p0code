@@ -85,9 +85,12 @@ plugin's own description. A plugin route requires `http:routes`, answers only th
 p0code UI (same origin or a desktop renderer origin) or a caller holding the
 host-issued route secret, and its body is capped like the API's.
 
-This build ships first-party plugins only. External plugins are meant to be installed
-as bundles; the loader has not landed in this build. There is no sandbox or process
-isolation today, so a third-party plugin is code with the user's rights.
+This build runs the first-party plugins it ships, plus any installed under
+`<stateDir>/installed-plugins/<id>/<version>/` (a `manifest.json` and a prebuilt
+`plugin.mjs`). An installed copy of a bundled plugin is refused, a version declaring
+capabilities nobody has consented to stays inactive, and one that fails to load leaves
+the previous version running. There is no sandbox or process isolation today, so a
+third-party plugin is code with the user's rights.
 
 ## Importing a stock T3 Code home
 
@@ -225,7 +228,7 @@ anything is replaced.
 - Managed policy: [`apps/server/src/policy`](apps/server/src/policy). `limits.previewTunnel` refuses forwarded ports as well as in-app previews ([`managedLimits.ts`](apps/server/src/policy/managedLimits.ts), [`SelfRelay.ts`](apps/server/src/selfRelay/SelfRelay.ts)); there is no separate public-tunnel limit on main.
 - Self-hosted relay: [`server.ts`](apps/relay/src/server.ts), [`state.ts`](apps/relay/src/state.ts), [`cli.ts`](apps/relay/src/cli.ts); [`RelayTunnelClient`](packages/relay-tunnel/src/client.ts), [`auth.ts`](packages/relay-tunnel/src/auth.ts)
 - Forwarded ports: [`SelfRelay.ts`](apps/server/src/selfRelay/SelfRelay.ts), [`portProxy.ts`](apps/server/src/selfRelay/portProxy.ts)
-- Plugins: [`PluginHost.ts`](apps/server/src/plugins/PluginHost.ts), [`bindings.ts`](apps/server/src/plugins/bindings.ts), [`http.ts`](apps/server/src/plugins/http.ts), [`registry.ts`](apps/server/src/plugins/registry.ts); manifests in [`contracts/plugins.ts`](packages/contracts/src/plugins.ts)
+- Plugins: [`PluginHost.ts`](apps/server/src/plugins/PluginHost.ts), [`bindings.ts`](apps/server/src/plugins/bindings.ts), [`http.ts`](apps/server/src/plugins/http.ts), [`registry.ts`](apps/server/src/plugins/registry.ts), [`loader.ts`](apps/server/src/plugins/loader.ts); manifests in [`contracts/plugins.ts`](packages/contracts/src/plugins.ts)
 - T3 import: [`migrateFromT3.ts`](packages/shared/src/migrateFromT3.ts), [`t3Import.ts`](apps/server/src/t3Import.ts), applied before the database opens in [`server.ts`](apps/server/src/server.ts)
 - Desktop preview isolation: [`preview/WebviewPreferences.ts`](apps/desktop/src/preview/WebviewPreferences.ts)
 
