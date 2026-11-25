@@ -439,7 +439,7 @@ export function resolveAdvertisedEndpointPairingUrl(
   endpoint: AdvertisedEndpoint,
   credential: string,
   hostedAppUrl?: string | null,
-): string {
+): string | null {
   // The hosted app is upstream's. Only route a QR through it when the environment's T3 Connect
   // bridge is running and named one; otherwise keep the pairing URL on the environment itself.
   if (endpoint.compatibility.hostedHttpsApp === "compatible" && hostedAppUrl?.trim()) {

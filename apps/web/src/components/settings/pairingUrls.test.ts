@@ -28,7 +28,7 @@ describe("settings pairing URL helpers", () => {
   });
 
   it("prefers the environment's own URL for the public origin by default", () => {
-    const endpoint = publicOriginAdvertisedEndpoint("https://abcdef.relay.example.com");
+    const endpoint = publicOriginAdvertisedEndpoint("https://abcdef.relay.example.com")!;
     expect(endpoint.compatibility.hostedHttpsApp).toBe("requires-configuration");
     expect(resolveAdvertisedEndpointPairingUrl(endpoint, "pairing-code")).toBe(
       "https://abcdef.relay.example.com/pair#token=pairing-code",
@@ -40,7 +40,7 @@ describe("settings pairing URL helpers", () => {
       "https://abcdef.relay.example.com",
       undefined,
       "https://app.example.com",
-    );
+    )!;
     expect(endpoint.compatibility.hostedHttpsApp).toBe("compatible");
     expect(
       resolveAdvertisedEndpointPairingUrl(endpoint, "pairing-code", "https://app.example.com"),
@@ -54,10 +54,26 @@ describe("settings pairing URL helpers", () => {
 
   it("advertises the server public origin for stock mobile pairing without a hosted hop", () => {
     const endpoint = publicOriginAdvertisedEndpoint("https://abcdef.relay.example.com");
-    expect(endpoint.reachability).toBe("public");
-    expect(endpoint.wsBaseUrl).toBe("wss://abcdef.relay.example.com");
-    expect(resolveDesktopPairingUrl(endpoint.httpBaseUrl, "pairing-code")).toBe(
+    expect(endpoint?.reachability).toBe("public");
+    expect(endpoint?.wsBaseUrl).toBe("wss://abcdef.relay.example.com");
+    expect(resolveDesktopPairingUrl(endpoint!.httpBaseUrl, "pairing-code")).toBe(
       "https://abcdef.relay.example.com/pair#token=pairing-code",
     );
+  });
+
+  it("rejects an invalid backend origin instead of throwing", () => {
+    expect(resolveDesktopPairingUrl("not a url", "PAIRCODE")).toBeNull();
+    expect(resolveHostedPairingUrl("not a url", "PAIRCODE")).toBeNull();
+    expect(publicOriginAdvertisedEndpoint("not a url")).toBeNull();
+  });
+
+  it("hides the QR when neither the direct nor the hosted URL is usable", () => {
+    const endpoint = publicOriginAdvertisedEndpoint(
+      "https://abcdef.relay.example.com",
+      undefined,
+      "https://app.example.com",
+    )!;
+    const brokenEndpoint = { ...endpoint, httpBaseUrl: "ftp://abcdef.relay.example.com" };
+    expect(resolveAdvertisedEndpointPairingUrl(brokenEndpoint, "pairing-code")).toBeNull();
   });
 });

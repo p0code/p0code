@@ -197,6 +197,9 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
         continue;
       }
       const url = resolveAdvertisedEndpointPairingUrl(endpoint, credential, hostedAppUrl);
+      if (url === null) {
+        continue;
+      }
       options.push({
         id: endpoint.id,
         preferenceKey: endpointDefaultPreferenceKey(endpoint),
