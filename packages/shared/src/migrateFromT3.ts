@@ -796,7 +796,7 @@ const buildPlan = async (input: {
           plan.keychainSteps.push(async () => {
             const secrets = keychainSecrets(
               keychain,
-              await credentialNamespace(destinationSecretsDir),
+              await credentialNamespace(destination, destinationSecretsDir),
             );
             for (const entry of keychainEntries) {
               const bytes = new Uint8Array(await NodeFSP.readFile(entry.source));

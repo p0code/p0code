@@ -500,7 +500,10 @@ describe("migrateFromT3", () => {
     });
     assert.equal(report.status, "migrated");
     const secretsDir = NodePath.join(fixture.to, "userdata", "secrets");
-    assert.deepEqual(NodeFS.readdirSync(secretsDir), [KEYCHAIN_MARKER_FILE]);
+    assert.deepEqual(NodeFS.readdirSync(secretsDir).toSorted(), [
+      KEYCHAIN_MARKER_FILE,
+      "keychain-namespace",
+    ]);
     const secrets = keychainSecrets(keychain, await credentialNamespace(secretsDir));
     assert.equal(
       new TextDecoder().decode(await secrets.get("provider-auth-abc")),

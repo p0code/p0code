@@ -9,8 +9,8 @@ import { previousAppHomePath } from "./appHomeMigration.ts";
 
 /**
  * OS keychain service `p0code`, one entry per secret, account `<namespace>:<secret name>`. The
- * namespace hashes the resolved secrets folder, so every home (`~/.p0code`, `P0CODE_HOME`,
- * `--base-dir`, dev) keeps its own.
+ * namespace is saved in the secrets folder, initially hashing its resolved path so existing
+ * homes keep their credentials and moving a home keeps its identity.
  */
 const KEYCHAIN_SERVICE = "p0code";
 
@@ -138,16 +138,39 @@ export const realpathLoose = async (target: string): Promise<string> => {
   return NodePath.join(await realpathLoose(parent), NodePath.basename(target));
 };
 
-export const credentialNamespace = async (secretsDir: string): Promise<string> =>
-  NodeCrypto.createHash("sha256")
+export const credentialNamespace = async (
+  secretsDir: string,
+  initialPath = secretsDir,
+): Promise<string> => {
+  const file = NodePath.join(secretsDir, "keychain-namespace");
+  const read = async () => {
+    const value = (await NodeFSP.readFile(file, "utf8")).trim();
+    if (!/^[0-9a-f]{16}$/.test(value)) throw new Error(`Invalid keychain namespace at ${file}.`);
+    return value;
+  };
+  try {
+    return await read();
+  } catch (cause) {
+    if (!(cause instanceof Error && "code" in cause && cause.code === "ENOENT")) throw cause;
+  }
+  const namespace = NodeCrypto.createHash("sha256")
     .update(
       previousAppHomePath(
-        await realpathLoose(NodePath.resolve(secretsDir)),
+        await realpathLoose(NodePath.resolve(initialPath)),
         await realpathLoose(NodeOS.homedir()),
       ),
     )
     .digest("hex")
     .slice(0, 16);
+  await NodeFSP.mkdir(secretsDir, { recursive: true, mode: 0o700 });
+  try {
+    await NodeFSP.writeFile(file, `${namespace}\n`, { flag: "wx", mode: 0o600 });
+  } catch (cause) {
+    if (!(cause instanceof Error && "code" in cause && cause.code === "EEXIST")) throw cause;
+    return read();
+  }
+  return namespace;
+};
 
 // Windows Credential Manager caps a credential at 2560 bytes (1280 UTF-16 characters), so
 // longer values are split across chunk entries and the head entry is written last.
