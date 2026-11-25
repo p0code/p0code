@@ -49,6 +49,7 @@ export function ComposerModelControl(props: {
         iconUrl: props.modelOption?.providerIconUrl,
         displayName: badge.displayName,
         showBadge: badge.showBadge,
+        namesAccount: badge.namesAccount,
       })
     : null;
   const shortLabel = props.modelOption?.shortName ?? label;
@@ -57,7 +58,7 @@ export function ComposerModelControl(props: {
       accessibilityLabel={[
         gt("Model and reasoning settings"),
         label,
-        badge?.showBadge ? badge.displayName : null,
+        badge?.showBadge || badge?.namesAccount ? badge.displayName : null,
         summary,
       ]
         .filter(Boolean)
@@ -71,6 +72,7 @@ export function ComposerModelControl(props: {
             iconUrl={props.modelOption?.providerIconUrl}
             provider={props.modelOption?.providerDriver}
             displayName={badge.displayName}
+            badgeLabel={badge.badgeLabel}
             accentColor={badge.accentColor}
             showBadge
             surfaceColor={props.surfaceColor}

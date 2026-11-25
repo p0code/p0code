@@ -138,6 +138,7 @@ export function SubagentTooltipContent(props: {
           <ProviderInstanceIcon
             driverKind={driver}
             displayName={entry?.displayName ?? props.provider?.displayName ?? driver}
+            badgeLabel={entry?.badgeLabel}
             accentColor={entry?.accentColor}
             acpRegistryIconUrl={props.provider?.iconUrl}
             showBadge={showInstanceBadge && entry?.accentColor !== undefined}

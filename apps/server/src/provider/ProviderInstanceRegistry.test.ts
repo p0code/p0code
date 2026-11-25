@@ -348,7 +348,7 @@ describe("ProviderInstanceRegistry — multi-instance codex slice", () => {
       }).pipe(Effect.provide(layerTest)),
   );
 
-  it.effect.each([{ displayName: "Renamed" }, { accentColor: "#ff0000" }])(
+  it.effect.each([{ displayName: "Renamed" }, { accentColor: "#ff0000" }, { instanceBadge: "W2" }])(
     "keeps the live instance when only %o changes",
     (presentation) =>
       Effect.gen(function* () {

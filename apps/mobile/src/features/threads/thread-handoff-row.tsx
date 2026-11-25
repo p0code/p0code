@@ -9,6 +9,8 @@ import {
 import { resolveModelShortName } from "@t3tools/client-runtime/provider-clients";
 import {
   normalizeProviderAccentColor,
+  providerInstanceAccountDetail,
+  resolveProviderInstanceBadges,
   resolveProviderInstanceDisplayName,
   shouldShowInstanceBadge,
 } from "@t3tools/client-runtime/state/provider-instance-display";
@@ -131,6 +133,7 @@ export function ThreadHandoffDivider(props: {
         acpRegistryAgentId: typeof agentId === "string" ? agentId.trim() || undefined : undefined,
       };
     }),
+    badgeLabels: resolveProviderInstanceBadges(config?.providers ?? []),
     surfaceColor: props.surfaceColor,
   };
   return (
@@ -167,6 +170,7 @@ function HandoffEndpoint(props: {
   instanceId: ProviderInstanceId;
   model?: string | undefined;
   providers: ReadonlyArray<HandoffProvider>;
+  badgeLabels: ReadonlyMap<string, string>;
   surfaceColor: string;
 }) {
   const gt = useGT();
@@ -188,7 +192,14 @@ function HandoffEndpoint(props: {
       onPress={() =>
         Dialog.alert(
           label,
-          provider ? resolveProviderInstanceDisplayName(provider) : props.instanceId,
+          provider
+            ? [
+                resolveProviderInstanceDisplayName(provider),
+                providerInstanceAccountDetail(provider.auth),
+              ]
+                .filter(Boolean)
+                .join("\n")
+            : props.instanceId,
         )
       }
     >
@@ -198,6 +209,7 @@ function HandoffEndpoint(props: {
           iconUrl={provider.iconUrl}
           size={14}
           displayName={resolveProviderInstanceDisplayName(provider)}
+          badgeLabel={props.badgeLabels.get(provider.instanceId)}
           accentColor={provider.accentColor}
           showBadge
           surfaceColor={props.surfaceColor}

@@ -1,5 +1,9 @@
 import {
   normalizeProviderAccentColor,
+  normalizeProviderInstanceBadge,
+  providerInstanceAccountDetail,
+  providerInstanceInitials,
+  resolveProviderInstanceBadges,
   resolveProviderInstanceDisplayName,
   shouldShowInstanceBadge,
 } from "@t3tools/client-runtime/state/provider-instance-display";
@@ -48,8 +52,12 @@ export type ModelOption = {
   readonly providerIconUrl?: string | undefined;
   readonly providerBadge?: {
     readonly displayName: string;
+    readonly badgeLabel: string;
     readonly accentColor?: string;
     readonly showBadge: boolean;
+    /** Another enabled instance shares the driver, so the icon alone does not say which account. */
+    readonly namesAccount: boolean;
+    readonly accountDetail?: string;
   };
   readonly isDefault: boolean;
   readonly isLegacy: boolean;
@@ -358,6 +366,7 @@ export function buildModelOptions(
     enabled: provider.enabled,
     acpRegistryAgentId: registryAgentId(provider.instanceId),
   }));
+  const badgeLabels = resolveProviderInstanceBadges(config?.providers ?? []);
   const providerBadgeFor = (instanceId: ModelSelection["instanceId"]) => {
     const snapshot = config?.providers.find((provider) => provider.instanceId === instanceId);
     const instance = config?.settings?.providerInstances[instanceId];
@@ -366,22 +375,28 @@ export function buildModelOptions(
     const accentColor = normalizeProviderAccentColor(
       snapshot?.accentColor ?? instance?.accentColor,
     );
+    const instanceBadge = normalizeProviderInstanceBadge(
+      snapshot?.instanceBadge ?? instance?.instanceBadge,
+    );
+    const displayName = resolveProviderInstanceDisplayName({
+      instanceId,
+      driver,
+      displayName: snapshot?.displayName ?? instance?.displayName,
+    });
+    const entry = {
+      driverKind: driver,
+      acpRegistryAgentId: registryAgentId(instanceId),
+      enabled: snapshot?.enabled ?? instance?.enabled ?? false,
+    };
+    const accountDetail = providerInstanceAccountDetail(snapshot?.auth);
     return {
-      displayName: resolveProviderInstanceDisplayName({
-        instanceId,
-        driver,
-        displayName: snapshot?.displayName ?? instance?.displayName,
-      }),
+      displayName,
+      badgeLabel:
+        badgeLabels.get(instanceId) ?? instanceBadge ?? providerInstanceInitials(displayName),
       ...(accentColor ? { accentColor } : {}),
-      showBadge: shouldShowInstanceBadge(
-        {
-          driverKind: driver,
-          accentColor,
-          acpRegistryAgentId: registryAgentId(instanceId),
-          enabled: snapshot?.enabled ?? instance?.enabled ?? false,
-        },
-        badgeEntries,
-      ),
+      showBadge: shouldShowInstanceBadge({ ...entry, accentColor, instanceBadge }, badgeEntries),
+      namesAccount: shouldShowInstanceBadge(entry, badgeEntries),
+      ...(accountDetail ? { accountDetail } : {}),
     };
   };
 

@@ -153,13 +153,18 @@ export function ProviderIcon(props: ProviderIconProps) {
   );
 }
 
-/** Local ACP agents share one fallback glyph, so a badge alone cannot tell instances apart. */
+/**
+ * Accounts sharing a driver are named in full; a badge is too short to say which one.
+ * Local ACP agents share one fallback glyph, so they are named too.
+ */
 export function providerInstanceNameLabel(props: {
   readonly provider: string | null | undefined;
   readonly iconUrl?: string | null | undefined;
   readonly displayName: string;
   readonly showBadge: boolean;
+  readonly namesAccount?: boolean;
 }): string | null {
+  if (props.namesAccount) return props.displayName;
   return props.showBadge &&
     props.provider === "acpRegistry" &&
     resolveOfficialAcpRegistryIconUrl(props.iconUrl) === null
@@ -172,6 +177,8 @@ export function ProviderInstanceIcon(props: {
   readonly provider: string | null | undefined;
   readonly size?: number;
   readonly displayName: string;
+  /** The instance's resolved badge; initials of the name when absent. */
+  readonly badgeLabel?: string | undefined;
   readonly accentColor?: string;
   readonly showBadge?: boolean;
   readonly surfaceColor?: string;
@@ -212,7 +219,7 @@ export function ProviderInstanceIcon(props: {
                 ...(accentColor ? { color: providerAccentForegroundColor(accentColor) } : {}),
               }}
             >
-              {providerInstanceInitials(props.displayName)}
+              {props.badgeLabel ?? providerInstanceInitials(props.displayName)}
             </Text>
           </View>
         </View>

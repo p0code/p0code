@@ -27,7 +27,11 @@ import { retainedModelWhileProviderLocked } from "./ProviderModelPicker.logic";
 import { ChatGptSharingControl } from "./ChatGptSharingControl";
 import { ProviderInstanceIcon } from "./ProviderInstanceIcon";
 import { ModelEsque, getDisplayModelName, getTriggerDisplayModelName } from "./providerIconUtils";
-import { shouldShowInstanceBadge, type ProviderInstanceEntry } from "../../providerInstances";
+import {
+  providerInstanceAccountName,
+  shouldShowInstanceBadge,
+  type ProviderInstanceEntry,
+} from "../../providerInstances";
 import { ComposerControl, type ComposerControlSize } from "./ComposerControl";
 import { takeOpenTarget, useComposerMenuProps } from "./composerEventScope";
 import { shortcutLabelForCommand } from "../../keybindings";
@@ -184,6 +188,13 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
     : triggerTitle;
   const showInstanceBadge =
     activeEntry !== null && shouldShowInstanceBadge(activeEntry, props.instanceEntries);
+  // Only sibling accounts make the name worth its room; a lone instance's badge is decoration.
+  const showInstanceName =
+    activeEntry !== null &&
+    shouldShowInstanceBadge(
+      { ...activeEntry, accentColor: undefined, instanceBadge: undefined },
+      props.instanceEntries,
+    );
 
   const setIsMenuOpen = (open: boolean) => {
     props.onOpenChange?.(open);
@@ -353,6 +364,9 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
             ref={triggerRef}
             aria-label={[
               props.triggerAriaLabel ?? props.triggerLabel ?? allModelNames ?? triggerLabel,
+              showInstanceName && props.triggerLabel === undefined && !selectedEntries
+                ? activeEntry.displayName
+                : null,
               props.triggerDetail,
             ]
               .filter(Boolean)
@@ -398,6 +412,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
                       key={`${selection.instanceId}:${selection.model}`}
                       driverKind={selection.entry.driverKind}
                       displayName={selection.entry.displayName}
+                      badgeLabel={selection.entry.badgeLabel}
                       accentColor={selection.entry.accentColor}
                       acpRegistryAgentId={selection.entry.acpRegistryAgentId}
                       acpRegistryIconUrl={selection.entry.acpRegistryIconUrl}
@@ -421,6 +436,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
                 accentColor={activeEntry.accentColor}
                 acpRegistryAgentId={activeEntry.acpRegistryAgentId}
                 acpRegistryIconUrl={activeEntry.acpRegistryIconUrl}
+                badgeLabel={activeEntry.badgeLabel}
                 showBadge={showInstanceBadge}
                 className="size-4"
                 iconClassName={cn("size-4", props.activeProviderIconClassName)}
@@ -430,6 +446,21 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
                   size === "xs" && "shadow-none",
                 )}
               />
+              {showInstanceName ? (
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <span
+                        className="max-w-24 shrink truncate text-muted-foreground"
+                        data-chat-provider-model-picker-instance
+                      />
+                    }
+                  >
+                    {activeEntry.displayName}
+                  </TooltipTrigger>
+                  <TooltipPopup side="top">{providerInstanceAccountName(activeEntry)}</TooltipPopup>
+                </Tooltip>
+              ) : null}
             </span>
           ) : null}
           {props.isComposerOwned ? (

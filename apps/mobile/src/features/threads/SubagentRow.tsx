@@ -1,6 +1,7 @@
 import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
   normalizeProviderAccentColor,
+  resolveProviderInstanceBadges,
   resolveProviderInstanceDisplayName,
   shouldShowInstanceBadge,
 } from "@t3tools/client-runtime/state/provider-instance-display";
@@ -180,6 +181,7 @@ function SubagentMetadata(props: {
           iconUrl={provider.iconUrl}
           size={12}
           displayName={resolveProviderInstanceDisplayName(provider)}
+          badgeLabel={resolveProviderInstanceBadges(providers).get(provider.instanceId)}
           accentColor={provider.accentColor}
           showBadge
         />

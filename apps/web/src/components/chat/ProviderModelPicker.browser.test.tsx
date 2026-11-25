@@ -403,3 +403,55 @@ it("formats provider sidebar usage bars and labels according to usageDisplayMode
     __setClientSettingsForTests(DEFAULT_CLIENT_SETTINGS);
   }
 });
+
+it("tells two accounts of one provider apart by badge, name and signed-in account", async () => {
+  const entries = deriveProviderInstanceEntries(
+    [
+      { id: "work-business", name: "Claude Work Business", email: "biz@example.com" },
+      { id: "work-2", name: "Claude Work 2", email: "two@example.com" },
+    ].map((account) => ({
+      instanceId: ProviderInstanceId.make(account.id),
+      driver: ProviderDriverKind.make("claudeAgent"),
+      displayName: account.name,
+      enabled: true,
+      installed: true,
+      version: null,
+      status: "ready" as const,
+      auth: { status: "authenticated" as const, email: account.email, label: "Max" },
+      checkedAt: "2026-01-01T00:00:00.000Z",
+      models: [{ slug: `${account.id}-opus`, name: "Opus", isCustom: false, capabilities: {} }],
+      slashCommands: [],
+      skills: [],
+    })),
+  );
+  const active = entries[1]!;
+
+  await using screen = await render(
+    <ProviderModelPicker
+      environmentId={null}
+      activeInstanceId={active.instanceId}
+      model="work-2-opus"
+      lockedProvider={null}
+      instanceEntries={entries}
+      modelOptionsByInstance={new Map(entries.map((entry) => [entry.instanceId, entry.models]))}
+      onInstanceModelChange={() => {}}
+    />,
+  );
+  const trigger = screen.container.querySelector("[data-chat-provider-model-picker]")!;
+  expect(trigger.querySelector("[data-chat-provider-model-picker-instance]")?.textContent).toBe(
+    "Claude Work 2",
+  );
+  expect(trigger.textContent).toContain("CW2");
+
+  await screen.getByRole("button", { name: /Opus/ }).click();
+  const railBadge = (instanceId: string) =>
+    document.querySelector(`[data-model-picker-provider="${instanceId}"]`)?.textContent;
+  await vi.waitFor(() => {
+    expect(railBadge("work-business")).toBe("CWB");
+    expect(railBadge("work-2")).toBe("CW2");
+  });
+  await page.getByRole("button", { name: "Claude Work Business", exact: true }).hover();
+  await expect
+    .element(page.getByText("Claude Work Business · biz@example.com · Max"))
+    .toBeVisible();
+});

@@ -73,10 +73,11 @@ const entryEqual = (a: ProviderInstanceConfig, b: ProviderInstanceConfig): boole
 const withoutPresentation = ({
   displayName: _displayName,
   accentColor: _accentColor,
+  instanceBadge: _instanceBadge,
   ...runtime
 }: ProviderInstanceConfig) => runtime;
 
-// Display name and accent colour are only labels; changing them must not stop the instance's sessions.
+// Display name, accent colour and badge are only labels; changing them must not stop the instance's sessions.
 const runtimeEqual = (a: ProviderInstanceConfig, b: ProviderInstanceConfig): boolean =>
   Equal.equals(withoutPresentation(a), withoutPresentation(b));
 
@@ -97,6 +98,9 @@ const withLivePresentation = (
       if (stamped) next[key] = stamped;
       else delete next[key];
     }
+    // Drivers never see the badge, so it is stamped here rather than restamped.
+    if (current.instanceBadge) next.instanceBadge = current.instanceBadge;
+    else delete next.instanceBadge;
     return next;
   };
   const { snapshot, snapshotForCwd } = instance;
@@ -293,6 +297,7 @@ const buildEntry = Effect.fn("ProviderInstanceRegistry.buildEntry")(function* <R
         instanceId,
         displayName: entry.displayName,
         accentColor: entry.accentColor,
+        instanceBadge: entry.instanceBadge,
         reason: blocked,
       }),
     };
@@ -306,6 +311,7 @@ const buildEntry = Effect.fn("ProviderInstanceRegistry.buildEntry")(function* <R
         instanceId,
         displayName: entry.displayName,
         accentColor: entry.accentColor,
+        instanceBadge: entry.instanceBadge,
         reason: `Driver '${entry.driver}' is not registered in this build.`,
       }),
     };
@@ -328,6 +334,7 @@ const buildEntry = Effect.fn("ProviderInstanceRegistry.buildEntry")(function* <R
         instanceId,
         displayName: entry.displayName,
         accentColor: entry.accentColor,
+        instanceBadge: entry.instanceBadge,
         reason: `Invalid config for instance '${rawInstanceId}': ${detail}`,
       }),
     };
@@ -343,6 +350,7 @@ const buildEntry = Effect.fn("ProviderInstanceRegistry.buildEntry")(function* <R
         instanceId,
         displayName: entry.displayName,
         accentColor: entry.accentColor,
+        instanceBadge: entry.instanceBadge,
         reason: "Reading secrets…",
       }),
     };
@@ -366,6 +374,7 @@ const buildEntry = Effect.fn("ProviderInstanceRegistry.buildEntry")(function* <R
         instanceId,
         displayName: entry.displayName,
         accentColor: entry.accentColor,
+        instanceBadge: entry.instanceBadge,
         reason: `Could not read ${unreadable.join(", ")} from its secret provider. Unlock it, then refresh.`,
       }),
     };
@@ -400,6 +409,7 @@ const buildEntry = Effect.fn("ProviderInstanceRegistry.buildEntry")(function* <R
         instanceId,
         displayName: entry.displayName,
         accentColor: entry.accentColor,
+        instanceBadge: entry.instanceBadge,
         reason: `Driver '${entry.driver}' failed to create instance: ${createResult.failure.detail}`,
       }),
     };

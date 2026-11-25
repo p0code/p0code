@@ -89,6 +89,8 @@ export function resolveProviderInstanceAcpRegistryIconUrl(input: {
 export const ProviderInstanceIcon = memo(function ProviderInstanceIcon(props: {
   driverKind: ProviderDriverKind;
   displayName: string;
+  /** Distinguishes accounts of one driver; defaults to the name's initials. */
+  badgeLabel?: string | undefined;
   accentColor?: string | undefined;
   acpRegistryAgentId?: string | undefined;
   acpRegistryIconUrl?: string | undefined;
@@ -186,7 +188,9 @@ export const ProviderInstanceIcon = memo(function ProviderInstanceIcon(props: {
           style={{ borderColor: indicatorBackground }}
           aria-hidden
         >
-          {badgeContent === "initials" ? providerInstanceInitials(props.displayName) : null}
+          {badgeContent === "initials"
+            ? props.badgeLabel || providerInstanceInitials(props.displayName)
+            : null}
         </span>
       ) : null}
     </span>
