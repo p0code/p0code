@@ -84,6 +84,7 @@ it("shows host disclosures for disabled plugins before allowing enable", async (
           "agent:instructions",
         ],
       },
+      origin: "bundled",
       enabled: false,
       state: "disabled",
       message: null,
