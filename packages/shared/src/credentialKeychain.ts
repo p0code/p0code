@@ -405,7 +405,7 @@ const SECRET_TEMP_FILE = /^(.+)\.bin\.[0-9a-f-]+\.tmp$/;
 
 export interface CredentialFileImport {
   readonly imported: ReadonlyArray<string>;
-  /** Files whose name was already in the keychain with a different value; the keychain wins. */
+  /** Conflicting files kept because the keychain contains different bytes. */
   readonly superseded: ReadonlyArray<string>;
 }
 
@@ -445,6 +445,7 @@ export async function importCredentialFiles(
       imported.push(name);
     } else if (!Buffer.from(existing).equals(Buffer.from(bytes))) {
       superseded.push(name);
+      continue;
     }
     await NodeFSP.rm(path, { force: true });
   }

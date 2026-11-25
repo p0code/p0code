@@ -272,6 +272,20 @@ describe("importCredentialFiles", () => {
     });
   });
 
+  it("keeps a conflicting credential file and reports its name", async () => {
+    const secretsDir = makeSecretsDir();
+    const file = NodePath.join(secretsDir, "server-signing-key.bin");
+    NodeFS.writeFileSync(file, "rotated key");
+    const secrets = keychainSecrets(memoryKeychainStore(), "ns");
+    await secrets.set("server-signing-key", encode("old key"));
+    assert.deepEqual(await importCredentialFiles(secretsDir, secrets), {
+      imported: [],
+      superseded: ["server-signing-key"],
+    });
+    assert.equal(NodeFS.readFileSync(file, "utf8"), "rotated key");
+    assert.equal(text(await secrets.get("server-signing-key")), "old key");
+  });
+
   it("never deletes a file the keychain failed to keep", async () => {
     const secretsDir = makeSecretsDir();
     NodeFS.writeFileSync(NodePath.join(secretsDir, "server-signing-key.bin"), "key");
