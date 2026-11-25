@@ -7,8 +7,10 @@ import {
   KEYCHAIN_MARKER_FILE,
   keychainSecrets,
   type KeychainSecrets,
+  type KeychainServiceMigration,
   type KeychainStore,
   keyringStore,
+  migrateKeychainService,
 } from "@t3tools/shared/credentialKeychain";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { lock } from "proper-lockfile";
@@ -208,6 +210,14 @@ export class ServerSecretStore extends Context.Service<
     /** Names starting with `prefix`, wherever they are stored. */
     readonly list?: (prefix: string) => Effect.Effect<ReadonlyArray<string>, SecretStoreError>;
     readonly storage?: SecretStorageStatus;
+    /**
+     * Moves the old keychain service's credentials into p0code, on demand only. Present when this
+     * home uses the keychain; never called at startup.
+     */
+    readonly importLegacyKeychain?: () => Effect.Effect<
+      KeychainServiceMigration,
+      SecretStoreBackendError
+    >;
   }
 >()("p0/auth/ServerSecretStore") {}
 
@@ -386,7 +396,10 @@ export const makeWith = Effect.fn("ServerSecretStore.makeWith")(function* (
     );
 
   const fileStore = { get, set, create, remove, list: listFiles };
-  const { keychain, storage } = yield* resolveKeychain(loadKeychain, serverConfig.secretsDir);
+  const { keychain, storage, importLegacyKeychain } = yield* resolveKeychain(
+    loadKeychain,
+    serverConfig.secretsDir,
+  );
   if (keychain === undefined) {
     return ServerSecretStore.of({
       directory: serverConfig.secretsDir,
@@ -417,6 +430,7 @@ export const makeWith = Effect.fn("ServerSecretStore.makeWith")(function* (
     ...routed,
     getOrCreateRandom: makeGetOrCreateRandom(routed, crypto, emptySecretRepair),
     storage,
+    importLegacyKeychain,
   });
 });
 
@@ -463,17 +477,16 @@ const resolveKeychain = Effect.fn("ServerSecretStore.resolveKeychain")(function*
     return {
       keychain: undefined,
       storage: { backend: "file", label: "files (P0CODE_SECRET_BACKEND=file)" },
+      importLegacyKeychain: undefined,
     } as const;
   }
 
   const opened = yield* Effect.tryPromise({
     try: async () => {
-      const secrets = keychainSecrets(
-        loadKeychain(platform),
-        await credentialNamespace(secretsDir),
-      );
+      const store = loadKeychain(platform);
+      const secrets = keychainSecrets(store, await credentialNamespace(secretsDir));
       await secrets.probe();
-      return secrets;
+      return { secrets, store };
     },
     catch: (cause) =>
       new SecretStoreBackendError({
@@ -493,10 +506,11 @@ const resolveKeychain = Effect.fn("ServerSecretStore.resolveKeychain")(function*
     return {
       keychain: undefined,
       storage: { backend: "file", label: "files (no keychain available)" },
+      importLegacyKeychain: undefined,
     } as const;
   }
 
-  const keychain = opened.success;
+  const { secrets: keychain, store: keychainBackingStore } = opened.success;
   yield* fileSystem
     .writeFileString(markerPath, `${keychain.label}\n`, { mode: 0o600 })
     .pipe(
@@ -522,7 +536,19 @@ const resolveKeychain = Effect.fn("ServerSecretStore.resolveKeychain")(function*
       names: moved.superseded,
     });
   }
-  return { keychain, storage: { backend: "keychain", label: keychain.label } } as const;
+  return {
+    keychain,
+    storage: { backend: "keychain", label: keychain.label },
+    importLegacyKeychain: () =>
+      Effect.tryPromise({
+        try: () => migrateKeychainService(keychainBackingStore),
+        catch: (cause) =>
+          new SecretStoreBackendError({
+            detail: "Could not read the old keychain service.",
+            cause,
+          }),
+      }),
+  } as const;
 });
 
 const makeKeychainOperations = (

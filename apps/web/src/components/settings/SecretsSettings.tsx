@@ -17,6 +17,7 @@ import {
   AlertDialogTitle,
 } from "../ui/alert-dialog";
 import { Button } from "../ui/button";
+import { LegacyKeychainImportRow } from "./LegacyKeychainImportRow";
 import { SecretProviderDialog } from "./SecretProviderDialog";
 import { classifySecretProvider } from "./SecretProviderDialog.logic";
 import { secretProviderUses } from "./SecretsSettings.logic";
@@ -48,6 +49,9 @@ export function SecretsSettingsPanel() {
             Credentials: <Var>{credentialStorage.label}</Var>
           </T>
         </p>
+      ) : null}
+      {connected && credentialStorage?.backend === "keychain" && environment !== null ? (
+        <LegacyKeychainImportRow environmentId={environment.environmentId} />
       ) : null}
       {connected &&
       environment.serverConfig !== null &&

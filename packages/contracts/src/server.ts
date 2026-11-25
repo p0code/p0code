@@ -714,6 +714,15 @@ export const ServerCredentialStorage = Schema.Struct({
 });
 export type ServerCredentialStorage = typeof ServerCredentialStorage.Type;
 
+/** Counts from an explicit move of the old keychain service, never names or values. */
+export const LegacyKeychainImportResult = Schema.Struct({
+  moved: NonNegativeInt,
+  alreadyPresent: NonNegativeInt,
+  leftBehind: NonNegativeInt,
+  failed: NonNegativeInt,
+});
+export type LegacyKeychainImportResult = typeof LegacyKeychainImportResult.Type;
+
 export const ServerConfig = Schema.Struct({
   environment: ExecutionEnvironmentDescriptor,
   auth: ServerAuthDescriptor,

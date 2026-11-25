@@ -142,76 +142,73 @@ describe("keyringStore", () => {
   });
 });
 
-describe("legacy keychain move", () => {
-  it("moves a missing entry from the old service on first read and never again", async () => {
-    const legacy = memoryKeychainStore();
-    await keychainSecrets(legacy, "ns").set("server-signing-key", encode("secret-value"));
-    const lines: Array<string> = [];
-    const store = memoryKeychainStore({ legacy, log: (line) => lines.push(line) });
-    const secrets = keychainSecrets(store, "ns");
-
-    assert.deepEqual(await secrets.names(), ["server-signing-key"]);
-    assert.equal(text(await secrets.get("server-signing-key")), "secret-value");
-    assert.equal(text(await secrets.get("server-signing-key")), "secret-value");
-
-    assert.deepEqual([...store.entries.keys()], ["ns:server-signing-key"]);
-    assert.deepEqual([...legacy.entries.keys()], []);
-    assert.deepEqual(secrets.movedFromLegacy(), ["server-signing-key"]);
-    assert.equal(lines.filter((line) => line.includes("Moved 1 secret")).length, 1);
-    assert.isFalse(lines.join("\n").includes("secret-value"));
-  });
-
-  it("moves a chunked entry whole, so no chunk is left behind", async () => {
-    const legacy = memoryKeychainStore();
-    const value = Uint8Array.from({ length: 4000 }, (_, index) => index % 256);
-    await keychainSecrets(legacy, "ns").set("plugin-x-token", value);
-    const store = memoryKeychainStore({ legacy });
-
-    const moved = await keychainSecrets(store, "ns").get("plugin-x-token");
-
-    assert.deepEqual(Array.from(moved ?? []), Array.from(value));
-    assert.deepEqual([...legacy.entries.keys()], []);
-    assert.deepEqual(
-      [...store.entries.keys()].filter((account) => account.startsWith("ns:")),
-      ["ns:plugin-x-token"],
-    );
-    assert.isTrue([...store.entries.keys()].some((account) => account.startsWith("ns#")));
-  });
-
-  it("returns the value and warns once when the old copy cannot be deleted", async () => {
-    const seeded = memoryKeychainStore();
-    await keychainSecrets(seeded, "ns").set("one", encode("first-secret"));
-    await keychainSecrets(seeded, "ns").set("two", encode("second-secret"));
-    const legacy: KeychainStore = {
-      ...seeded,
-      delete: async () => {
-        throw new Error("keychain is locked");
+describe("legacy keychain isolation", () => {
+  /** Wraps the old store and counts every read, so a test can prove none happened. */
+  const counted = (legacy: ReturnType<typeof memoryKeychainStore>) => {
+    const reads = { get: 0, accounts: 0 };
+    const store: KeychainStore = {
+      ...legacy,
+      get: async (account) => {
+        reads.get += 1;
+        return legacy.get(account);
+      },
+      accounts: async () => {
+        reads.accounts += 1;
+        return legacy.accounts();
       },
     };
-    const lines: Array<string> = [];
-    const store = memoryKeychainStore({ legacy, log: (line) => lines.push(line) });
+    return { store, reads };
+  };
+
+  it("never reads the old service on a miss, so startup asks for nothing", async () => {
+    const legacy = memoryKeychainStore();
+    await keychainSecrets(legacy, "ns").set("server-signing-key", encode("old"));
+    const countedLegacy = counted(legacy);
+    const store = memoryKeychainStore({ legacy: countedLegacy.store });
     const secrets = keychainSecrets(store, "ns");
 
-    assert.equal(text(await secrets.get("one")), "first-secret");
-    assert.equal(text(await secrets.get("two")), "second-secret");
+    assert.isUndefined(await secrets.get("server-signing-key"));
+    assert.deepEqual(await secrets.names(), []);
 
-    assert.isTrue(secrets.legacyCopyLeft());
-    assert.equal(lines.filter((line) => line.includes("Could not delete")).length, 1);
-    assert.isFalse(lines.join("\n").includes("first-secret"));
-    assert.isFalse(lines.join("\n").includes("second-secret"));
+    assert.equal(countedLegacy.reads.get, 0);
+    assert.equal(countedLegacy.reads.accounts, 0);
+    assert.deepEqual([...store.entries.keys()], []);
+    assert.deepEqual([...legacy.entries.keys()], ["ns:server-signing-key"]);
   });
 
-  it("maps namespaces one to one and leaves other homes alone", async () => {
+  it("never reads the old service when removing a p0code secret", async () => {
     const legacy = memoryKeychainStore();
-    await keychainSecrets(legacy, "ns1").set("a", encode("a"));
-    await keychainSecrets(legacy, "ns2").set("b", encode("b"));
-    const store = memoryKeychainStore({ legacy });
-    const secrets = keychainSecrets(store, "ns1");
+    await keychainSecrets(legacy, "ns").set("server-signing-key", encode("old"));
+    const countedLegacy = counted(legacy);
+    const store = memoryKeychainStore({ legacy: countedLegacy.store });
+    const secrets = keychainSecrets(store, "ns");
+    await secrets.set("server-signing-key", encode("new"));
 
-    assert.equal(text(await secrets.get("a")), "a");
-    assert.isUndefined(await secrets.get("b"));
-    assert.deepEqual([...store.entries.keys()], ["ns1:a"]);
-    assert.deepEqual([...legacy.entries.keys()], ["ns2:b"]);
+    await secrets.remove("server-signing-key");
+
+    assert.equal(countedLegacy.reads.get, 0);
+    assert.equal(countedLegacy.reads.accounts, 0);
+    assert.deepEqual([...store.entries.keys()], []);
+    assert.deepEqual([...legacy.entries.keys()], ["ns:server-signing-key"]);
+  });
+
+  it("lists only p0code names, never the old service's", async () => {
+    const legacy = memoryKeychainStore();
+    await keychainSecrets(legacy, "ns").set("a", encode("a"));
+    const store = memoryKeychainStore({ legacy });
+    await keychainSecrets(store, "ns").set("b", encode("b"));
+
+    assert.deepEqual(await keychainSecrets(store, "ns").names(), ["b"]);
+  });
+
+  it("reports nothing to import, without reading any old item, when the old service is empty", async () => {
+    const countedLegacy = counted(memoryKeychainStore());
+    const store = memoryKeychainStore({ legacy: countedLegacy.store });
+
+    const report = await migrateKeychainService(store);
+
+    assert.deepEqual(report, { moved: [], alreadyPresent: [], failed: [], leftBehind: [] });
+    assert.equal(countedLegacy.reads.get, 0);
   });
 });
 

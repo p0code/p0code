@@ -2722,6 +2722,37 @@ export const layerWsRpc = (
             return yield* keybindings.removeKeybindingRule(rule);
           }),
         [WS_METHODS.serverRunStorageCleanup]: () => storageCleanup.runNow,
+        [WS_METHODS.serverImportLegacyKeychain]:
+          /* Request instrumentation already owns the span; keep this helper in that context. */
+          Effect.fnUntraced(function* () {
+            const secretStore = yield* Effect.serviceOption(ServerSecretStore.ServerSecretStore);
+            if (
+              Option.isNone(secretStore) ||
+              secretStore.value.importLegacyKeychain === undefined
+            ) {
+              return yield* new ServerSettingsError({
+                settingsPath: config.secretsDir,
+                operation: "write-secret",
+                cause: new Error("This home does not keep credentials in the OS keychain."),
+              });
+            }
+            const report = yield* secretStore.value.importLegacyKeychain().pipe(
+              Effect.mapError(
+                (cause) =>
+                  new ServerSettingsError({
+                    settingsPath: config.secretsDir,
+                    operation: "write-secret",
+                    cause,
+                  }),
+              ),
+            );
+            return {
+              moved: report.moved.length,
+              alreadyPresent: report.alreadyPresent.length,
+              leftBehind: report.leftBehind.length,
+              failed: report.failed.length,
+            };
+          }),
         [WS_METHODS.serverGetStorageCleanupReport]: () => storageCleanup.reports,
         [WS_METHODS.serverGetDatabaseStorage]: () => databaseStorage.status,
         [WS_METHODS.serverReclaimDatabaseSpace]: () => databaseStorage.requestReclaim,

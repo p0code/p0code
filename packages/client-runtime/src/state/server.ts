@@ -1579,6 +1579,11 @@ export function createServerEnvironmentAtoms<R, E>(
       tag: WS_METHODS.serverRunStorageCleanup,
       concurrency: { mode: "singleFlight", key: ({ environmentId }) => environmentId },
     }),
+    importLegacyKeychain: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:import-legacy-keychain",
+      tag: WS_METHODS.serverImportLegacyKeychain,
+      concurrency: { mode: "singleFlight", key: ({ environmentId }) => environmentId },
+    }),
     t3ImportStatus: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:t3-import:status",
       tag: WS_METHODS.t3ImportStatus,
