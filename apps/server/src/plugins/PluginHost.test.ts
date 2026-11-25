@@ -27,7 +27,11 @@ import {
   PluginHostBindings,
 } from "./PluginHost.ts";
 
-const manifest = (id: string, capabilities: PluginManifest["capabilities"]): PluginManifest => ({
+const manifest = (
+  id: string,
+  capabilities: PluginManifest["capabilities"],
+  httpRoutes: PluginManifest["httpRoutes"] = [],
+): PluginManifest => ({
   id,
   name: id,
   description: "Test plugin.",
@@ -35,14 +39,14 @@ const manifest = (id: string, capabilities: PluginManifest["capabilities"]): Plu
   unofficial: false,
   externalServices: [],
   capabilities,
-  httpRoutes: [`/api/${id}/ping`],
+  httpRoutes,
 });
 
 const events: Array<string> = [];
 const revoked: Array<string> = [];
 
 const echo = definePlugin({
-  manifest: manifest("echo", ["auth:issue-device-credentials"]),
+  manifest: manifest("echo", ["auth:issue-device-credentials", "http:routes"], ["/api/echo/ping"]),
   actions: { echo: { input: Schema.Struct({ text: Schema.String }), output: Schema.String } },
   start: Effect.gen(function* () {
     const context = yield* PluginContext;
@@ -78,6 +82,29 @@ const undeclaredAdvisor = definePlugin({
   start: Effect.succeed({
     actions: {},
     agentInstructions: Effect.succeed("<forbidden>nope</forbidden>"),
+  }),
+});
+
+const routesWithoutCapability = definePlugin({
+  manifest: manifest("routes-without-capability", [], ["/api/routes-without-capability/ping"]),
+  actions: {},
+  start: Effect.succeed({
+    actions: {},
+    routes: {
+      "/api/routes-without-capability/ping": () =>
+        Effect.succeed({ status: 200, body: { pong: true } }),
+    },
+  }),
+});
+
+const undeclaredRoute = definePlugin({
+  manifest: manifest("undeclared-route", ["http:routes"], ["/api/undeclared-route/ping"]),
+  actions: {},
+  start: Effect.succeed({
+    actions: {},
+    routes: {
+      "/api/undeclared-route/other": () => Effect.succeed({ status: 200, body: { pong: true } }),
+    },
   }),
 });
 
@@ -133,7 +160,16 @@ const layerBindings = Layer.effect(
 );
 
 const layerHost = pluginHostLayer.pipe(
-  Layer.provide(Layer.succeed(BundledPlugins, [echo, broken, advisor, undeclaredAdvisor])),
+  Layer.provide(
+    Layer.succeed(BundledPlugins, [
+      echo,
+      broken,
+      advisor,
+      undeclaredAdvisor,
+      routesWithoutCapability,
+      undeclaredRoute,
+    ]),
+  ),
   Layer.provide(layerBindings),
   Layer.provideMerge(layerAgentInstructions),
   Layer.provideMerge(ServerSettings.ServerSettingsService.layerTest()),
@@ -200,6 +236,30 @@ describe("PluginHost", () => {
         yield* host.setEnabled({ pluginId: "broken", enabled: false });
         assert.strictEqual((yield* snapshotOf("broken"))?.state, "disabled");
         yield* host.setEnabled({ pluginId: "echo", enabled: false });
+      }),
+    );
+
+    it.effect("refuses routes without the http:routes capability or a declared path", () =>
+      Effect.gen(function* () {
+        const host = yield* PluginHost;
+        yield* host.setEnabled({ pluginId: "routes-without-capability", enabled: true });
+        const missingCapability = yield* snapshotOf("routes-without-capability");
+        assert.strictEqual(missingCapability?.state, "failed");
+        assert.strictEqual(
+          missingCapability?.message,
+          "Plugin routes require the http:routes capability.",
+        );
+        yield* host.setEnabled({ pluginId: "undeclared-route", enabled: true });
+        const undeclared = yield* snapshotOf("undeclared-route");
+        assert.strictEqual(undeclared?.state, "failed");
+        assert.strictEqual(
+          undeclared?.message,
+          "Route /api/undeclared-route/other is not declared.",
+        );
+        assert.isNull(yield* host.route("/api/routes-without-capability/ping"));
+        assert.isNull(yield* host.route("/api/undeclared-route/other"));
+        yield* host.setEnabled({ pluginId: "routes-without-capability", enabled: false });
+        yield* host.setEnabled({ pluginId: "undeclared-route", enabled: false });
       }),
     );
 
