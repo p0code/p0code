@@ -57,7 +57,11 @@ import type {
   ServerConfig as T3ServerConfig,
   UsageLimitsReport,
 } from "@t3tools/contracts";
-import { isOpenEndedSnooze, isProviderNativeSubagentThread } from "@t3tools/contracts";
+import {
+  AuthOrchestrationOperateScope,
+  isOpenEndedSnooze,
+  isProviderNativeSubagentThread,
+} from "@t3tools/contracts";
 import { serializeAssistantCitation } from "@t3tools/shared/assistantCitations";
 import {
   appendCodexArtifactTemplateUsePrompt,
@@ -144,6 +148,7 @@ import { mobilePreferencesAtom } from "../../state/preferences";
 import { useThreadServerBrowserTabs } from "../../state/preview";
 import { useEnvironmentQuery } from "../../state/query";
 import type { QueuedRunEdit } from "../../state/queued-run-edit";
+import { useEnvironmentScopeDenied } from "../../state/session";
 import {
   clearThreadComposerError,
   threadComposerErrorsAtom,
@@ -559,6 +564,10 @@ function ThreadDetailBody(
   });
   const unsnoozeThread = useAtomCommand(threadEnvironment.unsnooze, { reportFailure: false });
   const unsettleThread = useAtomCommand(threadEnvironment.unsettle, { reportFailure: false });
+  const canTriageThread = !useEnvironmentScopeDenied(
+    props.environmentId,
+    AuthOrchestrationOperateScope,
+  );
   const updateMetadata = useAtomCommand(threadEnvironment.updateMetadata, { reportFailure: false });
   const visitThread = useAtomCommand(threadEnvironment.visit, { reportFailure: false });
   const anyRunStop = useAtomValue(
@@ -658,7 +667,9 @@ function ThreadDetailBody(
     latestRunCompletedAt: props.selectedThread.latestRun?.completedAt ?? null,
   });
   const runStatusAction = async (action: "stop" | "wake" | "unsettle" | "dismiss") => {
-    if (statusPending || !props.canOperateThread) return;
+    const permitted =
+      action === "wake" || action === "unsettle" ? canTriageThread : props.canOperateThread;
+    if (statusPending || !permitted) return;
     const request: BackgroundWorkStopRequest = {
       threadKey: selectedThreadKey,
       taskIds:
@@ -808,7 +819,9 @@ function ThreadDetailBody(
               : gt("Dismissing...")
           : actionLabel,
         accessibilityLabel: actionLabel,
-        disabled: !props.canOperateThread || statusPending,
+        disabled:
+          !(lifecycleSnoozed || settled ? canTriageThread : props.canOperateThread) ||
+          statusPending,
         onPress: () =>
           void runStatusAction(lifecycleSnoozed ? "wake" : settled ? "unsettle" : "dismiss"),
       },

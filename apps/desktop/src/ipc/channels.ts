@@ -40,7 +40,7 @@ export const BACKEND_GET_STATUS_CHANNEL = "desktop:backend-get-status";
 export const BACKEND_UPDATE_CONFIG_CHANNEL = "desktop:backend-update-config";
 export const BACKEND_CONTROL_CHANNEL = "desktop:backend-control";
 export const GET_APP_BRANDING_CHANNEL = "desktop:get-app-branding";
-
+export const GET_DATABASE_MIGRATION_PROGRESS_CHANNEL = "desktop:get-database-migration-progress";
 export const GET_SYSTEM_LOCALE_CHANNEL = "desktop:get-system-locale";
 export const GET_PREFERRED_SYSTEM_LANGUAGES_CHANNEL = "desktop:get-preferred-system-languages";
 export const GET_PRIMARY_PASTE_ENABLED_CHANNEL = "desktop:get-primary-paste-enabled";

@@ -2,6 +2,7 @@ import {
   ContextMenuItemSchema,
   ContextMenuSource,
   DesktopAppBrandingSchema,
+  DatabaseMigrationProgress,
   DesktopEnvironmentBootstrapSchema,
   DesktopMediaReadSchema,
   DesktopThemeSchema,
@@ -23,6 +24,8 @@ import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
+import * as Ref from "effect/Ref";
+import * as DesktopState from "../../app/DesktopState.ts";
 
 import * as DesktopEnvironment from "../../app/DesktopEnvironment.ts";
 import * as DesktopBackendConfiguration from "../../backend/DesktopBackendConfiguration.ts";
@@ -71,6 +74,16 @@ function toWebSocketBaseUrl(httpBaseUrl: URL): string {
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
   return url.href;
 }
+
+export const getDatabaseMigrationProgress = DesktopIpc.makeIpcMethod({
+  channel: IpcChannels.GET_DATABASE_MIGRATION_PROGRESS_CHANNEL,
+  payload: Schema.Void,
+  result: Schema.NullOr(DatabaseMigrationProgress),
+  handler: Effect.fn("desktop.ipc.window.getDatabaseMigrationProgress")(function* () {
+    const state = yield* DesktopState.DesktopState;
+    return yield* Ref.get(state.databaseMigrationProgress);
+  }),
+});
 
 export const getAppBranding = DesktopIpc.makeSyncIpcMethod({
   channel: IpcChannels.GET_APP_BRANDING_CHANNEL,

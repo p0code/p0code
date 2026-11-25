@@ -154,7 +154,11 @@ const make = Effect.gen(function* () {
     yield* sql`PRAGMA wal_checkpoint(TRUNCATE)`.pipe(Effect.ignore({ log: true }));
     const completedAt = yield* Clock.currentTimeMillis;
     yield* fs.writeFileString(compactedAtPath, String(completedAt)).pipe(Effect.ignore);
-    if (result.deletedEventCount > 0 || result.deletedReceiptCount > 0) {
+    if (
+      result.deletedEventCount > 0 ||
+      result.deletedReceiptCount > 0 ||
+      result.purgedRowCount > 0
+    ) {
       yield* Effect.logInfo("Compacted orchestration history", result);
     }
   }).pipe(

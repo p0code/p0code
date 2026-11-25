@@ -169,6 +169,7 @@ A few settings need care:
     "webhookTasks": false,
     "browserCookieImport": false,
     "previewTunnel": false,
+    "worktreeLayoutCommands": false,
     "providers": {
       "allowedDrivers": ["claudeAgent", "codex"],
       "instances": {
@@ -255,6 +256,32 @@ so restart p0code after that.
   Browser tabs stream from it instead, and port forwarding and **Open on this device** are
   unavailable. This wins over the user's
   [Preview tunnel setting](./remote-access.md#browser-on-a-remote-environment).
+- `worktreeLayoutCommands: false`: p0code does not run the
+  [worktree layout commands](./multi-repo-projects.md#lay-the-folder-out-yourself) a project's
+  `t3.json` declares, whether or not a user approved them. Such a project gets no new worktree
+  threads; existing thread folders are restored as plain checkouts and removed without the
+  project's `remove` command.
+
+### Providers
+
+`providers.allowedDrivers` lists the providers that may run, by ID: `codex` (Codex),
+`claudeAgent` (Claude), `cursor` (Cursor), `grok` (Grok), `opencode` (OpenCode), `antigravity`
+(Antigravity), `fx` (fx), `kiro` (Kiro), `pi` (Pi), `muse` (Muse Code), and `acpRegistry` (ACP
+Registry).
+`p0 policy check` rejects an ID this version does not know. Threads on other providers stay,
+marked unavailable, and users can still turn those providers off.
+
+`providers.instances` sets fields on every instance of a provider, such as an environment variable
+that routes Claude through Amazon Bedrock or a base URL for a company gateway. `binaryPath` and
+`launchArgs` work only for providers that have those settings. With `"locked": true`, users cannot
+change the fields you set. With `"locked": false`, the fields fill in only what the user left
+empty. A `codex` entry that is locked, or any `codex` entry under `maxRuntimeMode`, also rules out
+[Connect with ChatGPT](./providers-codex.md#connect-with-chatgpt), since that runtime would skip
+your fields. In the same way, an `opencode` entry like that rules out a server URL, so OpenCode
+starts the binary you set.
+
+### Updates
+
 - `mode`: `auto` keeps the normal update flow. `off` stops p0code from checking for updates, for
   machines that get p0code through device management.
 - `feedUrl`: p0code updates from your own mirror instead of GitHub: the desktop app, `p0 update`,
