@@ -23,13 +23,13 @@ import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { QRCodeSvg } from "../ui/qr-code";
 
-const DEFAULT_SELF_RELAY_URL = "https://relay.hhh.yhw.tw";
+const RELAY_URL_PLACEHOLDER = "https://relay.yourdomain.com";
 
 export function SelfRelaySettings({ environmentId }: { environmentId: EnvironmentId }) {
   const gt = useGT();
   const m = useMessages();
-  const [relayUrl, setRelayUrl] = useState(DEFAULT_SELF_RELAY_URL);
-  const [configRelayUrl, setConfigRelayUrl] = useState(DEFAULT_SELF_RELAY_URL);
+  const [relayUrl, setRelayUrl] = useState("");
+  const [configRelayUrl, setConfigRelayUrl] = useState("");
   const status = useEnvironmentQuery(
     serverEnvironment.relayStatus({ environmentId, input: { relayUrl: configRelayUrl } }),
   );
@@ -152,7 +152,7 @@ export function SelfRelaySettings({ environmentId }: { environmentId: Environmen
                 <span>{m(msg("Relay URL"))}</span>
                 <Input
                   type="url"
-                  placeholder={DEFAULT_SELF_RELAY_URL}
+                  placeholder={RELAY_URL_PLACEHOLDER}
                   value={relayUrl}
                   disabled={busy}
                   onChange={(event) => setRelayUrl(event.target.value)}
