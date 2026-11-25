@@ -49,7 +49,9 @@ export const updateBackendConfig = makeIpcMethod({
     if (result.changed) {
       yield* lifecycle.relaunch(`backendConfigUpdated:${status.mode}`);
     }
-    return status;
+    return result.error === null
+      ? status
+      : ({ ...status, error: result.error } satisfies DesktopBackendStatus);
   }),
 });
 

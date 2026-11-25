@@ -302,12 +302,50 @@ const startLocalBackend = Effect.gen(function* () {
   const serverExposure = yield* DesktopServerExposure.DesktopServerExposure;
   if (yield* offerT3Import()) return false;
   // Before any window: an external backend the app can't use would only show a dead-end error.
-  const selectedBackend = yield* backendService.prepareSelectedBackend;
-  if (selectedBackend.fallbackReason !== null) {
-    yield* (yield* ElectronDialog.ElectronDialog).showErrorBox(
-      m(msg("The selected backend couldn't start")),
-      `${selectedBackend.fallbackReason}\n\n${m(msg("Switched back to the built-in backend so the app can open. You can choose another backend again in Settings."))}`,
+  // The saved choice stays on disk; the user can retry it or explicitly switch for good.
+  const electronDialog = yield* ElectronDialog.ElectronDialog;
+  let selectedBackend = yield* backendService.prepareSelectedBackend;
+  while (selectedBackend.fallbackReason !== null) {
+    const choice = yield* electronDialog
+      .showMessageBox({
+        type: "error",
+        title: m(msg("The selected backend couldn't start")),
+        message: m(msg("p0code couldn't start the backend you selected.")),
+        detail: m(
+          msg(
+            "{reason}\n\np0code is using the in-app backend for now. Your saved choice is unchanged, so you can retry it now or switch to the in-app backend.",
+            { reason: selectedBackend.fallbackReason },
+          ),
+        ),
+        buttons: [m(msg("Retry")), m(msg("Use the in-app backend")), m(msg("Quit"))],
+        defaultId: 0,
+        cancelId: 2,
+        noLink: true,
+      })
+      .pipe(
+        Effect.catch((error) =>
+          logBootstrapWarning("failed to show the backend failure notice", {
+            error: error.message,
+          }).pipe(Effect.as({ response: 1 })),
+        ),
+      );
+    if (choice.response === 0) {
+      selectedBackend = yield* backendService.prepareSelectedBackend;
+      continue;
+    }
+    if (choice.response === 2) {
+      yield* (yield* ElectronApp.ElectronApp).quit;
+      return false;
+    }
+    yield* desktopSettings.setBackendConfig({ mode: "embedded", modeConfiguredByUser: true }).pipe(
+      Effect.tap(() => logBootstrapInfo("switched to the in-app backend at the user's request")),
+      Effect.catch((error) =>
+        logBootstrapWarning("failed to save the in-app backend choice", {
+          error: error.message,
+        }),
+      ),
     );
+    selectedBackend = { mode: "embedded", requestedMode: "embedded", fallbackReason: null };
   }
   const effectiveBackendMode = selectedBackend.mode;
   const isExternalMode = DesktopBackendService.isExternalBackendMode(effectiveBackendMode);

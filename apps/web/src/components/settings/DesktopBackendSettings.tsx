@@ -9,25 +9,12 @@ import { useEffect, useState } from "react";
 
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
-import { Checkbox } from "../ui/checkbox";
 import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Spinner } from "../ui/spinner";
 import { stackedThreadToast, toastManager } from "../ui/toast";
-import { AdvancedSettings } from "./AdvancedSettings";
 import { SettingsRow, SettingsSection } from "./settingsLayout";
 import { useSearchableSetting } from "./settingsSearch";
-
-function isValidHttpUrl(value: string): boolean {
-  const trimmed = value.trim();
-  if (trimmed.length === 0) return false;
-  try {
-    const parsed = new URL(trimmed);
-    return parsed.protocol === "http:" || parsed.protocol === "https:";
-  } catch {
-    return false;
-  }
-}
 
 export function DesktopBackendSettings() {
   const gt = useGT();
@@ -37,8 +24,6 @@ export function DesktopBackendSettings() {
   const [status, setStatus] = useState<DesktopBackendStatus | null>(null);
   const [draftMode, setDraftMode] = useState<DesktopBackendMode>("embedded");
   const [modeTouched, setModeTouched] = useState(false);
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const [draftRemoteUrl, setDraftRemoteUrl] = useState("");
   const [draftBinaryPath, setDraftBinaryPath] = useState("");
   const [busyAction, setBusyAction] = useState<DesktopBackendAction | "save" | "refresh" | null>(
     null,
@@ -49,7 +34,6 @@ export function DesktopBackendSettings() {
     setStatus(next);
     setDraftMode(next.mode);
     setModeTouched(false);
-    setDraftRemoteUrl(next.remoteUrl ?? "");
     setDraftBinaryPath(next.binaryPath ?? "");
   };
 
@@ -75,7 +59,6 @@ export function DesktopBackendSettings() {
         if (active) {
           setStatus(next);
           setDraftMode(next.mode);
-          setDraftRemoteUrl(next.remoteUrl ?? "");
           setDraftBinaryPath(next.binaryPath ?? "");
         }
       },
@@ -93,8 +76,8 @@ export function DesktopBackendSettings() {
   if (!bridge) return null;
 
   const modeLabel = (mode: DesktopBackendMode): string => {
-    if (mode === "local-service") return gt("Local service (p0d)");
-    if (mode === "remote") return gt("Remote URL");
+    if (mode === "local-service") return gt("Background service");
+    if (mode === "remote") return gt("Remote URL (experimental)");
     return gt("In-app backend");
   };
 
@@ -112,30 +95,28 @@ export function DesktopBackendSettings() {
     return <Badge variant="secondary">{gt("Stopped")}</Badge>;
   };
 
-  const normalizedDraftRemoteUrl = draftRemoteUrl.trim() || null;
   const normalizedDraftBinaryPath = draftBinaryPath.trim() || null;
   const hasUnsavedChanges =
     status !== null &&
     (modeTouched ||
       draftMode !== status.mode ||
-      normalizedDraftRemoteUrl !== (status.remoteUrl ?? null) ||
       normalizedDraftBinaryPath !== (status.binaryPath ?? null));
 
-  const remoteUrlInvalid = draftMode === "remote" && !isValidHttpUrl(draftRemoteUrl);
-
   const handleSave = async () => {
-    if (busyAction !== null || remoteUrlInvalid) return;
+    if (busyAction !== null) return;
     setBusyAction("save");
     setError(null);
     try {
       // Only send the mode when the user actually picked one, so editing the binary path
-      // leaves the auto default (p0d when available) in place.
+      // leaves the saved mode in place.
       const next = await bridge.updateConfig({
         ...(modeTouched || draftMode !== status?.mode ? { mode: draftMode } : {}),
-        remoteUrl: normalizedDraftRemoteUrl,
         binaryPath: normalizedDraftBinaryPath,
       });
       syncFromStatus(next);
+      if (next.error) {
+        setError(next.error);
+      }
     } catch (cause) {
       const message =
         cause instanceof Error ? cause.message : gt("Could not save backend settings.");
@@ -178,12 +159,12 @@ export function DesktopBackendSettings() {
   const modeDescription =
     draftMode === "local-service"
       ? gt(
-          "Runs p0d as a background user service. Quitting the desktop window leaves the backend running.",
+          "Runs the backend as a background service so quitting the window leaves it running. This is an opt-in; the in-app backend is the default.",
         )
       : draftMode === "remote"
-        ? gt("Connects directly to a remote or self-hosted backend URL with no local process.")
+        ? gt("Remote backend mode is experimental and not supported yet.")
         : gt(
-            "Runs the backend inside the app. Quitting the window stops it, unlike Local service (p0d), which keeps running.",
+            "Runs the backend inside the app. This is the default and always available, and quitting the window stops it.",
           );
 
   const statusMetaParts: string[] = [];
@@ -197,17 +178,30 @@ export function DesktopBackendSettings() {
     <SettingsSection {...searchableSetting("desktop-backend")} title={gt("Backend")}>
       <p className="px-3 text-sm leading-relaxed text-muted-foreground sm:px-4">
         <T>
-          Local service (p0d) is the default. Quitting the app window leaves the backend running in
-          the background.
+          The in-app backend is the default and starts with the app. A background service is an
+          opt-in and must pass its sign-in check before the app will switch to it.
         </T>
       </p>
-      {status !== null && !status.resolvedBinaryPath ? (
-        <p className="px-3 text-sm leading-relaxed text-muted-foreground sm:px-4">
-          <T>
-            p0d was not found, so the app is running its in-app backend. Install p0d on PATH
-            (/usr/local/bin or /opt/homebrew/bin), or choose Local service (p0d) to set its path.
-          </T>
-        </p>
+      {status?.mode === "remote" ? (
+        <SettingsRow
+          title={gt("Remote backend mode is experimental and not supported yet")}
+          description={gt(
+            "This app cannot pair with or sign in to a remote server yet. Add another machine from Settings > Connections instead.",
+          )}
+          control={
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busyAction !== null}
+              onClick={() => {
+                setDraftMode("embedded");
+                setModeTouched(true);
+              }}
+            >
+              <T>Use the in-app backend</T>
+            </Button>
+          }
+        />
       ) : null}
       <SettingsRow
         title={gt("Backend mode")}
@@ -218,7 +212,6 @@ export function DesktopBackendSettings() {
             onValueChange={(value) => {
               if (value === "local-service" || value === "embedded") {
                 setDraftMode(value);
-                setShowAdvanced(false);
                 setModeTouched(true);
               }
             }}
@@ -232,11 +225,11 @@ export function DesktopBackendSettings() {
               <SelectValue>{modeLabel(draftMode)}</SelectValue>
             </SelectTrigger>
             <SelectPopup align="end" alignItemWithTrigger={false}>
-              <SelectItem hideIndicator value="local-service">
-                <T>Local service (p0d)</T>
-              </SelectItem>
               <SelectItem hideIndicator value="embedded">
                 <T>In-app backend</T>
+              </SelectItem>
+              <SelectItem hideIndicator value="local-service">
+                <T>Background service</T>
               </SelectItem>
             </SelectPopup>
           </Select>
@@ -245,14 +238,16 @@ export function DesktopBackendSettings() {
 
       {draftMode === "local-service" ? (
         <SettingsRow
-          title={gt("p0d binary path")}
+          title={gt("Backend binary path")}
           description={
             status?.resolvedBinaryPath ? (
               <T>
                 Optional override. Currently resolved: <Var>{status.resolvedBinaryPath}</Var>
               </T>
             ) : (
-              gt("Optional path to a local p0d binary. Leave blank to auto-detect.")
+              gt(
+                "Optional path to a background service binary. Leave blank to use the bundled server.",
+              )
             )
           }
           control={
@@ -260,7 +255,7 @@ export function DesktopBackendSettings() {
               size="sm"
               font="mono"
               className="w-full sm:w-72"
-              aria-label={gt("p0d binary path")}
+              aria-label={gt("Backend binary path")}
               placeholder={gt("Auto-detect")}
               value={draftBinaryPath}
               disabled={busyAction !== null}
@@ -270,59 +265,14 @@ export function DesktopBackendSettings() {
         />
       ) : null}
 
-      <AdvancedSettings
-        targetIds={["desktop-backend-remote"]}
-        open={showAdvanced || draftMode === "remote"}
-        onOpenChange={setShowAdvanced}
-      >
-        <SettingsRow
-          title={gt("Connect to a p0code server on another machine…")}
-          description={gt(
-            "Points the app straight at a URL for a server you run elsewhere. This is not the relay: to reach another machine, use relay pairing or linked environments.",
-          )}
-          control={
-            <Checkbox
-              checked={draftMode === "remote"}
-              disabled={busyAction !== null}
-              aria-label={gt("Connect to a p0code server on another machine…")}
-              onCheckedChange={(checked) => {
-                if (checked) {
-                  setShowAdvanced(true);
-                  setDraftMode("remote");
-                } else {
-                  setShowAdvanced(false);
-                  setDraftMode(status?.resolvedBinaryPath ? "local-service" : "embedded");
-                }
-                setModeTouched(true);
-              }}
-            />
-          }
-        />
-
-        {draftMode === "remote" ? (
-          <SettingsRow
-            title={gt("Remote backend URL")}
-            description={
-              remoteUrlInvalid
-                ? gt("Enter a valid http:// or https:// backend URL.")
-                : gt("Address of the backend server this app connects to.")
-            }
-            control={
-              <Input
-                size="sm"
-                type="url"
-                font="mono"
-                className="w-full sm:w-72"
-                aria-label={gt("Remote backend URL")}
-                placeholder="http://127.0.0.1:3773"
-                value={draftRemoteUrl}
-                disabled={busyAction !== null}
-                onChange={(event) => setDraftRemoteUrl(event.target.value)}
-              />
-            }
-          />
-        ) : null}
-      </AdvancedSettings>
+      {draftMode === "local-service" ? (
+        <p className="px-3 text-sm leading-relaxed text-muted-foreground sm:px-4">
+          <T>
+            Background service mode is blocked when the service cannot prove it belongs to this app.
+            Saving a mode that cannot sign in leaves your current setting untouched.
+          </T>
+        </p>
+      ) : null}
 
       {hasUnsavedChanges ? (
         <SettingsRow
@@ -340,7 +290,7 @@ export function DesktopBackendSettings() {
               </Button>
               <Button
                 size="sm"
-                disabled={busyAction !== null || remoteUrlInvalid}
+                disabled={busyAction !== null || !hasUnsavedChanges}
                 onClick={() => void handleSave()}
               >
                 {busyAction === "save" ? (
