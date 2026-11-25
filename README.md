@@ -36,6 +36,14 @@ It works with Claude Code, Codex, Cursor, OpenCode, Grok Build, Antigravity, Kir
 
 Download a build from [Releases](https://github.com/p0code/p0code/releases) for macOS, Windows, or Linux, or [build from source](./docs/operations/00_development.md#first-checkout).
 
+**macOS:** p0code is signed with its own certificate rather than an Apple Developer ID, and isn't notarized, so macOS blocks it the first time ("damaged" or "unidentified developer"). After dragging it to Applications, run this once in Terminal, then open it normally:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/p0code.app
+```
+
+Updates are signed with the same certificate, so macOS keeps your keychain approvals between versions.
+
 ### Command line
 
 From a checkout of this repository, install dependencies and start the server (the `p0` command):

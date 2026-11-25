@@ -2805,6 +2805,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   if (platform === "mac") {
     const path = yield* Path.Path;
     const repoRoot = yield* RepoRoot;
+    if (!signed) buildConfig.afterSign = path.join(repoRoot, "scripts/mac-after-sign.cjs");
     buildConfig.mac = {
       target: target === "dmg" ? [target, "zip"] : [target],
       // Without a certificate, seal the whole bundle ad hoc; Electron's linker-only signature makes

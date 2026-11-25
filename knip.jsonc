@@ -36,6 +36,7 @@
         "scenarios/*.ts",
         "setup-worktree.ts",
         "sign-macos.ts",
+        "mac-after-sign.cjs",
         "prepare-server-compile-cache.cjs",
         "smoke-desktop-app.ts",
         "verify-windows-desktop-artifact.ts",
