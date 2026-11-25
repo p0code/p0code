@@ -73,7 +73,7 @@ export class IssueTrackerBindingsRepository extends Context.Service<
       readonly createdAt: string;
     }) => Effect.Effect<void, IssueTrackerBindingsRepositoryError>;
   }
->()("t3/persistence/IssueTrackerBindings/IssueTrackerBindingsRepository") {}
+>()("p0/persistence/IssueTrackerBindings/IssueTrackerBindingsRepository") {}
 
 const encodeAdditionalScopes = Schema.encodeEffect(BindingRow.fields.additionalScopes);
 

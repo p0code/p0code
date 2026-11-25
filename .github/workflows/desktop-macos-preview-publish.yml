@@ -227,8 +227,8 @@ jobs:
         env:
           CHECKOUT_REF: ${{ github.sha }}
           GIT_TERMINAL_PROMPT: "0"
-        # Anonymous fetch avoids checkout's credential cleanup, which fails on
-        # orphaned gitlinks in .repos even when that directory is excluded.
+        # Anonymous fetch keeps checkout credentials out of a job that runs a
+        # validator fetched from the default branch.
         run: |
           set -euo pipefail
           git init .
@@ -286,7 +286,7 @@ jobs:
       ref: ${{ github.sha }}
       release_channel: preview
       label: macOS arm64 preview
-      runner: blacksmith-12vcpu-macos-26
+      runner: macos-26
       platform: mac
       target: dmg
       arch: arm64
@@ -303,8 +303,8 @@ jobs:
     name: Publish anonymous download
     needs: [resolve, build]
     if: needs.resolve.outputs.eligible == 'true' && needs.build.result == 'success'
-    runs-on: blacksmith-8vcpu-ubuntu-2404
-    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     # Its own group, so a publish never cancels a newer commit's signing job
     # (they would share the build group) and is never cancelled mid-upload.
     # preview_eligible's head check keeps a superseded publish from landing.

@@ -8,4 +8,4 @@ import * as Context from "effect/Context";
 export class RpcCallerScopes extends Context.Service<
   RpcCallerScopes,
   { readonly scopes: ReadonlyArray<AuthEnvironmentScope> }
->()("t3/auth/RpcCallerScopes") {}
+>()("p0/auth/RpcCallerScopes") {}

@@ -43,10 +43,10 @@ export class PluginHostBindings extends Context.Service<
     ) => Effect.Effect<void>;
     readonly platform: Context.Context<Exclude<PluginServices, PluginContext>>;
   }
->()("t3/plugins/PluginHost/PluginHostBindings") {}
+>()("p0/plugins/PluginHost/PluginHostBindings") {}
 
 export class BundledPlugins extends Context.Service<BundledPlugins, ReadonlyArray<Plugin>>()(
-  "t3/plugins/PluginHost/BundledPlugins",
+  "p0/plugins/PluginHost/BundledPlugins",
 ) {}
 
 /**
@@ -59,7 +59,7 @@ export class PluginAgentInstructions extends Context.Service<
     readonly read: Effect.Effect<ReadonlyArray<string>>;
     readonly attach: (read: Effect.Effect<ReadonlyArray<string>>) => Effect.Effect<void>;
   }
->()("t3/plugins/PluginHost/PluginAgentInstructions") {}
+>()("p0/plugins/PluginHost/PluginAgentInstructions") {}
 
 export const layerAgentInstructions = Layer.effect(
   PluginAgentInstructions,
@@ -87,7 +87,7 @@ export class PluginHost extends Context.Service<
     /** Instruction blocks from running plugins that declared `agent:instructions`. */
     readonly agentInstructions: Effect.Effect<ReadonlyArray<string>>;
   }
->()("t3/plugins/PluginHost") {}
+>()("p0/plugins/PluginHost") {}
 
 const START_TIMEOUT = "30 seconds";
 const STOP_TIMEOUT = "15 seconds";

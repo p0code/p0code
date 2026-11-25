@@ -34,12 +34,12 @@ permissions:
 
 jobs:
   # ARM-only, without release lint (see the production profile in eas.json),
-  # with Gradle, ccache, and pnpm state on a sticky disk.
+  # with Gradle, ccache, and pnpm state in an actions cache.
   android:
     name: Build
     if: ${{ !cancelled() && inputs.platform == 'android' }}
-    runs-on: blacksmith-32vcpu-ubuntu-2404
-    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
     permissions:
       contents: read
     outputs:
@@ -108,12 +108,12 @@ jobs:
         working-directory: apps/mobile
         run: eas submit --platform android --profile production --path "$RUNNER_TEMP/t3code.aab" --non-interactive
 
-  # No sticky disk: it mounts ext4 and only works on Linux runners.
+  # No build cache on macOS: the Android cache step targets Linux.
   ios:
     name: Build
     if: ${{ !cancelled() && inputs.platform == 'ios' }}
-    runs-on: blacksmith-12vcpu-macos-27
-    timeout-minutes: 60
+    runs-on: macos-latest
+    timeout-minutes: 120
     permissions:
       contents: read
     outputs:
@@ -169,7 +169,7 @@ jobs:
     name: Record build
     needs: [android, ios]
     if: ${{ !cancelled() && (needs.android.outputs.submitted == 'true' || needs.ios.outputs.submitted == 'true') }}
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       contents: write # pushes the build record tag

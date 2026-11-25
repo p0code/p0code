@@ -7,3 +7,16 @@
 [submodule "plugins/backup"]
 	path = plugins/backup
 	url = https://github.com/p0code/backup
+
+# `.repos/` holds read-only vendored references, not build inputs. Upstream
+# alchemy-effect pins these two nested repositories, so they appear here as
+# gitlinks. Map them (with `update = none`) so `git submodule status`, `foreach`
+# and `--recursive` skip them instead of failing with "no submodule mapping".
+[submodule ".repos/alchemy-effect/submodules/distilled"]
+	path = .repos/alchemy-effect/submodules/distilled
+	url = https://github.com/alchemy-run/distilled.git
+	update = none
+[submodule ".repos/alchemy-effect/submodules/floci"]
+	path = .repos/alchemy-effect/submodules/floci
+	url = https://github.com/alchemy-run/floci.git
+	update = none

@@ -39,7 +39,7 @@ export class CustomModelProviders extends Context.Service<
       input: ListUserModelProvidersInput,
     ) => Effect.Effect<ListUserModelProvidersResult>;
   }
->()("t3/provider/CustomModelProviders") {}
+>()("p0/provider/CustomModelProviders") {}
 
 const decodeCustomProviderSettings = Schema.decodeUnknownOption(
   Schema.Struct(customModelProviderSettingsFields),

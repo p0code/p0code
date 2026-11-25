@@ -159,7 +159,7 @@ export class ProjectCostService extends Context.Service<
       input: CostBreakdownInput,
     ) => Effect.Effect<CostBreakdown, CostBreakdownReadError>;
   }
->()("t3/usage/ProjectCostService") {}
+>()("p0/usage/ProjectCostService") {}
 
 const make = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;

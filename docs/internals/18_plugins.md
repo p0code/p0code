@@ -4,7 +4,7 @@ Plugins are first-party workspace packages under [`plugins/`](../../plugins) tha
 in-process, off by default. Each plugin lives in its own repository and is mounted as a git
 submodule (`plugins/t3-connect-bridge` from `p0code/t3-connect-bridge`,
 `plugins/obsidian-shared-memory` from `p0code/obsidian-sync`), so clone with
-`git clone --recurse-submodules` (or run `git submodule update --init` in an existing checkout)
+`git clone --recurse-submodules=plugins` (or run `git submodule update --init plugins/` in an existing checkout)
 before running `pnpm install`. The host is [`apps/server/src/plugins`](../../apps/server/src/plugins);
 plugins depend only on [`@t3tools/plugin-api`](../../packages/plugin-api), never on server internals.
 

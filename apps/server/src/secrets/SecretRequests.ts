@@ -99,7 +99,7 @@ export class SecretRequests extends Context.Service<
       readonly value: string;
     }) => Effect.Effect<string, SecretRequestError>;
   }
->()("t3/secrets/SecretRequests") {}
+>()("p0/secrets/SecretRequests") {}
 
 const make = Effect.gen(function* () {
   const store = yield* ServerSecretStore.ServerSecretStore;

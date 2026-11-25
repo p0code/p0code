@@ -7,7 +7,7 @@ import * as Effect from "effect/Effect";
 export class DatabaseMigrationProgress extends Context.Service<
   DatabaseMigrationProgress,
   { readonly current: Ref.Ref<Progress | null> }
->()("t3/persistence/DatabaseMigrationProgress") {}
+>()("p0/persistence/DatabaseMigrationProgress") {}
 
 export const layer = Layer.effect(
   DatabaseMigrationProgress,

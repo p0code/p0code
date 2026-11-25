@@ -71,7 +71,7 @@ export class PortDiscovery extends Context.Service<
       input: PreviewStopLocalServerInput,
     ) => Effect.Effect<void, PreviewStopLocalServerError>;
   }
->()("t3/preview/PortScanner/PortDiscovery") {}
+>()("p0/preview/PortScanner/PortDiscovery") {}
 
 /**
  * Agents launch with this set to their thread, and every job they start inherits it, so a

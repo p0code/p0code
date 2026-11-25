@@ -49,7 +49,7 @@ const FAILED_CHECK_RECHECK_DELAY = "30 seconds";
  * True inside a `checkProvider` whose failure over a ready provider is discarded for a recheck.
  * A provider that also records check results in its own state must leave that failure out of it.
  */
-export const DeferringFailedCheck = Context.Reference<boolean>("t3/provider/DeferringFailedCheck", {
+export const DeferringFailedCheck = Context.Reference<boolean>("p0/provider/DeferringFailedCheck", {
   defaultValue: () => false,
 });
 

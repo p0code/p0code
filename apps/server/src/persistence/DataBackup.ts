@@ -41,7 +41,7 @@ export class DataBackup extends Context.Service<
     readonly approve: (id: string) => Effect.Effect<void, DataRestoreError>;
     readonly cleanup: (dataDir: string) => Effect.Effect<void, DataRestoreError>;
   }
->()("t3/persistence/DataBackup") {}
+>()("p0/persistence/DataBackup") {}
 
 export const layer = Layer.effect(
   DataBackup,

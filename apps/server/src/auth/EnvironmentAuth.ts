@@ -559,7 +559,7 @@ export class EnvironmentAuth extends Context.Service<
       ServerAuthMcpApprovalCodeError | ServerAuthInternalError
     >;
   }
->()("t3/auth/EnvironmentAuth") {}
+>()("p0/auth/EnvironmentAuth") {}
 
 type BootstrapExchangeResult = {
   readonly response: AuthBrowserSessionResult;

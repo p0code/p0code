@@ -1,37 +1,32 @@
 name: Mobile Fingerprint Check
 
-# Detects whether a PR changes the native fingerprint — i.e. whether merging
-# it would leave main un-OTA-able until a new store build ships. Native-change
-# PRs get the "📱 Native Change" label (applied by mobile-fingerprint-label.yml,
-# which runs from main so fork PRs get it too) so they can be held and merged as a
-# batch right before the next store submission, keeping main OTA-able for
-# everything else in between. (Once one native PR merges, every later merge
-# inherits the drifted fingerprint and loses OTA reach too — that is why the
-# signal has to fire before merge, not after.)
-#
-# The check is advisory: it always passes, the label is the signal. Both
-# fingerprints are computed in this one job (same OS, same corepack-pinned
+# Reports whether a branch changes the native fingerprint — i.e. whether merging
+# it would leave main un-OTA-able until a new store build ships. Dispatch it
+# from the branch to check and name the base to compare against (main by
+# default). The check is advisory: it reports in the summary and always passes;
+# mobile-fingerprint-label.yml can sync the "📱 Native Change" label by hand.
+# Both fingerprints are computed in this one job (same OS, same corepack-pinned
 # pnpm), so the comparison is self-consistent; no EXPO_TOKEN needed.
 on:
-  pull_request:
-    # Run even when a rebase or base change removes every native input from the
-    # diff, so the label can be cleared without installing Expo dependencies.
-    types: [opened, synchronize, reopened, edited]
+  workflow_dispatch:
+    inputs:
+      base:
+        description: Base branch to compare against
+        required: true
+        default: main
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  # A title or body edit gets its own group, so it cannot cancel the PR's real
-  # run and leave a cancelled check on the head commit.
-  group: mobile-fingerprint-check-${{ github.event.action == 'edited' && !github.event.changes.base && format('edit-{0}', github.run_id) || github.event.pull_request.number }}
+  group: mobile-fingerprint-check-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   fingerprint:
     name: Native fingerprint diff
-    if: github.event.action != 'edited' || github.event.changes.base
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     env:
@@ -42,15 +37,15 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           submodules: true
-          # The merge ref can advance after the event is queued. Pin its commit
-          # and compare against its first parent, rather than the event's base.
           ref: ${{ github.sha }}
-          fetch-depth: 2
+          fetch-depth: 0
 
       - id: changes
         name: Detect native fingerprint inputs
+        env:
+          BASE: ${{ inputs.base }}
         run: |
-          base_sha=$(git rev-parse HEAD^1)
+          base_sha=$(git merge-base "origin/$BASE" HEAD)
           echo "base_sha=$base_sha" >> "$GITHUB_OUTPUT"
           paths=$(git diff --no-renames --name-only "$base_sha" HEAD -- \
             apps/mobile/ packages/client-runtime/ packages/contracts/ packages/shared/ \
@@ -60,7 +55,7 @@ jobs:
             echo "relevant=true" >> "$GITHUB_OUTPUT"
           else
             echo "relevant=false" >> "$GITHUB_OUTPUT"
-            echo "No native fingerprint inputs changed; clearing any stale native change label." >> "$GITHUB_STEP_SUMMARY"
+            echo "No native fingerprint inputs changed; the label can be cleared." >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Setup Vite+
@@ -132,20 +127,3 @@ jobs:
             done
           } >> "$GITHUB_STEP_SUMMARY"
           echo "changed_platforms=${changed# }" >> "$GITHUB_OUTPUT"
-
-      # mobile-fingerprint-label.yml reads this from main with a write token
-      # and syncs the label; this job's token is read-only for fork PRs.
-      - name: Record changed platforms
-        env:
-          CHANGED_PLATFORMS: ${{ steps.compare.outputs.changed_platforms }}
-        run: |
-          mkdir -p "$RUNNER_TEMP/fingerprint-result"
-          printf '%s\n' "$CHANGED_PLATFORMS" > "$RUNNER_TEMP/fingerprint-result/changed-platforms"
-
-      - name: Upload changed platforms
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: fingerprint-result
-          path: ${{ runner.temp }}/fingerprint-result
-          if-no-files-found: error
-          retention-days: 1

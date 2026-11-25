@@ -130,7 +130,7 @@ export class SelfRelay extends Context.Service<
       forwarded: (socket: NodeTls.TLSSocket, metadata: StreamLabel) => void,
     ) => Effect.Effect<void>;
   }
->()("t3/selfRelay/SelfRelay") {}
+>()("p0/selfRelay/SelfRelay") {}
 
 const make = Effect.gen(function* () {
   const config = yield* ServerConfig.ServerConfig;

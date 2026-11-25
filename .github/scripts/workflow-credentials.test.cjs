@@ -228,7 +228,6 @@ const forkPreviewScript = (id) =>
       .split(/^ {0,11}\S/m)[0]
       .replace(/^ {12}/gm, ""),
   );
-const consume = forkPreviewScript("consume");
 const pin = forkPreviewScript("pin");
 const forkPreviewEnvironment = /^ {10}ENVIRONMENT: (\S+)$/m.exec(forkPreview.request)[1];
 
@@ -237,8 +236,7 @@ test("a fork preview is requested by a job that reads no secrets and checks out 
   assert.doesNotMatch(request, /secrets\.|actions\/checkout|^ {4}environment:/m);
   assert.ok(!runsProjectCode(request), "request runs project code");
   assert.match(request, /^ {6}sha: \$\{\{ steps\.pin\.outputs\.sha \}\}$/m);
-  const pinStep = steps(request).find((step) => step.startsWith("id: pin\n"));
-  assert.match(pinStep, /^ {8}if: steps\.consume\.outputs\.consumed == 'true'$/m);
+  assert.doesNotMatch(request, /github\.event\.pull_request|removeLabel/);
 });
 
 test("every fork preview job that reads a secret or runs the PR's code waits in the environment and builds the requested commit", () => {
@@ -261,9 +259,15 @@ test("every fork preview job that reads a secret or runs the PR's code waits in 
   assert.doesNotMatch(comment, /secrets\.|^ +ref: |github\.event\.pull_request\.head/m);
 });
 
-async function runPin(environment, sha = "a".repeat(40)) {
+async function runPin(environment, pull) {
   const outputs = {};
   const written = { comments: [], summary: "", failed: "" };
+  const head = pull ?? {
+    number: 7,
+    state: "open",
+    head: { sha: "a".repeat(40), repo: { full_name: "someone/app" } },
+  };
+  process.env.PR = "7";
   await pin(
     {
       async request(route, params) {
@@ -272,13 +276,21 @@ async function runPin(environment, sha = "a".repeat(40)) {
         if (!environment) throw Object.assign(new Error("missing"), { status: 404 });
         return { data: environment };
       },
-      rest: { issues: { createComment: async ({ body }) => written.comments.push(body) } },
+      rest: {
+        pulls: {
+          async get({ pull_number }) {
+            assert.equal(pull_number, 7);
+            return { data: head };
+          },
+        },
+        issues: { createComment: async ({ body }) => written.comments.push(body) },
+      },
     },
     {
       repo: { owner: "example", repo: "app" },
       serverUrl: "https://github.example",
       runId: 99,
-      payload: { sender: { login: "labeler" }, pull_request: { number: 7, head: { sha } } },
+      actor: "dispatcher",
     },
     {
       setFailed: (message) => (written.failed = message),
@@ -305,10 +317,10 @@ test("a fork preview request names the commit where the reviewer reads it", asyn
   assert.deepEqual(named.comments, [named.summary]);
   assert.ok(named.summary.includes(`https://github.example/example/app/pull/7/commits/${sha}`));
   assert.ok(named.summary.includes("https://github.example/example/app/actions/runs/99"));
-  // Quoted, or YAML would end the title at the " #".
+  // It used to be quoted for the " #"; the title now starts with a word.
   assert.match(
     read("workflows/mobile-eas-preview-fork.yml"),
-    /^run-name: "\$\{\{ .*format\('Mobile preview of #\{0\} at \{1\}', github\.event\.pull_request\.number, github\.event\.pull_request\.head\.sha\) \|\| '' \}\}"$/m,
+    /^run-name: \$\{\{ format\('Mobile preview of #\{0\}', inputs\.pr\) \}\}$/m,
   );
 });
 
@@ -325,71 +337,39 @@ test("a fork preview request builds nothing unless the environment has required 
     assert.deepEqual([refused.outputs, refused.comments, refused.summary], [{}, [], ""]);
     assert.match(refused.failed, /no required reviewers/);
   }
-  const noCommit = await runPin(
-    { protection_rules: [{ type: "required_reviewers", reviewers: [{ type: "User" }] }] },
-    "main",
-  );
-  assert.deepEqual([noCommit.outputs, noCommit.comments], [{}, []]);
-  assert.match(noCommit.failed, /no head commit/);
 });
 
-async function runConsume(permission, removeStatus, removed = []) {
-  const outputs = {};
-  await consume(
-    {
-      rest: {
-        repos: {
-          async getCollaboratorPermissionLevel({ username }) {
-            assert.equal(username, "labeler");
-            if (permission === undefined) throw Object.assign(new Error("denied"), { status: 403 });
-            return { data: { permission } };
-          },
-        },
-        issues: {
-          async removeLabel(params) {
-            if (removeStatus) throw Object.assign(new Error("gone"), { status: removeStatus });
-            removed.push(params.name);
-          },
-        },
+test("a fork preview request builds nothing for a commit, PR, or repository it must not build", async () => {
+  process.env.ENVIRONMENT = forkPreviewEnvironment;
+  const reviewers = {
+    protection_rules: [{ type: "required_reviewers", reviewers: [{ type: "User" }] }],
+  };
+  for (const [pull, message] of [
+    [
+      {
+        number: 7,
+        state: "closed",
+        head: { sha: "a".repeat(40), repo: { full_name: "someone/app" } },
       },
-    },
-    {
-      repo: { owner: "example", repo: "app" },
-      payload: {
-        sender: { login: "labeler" },
-        label: { name: "deploy" },
-        pull_request: { number: 7 },
+      /not open/,
+    ],
+    [
+      {
+        number: 7,
+        state: "open",
+        head: { sha: "a".repeat(40), repo: { full_name: "example/app" } },
       },
-    },
-    { info() {}, warning() {}, setOutput: (name, value) => (outputs[name] = value) },
-  );
-  return { outputs, removed };
-}
-
-for (const [permission, consumed] of [
-  ["admin", "true"],
-  ["maintain", "true"],
-  ["write", "true"],
-  ["triage", "false"],
-  ["read", "false"],
-  ["none", "false"],
-]) {
-  test(`a fork preview label from ${permission} access is removed and ${consumed === "true" ? "builds" : "builds nothing"}`, async () => {
-    assert.deepEqual(await runConsume(permission), {
-      outputs: { consumed },
-      removed: ["deploy"],
-    });
-  });
-}
-
-test("a fork preview label is removed even when the access lookup fails", async () => {
-  const removed = [];
-  await assert.rejects(runConsume(undefined, undefined, removed), { status: 403 });
-  assert.deepEqual(removed, ["deploy"]);
-});
-
-test("a fork preview label removed before the run builds nothing", async () => {
-  assert.deepEqual(await runConsume("admin", 404), { outputs: { consumed: "false" }, removed: [] });
+      /not from a fork/,
+    ],
+    [
+      { number: 7, state: "open", head: { sha: "main", repo: { full_name: "someone/app" } } },
+      /no head commit/,
+    ],
+  ]) {
+    const refused = await runPin(reviewers, pull);
+    assert.deepEqual([refused.outputs, refused.comments], [{}, []]);
+    assert.match(refused.failed, message);
+  }
 });
 
 test("a version override rewrites only the app version", () => {

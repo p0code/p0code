@@ -22,7 +22,7 @@ Unified release workflow: `.github/workflows/release.yml`. Beta is a product lab
 Nightly installs check `releases.atom` (the 10 newest git tags), then the `update-feed` release's `nightly.json` pointer, then the GitHub API as fallback. **Never delete the `update-feed` release.**
 
 - If `Check the update feed` fails because stray/preview tags pushed the newest nightly out of `releases.atom`, delete the unneeded tags (`git push origin :refs/tags/<tag>`—converting a release to draft keeps its tag).
-- **To pull a bad nightly:** delete its release and tag, run `gh release delete-asset update-feed nightly.json` (so installs fall back until the next tick rewrites it), and move npm's `nightly` dist-tag back with `npm dist-tag add t3@<last-good> nightly`.
+- **To pull a bad nightly:** delete its release and tag, run `gh release delete-asset update-feed nightly.json` (so installs fall back until the next tick rewrites it), and move npm's `nightly` dist-tag back with `npm dist-tag add p0@<last-good> nightly`.
 
 ## Relay
 
@@ -33,8 +33,12 @@ relay.
 
 ## Mobile releases
 
-- **iOS TestFlight / App Store:** Merges to `main` publish compatible OTAs and build TestFlight prereleases (`testflight` profile at `3.0.0`). To cut an App Store build, dispatch **Mobile EAS Production** (`mode=build`, `profile=production`, `platform=ios`, explicit version). Before shipping `3.0.0` to the App Store, advance `build.testflight.env.T3CODE_MOBILE_VERSION` in `apps/mobile/eas.json` to the next unreleased major.
-- **Android APK mirror:** `.github/workflows/mobile-android-apk.yml` polls Google Play Alpha hourly and mirrors new Play-signed universal APKs to `android-beta-<build-number>` prereleases (`GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`). Nightlies attach the latest internal-testing APK when available.
+The app here is not the one that ships from the store, so nothing mobile runs on a
+push or a pull request: every mobile workflow is `workflow_dispatch` only, and the
+macOS mobile native lint in CI runs only when CI is dispatched.
+
+- **iOS TestFlight / App Store:** dispatch **Mobile EAS Production** (`mode=build`, `profile=production`, `platform=ios`, explicit version) to cut a build, or `mode=update` to publish an OTA. Before shipping `3.0.0` to the App Store, advance `build.testflight.env.T3CODE_MOBILE_VERSION` in `apps/mobile/eas.json` to the next unreleased major.
+- **Android APK mirror:** dispatch `.github/workflows/mobile-android-apk.yml` to check Google Play Alpha and mirror a new Play-signed universal APK to an `android-beta-<build-number>` prerelease (`GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`). Nightlies attach the latest internal-testing APK when available.
 
 ## Windows payload topology and update validation
 
@@ -44,7 +48,7 @@ Windows packages the bundled server and its unpacked native modules in `resource
 
 ### npm OIDC trusted publishing
 
-Configure `t3` on npm with GitHub Actions Trusted Publishing for `.github/workflows/release.yml` (the workflow publishes only the `t3` launcher tarball via `npm publish --provenance`). Set the publisher's environment to `production`, which `publish_cli` declares.
+Configure `p0` on npm with GitHub Actions Trusted Publishing for `.github/workflows/release.yml` (the workflow publishes only the `p0` launcher tarball via `npm publish --provenance`). Set the publisher's environment to `production`, which `publish_cli` declares.
 
 ### Apple signing and notarization (macOS)
 
@@ -58,7 +62,7 @@ Set secrets `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_
 
 ## Ongoing stable release checklist
 
-1. Verify the latest nightly (desktop launch, `npm view t3@<version> version`, remote server update + DB migration smoke test).
+1. Verify the latest nightly (desktop launch, `npm view p0@<version> version`, remote server update + DB migration smoke test).
 2. Dispatch **Release** on `main` with `channel=stable` (leave `version` blank unless overriding the nightly's base version).
 3. Confirm `Resolve release commit` matches the verified nightly, then verify `release` → `publish_cli` → `deploy_web` all succeed.
 4. Smoke-test the published artifacts.

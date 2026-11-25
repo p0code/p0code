@@ -1,24 +1,27 @@
 name: Mobile EAS Preview (Fork)
-run-name: "${{ github.event.label.name == '🚀 Mobile Continuous Deployment' && github.event.pull_request.head.repo.full_name != github.repository && format('Mobile preview of #{0} at {1}', github.event.pull_request.number, github.event.pull_request.head.sha) || '' }}"
+run-name: ${{ format('Mobile preview of #{0}', inputs.pr) }}
 
-# EAS previews for fork PRs. This runs the PR's code with an Expo token: the
-# app config and plugins run on a runner; both clients build on Blacksmith
-# with preview signing credentials. So every job that does waits for an
-# approval in the `mobile-preview-fork` environment on every run.
+# EAS previews for fork PRs, dispatched by hand with the pull request number.
+# This runs the PR's code with an Expo token: the app config and plugins run on
+# a runner; both clients build on GitHub-hosted runners with preview signing
+# credentials. So every job that does waits for an approval in the
+# `mobile-preview-fork` environment on every run.
 #
-# The label only requests a build, and counts only from someone with write
-# access. The `request` job consumes it, pins the PR's head commit from the
-# label event, and names that commit in the run title, the job summary and a
-# PR comment. It reads no secrets and checks out nothing. The approval is the
-# sign-off that the named commit was reviewed: the jobs after it build that
-# commit and no other. A later push deploys nothing until the label is applied
-# again and that run is approved.
+# The `request` job pins the PR's head commit, and names that commit in the run
+# title, the job summary and a PR comment. It reads no secrets and checks out
+# nothing. The approval is the sign-off that the named commit was reviewed: the
+# jobs after it build that commit and no other. A later push deploys nothing
+# until this workflow is dispatched again and that run is approved.
 #
-# Same-repo PRs deploy on every push while labeled, via mobile-eas-preview.yml.
+# Same-repo PRs use mobile-eas-preview.yml, also dispatched by hand.
 
 on:
-  pull_request_target:
-    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Pull request number (its head commit is what gets built)
+        required: true
+        type: number
 
 permissions:
   contents: read
@@ -26,60 +29,24 @@ permissions:
 jobs:
   request:
     name: Preview request
-    if: >-
-      github.event.pull_request.head.repo.full_name != github.repository &&
-      github.event.label.name == '🚀 Mobile Continuous Deployment'
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: write
     outputs:
       sha: ${{ steps.pin.outputs.sha }}
     steps:
-      # The label counts only from someone with write access, who could push a
-      # same-repo branch and get this build anyway. If a maintainer removed the
-      # label first, that removal wins.
-      - id: consume
-        name: Consume the deployment label
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
-        with:
-          script: |
-            try {
-              await github.rest.issues.removeLabel({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.payload.pull_request.number,
-                name: context.payload.label.name,
-              });
-            } catch (error) {
-              if (error.status !== 404) throw error;
-              core.info("The label was removed before this run could consume it. Skipping.");
-              core.setOutput("consumed", "false");
-              return;
-            }
-            const sender = context.payload.sender.login;
-            const { data: access } = await github.rest.repos.getCollaboratorPermissionLevel({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              username: sender,
-            });
-            const authorized = ["admin", "maintain", "write"].includes(access.permission);
-            if (!authorized) {
-              core.warning(`${sender} has ${access.permission} access; a fork preview needs write access. Label removed, nothing built.`);
-            }
-            core.setOutput("consumed", String(authorized));
-
-      # The review screen of a pull_request_target run shows the base branch,
-      # so the commit is named here, where the reviewer reads it before
+      # The dispatch is the request, and only someone who can dispatch can make
+      # it. The commit is named here, where the reviewer reads it before
       # approving. The jobs below take it from this job's output. Nothing is
       # requested unless the environment exists with required reviewers: a
       # workflow that names a missing environment creates it without any.
       - id: pin
         name: Name the commit to build
-        if: steps.consume.outputs.consumed == 'true'
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         env:
           ENVIRONMENT: mobile-preview-fork
+          PR: ${{ inputs.pr }}
         with:
           script: |
             const name = process.env.ENVIRONMENT;
@@ -98,17 +65,29 @@ jobs:
               core.setFailed(`The ${name} environment has no required reviewers. Nothing built.`);
               return;
             }
-            const pull = context.payload.pull_request;
+            const { data: pull } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: Number(process.env.PR),
+            });
+            if (pull.state !== "open") {
+              core.setFailed(`PR #${pull.number} is not open. Nothing built.`);
+              return;
+            }
+            if (pull.head.repo?.full_name === `${context.repo.owner}/${context.repo.repo}`) {
+              core.setFailed(`PR #${pull.number} is not from a fork; dispatch Mobile EAS Preview for it.`);
+              return;
+            }
             const sha = pull.head.sha;
             if (!/^[0-9a-f]{40}$/.test(sha)) {
-              core.setFailed("The label event carries no head commit. Nothing built.");
+              core.setFailed("The pull request carries no head commit. Nothing built.");
               return;
             }
             const repository = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}`;
             const body = [
-              `Mobile preview requested by ${context.payload.sender.login} for commit [\`${sha}\`](${repository}/pull/${pull.number}/commits/${sha}).`,
+              `Mobile preview requested by ${context.actor} for commit [\`${sha}\`](${repository}/pull/${pull.number}/commits/${sha}).`,
               "",
-              `It builds after an approval in the \`${name}\` environment: [review this run](${repository}/actions/runs/${context.runId}). Approving builds exactly this commit; a later push needs the label again.`,
+              `It builds after an approval in the \`${name}\` environment: [review this run](${repository}/actions/runs/${context.runId}). Approving builds exactly this commit; a later push needs another dispatch.`,
             ].join("\n");
             await core.summary.addRaw(body, true).write();
             await github.rest.issues.createComment({
@@ -123,11 +102,11 @@ jobs:
     name: EAS Preview
     needs: request
     if: needs.request.outputs.sha != ''
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     environment:
       name: mobile-preview-fork
     concurrency:
-      group: mobile-eas-preview-fork-${{ github.event.pull_request.number }}
+      group: mobile-eas-preview-fork-${{ inputs.pr }}
       cancel-in-progress: true
     permissions:
       contents: read
@@ -150,12 +129,14 @@ jobs:
     steps:
       - name: Confirm the PR is still open
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          PR: ${{ inputs.pr }}
         with:
           script: |
             const { data: pull } = await github.rest.pulls.get({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              pull_number: context.payload.pull_request.number,
+              pull_number: Number(process.env.PR),
             });
             if (pull.state !== "open") core.setFailed(`PR #${pull.number} is no longer open; not building.`);
 
@@ -198,7 +179,7 @@ jobs:
         if: steps.expo-token.outputs.present == 'true'
         uses: ./.trusted/.github/actions/drop-checkout-credentials
 
-      # No caches: pull_request_target saves them under main's scope, where
+      # No caches: a dispatch saves them under the default branch's scope, where
       # trusted workflows with other secrets would restore what PR code wrote.
       - name: Setup Vite+
         if: steps.expo-token.outputs.present == 'true'
@@ -289,7 +270,7 @@ jobs:
         shell: bash
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_PREVIEW_TOKEN }}
-          PR: ${{ github.event.pull_request.number }}
+          PR: ${{ inputs.pr }}
         run: |
           group="$(eas update --auto --branch "pr-$PR" --platform ios --environment preview --non-interactive --json | sed -n '/^\[/,$p' | jq -er '.[0].group')"
           echo "group=$group" >> "$GITHUB_OUTPUT"
@@ -327,21 +308,22 @@ jobs:
         shell: bash
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_PREVIEW_TOKEN }}
-          PR: ${{ github.event.pull_request.number }}
+          PR: ${{ inputs.pr }}
         run: |
           group="$(eas update --auto --branch "pr-$PR" --platform android --environment preview --non-interactive --json | sed -n '/^\[/,$p' | jq -er '.[0].group')"
           echo "group=$group" >> "$GITHUB_OUTPUT"
 
   # Each client job waits for its own approval in the environment, once the
-  # preview job has finished. The reviewed commit's Android client, built cold: no sticky disk, because PR
-  # code could leave Gradle or ccache state that trusted builds would restore, and
-  # no build record tag, so nobody else is served an APK a fork's code built.
+  # preview job has finished. The reviewed commit's Android client builds cold,
+  # with no build cache (PR code could leave Gradle or ccache state that trusted
+  # builds would restore) and no build record tag, so nobody else is served an APK
+  # a fork's code built.
   android-build:
     name: Android preview client
     needs: [request, preview]
     if: needs.preview.outputs.build == 'true'
-    runs-on: blacksmith-32vcpu-ubuntu-2404
-    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
     environment:
       name: mobile-preview-fork
     permissions:
@@ -359,12 +341,14 @@ jobs:
     steps:
       - name: Confirm the PR is still open
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          PR: ${{ inputs.pr }}
         with:
           script: |
             const { data: pull } = await github.rest.pulls.get({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              pull_number: context.payload.pull_request.number,
+              pull_number: Number(process.env.PR),
             });
             if (pull.state !== "open") core.setFailed(`PR #${pull.number} is no longer open; not building.`);
 
@@ -388,7 +372,7 @@ jobs:
       - name: Drop checkout credentials
         uses: ./.trusted/.github/actions/drop-checkout-credentials
 
-      # Cold: no sticky disk or EAS cache that trusted builds would restore.
+      # Cold: no build cache or EAS cache that trusted builds would restore.
       - name: Build
         uses: ./.trusted/.github/actions/eas-local-build
         with:
@@ -418,8 +402,8 @@ jobs:
     name: iOS preview client
     needs: [request, preview]
     if: needs.preview.outputs.ios_build == 'true'
-    runs-on: blacksmith-12vcpu-macos-27
-    timeout-minutes: 60
+    runs-on: macos-latest
+    timeout-minutes: 120
     environment:
       name: mobile-preview-fork
     permissions:
@@ -435,12 +419,14 @@ jobs:
     steps:
       - name: Confirm the PR is still open
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          PR: ${{ inputs.pr }}
         with:
           script: |
             const { data: pull } = await github.rest.pulls.get({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              pull_number: context.payload.pull_request.number,
+              pull_number: Number(process.env.PR),
             });
             if (pull.state !== "open") core.setFailed(`PR #${pull.number} is no longer open; not building.`);
 
@@ -464,7 +450,7 @@ jobs:
       - name: Drop checkout credentials
         uses: ./.trusted/.github/actions/drop-checkout-credentials
 
-      # Cold: no sticky disk or EAS cache that trusted builds would restore.
+      # Cold: no build cache or EAS cache that trusted builds would restore.
       - name: Build
         uses: ./.trusted/.github/actions/eas-local-build
         with:
@@ -494,9 +480,9 @@ jobs:
     name: Mobile preview comment
     needs: [request, preview, android-build, ios-build]
     if: always() && !cancelled() && needs.preview.result == 'success'
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     concurrency:
-      group: mobile-preview-comment-${{ github.event.pull_request.number }}
+      group: mobile-preview-comment-${{ inputs.pr }}
       cancel-in-progress: false
     permissions:
       contents: read
@@ -510,7 +496,7 @@ jobs:
       - name: Comment
         env:
           GH_TOKEN: ${{ github.token }}
-          PR: ${{ github.event.pull_request.number }}
+          PR: ${{ inputs.pr }}
           PR_HEAD_SHA: ${{ needs.request.outputs.sha }}
           EXPO_PROJECT_ID: ${{ needs.preview.outputs.project_id }}
           APP_SCHEME: ${{ needs.preview.outputs.scheme }}

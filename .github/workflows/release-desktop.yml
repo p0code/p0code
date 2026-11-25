@@ -125,9 +125,8 @@ jobs:
           echo "::error::untrusted_bundle cannot be combined with launch_check or cli_archive, which run the bundle."
           exit 1
 
-      # This repository is public, so Git needs no credentials. checkout's
-      # credential cleanup runs submodule foreach even with submodules disabled,
-      # which fails on the orphaned gitlinks in our vendored .repos tree.
+      # This repository is public, so Git needs no credentials, and a manual
+      # sparse checkout leaves the vendored .repos references out of the tree.
       # checkout.workers=0 writes the files on every core. Alternating both ways
       # in one job on the Windows runners, it wrote the files about 10s faster
       # (about 40% on arm64).
@@ -157,7 +156,7 @@ jobs:
       - name: Setup dependencies
         uses: ./.github/actions/setup-ci-deps
         with:
-          install-args: --filter=@t3tools/desktop... --filter=t3... --filter=@t3tools/scripts...
+          install-args: --filter=@t3tools/desktop... --filter=p0... --filter=@t3tools/scripts...
           save-pnpm-store: ${{ inputs.save_pnpm_store }}
         env:
           pnpm_config_cache_dir: ${{ runner.temp }}/pnpm-metadata
@@ -394,9 +393,6 @@ jobs:
           target_dir="$RUNNER_TEMP/cli-resource-monitor/${{ inputs.resource_key }}"
           mkdir -p "$target_dir"
           cp "native/resource-monitor/target/${{ inputs.rust_target }}/release/${binary_name}" "$target_dir/$binary_name"
-
-      - uses: ./.github/actions/setup-apt-mirrors
-        if: inputs.platform == 'linux'
 
       # The Linux archive ships libatomic.so.1 and points t3's RUNPATH at it.
       - name: Install patchelf
