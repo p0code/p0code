@@ -1,5 +1,7 @@
 # Brand icons
 
+The p0code icon is a single raster artwork, stored as `Assets/p0code.png` in each Icon Composer project. The tracked PNG and ICO exports were rendered from it directly (rounded 22.37% corners; macOS keeps the 824px body inset 100px), because exporting needs Icon Composer 2. With Icon Composer 2 installed, `vp run icons:export` regenerates them from the projects as described below.
+
 The three Icon Composer projects are the source of truth for full application icons:
 
 - `dev/app-icon.icon`
