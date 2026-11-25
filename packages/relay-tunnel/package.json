@@ -40,5 +40,6 @@
     "@types/node": "catalog:",
     "@types/ws": "catalog:",
     "vite-plus": "catalog:"
-  }
+  },
+  "license": "MIT"
 }

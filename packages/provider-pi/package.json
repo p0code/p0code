@@ -36,5 +36,6 @@
     "@t3tools/provider-testing": "workspace:*",
     "@types/node": "catalog:",
     "vite-plus": "catalog:"
-  }
+  },
+  "license": "MIT"
 }

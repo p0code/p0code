@@ -47,5 +47,6 @@
     "@types/node": "catalog:",
     "effect-acp": "workspace:*",
     "vite-plus": "catalog:"
-  }
+  },
+  "license": "MIT"
 }
