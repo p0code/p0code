@@ -1,5 +1,5 @@
 import { PublicOrigin } from "./selfRelay/PublicOrigin.ts";
-import { SharedMemoryError } from "@t3tools/contracts";
+import { ServerSettingsError, SharedMemoryError } from "@t3tools/contracts";
 import * as SharedMemorySync from "./memory/SharedMemorySync.ts";
 import * as SelfRelay from "./selfRelay/SelfRelay.ts";
 import { PluginHost } from "./plugins/PluginHost.ts";
@@ -2744,6 +2744,17 @@ export const layerWsRpc = (
               : serverSettings.updateProviderInstance(providerInstanceMutation, nextPatch);
             return ServerSettings.redactServerSettingsForClient(settings, settingsClient);
           }),
+        [WS_METHODS.serverDeleteEnvironmentTheme]: ({ themeId }) =>
+          environmentTheme.remove(themeId).pipe(
+            Effect.mapError(
+              (cause) =>
+                new ServerSettingsError({
+                  settingsPath: config.environmentThemesDir,
+                  detail: cause.message,
+                  cause,
+                }),
+            ),
+          ),
         [WS_METHODS.serverDiscoverSourceControl]: (_input) => sourceControlDiscovery.discover,
         [WS_METHODS.serverCheckSecretSource]: (input) => secretCheck.check(input.source),
         [WS_METHODS.serverGetTraceDiagnostics]: (_input) =>

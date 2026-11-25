@@ -17,6 +17,8 @@ import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { QRCodeSvg } from "../ui/qr-code";
 
+const DEFAULT_SELF_RELAY_URL = "https://relay.hhh.yhw.tw";
+
 export function SelfRelaySettings({ environmentId }: { environmentId: EnvironmentId }) {
   const gt = useGT();
   const status = useEnvironmentQuery(serverEnvironment.relayStatus({ environmentId, input: {} }));
@@ -30,7 +32,7 @@ export function SelfRelaySettings({ environmentId }: { environmentId: Environmen
   const unexpose = useAtomCommand(serverEnvironment.relayUnexposePort);
   const portLink = useAtomCommand(serverEnvironment.relayPortLink);
   const pair = useAtomCommand(authEnvironment.createPairingCredential);
-  const [relayUrl, setRelayUrl] = useState("");
+  const [relayUrl, setRelayUrl] = useState(DEFAULT_SELF_RELAY_URL);
   const [token, setToken] = useState("");
   const [label, setLabel] = useState("");
   const [expiry, setExpiry] = useState("3600");
@@ -111,7 +113,7 @@ export function SelfRelaySettings({ environmentId }: { environmentId: Environmen
           <div className="flex flex-wrap gap-2">
             <Input
               aria-label={gt("Relay HTTPS origin")}
-              placeholder="https://relay.example.com"
+              placeholder={DEFAULT_SELF_RELAY_URL}
               value={relayUrl}
               onChange={(event) => setRelayUrl(event.target.value)}
             />

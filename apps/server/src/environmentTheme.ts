@@ -136,6 +136,9 @@ export class EnvironmentThemeService extends Context.Service<
         | { readonly appearance: Exclude<DefaultAppearancePreference, ""> },
     ) => Effect.Effect<void, EnvironmentThemeRefusedError | EnvironmentThemeNotSelectedError>;
 
+    /** Removes a published theme file (and any companion background image) from disk. */
+    readonly remove: (themeId: string) => Effect.Effect<void, EnvironmentThemeRefusedError>;
+
     /** Subscribes before reading to retain changes during connection. */
     readonly streamChanges: Stream.Stream<ReadonlyArray<EnvironmentTheme>>;
   }
@@ -506,10 +509,47 @@ const make = Effect.gen(function* () {
     return { current: defaultTheme, themesDir, themes, theme };
   });
 
+  const remove: EnvironmentThemeService["Service"]["remove"] = Effect.fn(
+    "EnvironmentThemeService.remove",
+  )(function* (themeId) {
+    if (!isEnvironmentThemeId(themeId) || UNPUBLISHABLE_THEME_IDS.has(themeId)) {
+      return yield* new EnvironmentThemeRefusedError({ themeId, problem: INVALID_ID });
+    }
+    yield* publishSemaphore.withPermits(1)(
+      Effect.gen(function* () {
+        const themePath = `${environmentThemesDir}/${themeId}${THEME_FILE_SUFFIX}`;
+        yield* fs.remove(themePath, { force: true }).pipe(
+          Effect.mapError(
+            (cause) =>
+              new EnvironmentThemeRefusedError({
+                themeId,
+                problem: "could not be removed.",
+                cause,
+              }),
+          ),
+        );
+        for (const ext of THEME_BACKGROUND_EXTENSIONS) {
+          yield* fs
+            .remove(`${environmentThemesDir}/${themeId}.${ext}`, { force: true })
+            .pipe(Effect.ignore);
+        }
+        const currentSettings = yield* settings.getSettings.pipe(Effect.option);
+        if (Option.isSome(currentSettings) && currentSettings.value.defaultTheme === themeId) {
+          const setAt = DateTime.formatIso(yield* DateTime.now);
+          yield* settings
+            .updateSettings({ defaultTheme: "", defaultThemeSetAt: setAt })
+            .pipe(Effect.ignore);
+        }
+        yield* refresh;
+      }),
+    );
+  });
+
   return {
     current: Effect.map(refresh, (state) => state.themes),
     read,
     apply,
+    remove,
     get streamChanges() {
       return Stream.unwrap(
         Effect.gen(function* () {

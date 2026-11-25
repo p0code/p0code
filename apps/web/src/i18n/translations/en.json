@@ -1434,7 +1434,6 @@
   "1f404c456e5b2a0b": "Blank profile",
   "1f52ac7bf9eba697": "Add custom model",
   "1f52f8b06c39fad9": "This workbook has no visible sheets.",
-  "1f59f4e44986b92c": "Account profile: {name}",
   "1f6229d05665d1aa": "{count, plural, one {Cloned {count} repository} other {Cloned {count} repositories}}",
   "1f63c7df5678efa3": "Nobody matches that.",
   "1f7445dfeeb0502d": "Copy checkout command",
@@ -4120,7 +4119,6 @@
   "5459bf696a187c26": "Could not load workflow runs",
   "5469bba2f5569925": "Proposed plan",
   "54789628a737f557": "Sign in to {server}",
-  "547d851e24f3e081": "Edit profiles",
   "5485a3ad8bfad1bd": "Widen the state, involvement or project filter to see more.",
   "548f9db69b69ff04": "Adding…",
   "54915723f9384a19": [

@@ -15,6 +15,7 @@ import {
   type EnvironmentId,
   PROVIDER_DISPLAY_NAMES,
   type ProviderDriverKind,
+  type RuntimeMode,
   type ServerProvider,
 } from "@t3tools/contracts";
 import { moveProfileInstance, orderInstancesForDriver } from "@t3tools/shared/accountProfiles";
@@ -25,8 +26,10 @@ import { useState } from "react";
 
 import { useEnvironmentSettings, useUpdateEnvironmentSettings } from "../../hooks/useSettings";
 import { useNowMinute } from "../../hooks/useNowMinute";
+import { m } from "../../i18n/messages";
 import { cn } from "../../lib/utils";
 import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
+import { runtimeModeConfig, runtimeModeOptions } from "../chat/runtimeModeConfig";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
@@ -58,9 +61,7 @@ export function AccountProfilesSettings({
   const editing =
     profiles.find((profile) => profile.id === (editingId ?? settings.activeAccountProfileId)) ??
     profiles[0];
-  const drivers = [...new Set(providers.map((provider) => provider.driver))].filter(
-    (driver) => providers.filter((provider) => provider.driver === driver).length > 1,
-  );
+  const drivers = [...new Set(providers.map((provider) => provider.driver))];
   const now = Date.parse(`${nowMinute}:00Z`);
 
   const saveProfiles = (next: ReadonlyArray<AccountProfile>) =>
@@ -77,6 +78,7 @@ export function AccountProfilesSettings({
         id,
         name: gt("Profile {index}", { index }),
         instanceOrder: [],
+        excludedInstanceIds: [],
         autoSwitchOnLimit: false,
       },
     ]);
@@ -185,6 +187,39 @@ export function AccountProfilesSettings({
             }
           />
           <SettingsRow
+            title={gt("Permissions")}
+            control={
+              <Select
+                value={editing.defaultRuntimeMode ?? "__inherit__"}
+                disabled={readOnly}
+                onValueChange={(value) => {
+                  if (value === "__inherit__" || value === null) {
+                    const { defaultRuntimeMode: _removed, ...rest } = editing;
+                    saveProfile(rest);
+                  } else {
+                    saveProfile({ ...editing, defaultRuntimeMode: value as RuntimeMode });
+                  }
+                }}
+              >
+                <SelectTrigger size="sm" className="w-44" aria-label={gt("Permissions")}>
+                  <SelectValue>
+                    {editing.defaultRuntimeMode
+                      ? m(runtimeModeConfig[editing.defaultRuntimeMode].label)
+                      : gt("Default")}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectPopup align="end" alignItemWithTrigger={false}>
+                  <SelectItem value="__inherit__">{gt("Default")}</SelectItem>
+                  {runtimeModeOptions.map((mode) => (
+                    <SelectItem key={mode} value={mode}>
+                      {m(runtimeModeConfig[mode].label)}
+                    </SelectItem>
+                  ))}
+                </SelectPopup>
+              </Select>
+            }
+          />
+          <SettingsRow
             title={gt("Switch accounts at usage limits")}
             description={gt(
               "When a thread hits a usage limit, continue it on the next account in this profile instead of waiting for the reset. Without this, the thread offers the switch.",
@@ -250,6 +285,12 @@ function DriverOrder(props: {
     const to = ids.indexOf(String(event.over.id) as (typeof ids)[number]);
     if (from !== -1 && to !== -1) move(from, to - from);
   };
+  const toggleAllowed = (instanceId: (typeof ids)[number], allowed: boolean) => {
+    const excluded = new Set(props.profile.excludedInstanceIds);
+    if (allowed) excluded.delete(instanceId);
+    else excluded.add(instanceId);
+    props.onChange({ ...props.profile, excludedInstanceIds: [...excluded] });
+  };
   return (
     <SettingsRow title={driverName} description={gt("First account first.")}>
       <DndContext
@@ -269,8 +310,10 @@ function DriverOrder(props: {
                 provider={provider}
                 position={index + 1}
                 count={ordered.length}
+                allowed={!props.profile.excludedInstanceIds.includes(provider.instanceId)}
                 limited={exhaustedUsageWindow(provider, props.now) !== undefined}
                 readOnly={props.readOnly}
+                onToggleAllowed={(allowed) => toggleAllowed(provider.instanceId, allowed)}
                 onMove={(steps) => move(index, steps)}
               />
             ))}
@@ -285,24 +328,29 @@ function AccountRow(props: {
   readonly provider: ServerProvider;
   readonly position: number;
   readonly count: number;
+  readonly allowed: boolean;
   readonly limited: boolean;
   readonly readOnly: boolean;
+  readonly onToggleAllowed: (allowed: boolean) => void;
   readonly onMove: (steps: number) => void;
 }) {
   const gt = useGT();
   const name = props.provider.displayName ?? props.provider.instanceId;
   const { listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } =
-    useSortable({ id: props.provider.instanceId, disabled: props.readOnly });
+    useSortable({ id: props.provider.instanceId, disabled: props.readOnly || props.count <= 1 });
   return (
     <li
       ref={setNodeRef}
       style={{ transform: CSS.Translate.toString(transform), transition }}
       className={cn(
         "flex items-center gap-2 py-1.5 ps-3 pe-1.5",
+        !props.allowed && "opacity-55",
         isDragging && "relative z-10 rounded-lg bg-background shadow-md",
       )}
     >
-      <span className="w-4 text-xs tabular-nums text-muted-foreground">{props.position}</span>
+      {props.count > 1 ? (
+        <span className="w-4 text-xs tabular-nums text-muted-foreground">{props.position}</span>
+      ) : null}
       <ProviderInstanceIcon
         driverKind={props.provider.driver}
         displayName={name}
@@ -322,34 +370,43 @@ function AccountRow(props: {
       ) : null}
       {props.readOnly ? null : (
         <>
-          <span
-            ref={setActivatorNodeRef}
-            {...listeners}
-            aria-hidden
-            className="hidden size-6 shrink-0 cursor-grab touch-none items-center justify-center rounded text-muted-foreground/70 hover:text-foreground active:cursor-grabbing sm:flex"
-          >
-            <GripVerticalIcon className="size-3.5" />
-          </span>
-          <Button
-            type="button"
-            size="icon-xs"
-            variant="ghost-muted"
-            disabled={props.position === 1}
-            aria-label={gt("Move {name} up", { name })}
-            onClick={() => props.onMove(-1)}
-          >
-            <ArrowUpIcon />
-          </Button>
-          <Button
-            type="button"
-            size="icon-xs"
-            variant="ghost-muted"
-            disabled={props.position === props.count}
-            aria-label={gt("Move {name} down", { name })}
-            onClick={() => props.onMove(1)}
-          >
-            <ArrowDownIcon />
-          </Button>
+          <Switch
+            checked={props.allowed}
+            onCheckedChange={props.onToggleAllowed}
+            aria-label={name}
+          />
+          {props.count > 1 ? (
+            <>
+              <span
+                ref={setActivatorNodeRef}
+                {...listeners}
+                aria-hidden
+                className="hidden size-6 shrink-0 cursor-grab touch-none items-center justify-center rounded text-muted-foreground/70 hover:text-foreground active:cursor-grabbing sm:flex"
+              >
+                <GripVerticalIcon className="size-3.5" />
+              </span>
+              <Button
+                type="button"
+                size="icon-xs"
+                variant="ghost-muted"
+                disabled={props.position === 1}
+                aria-label={gt("Move {name} up", { name })}
+                onClick={() => props.onMove(-1)}
+              >
+                <ArrowUpIcon />
+              </Button>
+              <Button
+                type="button"
+                size="icon-xs"
+                variant="ghost-muted"
+                disabled={props.position === props.count}
+                aria-label={gt("Move {name} down", { name })}
+                onClick={() => props.onMove(1)}
+              >
+                <ArrowDownIcon />
+              </Button>
+            </>
+          ) : null}
         </>
       )}
     </li>

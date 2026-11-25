@@ -42,6 +42,7 @@ import {
   AccountProfileId,
   DEFAULT_ACCOUNT_PROFILES,
   DEFAULT_ACTIVE_ACCOUNT_PROFILE_ID,
+  isProviderInstanceAllowedInActiveProfile,
 } from "./accountProfile.ts";
 import { ProjectScript, type ProjectMutation } from "./project.ts";
 import { DEFAULT_RUNTIME_MODE, RuntimeMode } from "./providerPolicy.ts";
@@ -1737,10 +1738,12 @@ export const resolveProviderInstanceEnabled = (
 };
 
 export const resolveProjectProviderInstanceEnabled = (
-  settings: Pick<ServerSettings, "providerInstances" | "projectSettingsOverrides">,
+  settings: Pick<ServerSettings, "providerInstances" | "projectSettingsOverrides"> &
+    Partial<Pick<ServerSettings, "accountProfiles" | "activeAccountProfileId">>,
   projectId: ProjectId | null,
   instanceId: ProviderInstanceId,
 ): boolean => {
+  if (!isProviderInstanceAllowedInActiveProfile(settings, instanceId)) return false;
   const override =
     projectId === null
       ? undefined

@@ -1890,6 +1890,10 @@ export function createServerEnvironmentAtoms<R, E>(
     }),
     updateSettings,
     mutateProviderInstance: updateSettings,
+    deleteEnvironmentTheme: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:delete-environment-theme",
+      tag: WS_METHODS.serverDeleteEnvironmentTheme,
+    }),
     prepareAcpRegistryAgent: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:acp-registry:prepare",
       tag: WS_METHODS.serverPrepareAcpRegistryAgent,

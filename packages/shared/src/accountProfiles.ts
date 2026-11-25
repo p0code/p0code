@@ -83,13 +83,12 @@ export function routeSelectionToAccountProfile(input: RouteInput): ModelSelectio
   const driver = input.providers.find(
     (provider) => provider.instanceId === input.selection.instanceId,
   )?.driver;
-  if (
-    !profile ||
-    !profile.instanceOrder.some((id) =>
-      input.providers.some((provider) => provider.instanceId === id && provider.driver === driver),
-    )
-  )
-    return input.selection;
+  if (!profile) return input.selection;
+  const currentExcluded = profile.excludedInstanceIds.includes(input.selection.instanceId);
+  const hasOrder = profile.instanceOrder.some((id) =>
+    input.providers.some((provider) => provider.instanceId === id && provider.driver === driver),
+  );
+  if (!currentExcluded && !hasOrder) return input.selection;
   const target = candidates(input).find((provider) => canRun(provider, input));
   return target === undefined || target.instanceId === input.selection.instanceId
     ? input.selection

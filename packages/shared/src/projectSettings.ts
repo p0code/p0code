@@ -6,6 +6,7 @@ import {
   type ProjectId,
   type ProjectScopedServerSettingKey,
   type ProjectSettingsOverrides,
+  resolveActiveAccountProfile,
   resolveProjectProviderInstanceEnabled,
   resolveTextGenerationSelectionEnabled,
   type ResolvedServerSettings,
@@ -52,6 +53,27 @@ export interface LegacyProjectSettingsFields {
   readonly defaultThreadEnvMode?: ThreadEnvMode | null | undefined;
 }
 
+function applyActiveAccountProfileDefaults(settings: ServerSettings): ServerSettings {
+  const profile = resolveActiveAccountProfile(settings);
+  if (!profile) return settings;
+  const nextRuntimeMode = profile.defaultRuntimeMode ?? settings.defaultRuntimeMode;
+  const nextModelSelection =
+    profile.defaultModelSelection !== undefined
+      ? profile.defaultModelSelection
+      : settings.defaultModelSelection;
+  if (
+    nextRuntimeMode === settings.defaultRuntimeMode &&
+    nextModelSelection === settings.defaultModelSelection
+  ) {
+    return settings;
+  }
+  return {
+    ...settings,
+    defaultRuntimeMode: nextRuntimeMode,
+    defaultModelSelection: nextModelSelection,
+  };
+}
+
 export function resolveProjectSettings(
   settings: ServerSettings,
   projectId: ProjectId | null,
@@ -69,7 +91,8 @@ export function resolveProjectSettings(
   project?: LegacyProjectSettingsFields | null,
   projectFile?: T3ProjectFile | null,
 ): ResolvedProjectSettings {
-  const resolved = resolveProjectOverrides(settings, projectId, project);
+  const withProfile = applyActiveAccountProfileDefaults(settings);
+  const resolved = resolveProjectOverrides(withProfile, projectId, project);
   return projectFile === undefined ? resolved : applyProjectFile(resolved, projectFile);
 }
 

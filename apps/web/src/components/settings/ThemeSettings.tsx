@@ -1,3 +1,5 @@
+import { useAtomValue } from "@effect/atom-react";
+import { EnvironmentThemeId } from "@t3tools/contracts";
 import {
   CheckIcon,
   CopyIcon,
@@ -13,6 +15,9 @@ import { useState, type ReactElement } from "react";
 import { useEnvironmentThemeDefinitions } from "../../hooks/useEnvironmentTheme";
 import { readThemeHalvesRaw } from "../../hooks/useTheme";
 import { cn } from "../../lib/utils";
+import { localEnvironmentIdAtom } from "../../state/primaryEnvironment";
+import { serverEnvironment } from "../../state/server";
+import { useAtomCommand } from "../../state/use-atom-command";
 import {
   DEFAULT_THEME_ID,
   getThemeDefinition,
@@ -582,9 +587,12 @@ export function ThemeLibrary({
   const gt = useGT();
   const openThemeEditor = useThemeEditorStore((store) => store.openThemeEditor);
   const environmentThemes = useEnvironmentThemeDefinitions();
+  const themeEnvironmentId = useAtomValue(localEnvironmentIdAtom);
+  const deleteEnvironmentTheme = useAtomCommand(serverEnvironment.deleteEnvironmentTheme);
   const [themeRemovalTarget, setThemeRemovalTarget] = useState<{
     theme: ThemeDefinition;
     collectionThemes: ReadonlyArray<ThemeDefinition>;
+    source: "custom" | "environment";
   } | null>(null);
   const [isThemeRemovalOpen, setIsThemeRemovalOpen] = useState(false);
   const [themeIdsToRemove, setThemeIdsToRemove] = useState<ReadonlyArray<string>>([]);
@@ -622,15 +630,16 @@ export function ThemeLibrary({
   };
 
   const handleRemoveTheme = (
-    customTheme: ThemeDefinition,
+    targetTheme: ThemeDefinition,
     collectionThemes: ReadonlyArray<ThemeDefinition>,
+    source: "custom" | "environment" = "custom",
   ) => {
-    setThemeRemovalTarget({ theme: customTheme, collectionThemes });
-    setThemeIdsToRemove(collectionThemes.length > 1 ? [] : [customTheme.id]);
+    setThemeRemovalTarget({ theme: targetTheme, collectionThemes, source });
+    setThemeIdsToRemove(collectionThemes.length > 1 ? [] : [targetTheme.id]);
     setIsThemeRemovalOpen(true);
   };
 
-  const handleConfirmRemoveTheme = () => {
+  const handleConfirmRemoveTheme = async () => {
     if (!themeRemovalTarget) return;
     const removedIds = new Set(themeIdsToRemove);
     if (removedIds.size === 0) return;
@@ -649,6 +658,22 @@ export function ThemeLibrary({
         notifyThemeRemovalFailure();
         return;
       }
+    }
+    if (themeRemovalTarget.source === "environment") {
+      if (themeEnvironmentId === null) {
+        notifyThemeRemovalFailure();
+        return;
+      }
+      const result = await deleteEnvironmentTheme({
+        environmentId: themeEnvironmentId,
+        input: { themeId: EnvironmentThemeId.make(themeRemovalTarget.theme.id) },
+      });
+      if (result._tag !== "Success") {
+        notifyThemeRemovalFailure();
+        return;
+      }
+      setIsThemeRemovalOpen(false);
+      return;
     }
     try {
       removeCustomThemes([...removedIds]);
@@ -816,6 +841,12 @@ export function ThemeLibrary({
                   initialAppearance,
                 })
               }
+              {...(themeEnvironmentId === null
+                ? {}
+                : {
+                    onRemove: () =>
+                      handleRemoveTheme(environmentTheme, [environmentTheme], "environment"),
+                  })}
               onUse={() => {
                 const half = singleAppearanceOf(environmentTheme);
                 if (half === null) persistTheme(environmentTheme.id);
@@ -1017,7 +1048,7 @@ export function ThemeLibrary({
             <Button
               disabled={themeIdsToRemove.length === 0}
               variant="destructive"
-              onClick={handleConfirmRemoveTheme}
+              onClick={() => void handleConfirmRemoveTheme()}
             >
               {canRemoveCollection
                 ? themeIdsToRemove.length > 0

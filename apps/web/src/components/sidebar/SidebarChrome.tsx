@@ -39,10 +39,7 @@ import {
 } from "../ui/sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { isSidebarUtilityPage, useNavigateToMainApp } from "./mainAppLocation";
-import {
-  SidebarAccountProfileMenu,
-  SidebarAccountProfileToggle,
-} from "./SidebarAccountProfileMenu";
+import { SidebarAccountProfileToggle } from "./SidebarAccountProfileMenu";
 import { SidebarProviderUpdatePill } from "./SidebarProviderUpdatePill";
 import { SidebarThreadUndoNotice } from "./SidebarThreadUndoNotice";
 import { SidebarUpdateArchitectureWarning, SidebarUpdatePill } from "./SidebarUpdatePill";
@@ -309,7 +306,6 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
             label={gt("Usage")}
             onClick={handleUsageClick}
           />
-          <SidebarAccountProfileMenu />
         </>
       )}
       <SidebarThreadUndoNotice />
