@@ -4,7 +4,7 @@ This document maps the entire backend surface of `apps/server` (~308k non-test L
 
 ## 1. Surface Summary
 
-- **WebSocket RPCs**: **267** `Rpc.make` definitions in `packages/contracts/src/rpc.ts` (**232 unary**, **35 streaming**), 1-to-1 implemented in `apps/server/src/ws.ts` over `/ws` (`effect/rpc`, `RpcSerialization.layerJson`).
+- **WebSocket RPCs**: **267** `Rpc.make` definitions in `packages/contracts/src/rpc.ts` (**234 unary**, **33 streaming**), 1-to-1 implemented in `apps/server/src/ws.ts` over `/ws` (`effect/rpc`, `RpcSerialization.layerJson`).
 - **HTTP / Non-RPC WS Routes**: **79** fixed routes + dynamic bundled plugin routes across `apps/server/src/server.ts`:
   - **54** typed `EnvironmentHttpApi` endpoints across 10 `HttpApiGroup`s (`packages/contracts/src/environmentHttp.ts`).
   - **25** fixed raw `HttpRouter` routes (WebSocket `/ws`, voice WebSocket `/ws/voice`, MCP HTTP `/mcp`, signed asset/upload routes, guest share SSE/CRUD, peer thread SSE/CRUD, preview tunnel & browser stream, device hub proxy, desktop readiness proof, OTLP traces proxy, and static/SPA fallback) plus dynamic bundled plugin `POST` routes.
@@ -120,7 +120,7 @@ The proxy architecture in `PLAN.md` allows `hhhd` to run standalone for idle/non
 
 ## 3. Complete WebSocket RPC Inventory (267 Methods)
 
-All 267 methods are declared with `Rpc.make(...)` in `packages/contracts/src/rpc.ts` (using constants from `WS_METHODS` in `packages/contracts/src/rpc.ts:501-767` and `ORCHESTRATION_V2_WS_METHODS` in `packages/contracts/src/orchestrationV2.ts`) and registered 1-to-1 in `apps/server/src/ws.ts` (`WsRpcGroup.toLayer`).
+All 267 methods are declared with `Rpc.make(...)` in `packages/contracts/src/rpc.ts` (using constants from `WS_METHODS` in `packages/contracts/src/rpc.ts:501-767` and `ORCHESTRATION_V2_WS_METHODS` in `packages/contracts/src/orchestrationV2.ts`) and registered 1-to-1 in `apps/server/src/ws.ts` (`ServerWsRpcGroup.of({...})` at `ws.ts:1948`, served by `RpcServer.make` at `ws.ts:3729`). The group is deliberately split into two handler objects (`ws.ts:748-754`) because `RpcGroup.toLayer`'s type cost grows with methods × RPCs and degrades past ~200 methods; Go has no equivalent limit.
 
 ### 3.1 Orchestration V2 & Threads (23 RPCs: 18 unary, 5 stream)
 
