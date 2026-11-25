@@ -6,6 +6,7 @@ import {
   parseManualDesktopSshTarget,
   resolveAccessEnvironmentId,
   resolveCurrentOriginPairingUrl,
+  resolvePublicOrigin,
   resolveTailscaleServeBaseUrl,
   selectQrEndpointOption,
   togglePairingScopeSelection,
@@ -235,5 +236,37 @@ describe("isServerNetworkAccessible", () => {
     { authPolicy: null, directEndpoints: served, expected: false },
   ] as const)("$authPolicy with $directEndpoints.length endpoints", (row) => {
     expect(isServerNetworkAccessible(row)).toBe(row.expected);
+  });
+});
+
+describe("resolvePublicOrigin", () => {
+  it("uses the cached origin before live relay status arrives", () => {
+    expect(
+      resolvePublicOrigin({
+        liveStatus: null,
+        liveStatusLoaded: false,
+        cached: "https://cached.example.com",
+      }),
+    ).toBe("https://cached.example.com");
+  });
+
+  it("treats a live null as authoritative after unlinking", () => {
+    expect(
+      resolvePublicOrigin({
+        liveStatus: { publicOrigin: null },
+        liveStatusLoaded: true,
+        cached: "https://cached.example.com",
+      }),
+    ).toBeNull();
+  });
+
+  it("uses the live origin once it is available", () => {
+    expect(
+      resolvePublicOrigin({
+        liveStatus: { publicOrigin: "https://live.example.com" },
+        liveStatusLoaded: true,
+        cached: "https://cached.example.com",
+      }),
+    ).toBe("https://live.example.com");
   });
 });

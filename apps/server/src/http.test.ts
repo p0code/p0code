@@ -15,7 +15,13 @@ import * as Path from "effect/Path";
 import * as PlatformError from "effect/PlatformError";
 import * as Queue from "effect/Queue";
 import * as Tracer from "effect/Tracer";
-import { HttpClient, HttpClientRequest, HttpRouter, HttpServerResponse } from "effect/http";
+import {
+  FetchHttpClient,
+  HttpClient,
+  HttpClientRequest,
+  HttpRouter,
+  HttpServerResponse,
+} from "effect/http";
 import { openMediaFile } from "./assets/MediaFile.ts";
 
 import {
@@ -513,6 +519,24 @@ it.layer(
       });
       expect(response.headers["etag"]).not.toBe(initial.headers["etag"]);
       expect(yield* response.text).toBe(replacement);
+    }),
+  );
+
+  it.effect("moves legacy pairing query tokens into the fragment", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const staticDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-static-pair-" });
+      const request = yield* makeStaticRequest(staticDir);
+
+      const response = yield* request("/pair?token=ABC&label=Work").pipe(
+        Effect.provideService(FetchHttpClient.RequestInit, { redirect: "manual" }),
+      );
+      expect(response.status).toBe(302);
+      expect(response.headers["location"]).toBe("/pair?label=Work#token=ABC");
+
+      // Only the pairing page is a legacy link; other routes keep their query untouched.
+      const other = yield* request("/threads/example?token=ABC");
+      expect(other.status).not.toBe(302);
     }),
   );
 

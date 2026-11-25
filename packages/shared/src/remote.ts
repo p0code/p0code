@@ -191,15 +191,36 @@ export const readHostedPairingRequest = (url: URL): HostedPairingRequest | null 
 
 /** Wraps a pairing URL in the `t3code://pair` link that desktop opens and mobile scans. */
 export const buildPairingAppLink = (pairingUrl: string): string =>
-  `t3code://pair?${new URLSearchParams([[PAIRING_APP_LINK_PARAM, pairingUrl]])}`;
+  `t3code://pair#${new URLSearchParams([[PAIRING_APP_LINK_PARAM, pairingUrl]])}`;
 
-/** Reads the pairing URL from a `t3code://pair` link on any app channel scheme. */
+/**
+ * Reads the pairing URL from a `t3code://pair` link on any app channel scheme. The payload lives in
+ * the fragment so opening the link never sends it in a request; older links put it in the query.
+ */
 export const readPairingAppLink = (value: string): string | null => {
   const url = parseUrl(value);
   if (!url) return null;
   if (!APP_LINK_PROTOCOL.test(url.protocol) || url.host !== "pair") return null;
   if (url.pathname !== "" && url.pathname !== "/") return null;
-  return url.searchParams.get(PAIRING_APP_LINK_PARAM)?.trim() || null;
+  return (
+    readHashParams(url).get(PAIRING_APP_LINK_PARAM)?.trim() ||
+    url.searchParams.get(PAIRING_APP_LINK_PARAM)?.trim() ||
+    null
+  );
+};
+
+/**
+ * A redirect location for a legacy `/pair?token=…` link, or null when the URL needs none. Moving
+ * the token into the fragment keeps it out of access logs and same-origin Referer headers.
+ */
+export const legacyPairingTokenRedirectLocation = (url: URL): string | null => {
+  const token = url.searchParams.get(PAIRING_TOKEN_PARAM)?.trim() ?? "";
+  if (!token) return null;
+  if (url.pathname !== "/pair" && url.pathname !== "/pair/") return null;
+  const next = new URL(url.toString());
+  next.searchParams.delete(PAIRING_TOKEN_PARAM);
+  next.hash = new URLSearchParams([[PAIRING_TOKEN_PARAM, token]]).toString();
+  return `${next.pathname}${next.search}${next.hash}`;
 };
 
 export const resolveRemotePairingTarget = (input: {

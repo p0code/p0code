@@ -179,7 +179,7 @@ describe("p0 pair", () => {
             }),
           });
           const output = yield* captureStdout(
-            runCli(["pair", "--base-dir", baseDir, "--tailscale"]).pipe(
+            runCli(["pair", "--base-dir", baseDir, "--tailscale", "--show-token"]).pipe(
               Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
               Effect.provideService(HostProcess.Platform, "linux"),
               Effect.provideService(FetchHttpClient.Fetch, async (input, init) => {
@@ -297,7 +297,9 @@ describe("p0 pair", () => {
           }),
         });
 
-        const output = yield* captureStdout(runCli(["pair", "--base-dir", baseDir]));
+        const output = yield* captureStdout(
+          runCli(["pair", "--base-dir", baseDir, "--show-token"]),
+        );
 
         assert.include(output, `Pairing with pair-test (${origin})`);
         assert.include(output, `Pairing URL: ${origin}/pair#token=`);
@@ -318,6 +320,14 @@ describe("p0 pair", () => {
         assert.equal(credentials.length, 1);
         assert.equal(credentials[0]?.label, "p0 pair");
         assert.deepEqual(credentials[0]?.scopes, AuthStandardClientScopes);
+
+        // Plaintext output is opt-in: the default hides the token and still prints the QR.
+        const safe = yield* captureStdout(runCli(["pair", "--base-dir", baseDir]));
+        assert.include(safe, `Pairing URL: ${origin}/pair`);
+        assert.notInclude(safe, "#token=");
+        assert.notInclude(safe, "Token:");
+        assert.include(safe, "Pass --show-token to print it.");
+        assert.isTrue(safe.includes("█") || safe.includes("▀") || safe.includes("▄"));
       }),
     ).pipe(
       Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
@@ -351,7 +361,9 @@ describe("p0 pair", () => {
           }),
         });
 
-        const output = yield* captureStdout(runCli(["pair", "--base-dir", baseDir]));
+        const output = yield* captureStdout(
+          runCli(["pair", "--base-dir", baseDir, "--show-token"]),
+        );
 
         assert.include(output, "Pairing URL: http://localhost:5733/pair#token=");
       }),

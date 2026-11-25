@@ -5,13 +5,14 @@ const { main, mergeState, readState, render } = require("./mobile-preview-commen
 
 const fingerprint = "c31608b37a8a2dca35ccee39cfd2ec7305042629";
 const run = "https://github.com/pingdotgg/t3code/actions/runs/1";
+const config = { projectId: "11111111-2222-3333-4444-555555555555", appScheme: "p0code-preview" };
 
 test("the comment round-trips its state", () => {
   const state = {
     android: { fingerprint, client: "", group: "8e413a0a" },
     ios: { fingerprint: "ios-fingerprint", client: "https://expo.dev/ios", group: "ios-group" },
   };
-  const body = render(state, run);
+  const body = render(state, run, config);
   assert.deepEqual(readState(body), state);
   assert.match(body, /Client unavailable/);
   assert.match(body, /groupId=8e413a0a/);
@@ -25,7 +26,7 @@ test("the build job adds the install link without losing the update", () => {
   const built = mergeState(first, { fingerprint, client: "https://expo.dev/a/b", group: "" });
   assert.deepEqual(built, { fingerprint, client: "https://expo.dev/a/b", group: "8e413a0a" });
   assert.match(
-    render({ android: built }, run),
+    render({ android: built }, run, config),
     /Dev client \| \[Install\]\(https:\/\/expo\.dev\/a\/b\)/,
   );
 });
@@ -93,7 +94,7 @@ test("publishing consolidates platform comments and preserves unrelated comments
       {
         id: 4,
         user: { login: "github-actions[bot]" },
-        body: "<!-- continuous-deploy-fingerprint-projectId:d763fcb8-d37c-41ea-a773-b54a0ab4a454 -->\nOld Expo preview",
+        body: `<!-- continuous-deploy-fingerprint-projectId:${config.projectId} -->\nOld Expo preview`,
       },
     ],
     [
@@ -110,6 +111,8 @@ test("publishing consolidates platform comments and preserves unrelated comments
       GITHUB_REPOSITORY: "pingdotgg/t3code",
       PR: "1",
       GH_TOKEN: "test",
+      EXPO_PROJECT_ID: config.projectId,
+      APP_SCHEME: config.appScheme,
       ANDROID_FINGERPRINT: fingerprint,
       ANDROID_GROUP: "new-group",
     },
@@ -134,6 +137,8 @@ test("publishing consolidates platform comments and preserves unrelated comments
       GITHUB_REPOSITORY: "pingdotgg/t3code",
       PR: "1",
       GH_TOKEN: "test",
+      EXPO_PROJECT_ID: config.projectId,
+      APP_SCHEME: config.appScheme,
       ANDROID_FINGERPRINT: fingerprint,
       PR_HEAD_SHA: "old-head",
     },
@@ -142,4 +147,23 @@ test("publishing consolidates platform comments and preserves unrelated comments
       return { head: { sha: "new-head" } };
     },
   });
+});
+
+test("hides update links until the Expo project is configured", () => {
+  const state = { android: { fingerprint, client: "", group: "8e413a0a" } };
+  const body = render(state, run);
+  assert.doesNotMatch(body, /Update Permalink/);
+  assert.doesNotMatch(body, /qr\.expo\.dev/);
+  assert.match(body, /Update Details \| n\/a/);
+});
+
+test("builds update links from the configured project and scheme", () => {
+  const state = { ios: { fingerprint, client: "", group: "ios-group" } };
+  const body = render(state, run, config);
+  assert.match(
+    body,
+    /https:\/\/expo\.dev\/projects\/11111111-2222-3333-4444-555555555555\/updates\/ios-group/,
+  );
+  assert.match(body, /appScheme=p0code-preview/);
+  assert.match(body, /projectId=11111111-2222-3333-4444-555555555555/);
 });

@@ -84,7 +84,11 @@ export function extractPairingUrlFromQrPayload(payload: string): string {
   try {
     const url = new URL(trimmed);
     if (url.protocol === "t3code:") {
-      const pairingUrl = url.searchParams.get(MOBILE_PAIRING_URL_PARAM)?.trim() ?? "";
+      // New links keep the payload in the fragment; older ones used the query.
+      const hashPairingUrl =
+        new URLSearchParams(url.hash.slice(1)).get(MOBILE_PAIRING_URL_PARAM)?.trim() ?? "";
+      const queryPairingUrl = url.searchParams.get(MOBILE_PAIRING_URL_PARAM)?.trim() ?? "";
+      const pairingUrl = hashPairingUrl || queryPairingUrl;
       if (pairingUrl.length > 0) {
         return pairingUrl;
       }

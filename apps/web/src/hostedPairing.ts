@@ -31,6 +31,41 @@ function originFromUrl(value: string): string | null {
   }
 }
 
+const LOOPBACK_HOSTNAMES = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+/**
+ * The origin a hosted pairing link may open. Credentials in the URL would leak into the address
+ * bar and beyond, and plain HTTP would send the token in the clear; only loopback may use HTTP.
+ */
+export function hostedAppOrigin(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    return null;
+  }
+  if (url.username || url.password) return null;
+  if (url.protocol === "https:") return url.origin;
+  return url.protocol === "http:" && LOOPBACK_HOSTNAMES.has(url.hostname) ? url.origin : null;
+}
+
+/** The backend a pairing link may name: an HTTP(S) origin without embedded credentials. */
+function pairingHostOrigin(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+  if (url.username || url.password) return null;
+  return url.origin;
+}
+
 export function isHostedStaticApp(url?: URL): boolean {
   if (configuredBackendUrl()) {
     return false;
@@ -72,9 +107,19 @@ export function buildHostedPairingUrl(input: {
   readonly host: string;
   readonly token: string;
   readonly label?: string | null;
+  /** The hosted app to open, when something other than this build's default owns it. */
+  readonly hostedAppUrl?: string | null;
 }): string {
-  const url = new URL("/pair", configuredHostedAppUrl());
-  url.searchParams.set("host", input.host);
+  const hostedApp = hostedAppOrigin(input.hostedAppUrl?.trim() || configuredHostedAppUrl());
+  if (!hostedApp) {
+    throw new Error("A hosted pairing app must be an HTTPS origin without credentials.");
+  }
+  const host = pairingHostOrigin(input.host);
+  if (!host) {
+    throw new Error("A pairing host must be an HTTP(S) origin without credentials.");
+  }
+  const url = new URL("/pair", hostedApp);
+  url.searchParams.set("host", host);
 
   const label = input.label?.trim();
   if (label) {

@@ -4,12 +4,15 @@ import { PNG } from "pngjs";
 
 import type { ShowcaseStoreAssetSpec } from "./mobile-showcase.config.ts";
 import {
+  ANDROID_PACKAGE,
   encodeAndroidPairingUrls,
   normalizeStorePng,
   parsePairingCredentialOutput,
   readPngMetadata,
   validateStoreAsset,
 } from "./mobile-showcase.ts";
+import { resolveMobileAppIdentifiers } from "./lib/mobile-app-identifiers.ts";
+import { loadRepoEnv } from "./lib/public-config.ts";
 
 function rgbaPng(width: number, height: number): Buffer {
   const png = new PNG({ width, height });
@@ -90,4 +93,12 @@ it("encodes Android pairing URLs without shell-sensitive JSON quotes", () => {
   assert.equal(encoded.startsWith("json-uri:"), true);
   assert.deepStrictEqual(JSON.parse(decodeURIComponent(encoded.slice("json-uri:".length))), urls);
   assert.equal(encoded.includes('"'), false);
+});
+
+it("drives the production app resolved from the Expo config", () => {
+  assert.strictEqual(
+    ANDROID_PACKAGE,
+    resolveMobileAppIdentifiers("production", loadRepoEnv()).androidPackage,
+  );
+  assert.notStrictEqual(ANDROID_PACKAGE, "com.t3tools.t3code");
 });

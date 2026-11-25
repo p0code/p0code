@@ -29,6 +29,8 @@ import showcaseConfig, {
   SHOWCASE_THEMES,
   type ShowcaseTheme,
 } from "./mobile-showcase.config.ts";
+import { resolveMobileAppIdentifiers } from "./lib/mobile-app-identifiers.ts";
+import { loadRepoEnv } from "./lib/public-config.ts";
 import {
   SHOWCASE_ENVIRONMENTS,
   SHOWCASE_PROJECTS,
@@ -38,7 +40,11 @@ import {
 
 const REPO_ROOT = NodePath.resolve(NodePath.dirname(NodeURL.fileURLToPath(import.meta.url)), "..");
 const MOBILE_ROOT = NodePath.join(REPO_ROOT, "apps/mobile");
-const ANDROID_PACKAGE = "com.t3tools.t3code";
+// Captures drive the production variant; its Android package comes from the Expo config.
+export const ANDROID_PACKAGE = resolveMobileAppIdentifiers(
+  "production",
+  loadRepoEnv(),
+).androidPackage;
 const APP_SCHEME = "t3code";
 // Manifest flags update expo-dev-launcher preferences before loading, hiding dev chrome in captures.
 const DEV_CLIENT_LAUNCH_FLAGS = "disableOnboarding=1&disableFab=1&disableAutoLaunch=1";

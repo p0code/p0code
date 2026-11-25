@@ -141,6 +141,8 @@ type PairingLinkListRowProps = {
   servedByEnvironment: boolean;
   endpointUrl: string | null | undefined;
   endpoints: ReadonlyArray<AdvertisedEndpoint>;
+  /** The hosted app the environment's T3 Connect bridge named, if it is running. */
+  hostedAppUrl: string | null;
   defaultEndpointKey: string | null;
   revokingPairingLinkId: string | null;
   onRevoke: (id: string) => void;
@@ -154,6 +156,7 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
   servedByEnvironment,
   endpointUrl,
   endpoints,
+  hostedAppUrl,
   defaultEndpointKey,
   revokingPairingLinkId,
   onRevoke,
@@ -170,13 +173,13 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
 
   const currentOriginPairingUrl = credential ? resolveCurrentOriginPairingUrl(credential) : null;
   const hostedPairingUrl =
-    credential && endpointUrl != null && endpointUrl !== ""
-      ? resolveHostedPairingUrl(endpointUrl, credential)
+    credential && endpointUrl != null && endpointUrl !== "" && hostedAppUrl?.trim()
+      ? resolveHostedPairingUrl(endpointUrl, credential, hostedAppUrl)
       : null;
   const endpointPairingUrl = (() => {
     const endpoint = selectPairingEndpoint(endpoints, defaultEndpointKey);
     return endpoint && credential
-      ? resolveAdvertisedEndpointPairingUrl(endpoint, credential)
+      ? resolveAdvertisedEndpointPairingUrl(endpoint, credential, hostedAppUrl)
       : null;
   })();
   const endpointCopyOptions = (() => {
@@ -193,7 +196,10 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
       if (endpoint.status === "unavailable") {
         continue;
       }
-      const url = resolveAdvertisedEndpointPairingUrl(endpoint, credential);
+      const url = resolveAdvertisedEndpointPairingUrl(endpoint, credential, hostedAppUrl);
+      if (url === null) {
+        continue;
+      }
       options.push({
         id: endpoint.id,
         preferenceKey: endpointDefaultPreferenceKey(endpoint),
@@ -853,6 +859,8 @@ type PairingClientsListProps = {
   servedByEnvironment: boolean;
   endpointUrl: string | null | undefined;
   endpoints: ReadonlyArray<AdvertisedEndpoint>;
+  /** The hosted app the environment's T3 Connect bridge named, if it is running. */
+  hostedAppUrl: string | null;
   defaultEndpointKey: string | null;
   isLoading: boolean;
   pairingLinks: ReadonlyArray<ServerPairingLinkRecord>;
@@ -870,6 +878,7 @@ export const PairingClientsList = memo(function PairingClientsList({
   servedByEnvironment,
   endpointUrl,
   endpoints,
+  hostedAppUrl,
   defaultEndpointKey,
   isLoading,
   pairingLinks,
@@ -893,6 +902,7 @@ export const PairingClientsList = memo(function PairingClientsList({
           servedByEnvironment={servedByEnvironment}
           endpointUrl={endpointUrl}
           endpoints={endpoints}
+          hostedAppUrl={hostedAppUrl}
           defaultEndpointKey={defaultEndpointKey}
           revokingPairingLinkId={revokingPairingLinkId}
           onRevoke={onRevokePairingLink}

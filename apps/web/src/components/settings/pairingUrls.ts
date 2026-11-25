@@ -4,29 +4,54 @@ import type { AdvertisedEndpoint } from "@t3tools/contracts";
 import { buildHostedPairingUrl } from "../../hostedPairing";
 import { setPairingTokenOnUrl } from "@t3tools/shared/remote";
 
-export function resolveDesktopPairingUrl(endpointUrl: string, credential: string): string {
-  const url = new URL(endpointUrl);
+export function resolveDesktopPairingUrl(endpointUrl: string, credential: string): string | null {
+  let url: URL;
+  try {
+    url = new URL(endpointUrl);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+  if (url.username || url.password) return null;
   url.pathname = "/pair";
+  url.search = "";
+  url.hash = "";
   return setPairingTokenOnUrl(url, credential).toString();
 }
 
-export function resolveHostedPairingUrl(endpointUrl: string, credential: string): string | null {
-  const url = new URL(endpointUrl);
-  if (url.protocol !== "https:") {
+export function resolveHostedPairingUrl(
+  endpointUrl: string,
+  credential: string,
+  hostedAppUrl?: string | null,
+): string | null {
+  try {
+    const url = new URL(endpointUrl);
+    if (url.protocol !== "https:" || url.username || url.password) {
+      return null;
+    }
+
+    return buildHostedPairingUrl({
+      host: url.origin,
+      token: credential,
+      ...(hostedAppUrl === undefined ? {} : { hostedAppUrl }),
+    });
+  } catch {
     return null;
   }
-
-  return buildHostedPairingUrl({
-    host: endpointUrl,
-    token: credential,
-  });
 }
 
 export function publicOriginAdvertisedEndpoint(
   origin: string,
   resolve: MessageResolver = m,
-): AdvertisedEndpoint {
-  const url = new URL(origin);
+  hostedAppUrl?: string | null,
+): AdvertisedEndpoint | null {
+  let url: URL;
+  try {
+    url = new URL(origin);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return null;
   return {
     id: "server-public-origin",
     label: resolve(msg("Public HTTPS")),
@@ -39,7 +64,12 @@ export function publicOriginAdvertisedEndpoint(
     httpBaseUrl: url.origin,
     wsBaseUrl: url.origin.replace(/^https:/, "wss:"),
     reachability: "public",
-    compatibility: { hostedHttpsApp: "compatible", desktopApp: "compatible" },
+    // The hosted app is upstream's, so only offer it when this environment opted into the
+    // T3 Connect bridge and that bridge named the app to open. Otherwise the QR is direct.
+    compatibility: {
+      hostedHttpsApp: hostedAppUrl?.trim() ? "compatible" : "requires-configuration",
+      desktopApp: "compatible",
+    },
     source: "server",
     status: "available",
     isDefault: true,

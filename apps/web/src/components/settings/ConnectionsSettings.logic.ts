@@ -438,10 +438,13 @@ export function endpointDefaultPreferenceKey(endpoint: AdvertisedEndpoint): stri
 export function resolveAdvertisedEndpointPairingUrl(
   endpoint: AdvertisedEndpoint,
   credential: string,
-): string {
-  if (endpoint.compatibility.hostedHttpsApp === "compatible") {
+  hostedAppUrl?: string | null,
+): string | null {
+  // The hosted app is upstream's. Only route a QR through it when the environment's T3 Connect
+  // bridge is running and named one; otherwise keep the pairing URL on the environment itself.
+  if (endpoint.compatibility.hostedHttpsApp === "compatible" && hostedAppUrl?.trim()) {
     return (
-      resolveHostedPairingUrl(endpoint.httpBaseUrl, credential) ??
+      resolveHostedPairingUrl(endpoint.httpBaseUrl, credential, hostedAppUrl) ??
       resolveDesktopPairingUrl(endpoint.httpBaseUrl, credential)
     );
   }
@@ -458,6 +461,19 @@ export function resolveCurrentOriginPairingUrl(
     return null;
   }
   return setPairingTokenOnUrl(url, credential).toString();
+}
+
+/**
+ * Once the relay status arrives it is authoritative, including its null: unlinking the relay must
+ * not fall back to the cached public origin and keep showing the old pairing descriptor.
+ */
+export function resolvePublicOrigin(input: {
+  readonly liveStatus: { readonly publicOrigin: string | null } | null;
+  readonly liveStatusLoaded: boolean;
+  readonly cached: string | null | undefined;
+}): string | null {
+  if (input.liveStatusLoaded) return input.liveStatus?.publicOrigin ?? null;
+  return input.cached ?? null;
 }
 
 export function isHostedAppPairingUrl(value: string): boolean {

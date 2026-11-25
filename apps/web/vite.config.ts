@@ -14,6 +14,7 @@ import { defineProject, type TestProjectInlineConfiguration } from "vite-plus/te
 import pkg from "./package.json" with { type: "json" };
 
 import { DEV_PROXIED_PATH_PREFIXES } from "@t3tools/shared/devProxy";
+import { legacyPairingTokenRedirectLocation } from "@t3tools/shared/remote";
 
 import { loadRepoEnv } from "../../scripts/lib/public-config";
 import { resolveTaggedSourceVersion } from "../../scripts/lib/tagged-source-version";
@@ -230,6 +231,26 @@ function devCompressionPlugin(): Plugin {
   };
 }
 
+// Legacy pairing links put the token in the query; the dev server would otherwise serve the page
+// with it in the address bar, where subresource Referer headers carry it to access logs.
+function legacyPairingTokenRedirectPlugin(): Plugin {
+  return {
+    name: "t3code:legacy-pairing-token-redirect",
+    apply: "serve",
+    configureServer(server) {
+      server.middlewares.use((request, response, next) => {
+        if (request.method !== "GET" && request.method !== "HEAD") return next();
+        const location = legacyPairingTokenRedirectLocation(
+          new URL(request.url ?? "/", "http://localhost"),
+        );
+        if (location === null) return next();
+        response.writeHead(302, { location });
+        response.end();
+      });
+    },
+  };
+}
+
 // A static import cycle between chunks can run a chunk before the values it imports exist,
 // which blanks the app at boot. Fail the build instead of shipping it.
 function chunkCycleGuardPlugin(): Plugin {
@@ -319,6 +340,7 @@ export default defineConfig(({ command }) => {
     plugins: [
       bootstrapTitlePlugin(),
       devCompressionPlugin(),
+      legacyPairingTokenRedirectPlugin(),
       chunkCycleGuardPlugin(),
       builtDev
         ? undefined

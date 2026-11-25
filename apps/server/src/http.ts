@@ -12,6 +12,7 @@ import {
   injectMcpAppThemeBootstrap,
 } from "@t3tools/shared/mcpApp";
 import { FILE_PREVIEW_SCROLL_SCRIPT } from "@t3tools/shared/htmlRender";
+import { legacyPairingTokenRedirectLocation } from "@t3tools/shared/remote";
 import {
   DESKTOP_READINESS_CHALLENGE_MAX_LENGTH,
   DESKTOP_READINESS_CHALLENGE_PARAM,
@@ -705,6 +706,12 @@ const handleStaticAndDevRequest = Effect.fn("handleStaticAndDevRequest")(
     }
 
     const config = yield* ServerConfig.ServerConfig;
+    // Legacy pairing links put the token in the query; move it to the fragment before serving so
+    // it stops reaching access logs and same-origin Referer headers.
+    const legacyPairingRedirect = legacyPairingTokenRedirectLocation(url.value);
+    if (legacyPairingRedirect !== null) {
+      return HttpServerResponse.redirect(legacyPairingRedirect, { status: 302 });
+    }
     if (config.devUrl && isDevProxiedPath(url.value.pathname)) {
       return HttpServerResponse.text("Not Found", { status: 404 });
     }
