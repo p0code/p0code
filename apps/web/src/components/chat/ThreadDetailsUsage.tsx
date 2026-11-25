@@ -56,7 +56,8 @@ export function ThreadDetailsUsage({
   model,
   providers,
   sources,
-}: Omit<ThreadDetailsUsageInput, "contextWindow">) {
+  compact = false,
+}: Omit<ThreadDetailsUsageInput, "contextWindow"> & { readonly compact?: boolean }) {
   const gt = useGT();
   const nowMinute = useNowMinute();
   const now = Date.parse(`${nowMinute}:00Z`);
@@ -68,6 +69,7 @@ export function ThreadDetailsUsage({
       headingId="thread-details-usage-heading"
       title={gt("Usage limits")}
       showHeading={false}
+      compact={compact}
     >
       <div className="grid grid-cols-[auto_minmax(3rem,1fr)_auto] gap-x-3 text-xs">
         {resolved.kind === "pool" ? (
@@ -106,7 +108,13 @@ function InstanceRows({
 }
 
 /** The thread's context window. The bar fills as context is used; the tick marks auto-compaction. */
-export function ThreadDetailsContext({ usage }: { readonly usage: ContextWindowSnapshot }) {
+export function ThreadDetailsContext({
+  usage,
+  compact = false,
+}: {
+  readonly usage: ContextWindowSnapshot;
+  readonly compact?: boolean;
+}) {
   const maxTokens = usage.maxTokens != null && usage.maxTokens > 0 ? usage.maxTokens : null;
   const used =
     maxTokens !== null && usage.usedPercentage !== null
@@ -126,6 +134,7 @@ export function ThreadDetailsContext({ usage }: { readonly usage: ContextWindowS
       headingId="thread-details-context-heading"
       title={gt("Context window")}
       showHeading={false}
+      compact={compact}
     >
       <div className="grid grid-cols-[auto_minmax(3rem,1fr)_auto] gap-x-3 text-xs">
         <UsageRow

@@ -87,16 +87,15 @@ export function ComposerUsageRing({
           ) : null}
         </svg>
       </PopoverTrigger>
-      <PopoverPopup side="top" align="end" className="w-80">
-        <div className="flex flex-col gap-3">
-          {usage.contextWindow ? <ThreadDetailsContext usage={usage.contextWindow} /> : null}
-          <ThreadDetailsUsage
-            providerInstanceId={usage.providerInstanceId}
-            model={usage.model}
-            providers={usage.providers}
-            sources={usage.sources}
-          />
-        </div>
+      <PopoverPopup side="top" align="end" width="sm" padding="none">
+        {usage.contextWindow ? <ThreadDetailsContext usage={usage.contextWindow} compact /> : null}
+        <ThreadDetailsUsage
+          providerInstanceId={usage.providerInstanceId}
+          model={usage.model}
+          providers={usage.providers}
+          sources={usage.sources}
+          compact
+        />
       </PopoverPopup>
     </Popover>
   );

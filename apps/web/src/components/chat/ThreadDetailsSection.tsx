@@ -8,6 +8,7 @@ export function ThreadDetailsSection({
   actions,
   separated = true,
   showHeading = true,
+  compact = false,
   children,
   ...props
 }: Omit<ComponentProps<"section">, "className" | "style" | "title" | "aria-labelledby"> & {
@@ -16,6 +17,8 @@ export function ThreadDetailsSection({
   actions?: ReactNode;
   separated?: boolean;
   showHeading?: boolean;
+  /** Menu-like edge spacing for small popovers. */
+  compact?: boolean;
 }) {
   return (
     <section
@@ -25,7 +28,8 @@ export function ThreadDetailsSection({
       // A row can still render nothing (a fresh draft quiets Git actions), so an empty section
       // collapses, and a divider only follows a section that has content.
       className={cn(
-        "px-2 pt-2 pb-2.5 has-[>div:last-child:empty]:hidden",
+        "has-[>div:last-child:empty]:hidden",
+        compact ? "p-1" : "px-2 pt-2 pb-2.5",
         separated && "border-border/65 [section:not(:has(>div:last-child:empty))~&]:border-t",
       )}
     >
