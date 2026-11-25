@@ -9,6 +9,12 @@ Contributions are welcome: bug reports, ideas, and small focused PRs. I'm one bu
 reviews and replies can take a while — please be patient, and don't ping repeatedly. One polite bump
 after a couple of weeks is fine; five comments in an hour is not.
 
+## What we do not want
+
+- Mobile app changes. This fork does not build or ship a mobile app — the app in the App Store and
+  Play Store is upstream T3 Code's — so a PR touching `apps/mobile/` is closed automatically. Send
+  those to [pingdotgg/t3code](https://github.com/pingdotgg/t3code) instead.
+
 ## Setup
 
 Install [Vite+](https://viteplus.dev/guide/) first; `vp` provides the pinned Node version:
