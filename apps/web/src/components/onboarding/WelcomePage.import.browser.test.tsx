@@ -18,7 +18,7 @@ import { AsyncResult, Atom } from "effect/reactivity";
 import { expect, it, vi } from "vite-plus/test";
 
 import "~/index.css";
-import { act, render } from "../../../test/render";
+import { act, render, stubGlobal } from "../../../test/render";
 
 type SessionResult = AsyncResult.AsyncResult<AuthSessionState, Error>;
 type Project = { id: ProjectId; environmentId: EnvironmentId; workspaceRoot: string };
@@ -762,7 +762,7 @@ it("stages the T3 Code import and then asks for a restart", async () => {
 
   expect(state.t3ImportAccept).toHaveBeenCalledWith({ environmentId: primaryId, input: {} });
   await vi.waitFor(() => expect(pageText()).toContain("Restart p0code to finish importing"));
-  expect(pageText()).toContain("p0 migrate from-t3");
+  expect(pageText()).toContain("p0 service restart");
   expect(pageText()).not.toContain("Move my T3 Code data over");
   // Staging the import does not finish setup on its own.
   expect(state.onDone).not.toHaveBeenCalled();
@@ -842,4 +842,55 @@ it("names the main button after what it will do, and Start fresh skips the impor
   await vi.waitFor(() => expect(state.onDone).toHaveBeenCalledOnce());
   expect(state.createProject).not.toHaveBeenCalled();
   expect(state.importThreads).not.toHaveBeenCalled();
+});
+
+it("does not offer the history import while the T3 Code import can replace this home", async () => {
+  using _now = setup();
+  state.t3ImportStatus.mockResolvedValue(AsyncResult.success(t3Status("available")));
+  await using _screen = await mountWelcome();
+  await vi.waitFor(() => expect(pageText()).toContain("Move my T3 Code data over"));
+
+  expect(pageText()).toContain(
+    "Projects and their agent history can be imported after the restart.",
+  );
+  expect(pageText()).not.toContain("Import projects from");
+  expect(pageText()).not.toContain("Review all");
+
+  await click("Start");
+  await vi.waitFor(() => expect(state.onDone).toHaveBeenCalledOnce());
+  expect(state.createProject).not.toHaveBeenCalled();
+  expect(state.importThreads).not.toHaveBeenCalled();
+});
+
+it("does not offer the history import while the staged T3 Code import waits for a restart", async () => {
+  using _now = setup();
+  state.t3ImportStatus.mockResolvedValue(AsyncResult.success(t3Status("pending")));
+  await using _screen = await mountWelcome();
+  await vi.waitFor(() => expect(pageText()).toContain("Restart p0code to finish importing"));
+
+  expect(pageText()).toContain(
+    "Projects and their agent history can be imported after the restart.",
+  );
+  expect(pageText()).not.toContain("Import projects from");
+  expect(pageText()).not.toContain("Review all");
+});
+
+it("offers a desktop restart for the staged import, and the command elsewhere", async () => {
+  using _now = setup();
+  state.t3ImportStatus.mockResolvedValue(AsyncResult.success(t3Status("pending")));
+  {
+    await using _screen = await mountWelcome();
+    await vi.waitFor(() => expect(pageText()).toContain("Restart p0code to finish importing"));
+    expect(() => button("Restart p0code")).toThrow();
+    expect(pageText()).toContain("p0 service restart");
+  }
+
+  const restart = vi.fn().mockResolvedValue(undefined);
+  using _bridge = stubGlobal("desktopBridge", { t3Import: { restart } });
+  await using _screen = await mountWelcome();
+  await vi.waitFor(() => button("Restart p0code"));
+  expect(pageText()).not.toContain("p0 service restart");
+
+  await click("Restart p0code");
+  expect(restart).toHaveBeenCalledOnce();
 });

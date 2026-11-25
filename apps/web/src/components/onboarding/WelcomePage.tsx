@@ -149,6 +149,9 @@ export function WelcomePage({
     policy: useManagedPolicy(environmentId),
   });
   const scans = useProjectScans([environmentId]);
+  // A staged T3 Code import replaces this home on the next start, so anything imported now
+  // would be discarded with it.
+  const t3Import = useT3ImportOffer(environmentId);
   const [storedSelection, storeSelection] = useLocalStorage(
     welcomeImportSelectionKey(environmentId),
     null,
@@ -253,7 +256,7 @@ export function WelcomePage({
     onDone: finish,
   });
   // Without import permission, starting simply skips the projects.
-  const selected = projectImport.canWrite ? projectImport.selected : [];
+  const selected = t3Import.replacesHome || !projectImport.canWrite ? [] : projectImport.selected;
   const finishWithoutImport = () => {
     keepChoicesRef.current = scans.some((scan) => scan.data === null);
     projectImport.finishAfterImport();
@@ -302,12 +305,16 @@ export function WelcomePage({
               title={gt("Bring your stuff over")}
               className="[&:not(:has([data-slot=welcome-card]))]:hidden"
             >
-              <T3ImportCard environmentId={environmentId} />
-              <ProjectsSection
-                scan={scans[0]}
-                projectImport={projectImport}
-                isImporting={isImporting}
-              />
+              <T3ImportCard offer={t3Import} />
+              {t3Import.replacesHome ? (
+                <ProjectsAfterRestartNote />
+              ) : (
+                <ProjectsSection
+                  scan={scans[0]}
+                  projectImport={projectImport}
+                  isImporting={isImporting}
+                />
+              )}
             </WelcomeSection>
             <WelcomeSection title={gt("Your agents")}>
               <WelcomeCard>
@@ -397,16 +404,21 @@ function WelcomeCard({
 
 /**
  * Offers to bring a stock T3 Code home over. The server only stages consent here; the copy runs
- * before the database opens on the next start, so the card then just says to restart.
+ * before the database opens on the next start, so the card then offers to restart.
  */
-function T3ImportCard({ environmentId }: { readonly environmentId: EnvironmentId }) {
+function useT3ImportOffer(environmentId: EnvironmentId) {
   const gt = useGT();
   const loadStatus = useAtomCommand(serverEnvironment.t3ImportStatus, { reportFailure: false });
-  const accept = useAtomCommand(serverEnvironment.t3ImportAccept, { reportFailure: false });
+  const acceptCommand = useAtomCommand(serverEnvironment.t3ImportAccept, { reportFailure: false });
   const [status, setStatus] = useState<T3ImportStatus | null>(null);
   const [accepted, setAccepted] = useState(false);
   const [accepting, setAccepting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [restarting, setRestarting] = useState(false);
+  const [restartError, setRestartError] = useState<string | null>(null);
+  // Absent in a browser, and in desktop builds from before the welcome screen offered this.
+  const desktopRestart =
+    typeof window === "undefined" ? undefined : window.desktopBridge?.t3Import?.restart;
 
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- reads whether this computer can take the T3 Code import once per environment
   useEffect(() => {
@@ -419,14 +431,14 @@ function T3ImportCard({ environmentId }: { readonly environmentId: EnvironmentId
     };
   }, [environmentId, loadStatus]);
 
-  if (status === null) return null;
-  const pending = accepted || status.reason === "pending";
-  if (!pending && !status.available) return null;
+  const pending = accepted || status?.reason === "pending";
+  const available = status?.available === true && !pending;
 
-  const runAccept = async () => {
+  const accept = async () => {
+    if (!available || accepting) return;
     setAccepting(true);
     setError(null);
-    const result = await accept({ environmentId, input: {} });
+    const result = await acceptCommand({ environmentId, input: {} });
     setAccepting(false);
     if (result._tag === "Success") {
       setStatus(result.value);
@@ -438,10 +450,55 @@ function T3ImportCard({ environmentId }: { readonly environmentId: EnvironmentId
     setError(cause instanceof Error ? cause.message : gt("Something went wrong."));
   };
 
+  const restart = async () => {
+    if (desktopRestart === undefined || restarting) return;
+    setRestarting(true);
+    setRestartError(null);
+    try {
+      await desktopRestart();
+    } catch (cause) {
+      setRestarting(false);
+      setRestartError(cause instanceof Error ? cause.message : gt("Something went wrong."));
+    }
+  };
+
+  return {
+    status,
+    pending,
+    available,
+    // Either offer replaces this home, so nothing else may be imported into it first.
+    replacesHome: available || pending,
+    accepting,
+    error,
+    restartable: desktopRestart !== undefined,
+    restarting,
+    restartError,
+    accept,
+    restart,
+  };
+}
+
+function T3ImportCard({ offer }: { readonly offer: ReturnType<typeof useT3ImportOffer> }) {
+  const gt = useGT();
+  const {
+    status,
+    pending,
+    available,
+    accepting,
+    error,
+    restartable,
+    restarting,
+    restartError,
+    accept,
+    restart,
+  } = offer;
+  if (status === null) return null;
+  if (!pending && !available) return null;
+
   if (pending) {
     return (
       <WelcomeCard className="py-3">
-        <div role="status" className="flex gap-3">
+        <div role="status" className="flex flex-wrap items-start gap-3">
           <RowIcon>
             <RotateCwIcon className="size-4" />
           </RowIcon>
@@ -452,12 +509,29 @@ function T3ImportCard({ environmentId }: { readonly environmentId: EnvironmentId
             <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
               <T>
                 Your T3 Code data is copied in before p0code opens its database, so it moves over on
-                the next start. You can also run{" "}
-                <code className="font-mono text-foreground">p0 migrate from-t3</code>.
+                the next start.
               </T>
             </p>
+            {restartable ? null : (
+              <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                <T>
+                  Run <code className="font-mono text-foreground">p0 service restart</code> on the
+                  computer p0code runs on to finish.
+                </T>
+              </p>
+            )}
           </div>
+          {restartable ? (
+            <Button size="sm" disabled={restarting} onClick={() => void restart()}>
+              <T>Restart p0code</T>
+            </Button>
+          ) : null}
         </div>
+        {restartError !== null ? (
+          <p role="alert" className="mt-2 pl-8 text-sm text-destructive">
+            {gt("Could not restart p0code. {error}", { error: restartError })}
+          </p>
+        ) : null}
       </WelcomeCard>
     );
   }
@@ -482,7 +556,7 @@ function T3ImportCard({ environmentId }: { readonly environmentId: EnvironmentId
             </T>
           </p>
         </div>
-        <Button size="sm" disabled={accepting} onClick={() => void runAccept()}>
+        <Button size="sm" disabled={accepting} onClick={() => void accept()}>
           {accepting ? gt("Importing…") : gt("Import", { $context: "verb, imports T3 Code data" })}
         </Button>
       </div>
@@ -491,6 +565,21 @@ function T3ImportCard({ environmentId }: { readonly environmentId: EnvironmentId
           {gt("Could not import from T3 Code. {error}", { error })}
         </p>
       ) : null}
+    </WelcomeCard>
+  );
+}
+
+// The history import waits for the restart: the T3 Code home is copied over this one before the
+// database opens, which would take any projects imported a minute earlier with it.
+function ProjectsAfterRestartNote() {
+  return (
+    <WelcomeCard>
+      <p className="py-1 text-xs leading-relaxed text-muted-foreground">
+        <T>
+          Projects and their agent history can be imported after the restart. Importing T3 Code data
+          replaces this p0code home, so anything imported now would be lost.
+        </T>
+      </p>
     </WelcomeCard>
   );
 }

@@ -5779,6 +5779,7 @@
   "fd8f75f97a5c0e6d": "Wird importiert…",
   "06b428b511f2bf10": "Importieren und starten",
   "88ddebac4d96eb62": "Starten",
+  "c3cd09213d64a15d": "p0code konnte nicht neu gestartet werden. {error}",
   "1e43b5cc89279fca": "Importieren",
   "b2a5cf21e520a888": "Import aus T3 Code fehlgeschlagen. {error}",
   "9877b52c6722fe99": "{agent} konnte nicht aktiviert werden",
@@ -5833,16 +5834,17 @@
   "5fc35138b0ff1aea": "Neu beginnen",
   "501ce2d99da8bfd1": "Richte einen Agenten ein, um zu starten.",
   "0dfafed03706f50e": "Starte p0code neu, um den Import abzuschließen",
-  "e0af330a3647d10a": [
-    "Deine T3-Code-Daten werden kopiert, bevor p0code seine Datenbank öffnet, also beim nächsten Start übernommen. Du kannst auch",
-    " ",
+  "b3416111fcac5ea0": "Deine T3-Code-Daten werden kopiert, bevor p0code seine Datenbank öffnet, also beim nächsten Start übernommen.",
+  "1f4f6f8b3a15f338": [
+    "Führe ",
     {
       "t": "code",
       "i": 1,
-      "c": "p0 migrate from-t3"
+      "c": "p0 service restart"
     },
-    " ausführen."
+    " auf dem Computer aus, auf dem p0code läuft, um den Import abzuschließen."
   ],
+  "eb7648f458efb7ae": "p0code neu starten",
   "674d4f463ccdedfd": "Meine T3-Code-Daten übernehmen",
   "e7f96f059e56bf23": [
     "Übernimmt Threads, Projekte, Einstellungen und Anbieterkonten aus",
@@ -5858,6 +5860,7 @@
     },
     ". Die Daten von T3 Code selbst werden nie verändert."
   ],
+  "773702e1288c82ed": "Projekte und ihre Agenten-Historie können nach dem Neustart importiert werden. Der Import der T3-Code-Daten ersetzt dieses p0code-Zuhause, daher ginge alles, was jetzt importiert wird, verloren.",
   "f77d000c0710f066": "Aktivieren",
   "4ed27bf946e504db": "Einrichten",
   "7a26eaacff0607f7": [

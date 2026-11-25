@@ -5778,6 +5778,7 @@
   "fd8f75f97a5c0e6d": "Importerar…",
   "06b428b511f2bf10": "Importera och starta",
   "88ddebac4d96eb62": "Starta",
+  "c3cd09213d64a15d": "Det gick inte att starta om p0code. {error}",
   "1e43b5cc89279fca": "Importera",
   "b2a5cf21e520a888": "Kunde inte importera från T3 Code. {error}",
   "9877b52c6722fe99": "Kunde inte aktivera {agent}",
@@ -5834,16 +5835,17 @@
   "5fc35138b0ff1aea": "Börja från början",
   "501ce2d99da8bfd1": "Konfigurera en agent för att starta.",
   "0dfafed03706f50e": "Starta om p0code för att slutföra importen",
-  "e0af330a3647d10a": [
-    "Dina T3 Code-data kopieras innan p0code öppnar sin databas, så de flyttas över vid nästa start. Du kan också köra",
-    " ",
+  "b3416111fcac5ea0": "Din T3 Code-data kopieras in innan p0code öppnar sin databas, så den flyttas över vid nästa start.",
+  "1f4f6f8b3a15f338": [
+    "Kör ",
     {
       "t": "code",
       "i": 1,
-      "c": "p0 migrate from-t3"
+      "c": "p0 service restart"
     },
-    "."
+    " på datorn där p0code körs för att slutföra."
   ],
+  "eb7648f458efb7ae": "Starta om p0code",
   "674d4f463ccdedfd": "Flytta över mina T3 Code-data",
   "e7f96f059e56bf23": [
     "Tar med dina trådar, projekt, inställningar och leverantörskonton från",
@@ -5859,6 +5861,7 @@
     },
     ". T3 Codes egna data ändras aldrig."
   ],
+  "773702e1288c82ed": "Projekt och deras agenthistorik kan importeras efter omstarten. Import av T3 Code-data ersätter detta p0code-hem, så allt som importeras nu skulle gå förlorat.",
   "f77d000c0710f066": "Aktivera",
   "4ed27bf946e504db": "Konfigurera",
   "7a26eaacff0607f7": [

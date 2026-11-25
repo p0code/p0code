@@ -14,7 +14,7 @@ import {
   installCliCommand,
   uninstallCliCommand,
 } from "./methods/cliCommand.ts";
-import { getT3ImportState, runT3Import } from "./methods/t3Import.ts";
+import { getT3ImportState, restartT3Import, runT3Import } from "./methods/t3Import.ts";
 import { controlBackend, getBackendStatus, updateBackendConfig } from "./methods/backend.ts";
 import { getClientSettings, setClientSettings } from "./methods/clientSettings.ts";
 import { getConnectionCatalog, setConnectionCatalog } from "./methods/connectionCatalog.ts";
@@ -187,6 +187,7 @@ export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers"
   yield* ipc.handle(addCliCommandToPath);
   yield* ipc.handle(getT3ImportState);
   yield* ipc.handle(runT3Import);
+  yield* ipc.handle(restartT3Import);
   yield* ipc.handle(getBackendStatus);
   yield* ipc.handle(updateBackendConfig);
   yield* ipc.handle(controlBackend);

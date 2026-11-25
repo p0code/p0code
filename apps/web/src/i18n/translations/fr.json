@@ -5778,6 +5778,7 @@
   "fd8f75f97a5c0e6d": "Import…",
   "06b428b511f2bf10": "Importer et commencer",
   "88ddebac4d96eb62": "Commencer",
+  "c3cd09213d64a15d": "Impossible de redémarrer p0code. {error}",
   "1e43b5cc89279fca": "Importer",
   "b2a5cf21e520a888": "Impossible d'importer depuis T3 Code. {error}",
   "9877b52c6722fe99": "Impossible d’activer {agent}",
@@ -5834,16 +5835,17 @@
   "5fc35138b0ff1aea": "Repartir de zéro",
   "501ce2d99da8bfd1": "Configurez un agent pour commencer.",
   "0dfafed03706f50e": "Redémarrez p0code pour terminer l'importation",
-  "e0af330a3647d10a": [
-    "Vos données T3 Code sont copiées avant que p0code n'ouvre sa base de données : elles arrivent au prochain démarrage. Vous pouvez aussi exécuter",
-    " ",
+  "b3416111fcac5ea0": "Vos données T3 Code sont copiées avant que p0code n'ouvre sa base de données ; elles sont donc reprises au prochain démarrage.",
+  "1f4f6f8b3a15f338": [
+    "Exécutez ",
     {
       "t": "code",
       "i": 1,
-      "c": "p0 migrate from-t3"
+      "c": "p0 service restart"
     },
-    "."
+    " sur l'ordinateur où p0code s'exécute pour terminer."
   ],
+  "eb7648f458efb7ae": "Redémarrer p0code",
   "674d4f463ccdedfd": "Transférer mes données T3 Code",
   "e7f96f059e56bf23": [
     "Récupère vos fils, projets, réglages et comptes de fournisseurs depuis",
@@ -5859,6 +5861,7 @@
     },
     ". Les données de T3 Code elles-mêmes ne sont jamais modifiées."
   ],
+  "773702e1288c82ed": "Les projets et leur historique d'agents pourront être importés après le redémarrage. L'importation des données T3 Code remplace ce dossier p0code, donc tout ce qui serait importé maintenant serait perdu.",
   "f77d000c0710f066": "Activer",
   "4ed27bf946e504db": "Configurer",
   "7a26eaacff0607f7": [
