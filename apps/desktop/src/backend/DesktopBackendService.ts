@@ -854,13 +854,15 @@ export const make = Effect.gen(function* () {
     return Option.none<string>();
   });
 
-  const hasPackagedP0d = firstExistingPath(
+  // Checked once: sync IPC handlers read the backend label and cannot wait on the filesystem.
+  const packagedP0d = yield* firstExistingPath(
     packagedP0dBinaryCandidates({
       path: environment.path,
       platform: environment.platform,
       resourcesPath: environment.resourcesPath,
     }),
   ).pipe(Effect.map(Option.isSome));
+  const hasPackagedP0d = Effect.succeed(packagedP0d);
 
   const findP0dBinary = Effect.gen(function* () {
     const settings = yield* appSettings.get;

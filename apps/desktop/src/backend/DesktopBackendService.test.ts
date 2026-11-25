@@ -1,6 +1,11 @@
 import { assert, describe, it } from "@effect/vitest";
 import * as Duration from "effect/Duration";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
+import * as NodeHttpClient from "@effect/platform-node/NodeHttpClient";
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Layer from "effect/Layer";
 import * as FileSystem from "effect/FileSystem";
 import * as Ref from "effect/Ref";
 import * as Sink from "effect/Sink";
@@ -10,6 +15,8 @@ import { ChildProcessSpawner } from "effect/process";
 
 import * as DesktopBackendService from "./DesktopBackendService.ts";
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
+import * as DesktopConfig from "../app/DesktopConfig.ts";
+import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 
 function makeProcessHandle(options: {
   readonly pid?: number;
@@ -389,5 +396,54 @@ describe("makeLegacyNodeServiceDriver", () => {
       yield* driver.stop;
       assert.deepEqual(killedPids, [5511]);
     }),
+  );
+});
+
+// Sync IPC handlers run their effect with runSync, so the regression test must too.
+// oxlint-disable-next-line t3code/no-manual-effect-runtime-in-tests -- asserts the effect completes synchronously
+const runLikeSyncIpc = <A>(effect: Effect.Effect<A>) => Effect.runSyncExit(effect);
+
+describe("DesktopBackendService.layer", () => {
+  it.effect("answers the backend mode synchronously for sync IPC handlers", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const baseDir = yield* fileSystem.makeTempDirectoryScoped();
+      const service = yield* DesktopBackendService.DesktopBackendService.pipe(
+        Effect.provide(
+          DesktopBackendService.layer.pipe(
+            Layer.provide(
+              Layer.mergeAll(
+                DesktopEnvironment.layer({
+                  dirname: "/repo/apps/desktop/src",
+                  homeDirectory: baseDir,
+                  platform: "darwin",
+                  processArch: "arm64",
+                  appVersion: "1.2.3",
+                  appPath: "/repo",
+                  isPackaged: true,
+                  resourcesPath: "/missing/resources",
+                  runningUnderArm64Translation: false,
+                }).pipe(
+                  Layer.provide(
+                    Layer.mergeAll(
+                      NodeServices.layer,
+                      NodeCrypto.layer,
+                      DesktopConfig.layerTest({ T3CODE_HOME: baseDir }),
+                    ),
+                  ),
+                ),
+                DesktopAppSettings.layerTest(DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS),
+                NodeServices.layer,
+                NodeHttpClient.layerUndici,
+              ),
+            ),
+          ),
+        ),
+      );
+      assert.deepEqual(
+        runLikeSyncIpc(service.resolveEffectiveMode),
+        Exit.succeed("legacy-embedded"),
+      );
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
 });
