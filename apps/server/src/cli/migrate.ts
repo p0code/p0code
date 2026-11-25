@@ -33,7 +33,7 @@ const resolveMigrationKeychain = async (
 ): Promise<KeychainStore | null> => {
   if (requested === "file" || process.env.VITEST) return null;
   if (requested !== "auto" && requested !== "keychain") {
-    throw new Error(`HHHCODE_SECRET_BACKEND must be "keychain" or "file", got "${requested}".`);
+    throw new Error(`P0CODE_SECRET_BACKEND must be "keychain" or "file", got "${requested}".`);
   }
   try {
     const keyring: typeof import("@napi-rs/keyring") = requireExternal("@napi-rs/keyring");
@@ -45,7 +45,7 @@ const resolveMigrationKeychain = async (
     return store;
   } catch (cause) {
     if (requested === "keychain") {
-      throw new Error("HHHCODE_SECRET_BACKEND=keychain, but the OS keychain is not available.", {
+      throw new Error("P0CODE_SECRET_BACKEND=keychain, but the OS keychain is not available.", {
         cause,
       });
     }
@@ -61,7 +61,7 @@ const fromT3Command = Command.make("from-t3", {
     Flag.optional,
   ),
   to: Flag.String("to").pipe(
-    Flag.withDescription("hhhcode home to create. Default: HHHCODE_HOME or ~/.hhh."),
+    Flag.withDescription("p0code home to create. Default: P0CODE_HOME or ~/.p0code."),
     Flag.optional,
   ),
   dryRun: Flag.Boolean("dry-run").pipe(
@@ -86,7 +86,7 @@ const fromT3Command = Command.make("from-t3", {
   ),
 }).pipe(
   Command.withDescription(
-    "Import settings, threads, providers and secrets from a stock T3 Code home into this hhhcode home.",
+    "Import settings, threads, providers and secrets from a stock T3 Code home into this p0code home.",
   ),
   Command.withHandler((flags) =>
     Effect.gen(function* () {
@@ -98,7 +98,7 @@ const fromT3Command = Command.make("from-t3", {
       const to = yield* resolveBaseDir(
         Option.getOrUndefined(flags.to) ?? Option.getOrUndefined(yield* AppHomeConfig),
       );
-      const backendSetting = yield* Config.String("HHHCODE_SECRET_BACKEND").pipe(
+      const backendSetting = yield* Config.String("P0CODE_SECRET_BACKEND").pipe(
         Config.option,
         Effect.map(Option.map((value) => value.trim().toLowerCase())),
         Effect.orElseSucceed(() => Option.none<string>()),

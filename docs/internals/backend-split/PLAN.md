@@ -1,7 +1,7 @@
-# Backend split: GUI apps + native `hhhd` backend
+# Backend split: GUI apps + native `p0d` backend
 
 Goal: on macOS, Linux and Windows the desktop **GUI** (Electron) and the **backend** ship and run
-as separate things. The backend becomes a small native Go binary (`hhhd`) that uses far less disk,
+as separate things. The backend becomes a small native Go binary (`p0d`) that uses far less disk,
 CPU and RAM than the Node server, and the SQLite database gets smaller.
 
 ## Why Go
@@ -15,24 +15,24 @@ the daemon instead of a few hundred MB for Node.
 
 Rewriting everything at once is not realistic. So:
 
-1. `apps/hhhd` (Go module) is **the backend the GUI, web and mobile clients talk to**. It serves the
+1. `apps/p0d` (Go module) is **the backend the GUI, web and mobile clients talk to**. It serves the
    same HTTP routes and the same WebSocket RPC wire protocol (`effect/rpc`, `RpcSerialization.layerJson`)
    as `apps/server`, so clients do not change.
-2. Every RPC method / HTTP route that `hhhd` has ported is handled in Go. Every other one is
-   **forwarded** to a legacy Node sidecar (`apps/server`). `hhhd` starts the sidecar only when
+2. Every RPC method / HTTP route that `p0d` has ported is handled in Go. Every other one is
+   **forwarded** to a legacy Node sidecar (`apps/server`). `p0d` starts the sidecar only when
    something needs it, on loopback, with an internal token, and stops it after it sits idle.
 3. Domains move from the sidecar into Go one at a time (see `rpc-inventory.md`). When the last one
    moves, the sidecar and Node runtime are dropped from the backend package.
 
-## `hhhd` CLI contract (GUI and packaging depend on this; keep it stable)
+## `p0d` CLI contract (GUI and packaging depend on this; keep it stable)
 
 ```
-hhhd serve --home <dir> [--host 127.0.0.1] [--port 0] [--ready-file <path>] [--legacy-server <cmd>]
-hhhd version
-hhhd service install|uninstall|start|stop|status   # launchd (mac), systemd --user (linux), Task Scheduler/service (windows)
+p0d serve --home <dir> [--host 127.0.0.1] [--port 0] [--ready-file <path>] [--legacy-server <cmd>]
+p0d version
+p0d service install|uninstall|start|stop|status   # launchd (mac), systemd --user (linux), Task Scheduler/service (windows)
 ```
 
-- `--home` is the same data dir the Node server uses today (e.g. `~/.hhh/userdata`).
+- `--home` is the same data dir the Node server uses today (e.g. `~/.p0code/userdata`).
 - When it is ready to accept connections it writes JSON `{"pid":..,"port":..,"url":".."}` to `--ready-file`
   and answers `GET /healthz` with 200.
 - `--legacy-server` is the command that starts the Node sidecar. Packaging fills it in. Unset means
@@ -41,8 +41,8 @@ hhhd service install|uninstall|start|stop|status   # launchd (mac), systemd --us
 ## Desktop split
 
 - The GUI app no longer starts the Node server itself. It connects to a backend URL: by default the
-  local `hhhd` (which it can install, start and repair as a user service), or any remote/self-hosted one.
-- Releases ship separate artifacts per OS: `HHHCode` (GUI) and `hhhd` (backend, plus the legacy sidecar
+  local `p0d` (which it can install, start and repair as a user service), or any remote/self-hosted one.
+- Releases ship separate artifacts per OS: `p0code` (GUI) and `p0d` (backend, plus the legacy sidecar
   until the port is done). The backend can also run headless on servers.
 
 ## Database shrink

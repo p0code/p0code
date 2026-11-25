@@ -121,7 +121,7 @@ func (c *Conn) Serve(ctx context.Context) error {
 		up := c.up
 		c.mu.Unlock()
 		if up != nil {
-			c.dropUpstream(up, "hhhd: client disconnected")
+			c.dropUpstream(up, "p0d: client disconnected")
 		}
 	}()
 	go c.heartbeat(ctx)
@@ -388,7 +388,7 @@ func (c *Conn) proxy(key string, id, raw json.RawMessage, notify bool) {
 func (c *Conn) runUpstream(up *upstream) {
 	ws, release, err := c.dial(c.ctx)
 	if err != nil {
-		c.dropUpstream(up, "hhhd: legacy server unavailable: "+err.Error())
+		c.dropUpstream(up, "p0d: legacy server unavailable: "+err.Error())
 		return
 	}
 	defer release()
@@ -402,7 +402,7 @@ func (c *Conn) runUpstream(up *upstream) {
 			return
 		case frame := <-up.out:
 			if err := ws.Write(c.ctx, websocket.MessageText, frame); err != nil {
-				c.dropUpstream(up, "hhhd: legacy server connection failed: "+err.Error())
+				c.dropUpstream(up, "p0d: legacy server connection failed: "+err.Error())
 				return
 			}
 		}
@@ -413,7 +413,7 @@ func (c *Conn) readUpstream(up *upstream, ws *websocket.Conn) {
 	for {
 		_, frame, err := ws.Read(c.ctx)
 		if err != nil {
-			c.dropUpstream(up, "hhhd: legacy server connection closed")
+			c.dropUpstream(up, "p0d: legacy server connection closed")
 			return
 		}
 		var env envelope

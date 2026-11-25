@@ -994,17 +994,17 @@ describe("DesktopBackendManager", () => {
         entryPath: "/nonexistent/not-checked-in-service-mode",
         httpBaseUrl: new URL("http://127.0.0.1:3773"),
         serviceDriver: {
-          kind: "hhhd",
-          binaryPath: "/usr/local/bin/hhhd",
+          kind: "p0d",
+          binaryPath: "/usr/local/bin/p0d",
           status: Effect.succeed({
             running: true,
             installed: true,
             pid: 7788,
             version: "0.1.0",
             url: serviceUrl,
-            binaryPath: "/usr/local/bin/hhhd",
+            binaryPath: "/usr/local/bin/p0d",
             managedByService: true,
-            driverKind: "hhhd",
+            driverKind: "p0d",
           }),
           ensureRunning: Effect.sync(() => {
             ensureRunningCalls += 1;
@@ -1014,9 +1014,9 @@ describe("DesktopBackendManager", () => {
               pid: 7788,
               version: "0.1.0",
               url: serviceUrl,
-              binaryPath: "/usr/local/bin/hhhd",
+              binaryPath: "/usr/local/bin/p0d",
               managedByService: true,
-              driverKind: "hhhd" as const,
+              driverKind: "p0d" as const,
             };
           }),
           start: Effect.die("unexpected direct start"),

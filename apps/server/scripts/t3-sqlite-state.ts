@@ -63,7 +63,7 @@ export class SqliteStateSharedHomeMutationError extends Schema.TaggedError<Sqlit
   {},
 ) {
   override get message(): string {
-    return "Refusing to mutate the shared ~/.hhh (or stock ~/.t3) database. Use an isolated --base-dir.";
+    return "Refusing to mutate the shared ~/.p0code (or stock ~/.t3) database. Use an isolated --base-dir.";
   }
 }
 

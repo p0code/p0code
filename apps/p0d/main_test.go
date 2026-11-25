@@ -7,7 +7,7 @@ import (
 
 func TestSplitCommand(t *testing.T) {
 	cases := map[string][]string{
-		`node /opt/hhhd/legacy/bin.mjs serve`:            {"node", "/opt/hhhd/legacy/bin.mjs", "serve"},
+		`node /opt/p0d/legacy/bin.mjs serve`:             {"node", "/opt/p0d/legacy/bin.mjs", "serve"},
 		`"C:\Program Files\node.exe" 'a b' "say \"hi\""`: {`C:\Program Files\node.exe`, "a b", `say "hi"`},
 		``: nil,
 	}

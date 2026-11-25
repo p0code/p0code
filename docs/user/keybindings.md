@@ -96,7 +96,7 @@ place of `Cmd`. The on-screen keyboard's Return always inserts a new line.
 ## Edit the configuration file
 
 Keybindings live on the environment's machine, in
-`~/.hhh/userdata/keybindings.json` by default. You can edit this file directly.
+`~/.p0code/userdata/keybindings.json` by default. You can edit this file directly.
 It is a JSON array of rules:
 
 ```json

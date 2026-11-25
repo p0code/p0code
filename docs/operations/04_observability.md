@@ -1,14 +1,14 @@
 # Observability
 
-Server observability has three outputs: pretty stdout logs (not persisted locally, except SSH-managed launches at `~/.hhh/ssh-launch/<state>/server.log`), a local NDJSON trace file (always on), and optional OTLP export (traces, metrics, logs).
+Server observability has three outputs: pretty stdout logs (not persisted locally, except SSH-managed launches at `~/.p0code/ssh-launch/<state>/server.log`), a local NDJSON trace file (always on), and optional OTLP export (traces, metrics, logs).
 
 ## Local traces and event-loop stalls
 
 Default trace paths (`server.trace.ndjson`):
 
-- Production / explicit `--home-dir` / `HHHCODE_HOME` (or legacy `T3CODE_HOME`): `<home>/userdata/logs/server.trace.ndjson`
+- Production / explicit `--home-dir` / `P0CODE_HOME` (or legacy `T3CODE_HOME`): `<home>/userdata/logs/server.trace.ndjson`
 - Linked worktree dev run: `<worktree>/.t3/userdata/logs/server.trace.ndjson`
-- Non-worktree dev run: `~/.hhh/dev/logs/server.trace.ndjson`
+- Non-worktree dev run: `~/.p0code/dev/logs/server.trace.ndjson`
 
 Summarize counts, rates, and latency percentiles offline (even while a server is stalled or stopped):
 
@@ -50,7 +50,7 @@ vp run dev
 On macOS and Linux (not Windows), send `SIGUSR2` to the server PID from `server-runtime.json` (in the server's state dir beside `logs/`) to write `<logsDir>/server-<pid>-<timestamp>.heapsnapshot` for Chrome DevTools Memory tab:
 
 ```sh
-pid="$(jq .pid "${HHHCODE_HOME:-${T3CODE_HOME:-$HOME/.hhh}}/userdata/server-runtime.json")"
+pid="$(jq .pid "${P0CODE_HOME:-${T3CODE_HOME:-$HOME/.p0code}}/userdata/server-runtime.json")"
 ps -p "$pid" -o command=   # verify it is the T3 server—never signal desktop or launcher
 kill -USR2 "$pid"
 ```

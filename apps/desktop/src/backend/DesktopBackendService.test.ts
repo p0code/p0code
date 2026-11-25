@@ -38,7 +38,7 @@ function makeProcessHandle(options: {
 }
 
 describe("DesktopBackendService helpers", () => {
-  it("defaults to local-service when hhhd is packaged and user has not overridden mode", () => {
+  it("defaults to local-service when p0d is packaged and user has not overridden mode", () => {
     const modePackaged = DesktopBackendService.resolveEffectiveBackendMode(
       {
         backendMode: DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS.backendMode,
@@ -66,9 +66,9 @@ describe("DesktopBackendService helpers", () => {
     assert.equal(modeExplicit, "legacy-embedded");
   });
 
-  it("orders hhhd binary candidates with user override first, then packaged and dev paths", () => {
+  it("orders p0d binary candidates with user override first, then packaged and dev paths", () => {
     const posixPath = { join: (...parts: string[]) => parts.join("/") };
-    const candidates = DesktopBackendService.hhhdBinaryCandidates({
+    const candidates = DesktopBackendService.p0dBinaryCandidates({
       path: posixPath,
       platform: "darwin",
       arch: "arm64",
@@ -76,20 +76,20 @@ describe("DesktopBackendService helpers", () => {
       resourcesPath: "/App/Contents/Resources",
       rootDir: "/repo",
       homeDirectory: "/Users/test",
-      baseDir: "/Users/test/.hhh",
+      baseDir: "/Users/test/.p0code",
       appDataDirectory: "/Users/test/Library/Application Support",
-      configuredBinaryPath: "/custom/bin/hhhd",
+      configuredBinaryPath: "/custom/bin/p0d",
     });
 
-    assert.equal(candidates[0], "/custom/bin/hhhd");
-    assert.equal(candidates[1], "/App/Contents/Resources/hhhd/hhhd");
-    assert.include(candidates, "/repo/apps/hhhd/dist/darwin-arm64/hhhd");
-    assert.include(candidates, "/Users/test/.hhh/bin/hhhd");
+    assert.equal(candidates[0], "/custom/bin/p0d");
+    assert.equal(candidates[1], "/App/Contents/Resources/p0d/p0d");
+    assert.include(candidates, "/repo/apps/p0d/dist/darwin-arm64/p0d");
+    assert.include(candidates, "/Users/test/.p0code/bin/p0d");
   });
 
-  it("uses hhhd.exe on Windows", () => {
+  it("uses p0d.exe on Windows", () => {
     const winPath = { join: (...parts: string[]) => parts.join("\\") };
-    const candidates = DesktopBackendService.hhhdBinaryCandidates({
+    const candidates = DesktopBackendService.p0dBinaryCandidates({
       path: winPath,
       platform: "win32",
       arch: "x64",
@@ -97,16 +97,16 @@ describe("DesktopBackendService helpers", () => {
       resourcesPath: "C:\\App\\resources",
       rootDir: "C:\\repo",
       homeDirectory: "C:\\Users\\test",
-      baseDir: "C:\\Users\\test\\.hhh",
+      baseDir: "C:\\Users\\test\\.p0code",
       appDataDirectory: "C:\\Users\\test\\AppData\\Roaming",
       configuredBinaryPath: null,
     });
 
-    assert.include(candidates, "C:\\App\\resources\\hhhd\\hhhd.exe");
-    assert.include(candidates, "C:\\repo\\apps\\hhhd\\dist\\windows-amd64\\hhhd.exe");
+    assert.include(candidates, "C:\\App\\resources\\p0d\\p0d.exe");
+    assert.include(candidates, "C:\\repo\\apps\\p0d\\dist\\windows-amd64\\p0d.exe");
   });
 
-  it("parses ready-file JSON and hhhd service status in JSON or text formats", () => {
+  it("parses ready-file JSON and p0d service status in JSON or text formats", () => {
     const ready = DesktopBackendService.parseReadyFile(
       JSON.stringify({ pid: 9012, port: 3773, url: "http://127.0.0.1:3773/" }),
     );
@@ -117,7 +117,7 @@ describe("DesktopBackendService helpers", () => {
       version: null,
     });
 
-    const jsonStatus = DesktopBackendService.parseHhhdServiceStatus(
+    const jsonStatus = DesktopBackendService.parseP0dServiceStatus(
       JSON.stringify({
         running: true,
         installed: true,
@@ -132,7 +132,7 @@ describe("DesktopBackendService helpers", () => {
     assert.equal(jsonStatus.url, "http://127.0.0.1:3773");
     assert.equal(jsonStatus.version, "0.2.0");
 
-    const textStatus = DesktopBackendService.parseHhhdServiceStatus(
+    const textStatus = DesktopBackendService.parseP0dServiceStatus(
       "status: running\npid: 777\nurl: http://127.0.0.1:4111\n",
     );
     assert.equal(textStatus.running, true);
@@ -140,16 +140,16 @@ describe("DesktopBackendService helpers", () => {
     assert.equal(textStatus.pid, 777);
     assert.equal(textStatus.url, "http://127.0.0.1:4111");
 
-    const stoppedStatus = DesktopBackendService.parseHhhdServiceStatus("service not installed");
+    const stoppedStatus = DesktopBackendService.parseP0dServiceStatus("service not installed");
     assert.equal(stoppedStatus.running, false);
     assert.equal(stoppedStatus.installed, false);
 
-    assert.equal(DesktopBackendService.parseHhhdVersion("hhhd 0.3.1 (abc123)\n"), "0.3.1 (abc123)");
+    assert.equal(DesktopBackendService.parseP0dVersion("p0d 0.3.1 (abc123)\n"), "0.3.1 (abc123)");
   });
 });
 
-describe("makeHhhdServiceDriver", () => {
-  it.effect("attaches to an already-running hhhd without invoking install or start", () =>
+describe("makeP0dServiceDriver", () => {
+  it.effect("attaches to an already-running p0d without invoking install or start", () =>
     Effect.gen(function* () {
       const invokedCommands: string[] = [];
       const spawner = ChildProcessSpawner.make((command) => {
@@ -159,7 +159,7 @@ describe("makeHhhdServiceDriver", () => {
         const key = command.args.join(" ");
         invokedCommands.push(key);
         if (key === "version") {
-          return Effect.succeed(makeProcessHandle({ stdout: "hhhd 0.1.0\n" }));
+          return Effect.succeed(makeProcessHandle({ stdout: "p0d 0.1.0\n" }));
         }
         if (key === "service status") {
           return Effect.succeed(
@@ -190,10 +190,10 @@ describe("makeHhhdServiceDriver", () => {
           Effect.succeed(JSON.stringify({ pid: 8080, port: 3773, url: "http://127.0.0.1:3773" })),
       });
 
-      const driver = DesktopBackendService.makeHhhdServiceDriver({
-        binaryPath: "/usr/local/bin/hhhd",
-        stateDir: "/tmp/hhh/userdata",
-        readyFilePath: "/tmp/hhh/userdata/hhhd-ready.json",
+      const driver = DesktopBackendService.makeP0dServiceDriver({
+        binaryPath: "/usr/local/bin/p0d",
+        stateDir: "/tmp/p0code/userdata",
+        readyFilePath: "/tmp/p0code/userdata/p0d-ready.json",
         legacyServerCommand: null,
         host: "127.0.0.1",
         defaultPort: 3773,
@@ -214,7 +214,7 @@ describe("makeHhhdServiceDriver", () => {
     }),
   );
 
-  it.effect("installs and starts hhhd service when stopped, then waits for /healthz", () =>
+  it.effect("installs and starts p0d service when stopped, then waits for /healthz", () =>
     Effect.gen(function* () {
       const invokedCommands: string[] = [];
       const runningRef = yield* Ref.make(false);
@@ -228,7 +228,7 @@ describe("makeHhhdServiceDriver", () => {
           const key = command.args.join(" ");
           invokedCommands.push(key);
           if (key === "version") {
-            return makeProcessHandle({ stdout: "hhhd 0.2.0\n" });
+            return makeProcessHandle({ stdout: "p0d 0.2.0\n" });
           }
           if (key === "service status") {
             const running = yield* Ref.get(runningRef);
@@ -271,10 +271,10 @@ describe("makeHhhdServiceDriver", () => {
 
       const fileSystem = FileSystem.makeNoop({});
 
-      const driver = DesktopBackendService.makeHhhdServiceDriver({
-        binaryPath: "/usr/local/bin/hhhd",
-        stateDir: "/tmp/hhh/userdata",
-        readyFilePath: "/tmp/hhh/userdata/hhhd-ready.json",
+      const driver = DesktopBackendService.makeP0dServiceDriver({
+        binaryPath: "/usr/local/bin/p0d",
+        stateDir: "/tmp/p0code/userdata",
+        readyFilePath: "/tmp/p0code/userdata/p0d-ready.json",
         legacyServerCommand: "/electron /server/bin.mjs",
         host: "127.0.0.1",
         defaultPort: 3773,
@@ -363,9 +363,9 @@ describe("makeLegacyNodeServiceDriver", () => {
         executablePath: "/electron",
         entryPath: "/app/apps/server/dist/bin.mjs",
         cwd: "/app",
-        stateDir: "/tmp/hhh/userdata",
-        baseDir: "/tmp/hhh",
-        readyFilePath: "/tmp/hhh/userdata/hhhd-legacy-service.json",
+        stateDir: "/tmp/p0code/userdata",
+        baseDir: "/tmp/p0code",
+        readyFilePath: "/tmp/p0code/userdata/p0d-legacy-service.json",
         host: "127.0.0.1",
         port: 3773,
         version: "0.1.11",

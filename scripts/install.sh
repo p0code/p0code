@@ -8,7 +8,7 @@
 #   T3CODE_CHANNEL           release train to follow: stable, nightly, or preview
 #                            (default: stable; preview is a maintainers' test train)
 #   T3CODE_VERSION           exact version to install (overrides T3CODE_CHANNEL)
-#   HHHCODE_HOME             hhhcode home directory (default: ~/.hhh; legacy T3CODE_HOME is honored)
+#   P0CODE_HOME             p0code home directory (default: ~/.p0code; legacy T3CODE_HOME is honored)
 #   T3CODE_INSTALL_BIN_DIR   where the `t3` command goes (default: ~/.local/bin)
 #   T3CODE_RELEASE_BASE_URL  mirror for releases/download (default: GitHub)
 #
@@ -19,7 +19,11 @@ set -eu
 
 repo="pingdotgg/t3code"
 base_url="${T3CODE_RELEASE_BASE_URL:-https://github.com/${repo}/releases/download}"
-t3_home="${HHHCODE_HOME:-${T3CODE_HOME:-$HOME/.hhh}}"
+# Carry a home from before the rename to p0code over, as the app does on launch.
+if [ -z "${P0CODE_HOME:-}${HHHCODE_HOME:-}${T3CODE_HOME:-}" ] && [ ! -e "$HOME/.p0code" ] && [ -d "$HOME/.hhh" ]; then
+  mv "$HOME/.hhh" "$HOME/.p0code" || true
+fi
+t3_home="${P0CODE_HOME:-${HHHCODE_HOME:-${T3CODE_HOME:-$HOME/.p0code}}}"
 case "$t3_home" in
   /*) ;;
   *)

@@ -3,6 +3,9 @@ import { type ProviderInstanceId } from "@t3tools/contracts";
 import { memo, useLayoutEffect, useRef, useState } from "react";
 import { msg, T, useMessages } from "gt-react";
 import { StarIcon } from "lucide-react";
+import { remainingPercent, tightestSubscriptionWindow } from "@t3tools/shared/usageLimits";
+import { formatResetsIn } from "@t3tools/shared/usageLimitsCopy";
+import { useNowMinute } from "../../hooks/useNowMinute";
 import { ProviderInstanceIcon } from "./ProviderInstanceIcon";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { cn } from "~/lib/utils";
@@ -44,6 +47,19 @@ function describeUnavailableInstance(
   );
 }
 
+function describeUsageLeft(
+  windowLabel: string,
+  left: number,
+  resetsIn: string | null,
+  resolve: MessageResolver,
+): string {
+  return resetsIn === null
+    ? resolve(msg("{window}: {left}% left", { window: windowLabel, left }))
+    : resolve(
+        msg("{window}: {left}% left, {resetsIn}", { window: windowLabel, left, resetsIn }),
+      );
+}
+
 const PICKER_TOOLTIP_SIDE = "left" as const;
 const PICKER_TOOLTIP_SIDE_OFFSET = 8;
 
@@ -58,6 +74,8 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
   getDisabledInstanceTooltip?: (entry: ProviderInstanceEntry) => string;
 }) {
   const m = useMessages();
+  const nowMinute = useNowMinute();
+  const now = Date.parse(`${nowMinute}:00Z`);
   const handleSelect = (instanceId: ProviderInstanceId | "favorites") => {
     props.onSelectInstance(instanceId);
   };
@@ -153,11 +171,18 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
             const isHovered = hoveredInstanceId === entry.instanceId;
             const showInstanceBadge = shouldShowInstanceBadge(entry, props.instanceEntries);
 
-            const tooltip = isUnavailable
+            const usageWindow = isUnavailable ? null : tightestSubscriptionWindow(entry.snapshot);
+            const usageLeft = usageWindow === null ? null : remainingPercent(usageWindow);
+            const usageSummary =
+              usageWindow === null || usageLeft === null
+                ? null
+                : describeUsageLeft(usageWindow.label, usageLeft, formatResetsIn(usageWindow, now, m), m);
+            const baseTooltip = isUnavailable
               ? describeUnavailableInstance(entry, m)
               : isContextDisabled
                 ? (props.getDisabledInstanceTooltip?.(entry) ?? entry.displayName)
                 : entry.displayName;
+            const tooltip = usageSummary === null ? baseTooltip : `${baseTooltip} · ${usageSummary}`;
 
             const button = (
               <Toolbar.Button
@@ -179,7 +204,7 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
                 focusableWhenDisabled={!isDisabled}
                 aria-pressed={isSelected}
                 type="button"
-                aria-label={isUnavailable || isContextDisabled ? tooltip : entry.displayName}
+                aria-label={isUnavailable || isContextDisabled || usageSummary !== null ? tooltip : entry.displayName}
               >
                 <ProviderInstanceIcon
                   driverKind={entry.driverKind}
@@ -199,6 +224,25 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
                   }
                   {...(entry.accentColor ? { badgeClassName: "h-3 min-w-3 px-0.5 text-5xs" } : {})}
                 />
+                {usageLeft !== null ? (
+                  <span
+                    aria-hidden
+                    data-model-picker-usage-left={usageLeft}
+                    className="pointer-events-none absolute inset-x-1.5 bottom-0.5 h-0.5 overflow-hidden rounded-full bg-foreground/15"
+                  >
+                    <span
+                      className={cn(
+                        "block h-full rounded-full",
+                        usageLeft <= 10
+                          ? "bg-destructive"
+                          : usageLeft <= 25
+                            ? "bg-warning"
+                            : "bg-success",
+                      )}
+                      style={{ width: `${usageLeft}%` }}
+                    />
+                  </span>
+                ) : null}
               </Toolbar.Button>
             );
 

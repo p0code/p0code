@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"hhhd/internal/rpc"
-	"hhhd/internal/sidecar"
+	"p0d/internal/rpc"
+	"p0d/internal/sidecar"
 )
 
 // registerHandlers lists the RPC methods ported to Go. Scopes follow
@@ -16,9 +16,9 @@ func registerHandlers(reg *rpc.Registry, s *Server) {
 		return map[string]string{"serverTime": time.Now().UTC().Format("2006-01-02T15:04:05.000Z")}, nil
 	})
 
-	// hhhd.subscribeStatus is hhhd's own: the backend version and whether the legacy
+	// p0d.subscribeStatus is p0d's own: the backend version and whether the legacy
 	// server is running. It emits the current status, then every change.
-	reg.Stream("hhhd.subscribeStatus", "orchestration:read", func(ctx context.Context, call *rpc.Call, emit func(...any) error) error {
+	reg.Stream("p0d.subscribeStatus", "orchestration:read", func(ctx context.Context, call *rpc.Call, emit func(...any) error) error {
 		type status struct {
 			Version string          `json:"version"`
 			Legacy  *sidecar.Status `json:"legacy,omitempty"`

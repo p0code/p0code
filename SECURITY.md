@@ -166,7 +166,7 @@ revocation and ceilings hold, not what a full-scope session can do once issued.
 - Check the reported commit against `main`. Reports often trail fixes.
 - Prove a finding with a failing test at the lowest layer that shows it, as
   [Verifying](AGENTS.md#verifying) describes. Do not run a PoC against
-  `~/.hhh/userdata`, `~/.t3/userdata` or any live environment; use a dev server on seeded data.
+  `~/.p0code/userdata`, `~/.t3/userdata` or any live environment; use a dev server on seeded data.
 - Treat report attachments as untrusted. Extract them into an empty directory
   outside the worktree and read PoCs before running anything.
 - Fix confirmed findings rather than filing them. Keep advisory details out of

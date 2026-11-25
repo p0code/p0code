@@ -66,9 +66,9 @@ import {
   WSL_RUNTIME_ARCHIVE_HASH_NAME,
   WSL_RUNTIME_ARCHIVE_NAME,
   wslRuntimeArchiveStem,
-  HHHD_LAUNCHD_LABEL,
-  HHHD_SYSTEMD_UNIT_NAME,
-  HHHD_WINDOWS_TASK_NAME,
+  P0D_LAUNCHD_LABEL,
+  P0D_SYSTEMD_UNIT_NAME,
+  P0D_WINDOWS_TASK_NAME,
   backendArchiveFileName,
   buildBackendArtifact,
   renderLinuxBackendInstallScript,
@@ -76,7 +76,7 @@ import {
   renderMacBackendInstallScript,
   renderMacLaunchdPlist,
   renderWindowsBackendInstallScript,
-  resolveHhhdDistCandidates,
+  resolveP0dDistCandidates,
 } from "./build-desktop-artifact.ts";
 import {
   ReleasePackageManifestError,
@@ -576,7 +576,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         undefined,
       );
 
-      assert.nestedPropertyVal(linux, "linux.desktop.entry.StartupWMClass", "com.t3tools.T3Code");
+      assert.nestedPropertyVal(linux, "linux.desktop.entry.StartupWMClass", "tw.yhw.p0code");
     }),
   );
 
@@ -1575,7 +1575,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     });
 
     assert.deepStrictEqual(configuration, {
-      appId: "com.t3tools.t3code",
+      appId: "tw.yhw.p0code",
       teamId: "ABC1234567",
       rpDomains: ["passkeys.example.com"],
       provisioningProfilePath: "/tmp/t3code.provisionprofile",
@@ -1597,7 +1597,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       "passkeys.example.com",
       "passkeys.example.org",
     ]);
-    assert.include(entitlements, "<string>ABC1234567.com.t3tools.t3code</string>");
+    assert.include(entitlements, "<string>ABC1234567.tw.yhw.p0code</string>");
     assert.include(entitlements, "<string>webcredentials:passkeys.example.org</string>");
     assert.include(entitlements, "<string>webcredentials:passkeys.example.com</string>");
     assert.include(entitlements, "<key>com.apple.security.cs.allow-jit</key>");
@@ -1979,68 +1979,68 @@ it.effect.skipIf(!symlinksSupported)("preserves relative links when replacing di
   }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
 );
 
-it.effect("renders OS service manifests and install scripts for hhhd backend packages", () =>
+it.effect("renders OS service manifests and install scripts for p0d backend packages", () =>
   Effect.sync(() => {
     const plist = renderMacLaunchdPlist({
-      binaryPath: "/Users/test/.hhh/bin/hhhd",
-      homeDir: "/Users/test/.hhh/userdata",
-      readyFilePath: "/Users/test/.hhh/userdata/hhhd-ready.json",
-      legacyServerCmd: "node /Users/test/.hhh/hhhd/sidecar/apps/server/dist/bin.mjs",
-      logDir: "/Users/test/.hhh/userdata/logs",
+      binaryPath: "/Users/test/.p0code/bin/p0d",
+      homeDir: "/Users/test/.p0code/userdata",
+      readyFilePath: "/Users/test/.p0code/userdata/p0d-ready.json",
+      legacyServerCmd: "node /Users/test/.p0code/p0d/sidecar/apps/server/dist/bin.mjs",
+      logDir: "/Users/test/.p0code/userdata/logs",
     });
-    assert.include(plist, `<string>${HHHD_LAUNCHD_LABEL}</string>`);
+    assert.include(plist, `<string>${P0D_LAUNCHD_LABEL}</string>`);
     assert.include(plist, "<string>serve</string>");
     assert.include(plist, "<string>--ready-file</string>");
     assert.include(plist, "<string>--legacy-server</string>");
 
     const macInstall = renderMacBackendInstallScript();
     assert.include(macInstall, "launchctl bootstrap");
-    assert.include(macInstall, HHHD_LAUNCHD_LABEL);
+    assert.include(macInstall, P0D_LAUNCHD_LABEL);
 
     const systemd = renderLinuxSystemdUnit({
-      binaryPath: "/home/test/.hhh/bin/hhhd",
-      homeDir: "/home/test/.hhh/userdata",
-      readyFilePath: "/home/test/.hhh/userdata/hhhd-ready.json",
+      binaryPath: "/home/test/.p0code/bin/p0d",
+      homeDir: "/home/test/.p0code/userdata",
+      readyFilePath: "/home/test/.p0code/userdata/p0d-ready.json",
       legacyServerCmd: "node /home/test/sidecar/bin.mjs",
     });
-    assert.include(systemd, "ExecStart=/home/test/.hhh/bin/hhhd serve");
+    assert.include(systemd, "ExecStart=/home/test/.p0code/bin/p0d serve");
     assert.include(systemd, "WantedBy=default.target");
 
     const linuxInstall = renderLinuxBackendInstallScript();
     assert.include(linuxInstall, "systemctl --user enable --now");
-    assert.include(linuxInstall, HHHD_SYSTEMD_UNIT_NAME);
+    assert.include(linuxInstall, P0D_SYSTEMD_UNIT_NAME);
 
     const winInstall = renderWindowsBackendInstallScript();
     assert.include(winInstall, "Register-ScheduledTask");
-    assert.include(winInstall, HHHD_WINDOWS_TASK_NAME);
+    assert.include(winInstall, P0D_WINDOWS_TASK_NAME);
 
-    assert.equal(backendArchiveFileName("0.2.0", "mac", "arm64"), "hhhd-0.2.0-darwin-arm64.tar.gz");
-    assert.equal(backendArchiveFileName("0.2.0", "linux", "x64"), "hhhd-0.2.0-linux-x64.tar.gz");
-    assert.equal(backendArchiveFileName("0.2.0", "win", "x64"), "hhhd-0.2.0-windows-x64.zip");
+    assert.equal(backendArchiveFileName("0.2.0", "mac", "arm64"), "p0d-0.2.0-darwin-arm64.tar.gz");
+    assert.equal(backendArchiveFileName("0.2.0", "linux", "x64"), "p0d-0.2.0-linux-x64.tar.gz");
+    assert.equal(backendArchiveFileName("0.2.0", "win", "x64"), "p0d-0.2.0-windows-x64.zip");
 
-    const macCandidates = resolveHhhdDistCandidates("/repo", "mac", "arm64");
-    assert.include(macCandidates, "/repo/apps/hhhd/dist/darwin-arm64/hhhd");
-    const winCandidates = resolveHhhdDistCandidates("/repo", "win", "x64");
-    assert.include(winCandidates, "/repo/apps/hhhd/dist/windows-amd64/hhhd.exe");
+    const macCandidates = resolveP0dDistCandidates("/repo", "mac", "arm64");
+    assert.include(macCandidates, "/repo/apps/p0d/dist/darwin-arm64/p0d");
+    const winCandidates = resolveP0dDistCandidates("/repo", "win", "x64");
+    assert.include(winCandidates, "/repo/apps/p0d/dist/windows-amd64/p0d.exe");
   }),
 );
 
 it.effect(
-  "packages separate mac, linux, and windows backend archives with sidecar and optional hhhd binary",
+  "packages separate mac, linux, and windows backend archives with sidecar and optional p0d binary",
   () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-      const root = yield* fs.makeTempDirectoryScoped({ prefix: "hhhcode-backend-pkg-test-" });
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "p0code-backend-pkg-test-" });
       const serverDistDir = path.join(root, "server-dist");
       const outputDir = path.join(root, "release");
-      const hhhdBin = path.join(root, "apps/hhhd/dist/darwin-arm64/hhhd");
+      const p0dBin = path.join(root, "apps/p0d/dist/darwin-arm64/p0d");
       yield* fs.makeDirectory(path.join(serverDistDir, "client"), { recursive: true });
-      yield* fs.makeDirectory(path.dirname(hhhdBin), { recursive: true });
+      yield* fs.makeDirectory(path.dirname(p0dBin), { recursive: true });
       yield* fs.writeFileString(path.join(serverDistDir, "bin.mjs"), "console.log('sidecar');\n");
       yield* fs.writeFileString(path.join(serverDistDir, "client/index.html"), "<html></html>\n");
-      yield* fs.writeFileString(hhhdBin, "#!/bin/sh\necho hhhd\n");
+      yield* fs.writeFileString(p0dBin, "#!/bin/sh\necho p0d\n");
 
       const macArchive = yield* buildBackendArtifact({
         repoRoot: root,
@@ -2052,7 +2052,7 @@ it.effect(
         outputDir,
         verbose: false,
       });
-      assert.equal(path.basename(macArchive), "hhhd-0.2.0-darwin-arm64.tar.gz");
+      assert.equal(path.basename(macArchive), "p0d-0.2.0-darwin-arm64.tar.gz");
       assert.isTrue(yield* fs.exists(macArchive));
 
       const tarList = yield* spawner.spawn(
@@ -2070,10 +2070,10 @@ it.effect(
         ),
       );
       assert.equal(Number(yield* tarList.exitCode), 0);
-      assert.include(macEntries, "hhhd-0.2.0-darwin-arm64/bin/hhhd");
-      assert.include(macEntries, "hhhd-0.2.0-darwin-arm64/sidecar/apps/server/dist/bin.mjs");
-      assert.include(macEntries, `hhhd-0.2.0-darwin-arm64/service/${HHHD_LAUNCHD_LABEL}.plist`);
-      assert.include(macEntries, "hhhd-0.2.0-darwin-arm64/install.sh");
+      assert.include(macEntries, "p0d-0.2.0-darwin-arm64/bin/p0d");
+      assert.include(macEntries, "p0d-0.2.0-darwin-arm64/sidecar/apps/server/dist/bin.mjs");
+      assert.include(macEntries, `p0d-0.2.0-darwin-arm64/service/${P0D_LAUNCHD_LABEL}.plist`);
+      assert.include(macEntries, "p0d-0.2.0-darwin-arm64/install.sh");
 
       const linuxArchive = yield* buildBackendArtifact({
         repoRoot: root,
@@ -2085,7 +2085,7 @@ it.effect(
         outputDir,
         verbose: false,
       });
-      assert.equal(path.basename(linuxArchive), "hhhd-0.2.0-linux-x64.tar.gz");
+      assert.equal(path.basename(linuxArchive), "p0d-0.2.0-linux-x64.tar.gz");
       const linuxList = yield* spawner.spawn(
         ChildProcess.make("tar", ["-tzf", linuxArchive], {
           stdin: "ignore",
@@ -2101,8 +2101,8 @@ it.effect(
         ),
       );
       assert.equal(Number(yield* linuxList.exitCode), 0);
-      assert.include(linuxEntries, `hhhd-0.2.0-linux-x64/service/${HHHD_SYSTEMD_UNIT_NAME}`);
-      assert.include(linuxEntries, "hhhd-0.2.0-linux-x64/install.sh");
+      assert.include(linuxEntries, `p0d-0.2.0-linux-x64/service/${P0D_SYSTEMD_UNIT_NAME}`);
+      assert.include(linuxEntries, "p0d-0.2.0-linux-x64/install.sh");
 
       const winArchive = yield* buildBackendArtifact({
         repoRoot: root,
@@ -2114,7 +2114,7 @@ it.effect(
         outputDir,
         verbose: false,
       });
-      assert.equal(path.basename(winArchive), "hhhd-0.2.0-windows-x64.zip");
+      assert.equal(path.basename(winArchive), "p0d-0.2.0-windows-x64.zip");
       assert.isTrue(yield* fs.exists(winArchive));
     }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
 );

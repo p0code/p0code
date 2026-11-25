@@ -750,6 +750,24 @@ function limitsNotice(limits: ServerProviderUsageLimits): string | null {
   return limits.windows.length === 0 ? "No limits reported." : null;
 }
 
+/**
+ * The window with the least room left on an instance's own linked subscription, for an at-a-glance
+ * meter. Model-scoped windows are left out, and so is OpenCode, whose Go plan is spend rather
+ * than a subscription the user linked.
+ */
+export function tightestSubscriptionWindow(
+  provider: Pick<ServerProvider, "driver" | "usageLimits">,
+): ServerProviderUsageWindow | null {
+  if (provider.driver === "opencode" || !provider.usageLimits) return null;
+  if (limitsNotice(provider.usageLimits) !== null) return null;
+  let tightest: ServerProviderUsageWindow | null = null;
+  for (const window of provider.usageLimits.windows) {
+    if (window.modelIds?.length || window.providerIds?.length) continue;
+    if (tightest === null || window.usedPercent > tightest.usedPercent) tightest = window;
+  }
+  return tightest;
+}
+
 export function remainingPercent(window: ServerProviderUsageWindow): number {
   return Math.round(100 - Math.max(0, Math.min(100, window.usedPercent)));
 }

@@ -21,11 +21,11 @@ import (
 	"time"
 )
 
-// Headers the legacy server trusts from hhhd (see apps/server/src/auth/EnvironmentAuth.ts).
+// Headers the legacy server trusts from p0d (see apps/server/src/auth/EnvironmentAuth.ts).
 const (
-	TokenHeader   = "X-Hhhd-Internal-Token"
-	SessionHeader = "X-Hhhd-Session-Id"
-	tokenEnv      = "HHHD_INTERNAL_TOKEN"
+	TokenHeader   = "X-P0d-Internal-Token"
+	SessionHeader = "X-P0d-Session-Id"
+	tokenEnv      = "P0D_INTERNAL_TOKEN"
 )
 
 const (
@@ -33,7 +33,7 @@ const (
 	stopTimeout  = 10 * time.Second
 )
 
-// Status is what the hhhd.subscribeStatus stream reports.
+// Status is what the p0d.subscribeStatus stream reports.
 type Status struct {
 	State string `json:"state"` // stopped | starting | running
 	Pid   int    `json:"pid,omitempty"`
@@ -43,7 +43,7 @@ type Status struct {
 
 // Manager owns at most one legacy server process.
 type Manager struct {
-	// Command starts the legacy server; hhhd appends --host, --port and --base-dir.
+	// Command starts the legacy server; p0d appends --host, --port and --base-dir.
 	Command []string
 	// BaseDir is passed as --base-dir; the server keeps its state in BaseDir/userdata.
 	BaseDir     string
@@ -52,7 +52,7 @@ type Manager struct {
 	// Output receives the legacy server's stdout and stderr.
 	Output io.Writer
 
-	// Token is the secret only hhhd and its sidecar know.
+	// Token is the secret only p0d and its sidecar know.
 	Token string
 
 	mu      sync.Mutex
@@ -78,7 +78,7 @@ func New(command []string, baseDir string, idle time.Duration) *Manager {
 		Command:     command,
 		BaseDir:     baseDir,
 		IdleTimeout: idle,
-		Logger:      log.New(os.Stderr, "hhhd: ", log.LstdFlags),
+		Logger:      log.New(os.Stderr, "p0d: ", log.LstdFlags),
 		Output:      os.Stderr,
 		Token:       hex.EncodeToString(token),
 		changed:     make(chan struct{}),

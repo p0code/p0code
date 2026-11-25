@@ -523,19 +523,19 @@ describe("DesktopSettings", () => {
         const updated = yield* settings.setBackendConfig({
           mode: "remote",
           remoteUrl: "https://backend.example.com:3773/",
-          binaryPath: "  /opt/hhh/bin/hhhd  ",
+          binaryPath: "  /opt/p0code/bin/p0d  ",
         });
         assert.isTrue(updated.changed);
         assert.equal(updated.settings.backendMode, "remote");
         assert.equal(updated.settings.backendModeConfiguredByUser, true);
         assert.equal(updated.settings.backendRemoteUrl, "https://backend.example.com:3773");
-        assert.equal(updated.settings.backendBinaryPath, "/opt/hhh/bin/hhhd");
+        assert.equal(updated.settings.backendBinaryPath, "/opt/p0code/bin/p0d");
 
         const reloaded = yield* settings.load;
         assert.equal(reloaded.backendMode, "remote");
         assert.equal(reloaded.backendModeConfiguredByUser, true);
         assert.equal(reloaded.backendRemoteUrl, "https://backend.example.com:3773");
-        assert.equal(reloaded.backendBinaryPath, "/opt/hhh/bin/hhhd");
+        assert.equal(reloaded.backendBinaryPath, "/opt/p0code/bin/p0d");
       }),
     ),
   );

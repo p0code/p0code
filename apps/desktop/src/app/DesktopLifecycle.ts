@@ -232,8 +232,8 @@ export const make = DesktopLifecycle.of({
       }
       // Startup already acted on the app link that launched it; passing it on replays it.
       const appLinkPrefixes = environment.isDevelopment
-        ? ["hhhcode-dev:", "t3code-dev:"]
-        : ["hhhcode:", "t3code:"];
+        ? ["p0code-dev:", "t3code-dev:"]
+        : ["p0code:", "t3code:"];
       const args = yield* HostProcess.Arguments;
       yield* electronApp.relaunch({
         execPath: yield* HostProcess.ExecutablePath,

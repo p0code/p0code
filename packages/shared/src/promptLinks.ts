@@ -206,7 +206,7 @@ export function buildNewThreadLink(input: {
   return url.toString();
 }
 
-const APP_SCHEME = /^(?:hhhcode|t3code)(?:-[a-z]+)?:$/;
+const APP_SCHEME = /^(?:p0code|t3code)(?:-[a-z]+)?:$/;
 const THREAD_PATH = /^\/([^/]+)\/([^/]+)\/?$/;
 
 export function promptLinkAppPath(
@@ -233,7 +233,7 @@ export function promptLinkAppPath(
   return thread ? `/${thread[1]}/${thread[2]}${url.search}` : null;
 }
 
-export function promptLinkDeepLink(appPath: string, scheme = "hhhcode"): string {
+export function promptLinkDeepLink(appPath: string, scheme = "p0code"): string {
   const url = new URL(appPath, "https://app.invalid");
   const host = url.pathname === "/new" ? "new" : `threads${url.pathname}`;
   return `${scheme}://${host}${url.search}`;

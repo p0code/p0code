@@ -1,4 +1,4 @@
-import { APP_HOME_ENV, LEGACY_APP_HOME_ENV } from "@t3tools/shared/appHome";
+import { APP_HOME_ENV, LEGACY_APP_HOME_ENV, PREVIOUS_APP_HOME_ENV } from "@t3tools/shared/appHome";
 import * as NodeOS from "node:os";
 
 import { currentDesktopBootstrapToken } from "@t3tools/shared/desktopBootstrapToken";
@@ -696,7 +696,8 @@ const resolveWslStartConfig = Effect.fn("desktop.backendConfiguration.resolveWsl
 
   const parentEnvWithoutT3Home: Record<string, string | undefined> = {};
   for (const [key, value] of Object.entries(env)) {
-    if (key === LEGACY_APP_HOME_ENV || key === APP_HOME_ENV) continue;
+    if (key === LEGACY_APP_HOME_ENV || key === APP_HOME_ENV || key === PREVIOUS_APP_HOME_ENV)
+      continue;
     parentEnvWithoutT3Home[key] = value;
   }
   const wslEnv = mergeWslEnv(parentEnvWithoutT3Home.WSLENV, forwardedEnvNames);

@@ -21,11 +21,9 @@ export function StandalonePageHeader({
   return (
     <>
       <div className="flex items-baseline justify-between gap-3 text-muted-foreground">
-        {/* oxlint-disable-next-line t3code/no-untranslated-copy -- product wordmark */}
-        <span className="flex items-baseline gap-1.5" role="img" aria-label="HHHCode">
-          <span className="text-lg font-semibold tracking-tight text-foreground">HHH</span>
-          {/* oxlint-disable-next-line t3code/no-untranslated-copy -- product wordmark */}
-          <span className="text-lg font-medium tracking-tight">Code</span>
+        <span className="flex items-baseline gap-1.5" role="img" aria-label="p0code">
+          <span className="text-lg font-semibold tracking-tight text-foreground">p0</span>
+          <span className="text-lg font-medium tracking-tight">code</span>
         </span>
         {context ? <span className="text-sm">{context}</span> : null}
       </div>

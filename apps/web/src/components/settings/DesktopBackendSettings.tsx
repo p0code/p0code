@@ -89,7 +89,7 @@ export function DesktopBackendSettings() {
   if (!bridge) return null;
 
   const modeLabel = (mode: DesktopBackendMode): string => {
-    if (mode === "local-service") return gt("Local service (hhhd)");
+    if (mode === "local-service") return gt("Local service (p0d)");
     if (mode === "remote") return gt("Remote URL");
     return gt("Legacy embedded");
   };
@@ -173,7 +173,7 @@ export function DesktopBackendSettings() {
   const modeDescription =
     draftMode === "local-service"
       ? gt(
-          "Runs hhhd as a background user service. Quitting the desktop window leaves the backend running.",
+          "Runs p0d as a background user service. Quitting the desktop window leaves the backend running.",
         )
       : draftMode === "remote"
         ? gt("Connects directly to a remote or self-hosted backend URL with no local process.")
@@ -210,7 +210,7 @@ export function DesktopBackendSettings() {
             </SelectTrigger>
             <SelectPopup align="end" alignItemWithTrigger={false}>
               <SelectItem hideIndicator value="local-service">
-                <T>Local service (hhhd)</T>
+                <T>Local service (p0d)</T>
               </SelectItem>
               <SelectItem hideIndicator value="remote">
                 <T>Remote URL</T>
@@ -249,14 +249,14 @@ export function DesktopBackendSettings() {
 
       {draftMode === "local-service" ? (
         <SettingsRow
-          title={gt("hhhd binary path")}
+          title={gt("p0d binary path")}
           description={
             status?.resolvedBinaryPath ? (
               <T>
                 Optional override. Currently resolved: <Var>{status.resolvedBinaryPath}</Var>
               </T>
             ) : (
-              gt("Optional path to a local hhhd binary. Leave blank to auto-detect.")
+              gt("Optional path to a local p0d binary. Leave blank to auto-detect.")
             )
           }
           control={
@@ -264,7 +264,7 @@ export function DesktopBackendSettings() {
               size="sm"
               font="mono"
               className="w-full sm:w-72"
-              aria-label={gt("hhhd binary path")}
+              aria-label={gt("p0d binary path")}
               placeholder={gt("Auto-detect")}
               value={draftBinaryPath}
               disabled={busyAction !== null}

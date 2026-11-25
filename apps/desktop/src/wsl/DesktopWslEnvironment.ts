@@ -106,7 +106,7 @@ export class DesktopWslEnvironment extends Context.Service<
     readonly getUserHome: (distro: string | null) => Effect.Effect<Option.Option<string>>;
     // Use the distro IP to avoid unreliable wslhost localhost forwarding.
     readonly getDistroIp: (distro: string | null) => Effect.Effect<Option.Option<string>>;
-    // A null t3Home means the distro's login shell sets no absolute HHHCODE_HOME or T3CODE_HOME, so ~/.hhh applies.
+    // A null t3Home means the distro's login shell sets no absolute P0CODE_HOME or T3CODE_HOME, so ~/.p0code applies.
     readonly prepareRuntime: (
       distro: string | null,
       archive: WslRuntimeArchive,
@@ -273,7 +273,7 @@ const sanitizeWslRuntimeId = (value: string): string => value.replace(/[^A-Za-z0
 
 const runtimeParentAssignment = (t3Home: string | null): string =>
   t3Home === null
-    ? 'runtime_parent="$HOME/.hhh/wsl-runtime"'
+    ? 'runtime_parent="$HOME/.p0code/wsl-runtime"'
     : `runtime_parent=${shellQuote(`${t3Home}/wsl-runtime`)}`;
 
 // A null archive path asks for a staging directory to copy the archive into, unless the cache is ready.
@@ -453,7 +453,7 @@ const formatNodePtyProbeFailureReason = (exitCode: number): string | null =>
 // Capture login-shell PATH because the server launches provider CLIs by name.
 const RESOLVED_PATH_LINE = `printf 'resolvedPath:%s\\n' "$PATH"`;
 // wsl.exe --exec skips the profile, so the server only sees a profile-exported home if passed on.
-const T3_HOME_LINE = `printf 't3Home:%s\\n' "\${HHHCODE_HOME:-\${T3CODE_HOME:-}}"`;
+const T3_HOME_LINE = `printf 't3Home:%s\\n' "\${P0CODE_HOME:-\${HHHCODE_HOME:-\${T3CODE_HOME:-}}}"`;
 
 const NODE_PTY_PROBE_SCRIPT = (
   linuxServerDir: string,

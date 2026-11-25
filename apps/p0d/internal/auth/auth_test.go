@@ -5,13 +5,13 @@ import (
 	"testing"
 	"time"
 
-	"hhhd/internal/auth"
-	"hhhd/internal/authtest"
+	"p0d/internal/auth"
+	"p0d/internal/authtest"
 )
 
 func newAuth(t *testing.T, home *authtest.Home) *auth.Authenticator {
 	t.Helper()
-	t.Setenv("HHHCODE_SECRET_BACKEND", "file")
+	t.Setenv("P0CODE_SECRET_BACKEND", "file")
 	a, err := auth.New(home.Dir)
 	if err != nil {
 		t.Fatal(err)
@@ -73,7 +73,7 @@ func TestCookieOrigin(t *testing.T) {
 	if _, err := a.AuthenticateRequest(r); err != nil {
 		t.Fatalf("same origin: %v", err)
 	}
-	r.Header.Set("Origin", "hhhcode://app")
+	r.Header.Set("Origin", "p0code://app")
 	if _, err := a.AuthenticateRequest(r); err != nil {
 		t.Fatalf("desktop origin: %v", err)
 	}
@@ -169,7 +169,7 @@ func TestStillValid(t *testing.T) {
 }
 
 func TestCookieName(t *testing.T) {
-	name, legacy := auth.CookieName(3773, "127.0.0.1", "/home/u/.hhh/userdata", "env")
+	name, legacy := auth.CookieName(3773, "127.0.0.1", "/home/u/.p0code/userdata", "env")
 	if legacy != "" || len(name) != len("t3_session_3773_")+12 {
 		t.Fatalf("loopback name %q legacy %q", name, legacy)
 	}

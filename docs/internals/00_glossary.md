@@ -5,16 +5,16 @@ Shared vocabulary across T3 Code. Architecture and lifecycle constraints belong 
 
 ## Workspace and conversation
 
-| Term           | Meaning                                                                                           |
-| -------------- | ------------------------------------------------------------------------------------------------- |
-| Environment    | One running server and the machine, credentials, workspace access, and state it owns.             |
-| Client         | A web, desktop, or mobile UI connected to an environment. The desktop app can also host a server. |
-| Project        | An environment-local workspace record rooted at a directory.                                      |
-| Workspace root | The project's base filesystem directory on the environment.                                       |
-| Worktree       | A separate Git checkout a thread can use instead of the project's main checkout.                  |
-| Thread         | The durable conversation and work history for a project. Survives provider process exits.         |
-| Turn           | One user-to-agent cycle (a run). Provider work can end before checkpoint and diff work settles.   |
-| T3 home        | The base data directory (`~/.hhh` by default). Runtime state normally lives under its `userdata`. |
+| Term           | Meaning                                                                                              |
+| -------------- | ---------------------------------------------------------------------------------------------------- |
+| Environment    | One running server and the machine, credentials, workspace access, and state it owns.                |
+| Client         | A web, desktop, or mobile UI connected to an environment. The desktop app can also host a server.    |
+| Project        | An environment-local workspace record rooted at a directory.                                         |
+| Workspace root | The project's base filesystem directory on the environment.                                          |
+| Worktree       | A separate Git checkout a thread can use instead of the project's main checkout.                     |
+| Thread         | The durable conversation and work history for a project. Survives provider process exits.            |
+| Turn           | One user-to-agent cycle (a run). Provider work can end before checkpoint and diff work settles.      |
+| T3 home        | The base data directory (`~/.p0code` by default). Runtime state normally lives under its `userdata`. |
 
 ## Orchestration
 

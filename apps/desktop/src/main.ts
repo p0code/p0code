@@ -42,6 +42,7 @@ import * as DesktopIpc from "./ipc/DesktopIpc.ts";
 import * as DesktopAssets from "./app/DesktopAssets.ts";
 import * as DesktopCliCommand from "./app/DesktopCliCommand.ts";
 import * as DesktopEnvironment from "./app/DesktopEnvironment.ts";
+import * as DesktopRenameMigration from "./app/DesktopRenameMigration.ts";
 import * as DesktopLegacyLocalStorage from "./app/DesktopLegacyLocalStorage.ts";
 import * as DesktopLifecycle from "./app/DesktopLifecycle.ts";
 import * as DesktopLinuxUrlHandler from "./app/DesktopLinuxUrlHandler.ts";
@@ -90,6 +91,12 @@ if (process.argv.includes("--version")) {
   }
   Electron.app.exit(0);
 }
+
+DesktopRenameMigration.moveDesktopFoldersFromPreviousName({
+  env: process.env,
+  homeDirectory: NodeOS.homedir(),
+  appDataDirectory: Electron.app.getPath("appData"),
+});
 
 const layerDesktopEnvironment = Layer.unwrap(
   Effect.gen(function* () {

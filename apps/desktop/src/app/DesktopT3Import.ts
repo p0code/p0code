@@ -33,7 +33,12 @@ const tryLoadKeychain = async (
   secretsDir: string,
   platform: NodeJS.Platform,
 ): Promise<KeychainStore | null> => {
-  if (process.env.HHHCODE_SECRET_BACKEND?.trim().toLowerCase() === "file" || process.env.VITEST) {
+  if (
+    (process.env.P0CODE_SECRET_BACKEND ?? process.env.HHHCODE_SECRET_BACKEND)
+      ?.trim()
+      .toLowerCase() === "file" ||
+    process.env.VITEST
+  ) {
     return null;
   }
   try {
@@ -47,7 +52,7 @@ const tryLoadKeychain = async (
 };
 
 /**
- * On the first launch of a default `~/.hhh` home next to a stock T3 Code install,
+ * On the first launch of a default `~/.p0code` home next to a stock T3 Code install,
  * asks once whether to import it. Returns true when the app is relaunching.
  */
 export const offerT3Import = Effect.fn("desktop.offerT3Import")(function* () {
@@ -68,7 +73,7 @@ export const offerT3Import = Effect.fn("desktop.offerT3Import")(function* () {
     message: m(msg("Bring your T3 Code threads, settings and providers over?")),
     detail: m(
       msg(
-        "hhhcode keeps its data in {home}, separate from T3 Code in {stock}. Importing copies everything you need and never changes T3 Code's data. You can also do this later with `t3 migrate from-t3`.",
+        "p0code keeps its data in {home}, separate from T3 Code in {stock}. Importing copies everything you need and never changes T3 Code's data. You can also do this later with `t3 migrate from-t3`.",
       ),
       { home: environment.baseDir, stock: stockHome },
     ),
@@ -98,7 +103,7 @@ export const offerT3Import = Effect.fn("desktop.offerT3Import")(function* () {
       m(msg("Could not import from T3 Code")),
       m(
         msg(
-          "{reason} Quit hhhcode and run `t3 migrate from-t3 --force` in a terminal to try again.",
+          "{reason} Quit p0code and run `t3 migrate from-t3 --force` in a terminal to try again.",
         ),
         { reason: failure },
       ),
@@ -136,7 +141,7 @@ export const getT3ImportState = Effect.fn("desktop.getT3ImportState")(function* 
 
 /**
  * Stops the running local backend cleanly, imports stock T3 Code data into this home
- * (credentials straight to the OS keychain), and relaunches HHHCode.
+ * (credentials straight to the OS keychain), and relaunches p0code.
  */
 export const runT3ImportOnTheFly = Effect.fn("desktop.runT3ImportOnTheFly")(function* (input: {
   readonly keepEnvironmentId: boolean;
@@ -196,7 +201,7 @@ export const runT3ImportOnTheFly = Effect.fn("desktop.runT3ImportOnTheFly")(func
         m(msg("Could not import from T3 Code")),
         m(
           msg(
-            "{reason} Quit hhhcode and run `t3 migrate from-t3 --force` in a terminal to try again.",
+            "{reason} Quit p0code and run `t3 migrate from-t3 --force` in a terminal to try again.",
           ),
           { reason: failure },
         ),

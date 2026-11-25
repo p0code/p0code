@@ -39,7 +39,7 @@ installing one.
 
 `t3 uninstall` removes the background service, the `t3` launcher, and the
 downloaded versions after showing you the list and asking once. Your projects,
-threads, and settings under `~/.hhh/userdata` are kept, along with `service.env`
+threads, and settings under `~/.p0code/userdata` are kept, along with `service.env`
 under T3 home. Pass `--yes` from a script.
 
 ## Local network access
@@ -64,7 +64,7 @@ network. `t3 status` says so, and `t3 up --no-lan` turns it off. Any
 ## Configure the service environment
 
 Put custom environment variables in `service.env` under the service's T3 home
-directory, normally `~/.hhh/service.env`. This file survives service installation
+directory, normally `~/.p0code/service.env`. This file survives service installation
 and updates. For example:
 
 ```dotenv
@@ -74,7 +74,7 @@ T3CODE_HOST=127.0.0.1
 
 Use `KEY=VALUE` entries, quoting values that contain spaces or `#`. Values are
 literal: shell commands and variable expansion are not evaluated. Entries
-override the inherited service environment, except for `PATH`, `HHHCODE_HOME`, `T3CODE_HOME`,
+override the inherited service environment, except for `PATH`, `P0CODE_HOME`, `T3CODE_HOME`,
 `T3_BOOT_SERVICE_UNIT`, and `T3_SERVICE_LAUNCHER_CONTEXT` (including case variants).
 
 Run `t3 service restart` after changing the file. Changes apply when the service
@@ -83,7 +83,7 @@ For a service installed before env-file support, run `t3 service install` once
 with an up-to-date CLI.
 A missing file is ignored; other read failures stop service startup.
 If the file contains credentials, restrict access to that file with `chmod 600`
-(for the default T3 home, `chmod 600 ~/.hhh/service.env`).
+(for the default T3 home, `chmod 600 ~/.p0code/service.env`).
 
 ## Platform support
 

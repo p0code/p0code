@@ -5,7 +5,7 @@ export function providerAuthReturnUrl(value: string | undefined): string | undef
   try {
     const url = new URL(value);
     const desktop =
-      ["hhhcode:", "hhhcode-dev:", "t3code:", "t3code-dev:"].includes(url.protocol) &&
+      ["p0code:", "p0code-dev:", "t3code:", "t3code-dev:"].includes(url.protocol) &&
       url.host === "app";
     const web =
       ["http:", "https:"].includes(url.protocol) &&

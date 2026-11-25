@@ -67,7 +67,7 @@ func exitFrame(id json.RawMessage, exit any) []byte {
 		Exit      any             `json:"exit"`
 	}{"Exit", id, exit})
 	if err != nil {
-		return exitFrame(id, dieExit("hhhd: failed to encode response: "+err.Error()))
+		return exitFrame(id, dieExit("p0d: failed to encode response: "+err.Error()))
 	}
 	return b
 }

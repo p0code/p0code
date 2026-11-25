@@ -388,7 +388,7 @@ const make = Effect.gen(function* () {
     const signature = NodeCrypto.createHmac(
       "sha256",
       Buffer.from(
-        NodeCrypto.hkdfSync("sha256", state.privateKey, "hhhcode-self-relay", "port-link-v1", 32),
+        NodeCrypto.hkdfSync("sha256", state.privateKey, "p0code-self-relay", "port-link-v1", 32),
       ),
     )
       .update(`port:${payload}`)
@@ -518,7 +518,7 @@ const make = Effect.gen(function* () {
               NodeCrypto.hkdfSync(
                 "sha256",
                 state.privateKey,
-                "hhhcode-self-relay",
+                "p0code-self-relay",
                 "port-link-v1",
                 32,
               ),

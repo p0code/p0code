@@ -45,10 +45,10 @@ const snapshotTree = (root: string): Record<string, string> => {
 };
 
 const makeFixture = () => {
-  const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "hhh-migrate-"));
+  const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "p0code-migrate-"));
   roots.push(root);
   const from = NodePath.join(root, "home", ".t3");
-  const to = NodePath.join(root, "home", ".hhh");
+  const to = NodePath.join(root, "home", ".p0code");
   const userdata = NodePath.join(from, "userdata");
   const externalClaude = NodePath.join(root, "home", ".claude_work");
   write(
@@ -403,7 +403,7 @@ describe("migrateFromT3", () => {
 });
 
 describe("shouldOfferT3Import", () => {
-  it("offers only for a fresh hhhcode home next to a stock T3 Code database", async () => {
+  it("offers only for a fresh p0code home next to a stock T3 Code database", async () => {
     const fixture = makeFixture();
     fixture.database.close();
     assert.isTrue(await shouldOfferT3Import({ appHome: fixture.to, stockHome: fixture.from }));
@@ -414,19 +414,19 @@ describe("shouldOfferT3Import", () => {
 
 describe("makePathRewriter", () => {
   it("rewrites only moved folders and respects path boundaries", () => {
-    const rewrite = makePathRewriter("/h/.t3", "/h/.hhh");
+    const rewrite = makePathRewriter("/h/.t3", "/h/.p0code");
     assert.deepEqual(rewrite('"/h/.t3/userdata/x" "/h/.t3/userdata2" "/h/.t3/worktrees/a"'), {
-      text: '"/h/.hhh/userdata/x" "/h/.t3/userdata2" "/h/.t3/worktrees/a"',
+      text: '"/h/.p0code/userdata/x" "/h/.t3/userdata2" "/h/.t3/worktrees/a"',
       count: 1,
     });
   });
 
   it("rewrites JSON-escaped and forward-slash Windows paths", () => {
-    const rewrite = makePathRewriter("C:\\Users\\a\\.t3", "C:\\Users\\a\\.hhh");
+    const rewrite = makePathRewriter("C:\\Users\\a\\.t3", "C:\\Users\\a\\.p0code");
     assert.equal(
       rewrite('{"p":"C:\\\\Users\\\\a\\\\.t3\\\\userdata\\\\x"}').text,
-      '{"p":"C:\\\\Users\\\\a\\\\.hhh\\\\userdata\\\\x"}',
+      '{"p":"C:\\\\Users\\\\a\\\\.p0code\\\\userdata\\\\x"}',
     );
-    assert.equal(rewrite("C:/Users/a/.t3/userdata/x").text, "C:/Users/a/.hhh/userdata/x");
+    assert.equal(rewrite("C:/Users/a/.t3/userdata/x").text, "C:/Users/a/.p0code/userdata/x");
   });
 });

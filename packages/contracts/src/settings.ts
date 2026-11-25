@@ -106,7 +106,7 @@ export const SidebarAutoSettleAfterDays = Schema.Number.check(
 );
 export type SidebarAutoSettleAfterDays = typeof SidebarAutoSettleAfterDays.Type;
 const DEFAULT_SIDEBAR_AUTO_SETTLE_AFTER_DAYS: SidebarAutoSettleAfterDays = 7;
-export const MIN_HIDDEN_AUTO_ARCHIVE_AFTER_DAYS = 1;
+const MIN_HIDDEN_AUTO_ARCHIVE_AFTER_DAYS = 1;
 export const MAX_HIDDEN_AUTO_ARCHIVE_AFTER_DAYS = 365;
 export const HiddenAutoArchiveAfterDays = Schema.Number.check(
   Schema.isBetween({
@@ -115,7 +115,7 @@ export const HiddenAutoArchiveAfterDays = Schema.Number.check(
   }),
 );
 export type HiddenAutoArchiveAfterDays = typeof HiddenAutoArchiveAfterDays.Type;
-export const DEFAULT_HIDDEN_AUTO_ARCHIVE_AFTER_DAYS: HiddenAutoArchiveAfterDays = 30;
+const DEFAULT_HIDDEN_AUTO_ARCHIVE_AFTER_DAYS: HiddenAutoArchiveAfterDays = 30;
 
 export const MAX_SNOOZE_PRESET_MINUTES = 30 * 24 * 60;
 export const MAX_SNOOZE_PRESETS = 8;

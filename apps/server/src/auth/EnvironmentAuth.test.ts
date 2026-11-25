@@ -1016,26 +1016,26 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodePlatformCrypto.layer))(
       ),
     );
 
-    it.effect("trusts sessions hhhd forwards only with its internal token", () =>
+    it.effect("trusts sessions p0d forwards only with its internal token", () =>
       Effect.gen(function* () {
         const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
         const sessions = yield* SessionStore.SessionStore;
         // @effect-diagnostics-next-line processEnvInEffect:off -- the layer removes it at startup.
-        expect(process.env.HHHD_INTERNAL_TOKEN).toBeUndefined();
+        expect(process.env.P0D_INTERNAL_TOKEN).toBeUndefined();
         const issued = yield* sessions.issue({
-          subject: "hhhd-client",
+          subject: "p0d-client",
           scopes: ["orchestration:read"],
         });
         const forwarded = (token: string, sessionId: string) =>
           ({
             cookies: {},
-            headers: { "x-hhhd-internal-token": token, "x-hhhd-session-id": sessionId },
+            headers: { "x-p0d-internal-token": token, "x-p0d-session-id": sessionId },
           }) as unknown as Parameters<
             EnvironmentAuth.EnvironmentAuth["Service"]["authenticateHttpRequest"]
           >[0];
 
         const session = yield* serverAuth.authenticateHttpRequest(
-          forwarded("hhhd-secret", issued.sessionId),
+          forwarded("p0d-secret", issued.sessionId),
         );
         expect(session.sessionId).toBe(issued.sessionId);
         expect(session.scopes).toEqual(["orchestration:read"]);
@@ -1045,7 +1045,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodePlatformCrypto.layer))(
         expect(wrongToken._tag).toBe("ServerAuthInvalidCredentialError");
         yield* sessions.revoke(issued.sessionId);
         const revoked = yield* Effect.flip(
-          serverAuth.authenticateHttpRequest(forwarded("hhhd-secret", issued.sessionId)),
+          serverAuth.authenticateHttpRequest(forwarded("p0d-secret", issued.sessionId)),
         );
         expect(revoked._tag).toBe("ServerAuthInvalidCredentialError");
       }).pipe(
@@ -1053,8 +1053,8 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodePlatformCrypto.layer))(
         Effect.provide(
           Layer.effectDiscard(
             Effect.sync(() => {
-              // @effect-diagnostics-next-line processEnvInEffect:off -- hhhd passes the token this way.
-              process.env.HHHD_INTERNAL_TOKEN = "hhhd-secret";
+              // @effect-diagnostics-next-line processEnvInEffect:off -- p0d passes the token this way.
+              process.env.P0D_INTERNAL_TOKEN = "p0d-secret";
             }),
           ),
         ),

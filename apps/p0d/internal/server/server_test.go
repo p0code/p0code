@@ -13,17 +13,17 @@ import (
 
 	"github.com/coder/websocket"
 
-	"hhhd/internal/authtest"
+	"p0d/internal/authtest"
 )
 
-// The test binary doubles as a fake legacy server when HHHD_FAKE_LEGACY is set, so the
+// The test binary doubles as a fake legacy server when P0D_FAKE_LEGACY is set, so the
 // sidecar manager can start it like the real one.
 func TestMain(m *testing.M) {
-	if os.Getenv("HHHD_FAKE_LEGACY") == "1" {
+	if os.Getenv("P0D_FAKE_LEGACY") == "1" {
 		runFakeLegacy()
 		return
 	}
-	os.Setenv("HHHCODE_SECRET_BACKEND", "file")
+	os.Setenv("P0CODE_SECRET_BACKEND", "file")
 	os.Exit(m.Run())
 }
 
@@ -34,25 +34,25 @@ func runFakeLegacy() {
 			port = os.Args[i+1]
 		}
 	}
-	token := os.Getenv("HHHD_INTERNAL_TOKEN")
+	token := os.Getenv("P0D_INTERNAL_TOKEN")
 	mux := http.NewServeMux()
 	mux.HandleFunc("/.well-known/t3/environment", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("{}")) })
 	mux.HandleFunc("/api/echo", func(w http.ResponseWriter, r *http.Request) {
 		http.SetCookie(w, &http.Cookie{Name: "t3_session_9_abc", Value: "issued"})
 		json.NewEncoder(w).Encode(map[string]string{
-			"token":         r.Header.Get("X-Hhhd-Internal-Token"),
-			"session":       r.Header.Get("X-Hhhd-Session-Id"),
+			"token":         r.Header.Get("X-P0d-Internal-Token"),
+			"session":       r.Header.Get("X-P0d-Session-Id"),
 			"authorization": r.Header.Get("Authorization"),
 			"host":          r.Host,
 			"forwardedFor":  r.Header.Get("X-Forwarded-For"),
 		})
 	})
 	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("X-Hhhd-Internal-Token") != token {
+		if r.Header.Get("X-P0d-Internal-Token") != token {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
-		session := r.Header.Get("X-Hhhd-Session-Id")
+		session := r.Header.Get("X-P0d-Session-Id")
 		ws, err := websocket.Accept(w, r, nil)
 		if err != nil {
 			return
@@ -116,7 +116,7 @@ func start(t *testing.T, legacy bool) *harness {
 	cfg := Config{Home: home.Dir, Host: "127.0.0.1", ReadyFile: home.Dir + "/ready.json", Version: "test", LegacyIdle: 200 * time.Millisecond,
 		Logger: log.New(io.Discard, "", 0)}
 	if legacy {
-		t.Setenv("HHHD_FAKE_LEGACY", "1")
+		t.Setenv("P0D_FAKE_LEGACY", "1")
 		cfg.Legacy = []string{os.Args[0]}
 	}
 	srv, err := Start(cfg)
@@ -258,7 +258,7 @@ func TestNativeMethods(t *testing.T) {
 		t.Fatalf("unknown tag: %v", first)
 	}
 
-	c.send(`{"_tag":"Request","id":5,"tag":"hhhd.subscribeStatus","payload":{},"headers":[]}`)
+	c.send(`{"_tag":"Request","id":5,"tag":"p0d.subscribeStatus","payload":{},"headers":[]}`)
 	chunk := c.next()
 	values := chunk["values"].([]any)
 	if chunk["_tag"] != "Chunk" || values[0].(map[string]any)["version"] != "test" {
@@ -375,8 +375,8 @@ func TestProxyToLegacy(t *testing.T) {
 		t.Fatalf("cookie not renamed: %s", res.Header.Get("Set-Cookie"))
 	}
 	req, _ = http.NewRequest("GET", h.srv.URL()+"/api/echo", nil)
-	req.Header.Set("X-Hhhd-Session-Id", "s1")
-	req.Header.Set("X-Hhhd-Internal-Token", "guess")
+	req.Header.Set("X-P0d-Session-Id", "s1")
+	req.Header.Set("X-P0d-Internal-Token", "guess")
 	res, err = http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)

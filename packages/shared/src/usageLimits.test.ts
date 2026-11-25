@@ -4,6 +4,7 @@ import {
   ProviderDriverKind,
   ProviderInstanceId,
   type ServerProvider,
+  type ServerProviderUsageLimits,
   type UsageLimitSourceAccount,
   UsageLimitSourceId,
 } from "@t3tools/contracts";
@@ -25,6 +26,7 @@ import {
   paceRemainingPercent,
   usesChatGptSharing,
   resolveNewThreadModelSelection,
+  tightestSubscriptionWindow,
 } from "./usageLimits.ts";
 import { collectLimitNotices } from "./usageLimitsCopy.ts";
 
@@ -2009,5 +2011,39 @@ describe("ChatGPT sharing presentation", () => {
         auth: { status: "unauthenticated", subscriptionSharing: true },
       }),
     ).toBe(false);
+  });
+});
+
+describe("tightestSubscriptionWindow", () => {
+  const limits = (windows: ServerProviderUsageLimits["windows"]): ServerProviderUsageLimits => ({
+    checkedAt: "2026-11-25T00:00:00.000Z",
+    windows,
+  });
+
+  it("picks the general window with the least room left", () => {
+    const window = tightestSubscriptionWindow({
+      driver: ProviderDriverKind.make("claudeAgent"),
+      usageLimits: limits([
+        { id: "session", kind: "session", label: "Session", usedPercent: 30 },
+        { id: "weekly", kind: "weekly", label: "Weekly", usedPercent: 70 },
+        { id: "fable", kind: "weekly", label: "Fable", usedPercent: 95, modelIds: ["fable"] },
+      ]),
+    });
+    expect(window?.id).toBe("weekly");
+  });
+
+  it("shows nothing for OpenCode or an account whose limits cannot be read", () => {
+    expect(
+      tightestSubscriptionWindow({
+        driver: ProviderDriverKind.make("opencode"),
+        usageLimits: limits([{ id: "go", kind: "monthly", label: "Go", usedPercent: 10 }]),
+      }),
+    ).toBeNull();
+    expect(
+      tightestSubscriptionWindow({
+        driver: ProviderDriverKind.make("codex"),
+        usageLimits: { ...limits([]), unavailable: { reason: "probeFailed" } },
+      }),
+    ).toBeNull();
   });
 });
