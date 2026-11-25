@@ -167,6 +167,10 @@ const makeHarness = Effect.fn("TestEnvironmentRegistry.makeHarness")(function* (
     ) => Effect.Effect<ConnectionBlockedError | undefined>;
     readonly initialDisabled?: ReadonlyArray<EnvironmentId>;
     readonly directEndpoints?: ServerConfig["directEndpoints"];
+    readonly catalogFailure?: {
+      readonly detail: string;
+      readonly preservedKey: string | null;
+    };
   },
 ) {
   const storedTargets = yield* Ref.make<ReadonlyArray<ConnectionTarget>>(initialTargets);
@@ -205,9 +209,34 @@ const makeHarness = Effect.fn("TestEnvironmentRegistry.makeHarness")(function* (
     new Set(options?.initialDisabled ?? []),
   );
   const targetStore = Persistence.ConnectionTargetStore.of({
-    list: Ref.get(storedTargets),
-    listDisabled: Ref.get(storedDisabled).pipe(Effect.map((ids) => [...ids])),
+    list:
+      options?.catalogFailure === undefined
+        ? Ref.get(storedTargets)
+        : Effect.fail(
+            new Persistence.ConnectionPersistenceError({
+              operation: "list-targets",
+              message: options.catalogFailure.detail,
+            }),
+          ),
+    listDisabled:
+      options?.catalogFailure === undefined
+        ? Ref.get(storedDisabled).pipe(Effect.map((ids) => [...ids]))
+        : Effect.fail(
+            new Persistence.ConnectionPersistenceError({
+              operation: "list-disabled-targets",
+              message: options.catalogFailure.detail,
+            }),
+          ),
   });
+  const catalogProblemLayer =
+    options?.catalogFailure === undefined
+      ? Layer.empty
+      : Layer.succeed(
+          Persistence.ConnectionCatalogProblemStore,
+          Persistence.ConnectionCatalogProblemStore.of({
+            read: Effect.succeedSome(options.catalogFailure),
+          }),
+        );
   const registrationStore = Persistence.ConnectionRegistrationStore.of({
     register: (registration, routes) =>
       Effect.gen(function* () {
@@ -458,6 +487,7 @@ const makeHarness = Effect.fn("TestEnvironmentRegistry.makeHarness")(function* (
     Layer.provide(
       Layer.mergeAll(
         Layer.succeed(Persistence.ConnectionTargetStore, targetStore),
+        catalogProblemLayer,
         Layer.succeed(Persistence.ConnectionRegistrationStore, registrationStore),
         Layer.succeed(ConnectionProfileStore.ConnectionProfileStore, profileStore),
         Layer.succeed(ConnectionCredentialStore.ConnectionCredentialStore, credentialStore),
@@ -545,6 +575,41 @@ function awaitConnectionState(
 }
 
 describe("EnvironmentRegistry", () => {
+  it.effect("starts without targets and reports an unreadable saved catalog", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeHarness([TARGET], [], [], {
+        catalogFailure: {
+          detail: "Could not decode the local connection catalog.",
+          preservedKey: "catalog:unreadable:1",
+        },
+      });
+
+      yield* Effect.gen(function* () {
+        const registry = yield* EnvironmentRegistry.EnvironmentRegistry;
+        expect(yield* SubscriptionRef.get(registry.catalogError)).toEqual({
+          detail: "Could not decode the local connection catalog.",
+          preservedKey: "catalog:unreadable:1",
+        });
+        expect((yield* SubscriptionRef.get(registry.entries)).size).toBe(0);
+
+        yield* registry.start;
+        expect(yield* Ref.get(harness.sessions)).toHaveLength(0);
+      }).pipe(Effect.provide(harness.layer), Effect.scoped);
+    }),
+  );
+
+  it.effect("reports no catalog error when the saved catalog loaded", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeHarness([TARGET]);
+
+      yield* Effect.gen(function* () {
+        const registry = yield* EnvironmentRegistry.EnvironmentRegistry;
+        expect(yield* SubscriptionRef.get(registry.catalogError)).toBeNull();
+        expect((yield* SubscriptionRef.get(registry.entries)).size).toBe(1);
+      }).pipe(Effect.provide(harness.layer), Effect.scoped);
+    }),
+  );
+
   it.effect("replays connected state when arming a desktop commit observer", () =>
     Effect.gen(function* () {
       const harness = yield* makeHarness([TARGET]);

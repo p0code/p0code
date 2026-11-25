@@ -4,6 +4,7 @@ import {
   isFirstRunWorkspaceProvenanceAuthoritative,
   isFreshFirstRunWorkspace,
   resolveFirstRunDecision,
+  shouldShowSavedCatalogRecovery,
   transitionFirstRunGateState,
 } from "./firstRun.logic";
 
@@ -239,5 +240,24 @@ describe("isFreshFirstRunWorkspace", () => {
         ],
       }),
     ).toBe(false);
+  });
+});
+
+describe("shouldShowSavedCatalogRecovery", () => {
+  const error = { detail: "Could not decode the local connection catalog." };
+
+  it("replaces the app with the recovery surface when the saved catalog failed", () => {
+    expect(shouldShowSavedCatalogRecovery({ catalogError: error, pathname: "/" })).toBe(true);
+    expect(shouldShowSavedCatalogRecovery({ catalogError: error, pathname: "/chat" })).toBe(true);
+  });
+
+  it("keeps settings reachable so a machine can be reconnected", () => {
+    expect(
+      shouldShowSavedCatalogRecovery({ catalogError: error, pathname: "/settings/connections" }),
+    ).toBe(false);
+  });
+
+  it("leaves a healthy catalog alone", () => {
+    expect(shouldShowSavedCatalogRecovery({ catalogError: null, pathname: "/" })).toBe(false);
   });
 });

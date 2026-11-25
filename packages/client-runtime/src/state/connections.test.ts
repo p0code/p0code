@@ -7,6 +7,7 @@ import * as Stream from "effect/Stream";
 import * as SubscriptionRef from "effect/SubscriptionRef";
 import { Atom, AtomRegistry } from "effect/reactivity";
 
+import type { ConnectionCatalogEntry } from "../connection/catalog.ts";
 import {
   AVAILABLE_CONNECTION_STATE,
   ConnectionTransientError,
@@ -74,6 +75,43 @@ const lastFailure = new ConnectionTransientError({ reason: "transport", detail: 
 const newSession = () => Option.some({} as RpcSession.RpcSession);
 
 describe("environment catalog atoms", () => {
+  it.effect("reports an unreadable saved catalog separately from the entries", () =>
+    Effect.gen(function* () {
+      const entries = yield* SubscriptionRef.make<
+        ReadonlyMap<EnvironmentId, ConnectionCatalogEntry>
+      >(new Map());
+      const catalogError =
+        yield* SubscriptionRef.make<EnvironmentRegistry.EnvironmentCatalogError | null>({
+          detail: "Could not decode the local connection catalog.",
+          preservedKey: "catalog:unreadable:1",
+        });
+      const registry = EnvironmentRegistry.EnvironmentRegistry.of({
+        entries,
+        catalogError,
+      } as unknown as EnvironmentRegistry.EnvironmentRegistry["Service"]);
+      const catalog = createEnvironmentCatalogAtoms(
+        Atom.runtime(Layer.succeed(EnvironmentRegistry.EnvironmentRegistry, registry)),
+      );
+      const atoms = AtomRegistry.make();
+      const unmountError = atoms.mount(catalog.catalogErrorValueAtom);
+      const unmountCatalog = atoms.mount(catalog.catalogValueAtom);
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => {
+          unmountError();
+          unmountCatalog();
+          atoms.dispose();
+        }),
+      );
+      yield* Effect.yieldNow;
+
+      expect(atoms.get(catalog.catalogErrorValueAtom)).toEqual({
+        detail: "Could not decode the local connection catalog.",
+        preservedKey: "catalog:unreadable:1",
+      });
+      expect(atoms.get(catalog.catalogValueAtom).entries.size).toBe(0);
+    }),
+  );
+
   it.effect("changes the session generation only when a new session comes up", () =>
     Effect.gen(function* () {
       const { generation, generationAfter } = yield* makeCatalogHarness();

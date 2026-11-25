@@ -57,6 +57,7 @@ import {
   SETTINGS_NAV_LABELS,
   SETTINGS_SECTION_LABELS,
   settingsNavGroups,
+  settingsSectionDisabledReason,
   type SettingsPath,
   type SettingsSearchItem,
 } from "./settingsSearch";
@@ -65,6 +66,7 @@ import {
   useAvailableSettingsSearchItems,
   useHasPluginsEnvironment,
   useHasSecretProvidersEnvironment,
+  useSettingsCatalogUnavailable,
 } from "./useAvailableSettingsSearchItems";
 
 const SnapShotIcon = createLucideIcon("snap-shot", [
@@ -137,9 +139,11 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
   const [compactSearchOpen, setCompactSearchOpen] = useState(false);
   const [activeResultIndex, setActiveResultIndex] = useState(0);
   const searchableItems = useAvailableSettingsSearchItems();
+  const catalogUnavailable = useSettingsCatalogUnavailable();
   const navGroups = settingsNavGroups(
     useHasSecretProvidersEnvironment(),
     useHasPluginsEnvironment(),
+    catalogUnavailable,
   );
   const results = searchSettings(query, searchableItems, m);
   const isSearching = query.trim().length > 0;
@@ -397,22 +401,40 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
                           {group.paths.map((to) => {
                             const Icon = SETTINGS_SECTION_ICONS[to];
                             const isActive = activePath === to || activePath.startsWith(`${to}/`);
+                            const disabledReason = settingsSectionDisabledReason(
+                              to,
+                              catalogUnavailable,
+                            );
                             return (
                               <SidebarMenuItem key={to}>
                                 <SidebarMenuButton
                                   data-settings-section={to}
                                   aria-current={isActive ? "page" : undefined}
+                                  aria-disabled={disabledReason === null ? undefined : true}
+                                  disabled={disabledReason !== null}
                                   isActive={isActive}
                                   onClick={() => handleSectionClick(to)}
                                 >
                                   <Icon />
                                   <span
                                     className={cn(
-                                      "truncate",
+                                      "min-w-0 flex-1",
                                       !compactSearchOpen && "max-md:sr-only",
                                     )}
                                   >
-                                    {m(SETTINGS_NAV_LABELS[to])}
+                                    <span
+                                      className={cn(
+                                        "block truncate",
+                                        disabledReason !== null && "text-sidebar-muted-foreground",
+                                      )}
+                                    >
+                                      {m(SETTINGS_NAV_LABELS[to])}
+                                    </span>
+                                    {disabledReason === null ? null : (
+                                      <span className="block truncate text-2xs text-sidebar-muted-foreground/75">
+                                        {m(disabledReason)}
+                                      </span>
+                                    )}
                                   </span>
                                 </SidebarMenuButton>
                               </SidebarMenuItem>

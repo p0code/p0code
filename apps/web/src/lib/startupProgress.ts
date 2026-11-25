@@ -23,6 +23,8 @@ export interface ClientStartupReadinessInput {
   readonly hydrated: boolean;
   readonly firstRunDecision: "pending" | "app" | "wizard";
   readonly catalogReady: boolean;
+  /** The saved catalog could not be read; the gate shows its recovery surface, never the shell. */
+  readonly catalogUnavailable: boolean;
   readonly enabledEnvironmentCount: number;
   readonly primaryEnvironmentDiscovered: boolean;
   readonly primaryConnectionPhase: SupervisorConnectionPhase | null;
@@ -175,6 +177,11 @@ export function resolveServerStartupProgress(status: ServerStartupStatus): Start
 export function resolveClientStartupStage(input: ClientStartupReadinessInput): StartupStage {
   if (!input.enabled && !input.hostedStatic) {
     return "ready";
+  }
+
+  // A failed saved catalog never settles into the app shell; its recovery surface replaces it.
+  if (input.catalogUnavailable) {
+    return "connecting";
   }
 
   if (input.hostedStatic) {

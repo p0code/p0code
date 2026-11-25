@@ -22,6 +22,7 @@ const baseReadiness: ClientStartupReadinessInput = {
   hydrated: true,
   firstRunDecision: "app",
   catalogReady: true,
+  catalogUnavailable: false,
   enabledEnvironmentCount: 1,
   primaryEnvironmentDiscovered: true,
   primaryConnectionPhase: "connected",
@@ -222,6 +223,21 @@ describe("resolveClientStartupStage", () => {
         startupTimedOut: true,
       }),
     ).toBe("ready");
+  });
+
+  it("never releases to ready after the safety timer when the saved catalog failed", () => {
+    expect(
+      resolveClientStartupStage({
+        ...baseReadiness,
+        catalogUnavailable: true,
+        primaryEnvironmentDiscovered: false,
+        primaryConnectionPhase: null,
+        primaryServerConfigReady: false,
+        primaryShellHasSnapshot: false,
+        allShellsBootstrapped: false,
+        startupTimedOut: true,
+      }),
+    ).toBe("connecting");
   });
 
   it("handles hosted-static startup with and without environments", () => {

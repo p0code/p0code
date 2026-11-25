@@ -15,7 +15,11 @@ export * from "./routes.ts";
 export { type RouteCheck } from "./driver.ts";
 export * as EnvironmentRegistry from "./registry.ts";
 // Flat so consumers' inferred types can name them.
-export { EnvironmentNotRegisteredError, PlatformEnvironmentRemovalError } from "./registry.ts";
+export {
+  EnvironmentNotRegisteredError,
+  PlatformEnvironmentRemovalError,
+  type EnvironmentCatalogError,
+} from "./registry.ts";
 export * as EnvironmentSupervisor from "./supervisor.ts";
 export * as Wakeups from "./wakeups.ts";
 // Flat so consumers' inferred command types can name it.

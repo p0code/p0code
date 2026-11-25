@@ -16,6 +16,7 @@ import {
   movedSettingsPath,
   searchSettings,
   settingsNavGroups,
+  settingsSectionDisabledReason,
   SETTINGS_SEARCH_ITEMS,
   sourceControlHostSearchItems,
   sourceControlHostSettingsSearchId,
@@ -92,6 +93,32 @@ describe("searchSettings", () => {
       expect(navPaths.includes("/settings/secrets")).toBe(enabled);
       expect(searchPaths.includes("/settings/secrets")).toBe(enabled);
     }
+  });
+
+  it("keeps the Secrets and Plugins rows disabled when the saved catalog did not load", () => {
+    const availability = {
+      hasCloudPublicConfig: false,
+      hasEnvironment: false,
+      hasProviderSettingsEnvironment: false,
+      canManageLocalBackend: false,
+      isWslSettingsRowVisible: false,
+      hasThreadAutoSettlement: false,
+      hasSecretProvidersEnvironment: false,
+      hasPluginsEnvironment: false,
+      catalogUnavailable: true,
+    };
+    const navPaths = settingsNavGroups(false, false, true).flatMap((group) => group.paths);
+    expect(navPaths).toContain("/settings/secrets");
+    expect(navPaths).toContain("/settings/plugins");
+
+    const searchPaths = filterAvailableSettingsSearchItems(availability).map((item) => item.to);
+    expect(searchPaths).toContain("/settings/secrets");
+    expect(searchPaths).toContain("/settings/plugins");
+
+    expect(settingsSectionDisabledReason("/settings/secrets", true)).toMatch(/unavailable/);
+    expect(settingsSectionDisabledReason("/settings/plugins", true)).toMatch(/unavailable/);
+    expect(settingsSectionDisabledReason("/settings/general", true)).toBeNull();
+    expect(settingsSectionDisabledReason("/settings/plugins", false)).toBeNull();
   });
 
   it("finds where subagents and side chats open by any of its names", () => {

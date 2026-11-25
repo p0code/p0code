@@ -65,6 +65,19 @@ export function createEnvironmentCatalogAtoms<R, E>(
     AsyncResult.getOrElse(get(catalogAtom), () => EMPTY_ENVIRONMENT_CATALOG_STATE),
   ).pipe(Atom.withLabel("environment-catalog-value"));
 
+  const catalogErrorAtom = runtime.atom(
+    Stream.unwrap(
+      EnvironmentRegistry.EnvironmentRegistry.pipe(
+        Effect.map((registry) => SubscriptionRef.changes(registry.catalogError)),
+      ),
+    ),
+    { initialValue: null as EnvironmentRegistry.EnvironmentCatalogError | null },
+  );
+
+  const catalogErrorValueAtom = Atom.make((get) =>
+    AsyncResult.getOrElse(get(catalogErrorAtom), () => null),
+  ).pipe(Atom.withLabel("environment-catalog-error"));
+
   const pullRequestRoutingPermissionsAtom = runtime.atom(
     Stream.unwrap(
       PullRequestRoutingPermissions.pipe(Effect.map((permissions) => permissions.changes)),
@@ -195,6 +208,8 @@ export function createEnvironmentCatalogAtoms<R, E>(
   return {
     catalogAtom,
     catalogValueAtom,
+    catalogErrorAtom,
+    catalogErrorValueAtom,
     pullRequestRoutingPermissionsValueAtom,
     setPullRequestRoutingPermission,
     networkStatusAtom,

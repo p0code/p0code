@@ -106,6 +106,7 @@ const CATALOG_FAILURE = {
   encode: msg("Could not encode the local connection catalog: {cause}"),
   load: msg("Could not load the local connection catalog: {cause}"),
   save: msg("Could not save the local connection catalog: {cause}"),
+  unreadable: msg("The saved connections could not be read: {cause}"),
   "save pull request routing permissions in": msg(
     "Could not save pull request routing permissions in the local connection catalog: {cause}",
   ),
@@ -513,7 +514,8 @@ const encodeCatalog = Effect.fn("web.connectionStorage.encodeCatalog")(function*
 export interface CatalogBackend {
   readonly read: Effect.Effect<string | null, ConnectionTransientError>;
   readonly write: (raw: string) => Effect.Effect<void, ConnectionTransientError>;
-  readonly quarantine?: (raw: string) => Effect.Effect<void, ConnectionTransientError>;
+  /** Keeps a copy of a value that cannot be read, and reports where it kept it. */
+  readonly quarantine?: (raw: string) => Effect.Effect<string | null, ConnectionTransientError>;
 }
 
 export function makeCatalogBackend(database: DatabaseHandle): CatalogBackend {
@@ -548,13 +550,24 @@ export function makeCatalogBackend(database: DatabaseHandle): CatalogBackend {
       Effect.map((value) => (typeof value === "string" ? value : null)),
     ),
     write: (raw) => writeDatabaseValue(database, CATALOG_STORE_NAME, CATALOG_KEY, raw),
-    quarantine: (raw) =>
-      writeDatabaseValue(database, CATALOG_STORE_NAME, `${CATALOG_KEY}:corrupt:${Date.now()}`, raw),
+    quarantine: (raw) => {
+      const key = `catalog:unreadable:${Date.now()}`;
+      return writeDatabaseValue(database, CATALOG_STORE_NAME, key, raw).pipe(Effect.as(key));
+    },
   };
 }
 
+/** A saved catalog that loaded, or one that was kept aside because it cannot be read. */
+export type CatalogStoreLoad =
+  | { readonly _tag: "loaded"; readonly catalog: ConnectionCatalogDocumentType }
+  | {
+      readonly _tag: "unreadable";
+      readonly detail: string;
+      readonly preservedKey: string | null;
+    };
+
 interface CatalogStore {
-  readonly read: Effect.Effect<ConnectionCatalogDocumentType, ConnectionTransientError>;
+  readonly read: Effect.Effect<CatalogStoreLoad, ConnectionTransientError>;
   readonly update: (
     transform: (catalog: ConnectionCatalogDocumentType) => ConnectionCatalogDocumentType,
   ) => Effect.Effect<void, ConnectionTransientError>;
@@ -563,7 +576,7 @@ interface CatalogStore {
 export const makeCatalogStore = Effect.fn("web.connectionStorage.makeCatalogStore")(function* (
   backend: CatalogBackend,
 ) {
-  const state = yield* Ref.make<Option.Option<ConnectionCatalogDocumentType>>(Option.none());
+  const state = yield* Ref.make<Option.Option<CatalogStoreLoad>>(Option.none());
   const lock = yield* Semaphore.make(1);
 
   const loadUnlocked = Effect.fn("web.connectionStorage.loadCatalog")(function* () {
@@ -572,38 +585,54 @@ export const makeCatalogStore = Effect.fn("web.connectionStorage.makeCatalogStor
       return cached.value;
     }
     const raw = yield* backend.read;
-    let catalog = EMPTY_CONNECTION_CATALOG_DOCUMENT;
+    let loaded: CatalogStoreLoad = {
+      _tag: "loaded",
+      catalog: EMPTY_CONNECTION_CATALOG_DOCUMENT,
+    };
     if (raw !== null && raw.trim() !== "") {
-      catalog = yield* decodeCatalog(raw).pipe(
+      loaded = yield* decodeCatalog(raw).pipe(
+        Effect.map((catalog): CatalogStoreLoad => ({ _tag: "loaded", catalog })),
         Effect.catch((error) =>
           Effect.gen(function* () {
-            yield* Effect.logWarning("Discarding a corrupt web connection catalog.", {
-              error: error.message,
-            });
-            if (backend.quarantine !== undefined) {
-              yield* backend.quarantine(raw).pipe(
-                Effect.catch((cause) =>
-                  Effect.logWarning("Could not quarantine the corrupt web connection catalog.", {
-                    error: cause.message,
-                  }),
-                ),
-              );
-            }
-            const encoded = yield* encodeCatalog(EMPTY_CONNECTION_CATALOG_DOCUMENT);
-            yield* backend.write(encoded).pipe(
-              Effect.catch((cause) =>
-                Effect.logWarning("Could not persist the recovered web connection catalog.", {
-                  error: cause.message,
-                }),
-              ),
+            // The value stays where it is: an empty catalog must never replace a real one.
+            yield* Effect.logWarning(
+              "Keeping a saved web connection catalog that cannot be read.",
+              {
+                error: error.message,
+              },
             );
-            return EMPTY_CONNECTION_CATALOG_DOCUMENT;
+            const preservedKey =
+              backend.quarantine === undefined
+                ? null
+                : yield* backend
+                    .quarantine(raw)
+                    .pipe(
+                      Effect.catch((cause) =>
+                        Effect.logWarning(
+                          "Could not keep a copy of the unreadable web connection catalog.",
+                          { error: cause.message },
+                        ).pipe(Effect.as(null)),
+                      ),
+                    );
+            return {
+              _tag: "unreadable",
+              detail: error.message,
+              preservedKey,
+            } satisfies CatalogStoreLoad;
           }),
         ),
       );
     }
-    yield* Ref.set(state, Option.some(catalog));
-    return catalog;
+    yield* Ref.set(state, Option.some(loaded));
+    return loaded;
+  });
+
+  const loadDocumentUnlocked = Effect.fn("web.connectionStorage.loadCatalogDocument")(function* () {
+    const loaded = yield* loadUnlocked();
+    if (loaded._tag === "unreadable") {
+      return yield* catalogError("unreadable", loaded.detail);
+    }
+    return loaded.catalog;
   });
 
   const read = lock.withPermits(1)(loadUnlocked());
@@ -611,9 +640,9 @@ export const makeCatalogStore = Effect.fn("web.connectionStorage.makeCatalogStor
     function* (transform) {
       yield* lock.withPermits(1)(
         Effect.gen(function* () {
-          const next = transform(yield* loadUnlocked());
+          const next = transform(yield* loadDocumentUnlocked());
           yield* backend.write(yield* encodeCatalog(next));
-          yield* Ref.set(state, Option.some(next));
+          yield* Ref.set(state, Option.some({ _tag: "loaded", catalog: next }));
         }),
       );
     },
@@ -750,6 +779,26 @@ export const layer = Layer.effectContext(
       (owned) => owned.close,
     );
     const catalog = yield* makeCatalogStore(makeCatalogBackend(database));
+    const catalogDocument = catalog.read.pipe(
+      Effect.flatMap((loaded) =>
+        loaded._tag === "loaded"
+          ? Effect.succeed(loaded.catalog)
+          : Effect.fail(catalogError("unreadable", loaded.detail)),
+      ),
+    );
+    const catalogProblem = Persistence.ConnectionCatalogProblemStore.of({
+      read: catalog.read.pipe(
+        Effect.map((loaded): Option.Option<Persistence.ConnectionCatalogProblem> =>
+          loaded._tag === "unreadable"
+            ? Option.some({
+                detail: loaded.detail,
+                preservedKey: loaded.preservedKey,
+              })
+            : Option.none(),
+        ),
+        Effect.orElseSucceed(() => Option.none<Persistence.ConnectionCatalogProblem>()),
+      ),
+    });
     const pullRequestRoutingPermissions = makeBrowserPullRequestRoutingPermissions();
     // Remembers each thread row's encoding, so a save only encodes rows that changed.
     const encodeStoredShellSnapshot = makeStoredShellSnapshotEncoder({
@@ -762,11 +811,11 @@ export const layer = Layer.effectContext(
     const threadWriteOrder = makeThreadCacheWriteOrder();
 
     const targetStore = Persistence.ConnectionTargetStore.of({
-      list: catalog.read.pipe(
+      list: catalogDocument.pipe(
         Effect.map((document) => document.targets),
         Effect.mapError((cause) => persistenceError("list-targets", cause)),
       ),
-      listDisabled: catalog.read.pipe(
+      listDisabled: catalogDocument.pipe(
         Effect.map((document) => document.disabledEnvironmentIds),
         Effect.mapError((cause) => persistenceError("list-disabled-targets", cause)),
       ),
@@ -801,7 +850,7 @@ export const layer = Layer.effectContext(
     });
     const profileStore = ProfileStore.make({
       get: (connectionId) =>
-        catalog.read.pipe(
+        catalogDocument.pipe(
           Effect.map((document) =>
             Option.fromUndefinedOr(
               document.profiles.find((profile) => profile.connectionId === connectionId),
@@ -825,7 +874,7 @@ export const layer = Layer.effectContext(
     });
     const credentialStore = CredentialStore.make({
       get: (connectionId) =>
-        catalog.read.pipe(
+        catalogDocument.pipe(
           Effect.map((document) =>
             Option.fromUndefinedOr(
               document.credentials.find((entry) => entry.connectionId === connectionId)?.credential,
@@ -852,7 +901,7 @@ export const layer = Layer.effectContext(
     });
     const remoteTokenStore = TokenStore.make({
       get: (environmentId) =>
-        catalog.read.pipe(
+        catalogDocument.pipe(
           Effect.map((document) =>
             Option.fromUndefinedOr(
               document.remoteDpopTokens.find((token) => token.environmentId === environmentId),
@@ -1139,6 +1188,7 @@ export const layer = Layer.effectContext(
     };
 
     return Context.make(Persistence.ConnectionTargetStore, targetStore).pipe(
+      Context.add(Persistence.ConnectionCatalogProblemStore, catalogProblem),
       Context.add(PullRequestRoutingPermissions, pullRequestRoutingPermissions),
       Context.add(Persistence.ConnectionRegistrationStore, registrationStore),
       Context.add(ProfileStore.ConnectionProfileStore, profileStore),
