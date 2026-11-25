@@ -17,6 +17,7 @@ const isShelfHeader = (item: SidebarListItem | undefined) =>
   item?.kind === "marker" &&
   (item.marker === "working-header" ||
     item.marker === "snoozed-header" ||
+    item.marker === "hidden-header" ||
     item.marker === "settled-header");
 
 export function restrictBelowSidebarLabel(
@@ -56,7 +57,9 @@ export function createSidebarCollisionDetection(
       if (pointer.x >= boundary.left && pointer.x <= boundary.right) {
         if (pointer.y < previousY && pointer.y <= boundary.bottom) boundarySection = "pinned";
         else if (pointer.y > previousY && pointer.y >= boundary.top) boundarySection = "active";
-        const nextHeader = (["working-header", "snoozed-header", "settled-header"] as const)
+        const nextHeader = (
+          ["working-header", "snoozed-header", "hidden-header", "settled-header"] as const
+        )
           .map((marker) =>
             args.droppableContainers.find((container) => container.id === sidebarMarkerId(marker)),
           )
@@ -98,6 +101,7 @@ export function createSidebarSortingStrategy(input: {
   settledVisibleCount?: number;
   routeThreadKey?: string | null;
   snoozedThreadCount?: number;
+  hiddenThreadCount?: number;
   cardHeight?: number;
   slimHeight?: number;
   boundaryLabelHeight?: number;
@@ -119,6 +123,7 @@ export function createSidebarSortingStrategy(input: {
       active: [],
       working: [],
       snoozed: [],
+      hidden: [],
       settled: [],
     };
     let cardHeight = input.cardHeight;
@@ -187,6 +192,14 @@ export function createSidebarSortingStrategy(input: {
     ) {
       marker("snoozed-header");
       projected.push(...groups.snoozed);
+    }
+    if (
+      groups.hidden.length > 0 ||
+      ((active.section !== "hidden" || (input.hiddenThreadCount ?? 0) > 1) &&
+        items.some((item) => item.kind === "marker" && item.marker === "hidden-header"))
+    ) {
+      marker("hidden-header");
+      projected.push(...groups.hidden);
     }
     marker("settled-header");
     section("settled");

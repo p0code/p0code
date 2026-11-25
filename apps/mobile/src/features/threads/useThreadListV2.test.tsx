@@ -58,6 +58,7 @@ it("reuses a large thread list across tab renders and updates when its inputs ch
     workingShelfEnabled: true,
     workingShelfExpanded: false,
     snoozedShelfExpanded: false,
+    hiddenShelfExpanded: false,
     settledShelfExpanded: true,
     selectedThreadKey: null,
   };

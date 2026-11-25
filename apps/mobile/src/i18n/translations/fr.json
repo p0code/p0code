@@ -5350,5 +5350,13 @@
   "ad208e3e32c85029": "Tout masquer",
   "3328503592789bed": "Zen",
   "856812e7e1fc445e": "Appels d’outils dans la discussion",
-  "8d545d54c0a9e950": "Masque les commandes, modifications et recherches lancées par les agents. Masquer les réussis garde les échecs. Zen n’affiche que les réponses finales. Les approbations, questions et erreurs s’affichent toujours."
+  "8d545d54c0a9e950": "Masque les commandes, modifications et recherches lancées par les agents. Masquer les réussis garde les échecs. Zen n’affiche que les réponses finales. Les approbations, questions et erreurs s’affichent toujours.",
+  "be0ced155e1512b1": "Archiver les fils masqués",
+  "2a8bc9854167e134": "Déplace les fils masqués vers l’archive après ce nombre de jours, sauf s’ils ont une pull request ouverte.",
+  "4a194f0c4ef34d4b": "Jours masqués avant l’archivage",
+  "24d3000f06f94612": "Jours masqués",
+  "23c7c97630e50595": "Masqués",
+  "16e1300e91151c39": "{count, plural, one {{count} fil masqué} other {{count} fils masqués}}",
+  "7388ff6a377a6ede": "Réduit les fils masqués.",
+  "4248d02b513a4b32": "Développe les fils masqués."
 }

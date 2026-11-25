@@ -5356,5 +5356,13 @@
   "ad208e3e32c85029": "Alle ausblenden",
   "3328503592789bed": "Zen",
   "856812e7e1fc445e": "Tool-Aufrufe im Chat",
-  "8d545d54c0a9e950": "Die Befehle, Bearbeitungen und Suchen ausblenden, die Agenten ausführen. „Erfolgreiche ausblenden“ behält Fehler. „Zen“ zeigt nur endgültige Antworten. Genehmigungen, Fragen und Fehler werden immer angezeigt."
+  "8d545d54c0a9e950": "Die Befehle, Bearbeitungen und Suchen ausblenden, die Agenten ausführen. „Erfolgreiche ausblenden“ behält Fehler. „Zen“ zeigt nur endgültige Antworten. Genehmigungen, Fragen und Fehler werden immer angezeigt.",
+  "be0ced155e1512b1": "Ausgeblendete Threads archivieren",
+  "2a8bc9854167e134": "Ausgeblendete Threads nach so vielen Tagen ins Archiv verschieben, sofern sie keinen offenen Pull Request haben.",
+  "4a194f0c4ef34d4b": "Tage ausgeblendet bis zur Archivierung",
+  "24d3000f06f94612": "Tage ausgeblendet",
+  "23c7c97630e50595": "Ausgeblendet",
+  "16e1300e91151c39": "{count, plural, one {{count} ausgeblendeter Thread} other {{count} ausgeblendete Threads}}",
+  "7388ff6a377a6ede": "Klappt die ausgeblendeten Threads ein.",
+  "4248d02b513a4b32": "Klappt die ausgeblendeten Threads aus."
 }

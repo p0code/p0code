@@ -36,6 +36,7 @@ import {
   type SidebarListMarker,
   type SidebarSection,
   resolveSidebarDropVerb,
+  resolveSidebarThreadSection,
   groupSidebarThreadsByProject,
   resolveSidebarFolderDot,
   sidebarFolderExpansionKeys,
@@ -1854,5 +1855,21 @@ describe("filterSidebarProjectScopeItems", () => {
 
     expect(filter("")).toEqual([ADD_PROJECT_SCOPE_ITEM_VALUE, "all", "p1"]);
     expect(filter("project")).toEqual(["p1"]);
+  });
+});
+
+describe("hidden sidebar section", () => {
+  it("puts an open-ended snooze in Hidden and a timed one in Snoozed", () => {
+    expect(
+      resolveSidebarThreadSection({ snoozed: true, hidden: true, settled: false, pinned: false }),
+    ).toBe("hidden");
+    expect(
+      resolveSidebarThreadSection({ snoozed: true, hidden: false, settled: false, pinned: false }),
+    ).toBe("snoozed");
+  });
+
+  it("accepts no drops into Hidden, and dragging out of it wakes the thread", () => {
+    expect(resolveSidebarDropVerb("active", "hidden")).toBeNull();
+    expect(resolveSidebarDropVerb("hidden", "active")).toBe("wake");
   });
 });

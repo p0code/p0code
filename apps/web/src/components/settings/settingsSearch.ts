@@ -509,6 +509,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: [msg("usage quota rate limit reset wake recover continue")],
   },
   {
+    id: "archive-hidden-threads",
+    title: msg("Archive hidden threads"),
+    to: "/settings/threads",
+    searchTerms: [msg("hide hidden archive days pull request automatically cleanup")],
+  },
+  {
     id: "judges",
     title: msg("Judges"),
     to: "/settings/threads",

@@ -327,17 +327,16 @@ export function cancelAutoSettleDaysField(field: AutoSettleDaysField): AutoSettl
   return { ...field, draft: String(field.pending ?? field.saved), dirty: false };
 }
 
-export function commitAutoSettleDaysField(field: AutoSettleDaysField): {
+export function commitAutoSettleDaysField(
+  field: AutoSettleDaysField,
+  maxDays: number = MAX_SIDEBAR_AUTO_SETTLE_AFTER_DAYS,
+): {
   readonly field: AutoSettleDaysField;
   readonly submit: number | null;
 } {
   const current = field.pending ?? field.saved;
   const days = field.draft.trim() === "" ? Number.NaN : Number(field.draft);
-  if (
-    !Number.isInteger(days) ||
-    days < MIN_SIDEBAR_AUTO_SETTLE_AFTER_DAYS ||
-    days > MAX_SIDEBAR_AUTO_SETTLE_AFTER_DAYS
-  ) {
+  if (!Number.isInteger(days) || days < MIN_SIDEBAR_AUTO_SETTLE_AFTER_DAYS || days > maxDays) {
     return { field: { ...field, draft: String(current), dirty: false }, submit: null };
   }
   const settled = { ...field, draft: String(days), dirty: false };

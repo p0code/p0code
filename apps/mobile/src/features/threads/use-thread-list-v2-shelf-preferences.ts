@@ -10,6 +10,8 @@ export function useThreadListV2ShelfPreferences() {
   const loaded = AsyncResult.isSuccess(preferencesResult);
   const snoozedShelfExpanded =
     loaded && preferencesResult.value.threadListSnoozedShelfExpanded === true;
+  const hiddenShelfExpanded =
+    loaded && preferencesResult.value.threadListHiddenShelfExpanded === true;
   const settledShelfExpanded =
     loaded && preferencesResult.value.threadListSettledShelfExpanded === true;
   const workingShelfEnabled = loaded && preferencesResult.value.workingShelfEnabled !== false;
@@ -22,6 +24,14 @@ export function useThreadListV2ShelfPreferences() {
     void savePreferences({
       transform: (current) => ({
         threadListSnoozedShelfExpanded: current.threadListSnoozedShelfExpanded !== true,
+      }),
+    });
+  };
+  const toggleHiddenShelf = () => {
+    if (!loaded) return;
+    void savePreferences({
+      transform: (current) => ({
+        threadListHiddenShelfExpanded: current.threadListHiddenShelfExpanded !== true,
       }),
     });
   };
@@ -45,10 +55,12 @@ export function useThreadListV2ShelfPreferences() {
   return {
     loaded,
     settledShelfExpanded,
+    hiddenShelfExpanded,
     snoozedShelfExpanded,
     workingShelfEnabled,
     workingShelfExpanded,
     toggleSettledShelf,
+    toggleHiddenShelf,
     toggleSnoozedShelf,
     toggleWorkingShelf,
   } as const;

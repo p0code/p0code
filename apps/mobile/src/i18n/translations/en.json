@@ -5358,5 +5358,13 @@
   "ad208e3e32c85029": "Hide all",
   "3328503592789bed": "Zen",
   "856812e7e1fc445e": "Tool calls in chat",
-  "8d545d54c0a9e950": "Hide the commands, edits, and searches agents run. Hide successful keeps failures. Zen shows only final answers. Approvals, questions, and errors always show."
+  "8d545d54c0a9e950": "Hide the commands, edits, and searches agents run. Hide successful keeps failures. Zen shows only final answers. Approvals, questions, and errors always show.",
+  "be0ced155e1512b1": "Archive hidden threads",
+  "2a8bc9854167e134": "Move hidden threads to the archive after this many days, unless they have an open pull request.",
+  "4a194f0c4ef34d4b": "Days hidden before archiving",
+  "24d3000f06f94612": "Days hidden",
+  "23c7c97630e50595": "Hidden",
+  "16e1300e91151c39": "{count, plural, one {{count} hidden thread} other {{count} hidden threads}}",
+  "7388ff6a377a6ede": "Collapses the hidden threads.",
+  "4248d02b513a4b32": "Expands the hidden threads."
 }

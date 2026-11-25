@@ -106,6 +106,16 @@ export const SidebarAutoSettleAfterDays = Schema.Number.check(
 );
 export type SidebarAutoSettleAfterDays = typeof SidebarAutoSettleAfterDays.Type;
 const DEFAULT_SIDEBAR_AUTO_SETTLE_AFTER_DAYS: SidebarAutoSettleAfterDays = 7;
+export const MIN_HIDDEN_AUTO_ARCHIVE_AFTER_DAYS = 1;
+export const MAX_HIDDEN_AUTO_ARCHIVE_AFTER_DAYS = 365;
+export const HiddenAutoArchiveAfterDays = Schema.Number.check(
+  Schema.isBetween({
+    minimum: MIN_HIDDEN_AUTO_ARCHIVE_AFTER_DAYS,
+    maximum: MAX_HIDDEN_AUTO_ARCHIVE_AFTER_DAYS,
+  }),
+);
+export type HiddenAutoArchiveAfterDays = typeof HiddenAutoArchiveAfterDays.Type;
+export const DEFAULT_HIDDEN_AUTO_ARCHIVE_AFTER_DAYS: HiddenAutoArchiveAfterDays = 30;
 
 export const MAX_SNOOZE_PRESET_MINUTES = 30 * 24 * 60;
 export const MAX_SNOOZE_PRESETS = 8;
@@ -1550,6 +1560,10 @@ export const ServerSettings = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed(false)),
   ),
   idleCompaction: Schema.optionalKey(IdleCompactionMode),
+  /** Hidden threads with no open pull request move to the archive after this many days; null never. */
+  hiddenAutoArchiveAfterDays: Schema.NullOr(HiddenAutoArchiveAfterDays).pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_HIDDEN_AUTO_ARCHIVE_AFTER_DAYS)),
+  ),
   snoozeLimitedThreads: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   autoResumeLimitedThreads: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   snoozePresets: SnoozePresetSettings.pipe(
@@ -2012,6 +2026,7 @@ export const ServerSettingsPatch = Schema.Struct({
   sidebarAutoSettleKeepPullRequests: Schema.optionalKey(Schema.Boolean),
   sidebarAutoSettleOnMerge: Schema.optionalKey(Schema.Boolean),
   autoResumeLimitedThreads: Schema.optionalKey(Schema.Boolean),
+  hiddenAutoArchiveAfterDays: Schema.optionalKey(Schema.NullOr(HiddenAutoArchiveAfterDays)),
   snoozeLimitedThreads: Schema.optionalKey(Schema.Boolean),
   snoozePresets: Schema.optionalKey(SnoozePresetSettings),
   hiddenThreadTags: Schema.optionalKey(Schema.Array(Schema.String)),

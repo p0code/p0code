@@ -5356,5 +5356,13 @@
   "ad208e3e32c85029": "Dölj alla",
   "3328503592789bed": "Zen",
   "856812e7e1fc445e": "Verktygsanrop i chatten",
-  "8d545d54c0a9e950": "Dölj kommandon, redigeringar och sökningar som agenter kör. Dölj lyckade behåller misslyckanden. Zen visar bara slutliga svar. Godkännanden, frågor och fel visas alltid."
+  "8d545d54c0a9e950": "Dölj kommandon, redigeringar och sökningar som agenter kör. Dölj lyckade behåller misslyckanden. Zen visar bara slutliga svar. Godkännanden, frågor och fel visas alltid.",
+  "be0ced155e1512b1": "Arkivera dolda trådar",
+  "2a8bc9854167e134": "Flytta dolda trådar till arkivet efter så här många dagar, om de inte har en öppen pull request.",
+  "4a194f0c4ef34d4b": "Dagar dold innan arkivering",
+  "24d3000f06f94612": "Dagar dold",
+  "23c7c97630e50595": "Dolda",
+  "16e1300e91151c39": "{count, plural, one {{count} dold tråd} other {{count} dolda trådar}}",
+  "7388ff6a377a6ede": "Fäller ihop de dolda trådarna.",
+  "4248d02b513a4b32": "Fäller ut de dolda trådarna."
 }

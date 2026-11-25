@@ -15,7 +15,7 @@ import { useEnvironmentsWithScope } from "../../state/session";
 import { AutoSettleDaysField } from "./components/AutoSettleDaysField";
 
 import { supportsSharedSettingsSync } from "@t3tools/client-runtime/state/shared-settings";
-import { DEFAULT_SERVER_SETTINGS } from "@t3tools/contracts";
+import { DEFAULT_SERVER_SETTINGS, MAX_HIDDEN_AUTO_ARCHIVE_AFTER_DAYS } from "@t3tools/contracts";
 import { AppText as Text } from "../../components/ui/AppText";
 import { useEnvironments } from "../../state/environments";
 import { mobilePreferencesAtom, saveMobilePreferences } from "../../state/preferences";
@@ -69,6 +69,7 @@ export function SettingsLabsRouteScreen() {
 }
 
 const AUTO_SETTLE_DEFAULT_DAYS = DEFAULT_SERVER_SETTINGS.sidebarAutoSettleAfterDays ?? 7;
+const HIDDEN_AUTO_ARCHIVE_DEFAULT_DAYS = DEFAULT_SERVER_SETTINGS.hiddenAutoArchiveAfterDays ?? 30;
 
 /**
  * Usage-limit and auto-settle rows. The Threads page owns their writes, so they share its queue
@@ -108,6 +109,7 @@ export function AutoSettleSettingsRows(props: {
     patch: Partial<AutoSettleSettings> & {
       autoResumeLimitedThreads?: boolean;
       snoozeLimitedThreads?: boolean;
+      hiddenAutoArchiveAfterDays?: number | null;
     },
   ) => props.write(patch);
 
@@ -129,6 +131,7 @@ export function AutoSettleSettingsRows(props: {
   const disabledFor = (...keys: string[]) =>
     disabled || managedSettingReason(displayTargets, keys) !== undefined;
   const afterDays = referenceSettings.sidebarAutoSettleAfterDays;
+  const hiddenArchiveDays = referenceSettings.hiddenAutoArchiveAfterDays;
 
   return (
     <View className="gap-6">
@@ -154,6 +157,35 @@ export function AutoSettleSettingsRows(props: {
             disabled={disabledFor("snoozeLimitedThreads")}
             onValueChange={(value) => writeToAll({ snoozeLimitedThreads: value })}
           />
+          <SettingsSwitchRow
+            icon="archivebox.fill"
+            label={gt("Archive hidden threads")}
+            subtitle={gt(
+              "Move hidden threads to the archive after this many days, unless they have an open pull request.",
+            )}
+            value={hiddenArchiveDays !== null}
+            disabled={disabledFor("hiddenAutoArchiveAfterDays")}
+            onValueChange={(value) =>
+              writeToAll({
+                hiddenAutoArchiveAfterDays: value ? HIDDEN_AUTO_ARCHIVE_DEFAULT_DAYS : null,
+              })
+            }
+          />
+          {hiddenArchiveDays !== null ? (
+            <View className="flex-row items-center gap-4 px-4 py-4 android:min-h-14 android:py-3">
+              <View className="w-[22px] android:w-6" />
+              <Text className="flex-1 text-foreground text-lg android:text-base">
+                <T>Days hidden</T>
+              </Text>
+              <AutoSettleDaysField
+                value={hiddenArchiveDays}
+                max={MAX_HIDDEN_AUTO_ARCHIVE_AFTER_DAYS}
+                label={gt("Days hidden before archiving")}
+                disabled={disabledFor("hiddenAutoArchiveAfterDays")}
+                onValueChange={(value) => writeToAll({ hiddenAutoArchiveAfterDays: value })}
+              />
+            </View>
+          ) : null}
         </SettingsSection>
       ) : null}
       <SettingsSection title={gt("Auto-settle")}>

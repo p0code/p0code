@@ -51,6 +51,7 @@ import * as ProjectStore from "./ProjectStore.ts";
 import * as Orchestrator from "./Orchestrator.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
 import * as ThreadSettlementService from "./ThreadSettlementService.ts";
+import { isHiddenAutoArchiveDue } from "./HiddenAutoArchiveWorker.ts";
 
 const NOW_MS = Date.parse("2026-06-10T12:00:00.000Z");
 const DAY_MS = 24 * 60 * 60 * 1_000;
@@ -2586,5 +2587,53 @@ describe("isSnoozed", () => {
         autoSettleOnMerge: true,
       }),
     ).toBeNull();
+  });
+});
+
+describe("isHiddenAutoArchiveDue", () => {
+  const hidden = (overrides: Partial<SettlementShell> = {}) =>
+    shell({
+      snoozedUntil: DateTime.makeUnsafe(Date.parse("9999-12-31T00:00:00.000Z")),
+      snoozedAt: at(-31 * DAY_MS),
+      ...overrides,
+    });
+
+  it("archives a thread hidden longer than the setting", () => {
+    expect(isHiddenAutoArchiveDue(hidden(), NOW_MS, 30)).toBe(true);
+  });
+
+  it("waits until the thread has been hidden for the whole period", () => {
+    expect(isHiddenAutoArchiveDue(hidden({ snoozedAt: at(-29 * DAY_MS) }), NOW_MS, 30)).toBe(false);
+  });
+
+  it("never archives when the setting is off", () => {
+    expect(isHiddenAutoArchiveDue(hidden(), NOW_MS, null)).toBe(false);
+  });
+
+  it("leaves timed snoozes alone", () => {
+    expect(isHiddenAutoArchiveDue(hidden({ snoozedUntil: at(DAY_MS) }), NOW_MS, 30)).toBe(false);
+  });
+
+  it("keeps a hidden thread with an open or unsynced pull request", () => {
+    expect(
+      isHiddenAutoArchiveDue(
+        hidden({ pullRequests: [persistedLink("open", at(-40 * DAY_MS))] }),
+        NOW_MS,
+        30,
+      ),
+    ).toBe(false);
+    expect(
+      isHiddenAutoArchiveDue(
+        hidden({ pullRequests: [persistedLink(null, at(-40 * DAY_MS))] }),
+        NOW_MS,
+        30,
+      ),
+    ).toBe(false);
+  });
+
+  it("keeps a hidden thread that is running or waiting on the user", () => {
+    expect(isHiddenAutoArchiveDue(hidden({ activityRunStatus: "running" }), NOW_MS, 30)).toBe(
+      false,
+    );
   });
 });

@@ -9,16 +9,16 @@ import { NumberField } from "../../../components/ui/NumberField";
 export type AutoSettleDaysFieldProps = Pick<
   ComponentProps<typeof NumberField>,
   "value" | "onValueChange" | "disabled"
->;
+> & { readonly max?: number; readonly label?: string };
 
-export function AutoSettleDaysField(props: AutoSettleDaysFieldProps) {
+export function AutoSettleDaysField({ max, label, ...props }: AutoSettleDaysFieldProps) {
   const gt = useGT();
   return (
     <NumberField
       {...props}
       min={MIN_SIDEBAR_AUTO_SETTLE_AFTER_DAYS}
-      max={MAX_SIDEBAR_AUTO_SETTLE_AFTER_DAYS}
-      label={gt("Days before auto-settle")}
+      max={max ?? MAX_SIDEBAR_AUTO_SETTLE_AFTER_DAYS}
+      label={label ?? gt("Days before auto-settle")}
       formatValue={(value) =>
         gt("{count, plural, one {{count} day} other {{count} days}}", { count: value })
       }

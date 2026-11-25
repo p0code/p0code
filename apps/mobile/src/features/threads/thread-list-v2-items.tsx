@@ -338,6 +338,12 @@ const SHELF_COPY = {
     collapse: msg("Collapses the snoozed threads."),
     expand: msg("Expands the snoozed threads."),
   },
+  hidden: {
+    label: msg("Hidden", { $context: "thread list section" }),
+    count: msg("{count, plural, one {{count} hidden thread} other {{count} hidden threads}}"),
+    collapse: msg("Collapses the hidden threads."),
+    expand: msg("Expands the hidden threads."),
+  },
   settled: {
     label: msg("Settled", { $context: "thread list section" }),
     count: msg("{count, plural, one {{count} settled thread} other {{count} settled threads}}"),
@@ -379,6 +385,12 @@ export const ThreadListV2SnoozedShelfHeader = memo(function ThreadListV2SnoozedS
   props: ThreadListV2ShelfHeaderProps,
 ) {
   return <ThreadListV2ShelfHeader {...props} kind="snoozed" />;
+});
+
+export const ThreadListV2HiddenShelfHeader = memo(function ThreadListV2HiddenShelfHeader(
+  props: ThreadListV2ShelfHeaderProps,
+) {
+  return <ThreadListV2ShelfHeader {...props} kind="hidden" />;
 });
 
 export const ThreadListV2SettledShelfHeader = memo(function ThreadListV2SettledShelfHeader(

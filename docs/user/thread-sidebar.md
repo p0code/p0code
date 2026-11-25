@@ -391,10 +391,16 @@ local time zone, or a duration in minutes, hours, or days. Durations start when
 you confirm; one day means 24 hours. On web and desktop, you can also snooze
 several selected threads together. Choose **Wake thread** to bring a thread back early.
 
-Choose **Snooze → Until I bring it back** to hide a thread with no wake time. It shows
-as **Hidden** under **Snoozed** and never wakes on the clock; bring it back from its
-menu, the command palette (**Bring thread back**), or the **Thread: Hide or Bring Back**
-shortcut. A hidden thread with a scheduled limit continuation still resumes at the reset.
+Choose **Snooze → Until I bring it back** to hide a thread with no wake time. It moves
+to its own **Hidden** section, below **Snoozed**, and never wakes on the clock; bring it
+back from its menu, the command palette (**Bring thread back**), or the **Thread: Hide or
+Bring Back** shortcut. A hidden thread with a scheduled limit continuation still resumes
+at the reset.
+
+A thread that stays hidden for 30 days moves to the archive, unless it has an open pull
+request or is still working. Change the number of days, or turn this off, under
+**Settings → Threads → Archive hidden threads**. Archived threads can be restored from
+the archive.
 
 A snoozed thread keeps working and stays hidden until its wake time, even while
 its agent wakes itself for background work. It comes back early for an approval,

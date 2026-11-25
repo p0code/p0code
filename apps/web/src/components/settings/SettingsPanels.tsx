@@ -18,6 +18,7 @@ import {
 import {
   DEFAULT_UNIFIED_SETTINGS,
   type DiffLayout,
+  MAX_HIDDEN_AUTO_ARCHIVE_AFTER_DAYS,
   MAX_SIDEBAR_AUTO_SETTLE_AFTER_DAYS,
   MIN_SIDEBAR_AUTO_SETTLE_AFTER_DAYS,
   type QuitConfirmationMode,
@@ -567,6 +568,9 @@ export function useSettingsRestore(onRestored?: () => void) {
     ...(settings.snoozeLimitedThreads !== DEFAULT_UNIFIED_SETTINGS.snoozeLimitedThreads
       ? [gt("Snooze until limits reset")]
       : []),
+    ...(settings.hiddenAutoArchiveAfterDays !== DEFAULT_UNIFIED_SETTINGS.hiddenAutoArchiveAfterDays
+      ? [gt("Archive hidden threads")]
+      : []),
     ...(!Equal.equals(settings.snoozePresets, DEFAULT_UNIFIED_SETTINGS.snoozePresets)
       ? [gt("Snooze options")]
       : []),
@@ -747,6 +751,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       sidebarAutoSettleKeepPullRequests: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleKeepPullRequests,
       sidebarAutoSettleOnMerge: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleOnMerge,
       autoResumeLimitedThreads: DEFAULT_UNIFIED_SETTINGS.autoResumeLimitedThreads,
+      hiddenAutoArchiveAfterDays: DEFAULT_UNIFIED_SETTINGS.hiddenAutoArchiveAfterDays,
       snoozeLimitedThreads: DEFAULT_UNIFIED_SETTINGS.snoozeLimitedThreads,
       snoozePresets: DEFAULT_UNIFIED_SETTINGS.snoozePresets,
       responseStreamingMode: DEFAULT_UNIFIED_SETTINGS.responseStreamingMode,
@@ -799,13 +804,18 @@ export function useSettingsRestore(onRestored?: () => void) {
 }
 
 const AUTO_SETTLE_DEFAULT_DAYS = DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleAfterDays ?? 7;
+const HIDDEN_AUTO_ARCHIVE_DEFAULT_DAYS = DEFAULT_UNIFIED_SETTINGS.hiddenAutoArchiveAfterDays ?? 30;
 
 function AutoSettleDaysInput({
   value,
   onCommit,
+  maxDays = MAX_SIDEBAR_AUTO_SETTLE_AFTER_DAYS,
+  ariaLabel,
 }: {
   value: number;
   onCommit: (days: number, options: { onFailed: () => void }) => void;
+  maxDays?: number;
+  ariaLabel?: string;
 }) {
   const gt = useGT();
   const [stored, setField] = useState(() => autoSettleDaysField(value));
@@ -813,7 +823,7 @@ function AutoSettleDaysInput({
   if (field !== stored) setField(field);
 
   const commit = () => {
-    const next = commitAutoSettleDaysField(field);
+    const next = commitAutoSettleDaysField(field, maxDays);
     setField(next.field);
     if (next.submit === null) return;
     const { revision } = next.field;
@@ -827,7 +837,7 @@ function AutoSettleDaysInput({
       size="sm"
       type="number"
       min={MIN_SIDEBAR_AUTO_SETTLE_AFTER_DAYS}
-      max={MAX_SIDEBAR_AUTO_SETTLE_AFTER_DAYS}
+      max={maxDays}
       className="w-full sm:w-24"
       value={field.draft}
       onChange={(event) => setField(editAutoSettleDaysField(field, event.target.value))}
@@ -842,7 +852,7 @@ function AutoSettleDaysInput({
           setField(cancelAutoSettleDaysField(field));
         }
       }}
-      aria-label={gt("Days of inactivity before auto-settle")}
+      aria-label={ariaLabel ?? gt("Days of inactivity before auto-settle")}
     />
   );
 }
@@ -2106,6 +2116,43 @@ export function ThreadsSettingsPanel() {
             />
           }
         />
+        <SettingsRow
+          serverScoped
+          {...setting("archive-hidden-threads")}
+          description={gt(
+            "Move hidden threads to the archive after this many days, unless they have an open pull request.",
+          )}
+          settingKeys={["hiddenAutoArchiveAfterDays"]}
+          control={
+            <ScopedSwitch
+              settingKeys={["hiddenAutoArchiveAfterDays"]}
+              checked={settings.hiddenAutoArchiveAfterDays !== null}
+              onCheckedChange={(checked) =>
+                updateSettings({
+                  hiddenAutoArchiveAfterDays: checked ? HIDDEN_AUTO_ARCHIVE_DEFAULT_DAYS : null,
+                })
+              }
+              aria-label={gt("Archive hidden threads")}
+            />
+          }
+        />
+        {settings.hiddenAutoArchiveAfterDays !== null ? (
+          <SettingsRow
+            serverScoped
+            settingKeys={["hiddenAutoArchiveAfterDays"]}
+            title={gt("Days hidden before archiving")}
+            control={
+              <AutoSettleDaysInput
+                value={settings.hiddenAutoArchiveAfterDays}
+                maxDays={MAX_HIDDEN_AUTO_ARCHIVE_AFTER_DAYS}
+                ariaLabel={gt("Days hidden before archiving")}
+                onCommit={(days, options) =>
+                  updateSettings({ hiddenAutoArchiveAfterDays: days }, options)
+                }
+              />
+            }
+          />
+        ) : null}
       </SettingsSection>
 
       {hasServerTargets ? (

@@ -5350,5 +5350,13 @@
   "ad208e3e32c85029": "Ocultar todas",
   "3328503592789bed": "Zen",
   "856812e7e1fc445e": "Chamadas de ferramentas no chat",
-  "8d545d54c0a9e950": "Oculta os comandos, edições e pesquisas que os agentes executam. \"Ocultar bem-sucedidas\" mantém as falhas. Zen mostra só as respostas finais. Aprovações, perguntas e erros sempre aparecem."
+  "8d545d54c0a9e950": "Oculta os comandos, edições e pesquisas que os agentes executam. \"Ocultar bem-sucedidas\" mantém as falhas. Zen mostra só as respostas finais. Aprovações, perguntas e erros sempre aparecem.",
+  "be0ced155e1512b1": "Arquivar threads ocultas",
+  "2a8bc9854167e134": "Move threads ocultas para o arquivo após este número de dias, a menos que tenham um pull request aberto.",
+  "4a194f0c4ef34d4b": "Dias ocultos antes de arquivar",
+  "24d3000f06f94612": "Dias ocultos",
+  "23c7c97630e50595": "Ocultos",
+  "16e1300e91151c39": "{count, plural, one {{count} thread oculta} other {{count} threads ocultas}}",
+  "7388ff6a377a6ede": "Recolhe as threads ocultas.",
+  "4248d02b513a4b32": "Expande as threads ocultas."
 }

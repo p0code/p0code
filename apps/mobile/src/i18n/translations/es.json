@@ -5350,5 +5350,13 @@
   "ad208e3e32c85029": "Ocultar todo",
   "3328503592789bed": "Zen",
   "856812e7e1fc445e": "Llamadas a herramientas en el chat",
-  "8d545d54c0a9e950": "Oculta los comandos, ediciones y búsquedas que ejecutan los agentes. Ocultar las correctas mantiene los fallos. Zen solo muestra las respuestas finales. Las aprobaciones, preguntas y errores siempre se muestran."
+  "8d545d54c0a9e950": "Oculta los comandos, ediciones y búsquedas que ejecutan los agentes. Ocultar las correctas mantiene los fallos. Zen solo muestra las respuestas finales. Las aprobaciones, preguntas y errores siempre se muestran.",
+  "be0ced155e1512b1": "Archivar hilos ocultos",
+  "2a8bc9854167e134": "Mueve los hilos ocultos al archivo después de esta cantidad de días, salvo que tengan una pull request abierta.",
+  "4a194f0c4ef34d4b": "Días ocultos antes de archivar",
+  "24d3000f06f94612": "Días ocultos",
+  "23c7c97630e50595": "Ocultos",
+  "16e1300e91151c39": "{count, plural, one {{count} hilo oculto} other {{count} hilos ocultos}}",
+  "7388ff6a377a6ede": "Contrae los hilos ocultos.",
+  "4248d02b513a4b32": "Expande los hilos ocultos."
 }

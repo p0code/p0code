@@ -500,6 +500,36 @@ describe("buildThreadListV2Items", () => {
     expect(layout.snoozedCount).toBe(2);
   });
 
+  it("lists hidden threads on their own shelf, apart from timed snoozes", () => {
+    const layout = buildThreadListV2Items({
+      threads: [
+        makeThread({
+          id: ThreadId.make("timed"),
+          title: "Timed",
+          snoozedUntil: "2026-06-03T09:00:00.000Z",
+          snoozedAt: "2026-06-01T12:00:00.000Z",
+        }),
+        makeThread({
+          id: ThreadId.make("hidden"),
+          title: "Hidden",
+          snoozedUntil: "9999-12-31T00:00:00.000Z",
+          snoozedAt: "2026-06-01T12:00:00.000Z",
+        }),
+      ],
+      environmentId: null,
+      searchQuery: "",
+      now: NOW,
+      snoozedShelfExpanded: true,
+      hiddenShelfExpanded: true,
+    });
+
+    expect(layout.items.map((item) => item.thread.id)).toEqual(["timed", "hidden"]);
+    expect(layout.snoozedCount).toBe(1);
+    expect(layout.snoozedShelfHeaderIndex).toBe(0);
+    expect(layout.hiddenCount).toBe(1);
+    expect(layout.hiddenShelfHeaderIndex).toBe(1);
+  });
+
   it("keeps the selected thread on a collapsed shelf", () => {
     const layout = buildThreadListV2Items({
       threads: [
