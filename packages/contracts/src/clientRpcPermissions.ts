@@ -39,6 +39,8 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
   // Stopping a server signals its processes, as closing a terminal does.
   [WS_METHODS.previewStopLocalServer]: AuthTerminalOperateScope,
   [WS_METHODS.serverRunStorageCleanup]: AuthSettingsWriteScope,
+  // Moving old credentials into p0code changes what this home stores.
+  [WS_METHODS.serverImportLegacyKeychain]: AuthSettingsWriteScope,
   // Consent decides which home the next start uses, as saving settings does.
   [WS_METHODS.t3ImportAccept]: AuthSettingsWriteScope,
   // Restarts the server, as an update does.

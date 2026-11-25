@@ -414,6 +414,7 @@ import {
   ServerSignalProcessInput,
   ServerSignalProcessResult,
   EnvironmentThemeId,
+  LegacyKeychainImportResult,
   ServerUpsertKeybindingInput,
   ServerUpsertKeybindingResult,
 } from "./server.ts";
@@ -622,6 +623,7 @@ export const WS_METHODS = {
   serverUpsertKeybinding: "server.upsertKeybinding",
   serverRemoveKeybinding: "server.removeKeybinding",
   serverRunStorageCleanup: "server.runStorageCleanup",
+  serverImportLegacyKeychain: "server.importLegacyKeychain",
   serverGetStorageCleanupReport: "server.getStorageCleanupReport",
   serverGetDatabaseStorage: "server.getDatabaseStorage",
   serverReclaimDatabaseSpace: "server.reclaimDatabaseSpace",
@@ -979,6 +981,11 @@ const WsServerCommitDesktopUpdateRpc = Rpc.make(WS_METHODS.serverCommitDesktopUp
 const WsServerRunStorageCleanupRpc = Rpc.make(WS_METHODS.serverRunStorageCleanup, {
   payload: Schema.Struct({}),
   success: StorageCleanupReport,
+  error: Schema.Union([ServerSettingsError, EnvironmentAuthorizationError]),
+});
+const WsServerImportLegacyKeychainRpc = Rpc.make(WS_METHODS.serverImportLegacyKeychain, {
+  payload: Schema.Struct({}),
+  success: LegacyKeychainImportResult,
   error: Schema.Union([ServerSettingsError, EnvironmentAuthorizationError]),
 });
 const WsServerGetStorageCleanupReportRpc = Rpc.make(WS_METHODS.serverGetStorageCleanupReport, {
@@ -2643,6 +2650,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerUpsertKeybindingRpc,
   WsServerRemoveKeybindingRpc,
   WsServerRunStorageCleanupRpc,
+  WsServerImportLegacyKeychainRpc,
   WsServerGetStorageCleanupReportRpc,
   WsServerGetDatabaseStorageRpc,
   WsServerGetSettingsRpc,

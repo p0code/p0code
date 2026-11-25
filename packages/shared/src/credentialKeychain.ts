@@ -15,8 +15,9 @@ import { previousAppHomePath } from "./appHomeMigration.ts";
 const KEYCHAIN_SERVICE = "p0code";
 
 /**
- * The service name stored credentials lived under before the rename. Only the one-time move in
- * `keychainSecrets` reads it, so `grep hhhcode` finds every place the old name still matters.
+ * The service name stored credentials lived under before the rename. Only the explicit
+ * `migrateKeychainService` move reads it, so `grep hhhcode` finds every place the old name still
+ * matters.
  */
 const LEGACY_KEYCHAIN_SERVICE = "hhhcode";
 
@@ -51,8 +52,8 @@ export interface KeychainStore {
   readonly delete: (account: string) => Promise<void>;
   readonly accounts: () => Promise<ReadonlyArray<string>>;
   /**
-   * The pre-rename service. Entries missing from the primary service are read from here once,
-   * copied under the primary name and then deleted.
+   * The pre-rename service. Only `migrateKeychainService` reads it; ordinary gets, sets, removes
+   * and listings never touch it, so the OS never asks about old items on its own.
    */
   readonly legacy?: KeychainStore;
   /** Debug sink for the move. Never receives account values. */
@@ -161,10 +162,6 @@ export interface KeychainSecrets {
   readonly names: () => Promise<ReadonlyArray<string>>;
   /** Write, read back and delete a throwaway entry; rejects when the keychain is unusable. */
   readonly probe: () => Promise<void>;
-  /** Names moved out of the pre-rename service by this adapter, in the order they moved. */
-  readonly movedFromLegacy: () => ReadonlyArray<string>;
-  /** True when an old copy could not be deleted; its value is already safe under p0code. */
-  readonly legacyCopyLeft: () => boolean;
 }
 
 type Head =
@@ -226,47 +223,11 @@ export function keychainSecrets(store: KeychainStore, namespace: string): Keycha
     await store.set(headAccount(name), `c:${generation}:${count}`);
   };
 
-  const legacyStore = store.legacy;
-  const legacy = legacyStore === undefined ? undefined : keychainSecrets(legacyStore, namespace);
-  const log = store.log ?? (() => {});
-  // A name missing from the old service stays missing: nothing writes that service any more.
-  const absentFromLegacy = new Set<string>();
-  const moved: Array<string> = [];
-  let legacyDeleteFailed = false;
-
-  const deleteLegacy = async (name: string) => {
-    if (legacy === undefined) return;
-    try {
-      await legacy.remove(name);
-    } catch {
-      // The value is already under p0code; a leftover old copy must not fail the caller.
-      if (!legacyDeleteFailed) {
-        legacyDeleteFailed = true;
-        log("Could not delete a secret from the old keychain service; its p0code copy is safe.");
-      }
-    }
-  };
-
-  // Moves the whole value at once so an interrupted move never leaves chunks under p0code only.
-  const moveFromLegacy = async (name: string): Promise<Uint8Array | undefined> => {
-    if (legacy === undefined || absentFromLegacy.has(name)) return undefined;
-    const value = await legacy.get(name);
-    if (value === undefined) {
-      absentFromLegacy.add(name);
-      return undefined;
-    }
-    await writeBody(name, value);
-    moved.push(name);
-    log(`Moved ${moved.length} secret(s) from the old keychain service to p0code.`);
-    await deleteLegacy(name);
-    return value;
-  };
-
   return {
     label: store.label,
     get: async (name) => {
       const head = await readHead(name);
-      if (head === undefined) return moveFromLegacy(name);
+      if (head === undefined) return undefined;
       return readBody(name, head);
     },
     set: async (name, value) => {
@@ -278,19 +239,12 @@ export function keychainSecrets(store: KeychainStore, namespace: string): Keycha
       const head = await readHead(name).catch(() => undefined);
       await store.delete(headAccount(name));
       await deleteChunks(name, head);
-      await deleteLegacy(name);
     },
     names: async () => {
       const prefix = `${namespace}:`;
-      const headNames = (accounts: ReadonlyArray<string>) =>
-        accounts
-          .filter((account) => account.startsWith(prefix))
-          .map((account) => account.slice(prefix.length));
-      const primary = headNames(await store.accounts());
-      if (legacyStore === undefined) return primary;
-      // Entries not read yet are still owned by the old service; listing must see them.
-      const previous = await legacyStore.accounts().catch(() => [] as ReadonlyArray<string>);
-      return [...new Set([...primary, ...headNames(previous)])];
+      return (await store.accounts())
+        .filter((account) => account.startsWith(prefix))
+        .map((account) => account.slice(prefix.length));
     },
     probe: async () => {
       const account = `${namespace}#probe`;
@@ -304,8 +258,6 @@ export function keychainSecrets(store: KeychainStore, namespace: string): Keycha
         await store.delete(account);
       }
     },
-    movedFromLegacy: () => [...moved],
-    legacyCopyLeft: () => legacyDeleteFailed,
   };
 }
 

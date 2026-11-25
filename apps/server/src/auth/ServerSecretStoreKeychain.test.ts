@@ -177,27 +177,63 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))(
       );
     });
 
-    it.effect("moves a credential from the old keychain service on its first read", () => {
+    it.effect("never reads the old keychain service at startup", () => {
+      const legacy = memoryKeychainStore();
+      const reads = { get: 0, accounts: 0 };
+      const countedLegacy: KeychainStore = {
+        ...legacy,
+        get: async (account) => {
+          reads.get += 1;
+          return legacy.get(account);
+        },
+        accounts: async () => {
+          reads.accounts += 1;
+          return legacy.accounts();
+        },
+      };
+      const keychain = memoryKeychainStore({ legacy: countedLegacy });
+      return withStore(
+        keychain,
+        (store) =>
+          Effect.gen(function* () {
+            assert.isTrue(Option.isNone(yield* store.get("server-signing-key")));
+            assert.equal(reads.get, 0);
+            assert.equal(reads.accounts, 0);
+            assert.equal(legacy.entries.size, 1);
+            assert.isFalse(
+              [...keychain.entries.keys()].some((account) =>
+                account.endsWith(":server-signing-key"),
+              ),
+            );
+          }),
+        {
+          prepare: (secretsDir) =>
+            Effect.promise(async () => {
+              const namespace = await credentialNamespace(secretsDir);
+              await keychainSecrets(legacy, namespace).set("server-signing-key", encode("old-key"));
+            }),
+        },
+      );
+    });
+
+    it.effect("moves the old service only when the import is asked for", () => {
       const legacy = memoryKeychainStore();
       const keychain = memoryKeychainStore({ legacy });
       return withStore(
         keychain,
         (store) =>
           Effect.gen(function* () {
-            assert.equal(
-              decode(Option.getOrThrow(yield* store.get("server-signing-key"))),
-              "old-key",
-            );
+            assert.isDefined(store.importLegacyKeychain);
+            const report = yield* store.importLegacyKeychain!();
+            assert.equal(report.moved.length, 1);
+            assert.deepEqual(report.alreadyPresent, []);
+            assert.deepEqual(report.failed, []);
+            assert.deepEqual(report.leftBehind, []);
             assert.equal(
               decode(Option.getOrThrow(yield* store.get("server-signing-key"))),
               "old-key",
             );
             assert.equal(legacy.entries.size, 0);
-            assert.isTrue(
-              [...keychain.entries.keys()].some((account) =>
-                account.endsWith(":server-signing-key"),
-              ),
-            );
           }),
         {
           prepare: (secretsDir) =>
