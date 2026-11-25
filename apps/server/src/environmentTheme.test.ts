@@ -649,7 +649,7 @@ describe("environment theme", () => {
       Effect.gen(function* () {
         const themes = yield* EnvironmentTheme.EnvironmentThemeService;
         yield* themes.apply({ themeId: "agent-look", theme: NIGHTFALL_THEME });
-        yield* themes.apply({ themeId: "t3-code" });
+        yield* themes.apply({ themeId: "grove" });
         assert.deepEqual(selected, [{ theme: "agent-look" }, { theme: "" }]);
       }),
       { selected },

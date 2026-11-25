@@ -60,10 +60,10 @@ function platformThemeVariables(
     ? defaults[appearance]
     : getMobileThemeVariables(themeId, appearance);
   const frame = themeColorWithAlpha(
-    variables[usesDefaultPalette ? "--color-row-hover" : "--color-drawer"],
+    variables[themeId === "material-you" ? "--color-row-hover" : "--color-drawer"],
     1,
   );
-  if (platform === "ios" && usesDefaultPalette && appearance === "light") {
+  if (platform === "ios" && themeId === "material-you" && appearance === "light") {
     return {
       ...variables,
       "--color-header": frame,

@@ -14,6 +14,7 @@ import { useEnvironmentThemeDefinitions } from "../../hooks/useEnvironmentTheme"
 import { readThemeHalvesRaw } from "../../hooks/useTheme";
 import { cn } from "../../lib/utils";
 import {
+  DEFAULT_THEME_ID,
   getThemeDefinition,
   singleAppearanceOf,
   getThemeModes,
@@ -22,7 +23,6 @@ import {
   type ThemeAppearance,
   type ThemeDefinition,
   type ThemeHalves,
-  T3_CHAT_THEME,
   EMBER_THEME,
   GROVE_THEME,
   IRIS_THEME,
@@ -44,7 +44,6 @@ import { ThemeImportDialog } from "./ThemeImportDialog";
 import { useSearchableSetting } from "./settingsSearch";
 import { useThemeEditorStore } from "./themeEditorStore";
 import {
-  STANDARD_THEME_CARDS,
   getThemeCardDefinition,
   previewColorsOf,
   ThemePreviewCircles,
@@ -56,7 +55,6 @@ import { ThemeWireframe } from "./ThemeWireframe";
 import { T, useGT } from "gt-react";
 
 const MAINTAINER_THEMES: ReadonlyArray<ThemeDefinition> = [
-  T3_CHAT_THEME,
   GROVE_THEME,
   OCEAN_THEME,
   EMBER_THEME,
@@ -640,7 +638,7 @@ export function ThemeLibrary({
     // Read raw halves before persistTheme clears them; themeHalves omits published themes not yet streamed
     // in.
     const storedHalves = readThemeHalvesRaw();
-    if (removesBase && !persistTheme(appearanceMode === "system" ? "system" : appearanceMode)) {
+    if (removesBase && !persistTheme(DEFAULT_THEME_ID)) {
       return;
     }
     for (const appearance of ["light", "dark"] as const) {
@@ -661,36 +659,24 @@ export function ThemeLibrary({
     setIsThemeRemovalOpen(false);
   };
 
-  const baseCardId = getThemeDefinition(theme)?.id ?? null;
+  const baseCardId = getThemeDefinition(theme)?.id ?? DEFAULT_THEME_ID;
   const lightOwner = themeHalves?.light ?? baseCardId;
   const darkOwner = themeHalves?.dark ?? baseCardId;
 
   const assignHalf = (appearance: ThemeAppearance, cardId: string | null) => {
-    const otherAppearance = appearance === "light" ? "dark" : "light";
-    // To restore one default appearance, move the themed base to the opposite explicit half.
-    if (cardId === null && baseCardId !== null) {
-      // Read raw before persistTheme clears the mix; unstreamed published halves must not fall back to the
-      // base.
-      const otherOwner = readThemeHalvesRaw()[otherAppearance] ?? baseCardId;
-      if (!persistTheme(appearanceMode === "system" ? "system" : appearanceMode)) return;
-      if (!setThemeHalf(otherAppearance, otherOwner)) {
-        setTheme(theme);
-        notifyThemeSaveFailure();
-      }
-      return;
-    }
     if (!setThemeHalf(appearance, cardId)) {
       notifyThemeSaveFailure();
     }
   };
 
   const activeThemeForAppearance =
-    getThemeDefinition((initialAppearance === "light" ? lightOwner : darkOwner) ?? "") ?? null;
+    getThemeDefinition((initialAppearance === "light" ? lightOwner : darkOwner) ?? "") ??
+    GROVE_THEME;
 
   const cardDefById = (id: string | null): ThemeCardDefinition => {
-    if (id === null) return STANDARD_THEME_CARDS[0]!;
+    if (id === null) return getThemeCardDefinition(GROVE_THEME);
     const definition = getThemeDefinition(id);
-    return definition ? getThemeCardDefinition(definition) : STANDARD_THEME_CARDS[0]!;
+    return getThemeCardDefinition(definition ?? GROVE_THEME);
   };
 
   const pickColors = (id: string | null, appearance: ThemeAppearance) => {
@@ -791,24 +777,6 @@ export function ThemeLibrary({
         className="grid w-full gap-2"
         style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 16rem), 1fr))" }}
       >
-        {STANDARD_THEME_CARDS.map((standardTheme) => (
-          <ThemeLibraryCard
-            activeModes={pickedModesFor(null)}
-            isActive={false}
-            key={standardTheme.id}
-            onDuplicate={() =>
-              openThemeEditor({
-                editingThemeId: null,
-                seedThemeId: null,
-                seedName: `${standardTheme.label} copy`,
-                initialAppearance,
-              })
-            }
-            onUse={() => persistTheme(appearanceMode === "system" ? "system" : appearanceMode)}
-            onUseMode={handlePairPick(null)}
-            theme={standardTheme}
-          />
-        ))}
         {MAINTAINER_THEMES.map((maintainerTheme) => {
           const card = getThemeCardDefinition(maintainerTheme);
           return (

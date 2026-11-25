@@ -1,8 +1,6 @@
 import {
   BUILT_IN_THEMES,
-  T3_CHAT_THEME,
-  T3_CODE_LIGHT_THEME_COLORS,
-  T3_CODE_DARK_THEME_COLORS,
+  GROVE_THEME,
   getThemeColorsForAppearance,
   MOBILE_DEFAULT_THEME_ID,
   MOBILE_THEME_IDS as SHARED_MOBILE_THEME_IDS,
@@ -26,7 +24,6 @@ export const MOBILE_THEME_OPTIONS: ReadonlyArray<{
   readonly id: MobileThemeId;
   readonly label: string;
 }> = [
-  { id: DEFAULT_MOBILE_THEME_ID, label: "T3 Code" },
   { id: "material-you", label: "Material You" },
   ...BUILT_IN_THEMES.map((theme) => ({ id: theme.id as MobileThemeId, label: theme.label })),
 ];
@@ -422,7 +419,10 @@ export function createMobileThemeVariables(
     "--color-md-code-bg": c.codeBackground,
     "--color-md-code-text": c.codeForeground,
     "--color-md-user-code-bg": withAlpha(c.messageForeground, 0.18),
-    "--color-md-user-code-text": c.messageForeground,
+    "--color-md-user-code-text": themeColorWithContrast(
+      c.messageForeground,
+      flattenThemeColor(withAlpha(c.messageForeground, 0.18), c.messageSurface),
+    ),
     "--color-md-user-fence-bg": withAlpha("#000000", appearance === "dark" ? 0.28 : 0.16),
     "--color-md-user-fence-text": c.messageForeground,
     "--color-md-hr": c.border,
@@ -452,10 +452,7 @@ export function getMobileThemeColors(
   themeId: SharedMobileThemeId,
   appearance: MobileThemeAppearance,
 ): ThemeColors {
-  if (themeId === DEFAULT_MOBILE_THEME_ID) {
-    return appearance === "dark" ? T3_CODE_DARK_THEME_COLORS : T3_CODE_LIGHT_THEME_COLORS;
-  }
-  const theme = BUILT_IN_THEMES.find((candidate) => candidate.id === themeId) ?? T3_CHAT_THEME;
+  const theme = BUILT_IN_THEMES.find((candidate) => candidate.id === themeId) ?? GROVE_THEME;
   return getThemeColorsForAppearance(theme, appearance) ?? theme.colors;
 }
 
@@ -465,39 +462,10 @@ export function getMobileThemeVariables(
   overrides: Partial<MobileThemeVariables> | null = null,
 ): MobileThemeVariables {
   const colors = getMobileThemeColors(themeId, appearance);
-  const groupedCard =
-    themeId === DEFAULT_MOBILE_THEME_ID
-      ? appearance === "light"
-        ? colors.toolbarControlHover
-        : colors.sidebarRowActive
-      : themeId === "t3-chat"
-        ? appearance === "light"
-          ? colors.toolbarControl
-          : colors.surface
-        : colors.muted;
-  const mobileColors =
-    themeId === DEFAULT_MOBILE_THEME_ID
-      ? {
-          ...colors,
-          messageSurface: flattenThemeColor(
-            themeColorWithAlpha(
-              appearance === "dark" ? colors.sidebarRowActive : colors.border,
-              0.3,
-            ),
-            colors.messageSurface,
-          ),
-        }
-      : colors;
-  const baseVariables = createMobileThemeVariables(
-    mobileColors,
-    appearance,
-    groupedCard,
-    themeId === "t3-chat" && appearance === "dark"
-      ? [colors.messageActionForeground, colors.messageAction]
-      : themeId !== DEFAULT_MOBILE_THEME_ID && themeId !== "t3-chat"
-        ? [colors.messageAction, colors.messageActionForeground]
-        : undefined,
-  );
+  const baseVariables = createMobileThemeVariables(colors, appearance, colors.muted, [
+    colors.messageAction,
+    colors.messageActionForeground,
+  ]);
 
   return overrides ? ({ ...baseVariables, ...overrides } as MobileThemeVariables) : baseVariables;
 }
@@ -506,9 +474,8 @@ export function getMobileThemePreviewColors(
   themeId: MobileThemeId,
   appearance: MobileThemeAppearance,
 ): ThemePreviewColors {
-  if (themeId === DEFAULT_MOBILE_THEME_ID || themeId === "material-you")
-    return STANDARD_THEME_PREVIEW_COLORS[appearance];
-  const theme = BUILT_IN_THEMES.find((candidate) => candidate.id === themeId) ?? T3_CHAT_THEME;
+  if (themeId === "material-you") return STANDARD_THEME_PREVIEW_COLORS[appearance];
+  const theme = BUILT_IN_THEMES.find((candidate) => candidate.id === themeId) ?? GROVE_THEME;
   const colors = getThemeColorsForAppearance(theme, appearance) ?? theme.colors;
   return {
     canvas: themeColorToNativeColor(colors.canvas),

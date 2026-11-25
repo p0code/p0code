@@ -37,35 +37,22 @@
         // app colors before React mounts.
         const DEFAULT_THEME_PALETTES = {
           light: {
-            background: "oklch(0.982446 0.010114 325.653)",
-            foreground: "oklch(0.325698 0.116116 325.037)",
-            accent: "oklch(0.591646 0.217985 0.584)",
-            chrome: "oklch(0.982446 0.010114 325.653)",
+            background: "oklch(0.972369 0.005497 157.15)",
+            foreground: "oklch(0.222003 0.03479 328.979)",
+            accent: "oklch(0.523295 0.112292 158.089)",
+            chrome: "oklch(0.972369 0.005497 157.15)",
           },
           dark: {
-            background: "oklch(0.22813 0.020366 307.469)",
-            foreground: "oklch(0.980735 0.004092 301.426)",
-            accent: "oklch(0.460685 0.185347 4.099)",
-            chrome: "oklch(0.22813 0.020366 307.469)",
+            background: "oklch(0.260865 0.02152 162.75)",
+            foreground: "oklch(0.990339 0.008411 325.64)",
+            accent: "oklch(0.796228 0.133058 157.319)",
+            chrome: "oklch(0.260865 0.02152 162.75)",
           },
         };
+        const DEFAULT_THEME_ID = "grove";
         // Keep this small boot-time copy in sync with the built-in palettes so
         // the selected theme is visible before the app has mounted.
         const BUILT_IN_THEME_PALETTES = {
-          "t3-chat": {
-            light: {
-              background: "oklch(0.982446 0.010114 325.653)",
-              foreground: "oklch(0.325698 0.116116 325.037)",
-              accent: "oklch(0.591646 0.217985 0.584)",
-              chrome: "oklch(0.982446 0.010114 325.653)",
-            },
-            dark: {
-              background: "oklch(0.22813 0.020366 307.469)",
-              foreground: "oklch(0.980735 0.004092 301.426)",
-              accent: "oklch(0.460685 0.185347 4.099)",
-              chrome: "oklch(0.22813 0.020366 307.469)",
-            },
-          },
           grove: {
             light: {
               background: "oklch(0.972369 0.005497 157.15)",
@@ -133,6 +120,7 @@
           "system",
           "light",
           "dark",
+          "t3-code",
           "t3-chat",
           "grove",
           "ocean",
@@ -222,18 +210,19 @@
           const storedTheme = window.localStorage.getItem("t3code:theme");
           const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
           const LEGACY_THEME_IDS = {
-            "t3-chat-dark": "t3-chat",
             "t3-grove": "grove",
             "t3-ocean": "ocean",
             "t3-ember": "ember",
             "t3-iris": "iris",
           };
           const isLegacyT3ChatDark = storedTheme === "t3-chat-dark";
-          const themeId =
+          const rawThemeId =
             storedTheme === null ? "" : (LEGACY_THEME_IDS[storedTheme] ?? storedTheme);
           const legacyMode = isLegacyT3ChatDark ? "dark" : null;
+          const resolvedBuiltInModes = BUILT_IN_THEME_MODES[rawThemeId] ?? null;
+          const customTheme = resolvedBuiltInModes ? null : findCustomTheme(rawThemeId);
+          const themeId = resolvedBuiltInModes || customTheme ? rawThemeId : DEFAULT_THEME_ID;
           const builtInModes = BUILT_IN_THEME_MODES[themeId] ?? null;
-          const customTheme = builtInModes ? null : findCustomTheme(themeId);
           const themeModes =
             builtInModes ??
             (customTheme
@@ -245,9 +234,10 @@
             storedTheme === "light" ||
             storedTheme === "dark" ||
             storedTheme === "system" ||
-            themeModes !== null;
-          const theme = isKnownTheme && storedTheme ? storedTheme : "system";
-          const isThemed = isKnownTheme && themeModes !== null;
+            resolvedBuiltInModes !== null ||
+            customTheme !== null;
+          const theme = isKnownTheme && storedTheme ? storedTheme : DEFAULT_THEME_ID;
+          const isThemed = themeModes !== null;
           const baseAppearance = customTheme ? customTheme.appearance : "light";
           const systemMode = prefersDark ? "dark" : "light";
           const storedAppearanceMode = window.localStorage.getItem(
@@ -262,7 +252,7 @@
               ? "system"
               : storedFollowSystem === "false"
                 ? preferenceMode
-                : theme === "system"
+                : theme === "system" || (!isKnownTheme && legacyMode === null)
                   ? "system"
                   : preferenceMode;
           // A valid mix half for the wanted appearance takes over: it decides

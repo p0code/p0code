@@ -1,4 +1,4 @@
-import { BUILT_IN_THEMES } from "@t3tools/shared/themePalettes";
+import { BUILT_IN_THEMES, DEFAULT_THEME_ID } from "@t3tools/shared/themePalettes";
 import { msg, T, useGT, useMessages } from "gt-react";
 import { MonitorIcon, MoonIcon, PaletteIcon, SunIcon } from "lucide-react";
 
@@ -14,11 +14,7 @@ import {
   type CommandPaletteSubmenuItem,
 } from "./CommandPalette.logic";
 import { toggleThemeEditorForTheme } from "./settings/themeEditorStore";
-import {
-  STANDARD_THEME_CARDS,
-  getThemeCardDefinition,
-  ThemePreviewCircle,
-} from "./settings/ThemePreviewCircles";
+import { getThemeCardDefinition, ThemePreviewCircle } from "./settings/ThemePreviewCircles";
 import { stackedThreadToast, toastManager } from "./ui/toast";
 
 export const APPEARANCE_OPTIONS = [
@@ -43,16 +39,13 @@ function useThemeCards() {
   const customThemes = useCustomThemes();
   const environmentThemes = useEnvironmentThemeDefinitions();
   const seen = new Set<string>();
-  return [
-    ...STANDARD_THEME_CARDS.map((card) => ({ ...card, id: null })),
-    ...[...BUILT_IN_THEMES, ...customThemes, ...environmentThemes]
-      .filter((definition) => {
-        if (seen.has(definition.id)) return false;
-        seen.add(definition.id);
-        return true;
-      })
-      .map(getThemeCardDefinition),
-  ];
+  return [...BUILT_IN_THEMES, ...customThemes, ...environmentThemes]
+    .filter((definition) => {
+      if (seen.has(definition.id)) return false;
+      seen.add(definition.id);
+      return true;
+    })
+    .map(getThemeCardDefinition);
 }
 
 export function useCommandPaletteThemeItems() {
@@ -83,7 +76,7 @@ export function useCommandPaletteThemeItems() {
         label: gt("Change theme"),
         items: themeCards.map(({ id, label, previews }) => ({
           kind: "action",
-          value: id === null ? "theme:standard" : `theme:palette:${id}`,
+          value: `theme:palette:${id}`,
           title: label,
           description:
             previews.length === 1
@@ -95,7 +88,9 @@ export function useCommandPaletteThemeItems() {
           icon: <PaletteIcon className={ITEM_ICON_CLASS} />,
           titleTrailingContent: (
             <span className="flex shrink-0 items-center gap-2">
-              {(themeHalves?.[resolvedTheme] ?? getThemeDefinition(theme)?.id ?? null) === id ? (
+              {(themeHalves?.[resolvedTheme] ??
+                getThemeDefinition(theme)?.id ??
+                DEFAULT_THEME_ID) === id ? (
                 <span className="text-xs text-muted-foreground/70">
                   <T context="the theme or mode in use now">Current</T>
                 </span>
@@ -114,9 +109,7 @@ export function useCommandPaletteThemeItems() {
           ),
           run: async () => {
             const saved =
-              previews.length === 1 && id !== null
-                ? setThemeHalf(previews[0]!.mode, id)
-                : setTheme(id ?? appearanceMode);
+              previews.length === 1 ? setThemeHalf(previews[0]!.mode, id) : setTheme(id);
             if (!saved) notifyThemeSaveFailure();
           },
         })),
