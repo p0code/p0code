@@ -115,7 +115,10 @@ export const OpenInPicker = memo(function OpenInPicker({
   const isEditorUnavailable = (editor: EditorId | null) =>
     editor === "file-manager" && fileManagerAction === "unavailable";
 
-  const openInEditor = async (editorId: EditorId | null): Promise<boolean> => {
+  const openInEditor = async (
+    editorId: EditorId | null,
+    rememberChoice = true,
+  ): Promise<boolean> => {
     if (!openInCwd) return false;
     const editor = editorId ?? preferredEditor;
     if (!editor || isEditorUnavailable(editor)) return false;
@@ -133,7 +136,7 @@ export const OpenInPicker = memo(function OpenInPicker({
       const opened = await openRemoteEditorUrl(url);
       if (!opened) return false;
       markRemoteHintSeen();
-      setPreferredEditor(editor);
+      if (rememberChoice) setPreferredEditor(editor);
       return true;
     }
     if (!readEnvironmentScope(environmentId, AuthOrchestrationOperateScope)) return false;
@@ -145,7 +148,7 @@ export const OpenInPicker = memo(function OpenInPicker({
         ...(fileManagerAction === "reveal" && editor === "file-manager" ? { reveal: true } : {}),
       },
     });
-    setPreferredEditor(editor);
+    if (rememberChoice) setPreferredEditor(editor);
     return (await result)._tag === "Success";
   };
 
@@ -155,8 +158,20 @@ export const OpenInPicker = memo(function OpenInPicker({
   );
 
   const backgroundThread = use(BackgroundThreadContext);
-  const options = resolveOpenInOptions(navigator.platform, effectiveEditors, messages);
-  const primaryOption = options.find(({ value }) => value === preferredEditor) ?? null;
+  const allOptions = resolveOpenInOptions(navigator.platform, effectiveEditors, messages);
+  // The panel gives the file manager its own row, so the split row always names a code editor.
+  const fileManagerOption = isPanel
+    ? (allOptions.find(({ value }) => value === "file-manager") ?? null)
+    : null;
+  const options =
+    fileManagerOption === null
+      ? allOptions
+      : allOptions.filter(({ value }) => value !== "file-manager");
+  const editorChoice =
+    fileManagerOption !== null && preferredEditor === "file-manager"
+      ? (options[0]?.value ?? null)
+      : preferredEditor;
+  const primaryOption = options.find(({ value }) => value === editorChoice) ?? null;
   const primaryLabel = isPanel
     ? primaryOption
       ? gt("Open in {editor}", { editor: primaryOption.label })
@@ -206,7 +221,7 @@ export const OpenInPicker = memo(function OpenInPicker({
             >
               <Icon aria-hidden="true" className={getOpenInIconClass(kind)} />
               <MenuItemLabel>{label}</MenuItemLabel>
-              {value === preferredEditor && openFavoriteEditorShortcutLabel && (
+              {value === editorChoice && openFavoriteEditorShortcutLabel && (
                 <MenuShortcut>{openFavoriteEditorShortcutLabel}</MenuShortcut>
               )}
             </MenuItem>
@@ -267,14 +282,12 @@ export const OpenInPicker = memo(function OpenInPicker({
       variant={isPanel ? "ghost" : "outline"}
       part="primary"
       panel={isPanel}
-      disabled={
-        !preferredEditor || !openInCwd || !canOpenEditor || isEditorUnavailable(preferredEditor)
-      }
+      disabled={!editorChoice || !openInCwd || !canOpenEditor || isEditorUnavailable(editorChoice)}
       {...(enableShortcut && !backgroundThread ? { [OPEN_FAVORITE_EDITOR_ATTRIBUTE]: "" } : {})}
       onClick={() => {
-        if (!preferredEditor) return;
-        const label = editorLabelForPlatform(preferredEditor, navigator.platform);
-        void openInEditor(preferredEditor).then((opened) => {
+        if (!editorChoice) return;
+        const label = editorLabelForPlatform(editorChoice, navigator.platform);
+        void openInEditor(editorChoice).then((opened) => {
           if (opened) announce(gt("Opened in {editor}", { editor: label }));
         });
       }}
@@ -303,7 +316,34 @@ export const OpenInPicker = memo(function OpenInPicker({
     </ThreadDetailsControl>
   );
 
-  return (
+  const fileManagerRow =
+    fileManagerOption === null ? null : (
+      <ThreadDetailsControl
+        aria-label={gt("Open in {editor}", { editor: fileManagerOption.label })}
+        size="sm"
+        variant="ghost"
+        part="row"
+        disabled={!openInCwd || !canOpenEditor || isEditorUnavailable("file-manager")}
+        onClick={() => {
+          void openInEditor("file-manager", false).then((opened) => {
+            if (opened) announce(gt("Opened in {editor}", { editor: fileManagerOption.label }));
+          });
+        }}
+      >
+        <fileManagerOption.Icon
+          aria-hidden="true"
+          className={cn(
+            THREAD_DETAILS_PANEL_ICON_CLASS,
+            getOpenInIconClass(fileManagerOption.kind),
+          )}
+        />
+        <span className={cn("min-w-0 truncate", THREAD_DETAILS_PANEL_LABEL_CLASS)}>
+          {gt("Open in {editor}", { editor: fileManagerOption.label })}
+        </span>
+      </ThreadDetailsControl>
+    );
+
+  const editorGroup = (
     <ActionGroup
       aria-label={gt("Open in editor")}
       role="group"
@@ -357,5 +397,13 @@ export const OpenInPicker = memo(function OpenInPicker({
         </MenuPopup>
       </Menu>
     </ActionGroup>
+  );
+  return fileManagerRow === null ? (
+    editorGroup
+  ) : (
+    <>
+      {fileManagerRow}
+      {editorGroup}
+    </>
   );
 });

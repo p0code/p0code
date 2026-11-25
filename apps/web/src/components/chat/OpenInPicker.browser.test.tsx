@@ -218,6 +218,29 @@ describe("file manager", () => {
   });
 });
 
+describe("details panel", () => {
+  it("gives the file manager its own row and keeps the editor row on a code editor", async () => {
+    await using fixture = await setup();
+    const { renderPicker, byLabel, click } = fixture;
+    state.allowed.add(selected);
+    window.localStorage.setItem("t3code:last-editor", JSON.stringify("file-manager"));
+    // A failed open is not announced, so no timer outlives the test.
+    state.run.mockResolvedValue(AsyncResult.failure(Cause.fail(new Error("closed"))));
+    await renderPicker(["vscode", "file-manager"], true);
+
+    const fileManagerRow = byLabel("Open in Files");
+    const editorRow = byLabel("Open in VS Code");
+    await click(fileManagerRow);
+    await click(editorRow);
+    expect(state.run.mock.calls.map(([call]) => call.input.editor)).toEqual([
+      "file-manager",
+      "vscode",
+    ]);
+    // Opening the file manager does not replace the chosen code editor.
+    expect(state.setPreferred.mock.calls).toEqual([["vscode"]]);
+  });
+});
+
 describe("remote editor links", () => {
   it("opens the link from the fallback when the picker is not mounted", async () => {
     await using fixture = await setup();
