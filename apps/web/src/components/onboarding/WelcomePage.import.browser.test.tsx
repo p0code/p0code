@@ -11,7 +11,9 @@ import {
   type AuthEnvironmentScope,
   type AuthSessionState,
   type ServerProvider,
+  type T3ImportStatus,
 } from "@t3tools/contracts";
+import * as Cause from "effect/Cause";
 import { AsyncResult, Atom } from "effect/reactivity";
 import { expect, it, vi } from "vite-plus/test";
 
@@ -33,6 +35,8 @@ const state = vi.hoisted(() => ({
   createProject: vi.fn(),
   importThreads: vi.fn(),
   refreshProviders: vi.fn(),
+  t3ImportStatus: vi.fn(),
+  t3ImportAccept: vi.fn(),
   completeOnboarding: vi.fn(),
   onDone: vi.fn(),
   scan: vi.fn(),
@@ -77,6 +81,8 @@ vi.mock(import("../../state/server"), async (original) => {
       providersValueAtom: (() => state.providers) as never,
       configValueAtom: (() => state.config) as never,
       refreshProviders: "refreshProviders" as never,
+      t3ImportStatus: "t3ImportStatus" as never,
+      t3ImportAccept: "t3ImportAccept" as never,
     },
   };
 });
@@ -149,6 +155,8 @@ vi.mock(import("../../state/use-atom-command"), async (original) => ({
       | "createProject"
       | "importThreads"
       | "refreshProviders"
+      | "t3ImportStatus"
+      | "t3ImportAccept"
       | "openTerminal"
       | "writeTerminal"
       | "closeTerminal",
@@ -175,6 +183,16 @@ const readyClaude: ServerProvider = {
   skills: [],
 };
 const permissionMessage = "This connection cannot import projects or thread history.";
+
+function t3Status(reason: T3ImportStatus["reason"]): T3ImportStatus {
+  return {
+    available: reason === "available",
+    stockHome: "/Users/dev/.t3",
+    appHome: "/Users/dev/.p0code",
+    fresh: reason !== "home-not-fresh",
+    reason,
+  };
+}
 
 function session(scopes: ReadonlyArray<AuthEnvironmentScope>): AuthSessionState {
   return {
@@ -316,6 +334,10 @@ function setup() {
     .mockReset()
     .mockResolvedValue(AsyncResult.success({ importedCount: 1, skippedCount: 0 }));
   state.refreshProviders.mockReset().mockResolvedValue(AsyncResult.success(undefined));
+  state.t3ImportStatus
+    .mockReset()
+    .mockResolvedValue(AsyncResult.success(t3Status("home-not-fresh")));
+  state.t3ImportAccept.mockReset().mockResolvedValue(AsyncResult.success(t3Status("pending")));
   state.completeOnboarding.mockReset().mockResolvedValue(undefined);
   state.onDone.mockReset();
   state.scan.mockReset();
@@ -339,7 +361,7 @@ it("rechecks after project creation and can retry its history without recreating
     return recordProject(input);
   });
   await using _screen = await mountWelcome();
-  await click("Import 2 projects and start");
+  await click("Import and start");
   expect(state.createProject).toHaveBeenCalledOnce();
   await act(async () => {
     setGrant(primaryId, false);
@@ -353,7 +375,7 @@ it("rechecks after project creation and can retry its history without recreating
 
   await act(async () => setGrant(primaryId, true));
   // The first project now exists, so only the second counts as new.
-  await click("Import 1 project and start");
+  await click("Import and start");
   expect(state.createProject).toHaveBeenCalledTimes(2);
   expect(state.importThreads).toHaveBeenCalledTimes(2);
   expect(state.onDone).toHaveBeenCalledOnce();
@@ -367,7 +389,7 @@ it("completes accepted imports when permission is revoked after the final server
     AsyncResult.success(await imported.promise),
   );
   await using _screen = await mountWelcome();
-  await click("Import 1 project and start");
+  await click("Import and start");
   await act(async () => {
     setGrant(primaryId, false);
     imported.resolve({ importedCount: 1, skippedCount: 0 });
@@ -389,13 +411,13 @@ it("finishes setup without landing when the imported project never reaches the c
   await using _screen = await mountWelcome();
   using toastAdd = vi.spyOn(toastManager, "add");
 
-  await click("Import 1 project and start");
+  await click("Import and start");
   await vi.waitFor(() => expect(state.completeOnboarding).toHaveBeenCalledOnce());
   // A failed completion hands the step back instead of leaving it importing.
-  await vi.waitFor(() => expect(button("Import 1 project and start").disabled).toBe(false));
+  await vi.waitFor(() => expect(button("Import and start").disabled).toBe(false));
   expect(state.onDone).not.toHaveBeenCalled();
 
-  await click("Import 1 project and start");
+  await click("Import and start");
   await vi.waitFor(() => expect(state.onDone).toHaveBeenCalledOnce());
   expect(state.onDone).toHaveBeenCalledWith(undefined);
   // The retry skips the project it already imported, but still counts its thread.
@@ -410,7 +432,7 @@ it("waits for a ready agent to start, and Start without an agent still finishes 
   using _now = setup();
   appAtomRegistry.set(state.providers as Atom.Writable<ReadonlyArray<ServerProvider>>, []);
   await using _screen = await mountWelcome();
-  expect(button("Import 2 projects and start").disabled).toBe(true);
+  expect(button("Import and start").disabled).toBe(true);
 
   await click("Start without an agent");
   await vi.waitFor(() => expect(state.onDone).toHaveBeenCalledOnce());
@@ -432,7 +454,7 @@ it("blocks leaving the page until the imported projects have landed", async () =
     },
   );
   await using screen = await mountWelcome();
-  await click("Import 2 projects and start");
+  await click("Import and start");
 
   // A blocked navigation never settles, so it is not awaited.
   const leave = () =>
@@ -482,7 +504,7 @@ it("gives projects a later scan finds the default, unless the main box was unche
   await click("Review all 2");
   await click("Select none");
   await findProject("/projects/third");
-  await vi.waitFor(() => expect(button("Import 1 project and start").disabled).toBe(false));
+  await vi.waitFor(() => expect(button("Import and start").disabled).toBe(false));
 
   const importProjects = document.querySelector<HTMLElement>('[role="checkbox"]');
   await act(async () => importProjects?.click());
@@ -507,7 +529,7 @@ it("keeps the project choice across a visit to Settings until setup finishes", a
     expect(state.createProject).not.toHaveBeenCalled();
   }
   await using _third = await mountWelcome();
-  expect(button("Import 2 projects and start").disabled).toBe(false);
+  expect(button("Import and start").disabled).toBe(false);
 });
 
 it("stays busy while setup saves after an import with nothing to open", async () => {
@@ -518,7 +540,7 @@ it("stays busy while setup saves after an import with nothing to open", async ()
   state.completeOnboarding.mockImplementationOnce(() => saved.promise);
   await using _screen = await mountWelcome();
 
-  await click("Import 1 project and start");
+  await click("Import and start");
   await vi.waitFor(() => expect(state.completeOnboarding).toHaveBeenCalledOnce());
   expect(button("Importing…").disabled).toBe(true);
   await act(async () => {
@@ -554,7 +576,7 @@ it("leaves projects already in p0code out of the default import, unless the box 
   const importProjects = document.querySelector<HTMLElement>('[role="checkbox"]');
   await act(async () => importProjects?.click());
   await vi.waitFor(() => expect(pageText()).toContain("Import 2 projects and their threads"));
-  expect(button("Import threads and start").disabled).toBe(false);
+  expect(button("Import and start").disabled).toBe(false);
 });
 
 it("keeps the started projects checked when the page opens again after a quit", async () => {
@@ -565,7 +587,7 @@ it("keeps the started projects checked when the page opens again after a quit", 
   );
   {
     await using _first = await mountWelcome();
-    await click("Import 2 projects and start");
+    await click("Import and start");
     await vi.waitFor(() => expect(state.importThreads).toHaveBeenCalledOnce());
   }
   // The app quit during the first project's history; it now exists in p0code.
@@ -586,7 +608,7 @@ it("keeps the project controls when a later scan fails", async () => {
     appAtomRegistry.set(candidatesAtom(), [...appAtomRegistry.get(candidatesAtom())]),
   );
   await vi.waitFor(() => expect(pageText()).toContain("Could not check projects again."));
-  expect(button("Import 2 projects and start").disabled).toBe(false);
+  expect(button("Import and start").disabled).toBe(false);
   expect(button("Retry").disabled).toBe(false);
 });
 
@@ -622,7 +644,7 @@ it("offers Update for a signed-in agent whose version is broken, and keeps Start
     (element) => element.textContent?.trim() === "Update",
   );
   expect(update?.getAttribute("href")).toContain("/settings/providers");
-  expect(button("Import 2 projects and start").disabled).toBe(true);
+  expect(button("Import and start").disabled).toBe(true);
 });
 
 it("checks an agent again once its install command finishes in the setup terminal", async () => {
@@ -711,4 +733,113 @@ it("starts without importing when this connection cannot import projects", async
   await click("Start");
   await vi.waitFor(() => expect(state.onDone).toHaveBeenCalledOnce());
   expect(state.createProject).not.toHaveBeenCalled();
+});
+
+it("offers the T3 Code import only when the server says it is available", async () => {
+  using _now = setup();
+  for (const reason of ["already-imported", "home-not-fresh", "stock-home-missing"] as const) {
+    state.t3ImportStatus.mockResolvedValue(AsyncResult.success(t3Status(reason)));
+    await using _screen = await mountWelcome();
+    await vi.waitFor(() => expect(state.t3ImportStatus).toHaveBeenCalled());
+    expect(pageText()).not.toContain("Move my T3 Code data over");
+    expect(pageText()).not.toContain("Restart p0code to finish importing");
+    state.t3ImportStatus.mockClear();
+  }
+
+  state.t3ImportStatus.mockResolvedValue(AsyncResult.success(t3Status("available")));
+  await using _screen = await mountWelcome();
+  await vi.waitFor(() => expect(pageText()).toContain("Move my T3 Code data over"));
+  expect(pageText()).toContain("T3 Code's own data is never modified.");
+  expect(pageText()).toContain("/Users/dev/.t3");
+});
+
+it("stages the T3 Code import and then asks for a restart", async () => {
+  using _now = setup();
+  state.t3ImportStatus.mockResolvedValue(AsyncResult.success(t3Status("available")));
+  await using _screen = await mountWelcome();
+  await vi.waitFor(() => button("Import"));
+  await click("Import");
+
+  expect(state.t3ImportAccept).toHaveBeenCalledWith({ environmentId: primaryId, input: {} });
+  await vi.waitFor(() => expect(pageText()).toContain("Restart p0code to finish importing"));
+  expect(pageText()).toContain("p0 migrate from-t3");
+  expect(pageText()).not.toContain("Move my T3 Code data over");
+  // Staging the import does not finish setup on its own.
+  expect(state.onDone).not.toHaveBeenCalled();
+});
+
+it("shows a staged T3 Code import as waiting for a restart straight away", async () => {
+  using _now = setup();
+  state.t3ImportStatus.mockResolvedValue(AsyncResult.success(t3Status("pending")));
+  await using _screen = await mountWelcome();
+  await vi.waitFor(() => expect(pageText()).toContain("Restart p0code to finish importing"));
+  expect([...document.querySelectorAll("button")].some((b) => b.textContent === "Import")).toBe(
+    false,
+  );
+});
+
+it("keeps a failed T3 Code import on the card so it can be tried again", async () => {
+  using _now = setup();
+  state.t3ImportStatus.mockResolvedValue(AsyncResult.success(t3Status("available")));
+  state.t3ImportAccept.mockResolvedValueOnce(
+    AsyncResult.failure(Cause.fail(new Error("The disk is full."))),
+  );
+  await using _screen = await mountWelcome();
+  using toastAdd = vi.spyOn(toastManager, "add");
+  await vi.waitFor(() => button("Import"));
+  await click("Import");
+
+  const alert = await vi.waitFor(() => {
+    const found = [...document.querySelectorAll('[role="alert"]')].find((element) =>
+      element.textContent?.includes("The disk is full."),
+    );
+    if (!found) throw new Error("No inline error yet");
+    return found;
+  });
+  expect(alert.textContent).toContain("Could not import from T3 Code.");
+  expect(toastAdd).not.toHaveBeenCalled();
+  expect(pageText()).not.toContain("Restart p0code to finish importing");
+
+  // The retry succeeds and clears the error.
+  await click("Import");
+  await vi.waitFor(() => expect(pageText()).toContain("Restart p0code to finish importing"));
+  expect(pageText()).not.toContain("The disk is full.");
+});
+
+it("sums up ready agents and lists them only when asked", async () => {
+  using _now = setup();
+  await using _screen = await mountWelcome();
+  const summary = () =>
+    [...document.querySelectorAll("button")].find((element) =>
+      element.textContent?.startsWith("1 agent ready"),
+    );
+  await vi.waitFor(() => expect(summary()).toBeDefined());
+  expect(summary()?.getAttribute("aria-expanded")).toBe("false");
+  expect(pageText()).not.toContain("Ready");
+
+  await act(async () => summary()?.click());
+  expect(summary()?.getAttribute("aria-expanded")).toBe("true");
+  await vi.waitFor(() => expect(pageText()).toContain("Ready"));
+  expect(pageText()).toContain("Add more agents");
+});
+
+it("names the main button after what it will do, and Start fresh skips the import", async () => {
+  using _now = setup();
+  {
+    await using _first = await mountWelcome();
+    expect(button("Import and start").disabled).toBe(false);
+    expect(button("Start fresh").disabled).toBe(false);
+    const importProjects = document.querySelector<HTMLElement>('[role="checkbox"]');
+    await act(async () => importProjects?.click());
+    await vi.waitFor(() => expect(button("Start").disabled).toBe(false));
+    expect(() => button("Start fresh")).toThrow();
+    await act(async () => importProjects?.click());
+    await vi.waitFor(() => button("Import and start"));
+  }
+
+  await using _second = await mountWelcome();
+  await click("Start fresh");
+  await vi.waitFor(() => expect(state.onDone).toHaveBeenCalledOnce());
+  expect(state.createProject).not.toHaveBeenCalled();
+  expect(state.importThreads).not.toHaveBeenCalled();
 });

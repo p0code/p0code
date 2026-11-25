@@ -13,6 +13,7 @@ import type {
   ScopedProjectRef,
   ServerConfig,
   ServerProvider,
+  T3ImportStatus,
 } from "@t3tools/contracts";
 import {
   AgentSessionSource,
@@ -30,10 +31,12 @@ import { Link, useBlocker } from "@tanstack/react-router";
 import * as Schema from "effect/Schema";
 import { msg, T, useGT, useLocale, useMessages, Var } from "gt-react";
 import {
+  ArrowDownToLineIcon,
   CheckIcon,
   ChevronDownIcon,
   ChevronRightIcon,
   PlusIcon,
+  RotateCwIcon,
   SmartphoneIcon,
   TerminalIcon,
 } from "lucide-react";
@@ -251,13 +254,16 @@ export function WelcomePage({
   });
   // Without import permission, starting simply skips the projects.
   const selected = projectImport.canWrite ? projectImport.selected : [];
-  const newCount = selected.filter(projectImport.isNew).length;
-  const start = () => {
+  const finishWithoutImport = () => {
     keepChoicesRef.current = scans.some((scan) => scan.data === null);
+    projectImport.finishAfterImport();
+  };
+  const start = () => {
     if (selected.length === 0) {
-      projectImport.finishAfterImport();
+      finishWithoutImport();
       return;
     }
+    keepChoicesRef.current = scans.some((scan) => scan.data === null);
     // Stored now, so after a restart mid-import these stay checked even once they exist.
     projectImport.setSelectedKeys(new Set(selected.map((candidate) => candidate.key)));
     void projectImport.runImport(selected);
@@ -273,40 +279,58 @@ export function WelcomePage({
         {/* The desktop window only moves where CSS opts in, so keep a titlebar strip. */}
         {isElectron ? <WorkspacePageHeader electron /> : null}
         <div className="min-h-0 flex-1 overflow-y-auto scrollbar-gutter-both">
-          <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col px-6 pt-12 pb-8 sm:pt-20">
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-              <T>Welcome to p0code</T>
-            </h1>
-            <p className="mt-1.5 text-sm text-muted-foreground">
-              <T>
-                Setting up{" "}
-                <span className="text-foreground">
-                  <Var>{label}</Var>
-                </span>
-                .
-              </T>
-            </p>
-            <div className="mt-10 border-t border-border/60">
-              <AgentsSection
-                environmentId={environmentId}
-                label={label}
-                isPrimary={isPrimary}
-                onImportSourceEnabled={() => scans[0]?.refresh()}
-              />
+          <div className="mx-auto flex min-h-full w-full max-w-2xl flex-col px-6 pt-12 pb-8 sm:pt-20">
+            <header>
+              <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+                <T>Welcome to p0code</T>
+              </h1>
+              <p className="mt-2 text-sm text-foreground/80">
+                <T>One place to run your coding agents, side by side, and keep their threads.</T>
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                <T>
+                  Setting up{" "}
+                  <span className="text-foreground">
+                    <Var>{label}</Var>
+                  </span>
+                  .
+                </T>
+              </p>
+            </header>
+            {/* Hidden when neither card has anything to offer. */}
+            <WelcomeSection
+              title={gt("Bring your stuff over")}
+              className="[&:not(:has([data-slot=welcome-card]))]:hidden"
+            >
+              <T3ImportCard environmentId={environmentId} />
               <ProjectsSection
                 scan={scans[0]}
                 projectImport={projectImport}
                 isImporting={isImporting}
               />
-              {showPhone ? <PhoneSection /> : null}
-            </div>
-            <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
-              {agentReady ? (
-                <span />
-              ) : (
+            </WelcomeSection>
+            <WelcomeSection title={gt("Your agents")}>
+              <WelcomeCard>
+                <AgentsSection
+                  environmentId={environmentId}
+                  label={label}
+                  isPrimary={isPrimary}
+                  onImportSourceEnabled={() => scans[0]?.refresh()}
+                />
+              </WelcomeCard>
+            </WelcomeSection>
+            {showPhone ? <PhoneSection /> : null}
+            <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
+              {!agentReady ? (
                 <Button variant="ghost-muted" disabled={isImporting} onClick={start}>
                   <T>Start without an agent</T>
                 </Button>
+              ) : selected.length > 0 ? (
+                <Button variant="ghost-muted" disabled={isImporting} onClick={finishWithoutImport}>
+                  <T>Start fresh</T>
+                </Button>
+              ) : (
+                <span />
               )}
               <div className="flex items-center gap-3">
                 {agentReady ? null : (
@@ -319,14 +343,9 @@ export function WelcomePage({
                     ? selected.length > 0
                       ? gt("Importing…")
                       : gt("Starting…")
-                    : newCount > 0
-                      ? gt(
-                          "{count, plural, one {Import {count} project and start} other {Import {count} projects and start}}",
-                          { count: newCount },
-                        )
-                      : selected.length > 0
-                        ? gt("Import threads and start")
-                        : gt("Start", { $context: "verb, finishes setup" })}
+                    : selected.length > 0
+                      ? gt("Import and start")
+                      : gt("Start", { $context: "verb, finishes setup" })}
                 </Button>
               </div>
             </div>
@@ -337,19 +356,142 @@ export function WelcomePage({
   );
 }
 
-// Each part of the page is one band: its label on the left, its rows on the right.
+// Each part of the page is a titled stack of cards.
 function WelcomeSection({
   title,
+  className,
   children,
 }: {
   readonly title: string;
+  readonly className?: string;
   readonly children: ReactNode;
 }) {
   return (
-    <section className="grid gap-x-10 border-b border-border/60 py-4 sm:grid-cols-[6rem_minmax(0,1fr)]">
-      <h2 className="text-sm leading-10 text-muted-foreground">{title}</h2>
-      <div className="min-w-0">{children}</div>
+    <section className={cn("mt-10", className)}>
+      <h2 className="mb-3 text-sm font-medium text-foreground">{title}</h2>
+      <div className="min-w-0 space-y-3">{children}</div>
     </section>
+  );
+}
+
+// The same card the settings groups use.
+function WelcomeCard({
+  className,
+  children,
+}: {
+  readonly className?: string;
+  readonly children: ReactNode;
+}) {
+  return (
+    <div
+      data-slot="welcome-card"
+      className={cn(
+        "rounded-xl border border-border/60 bg-card/40 px-4 py-2 shadow-xs/5",
+        className,
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+/**
+ * Offers to bring a stock T3 Code home over. The server only stages consent here; the copy runs
+ * before the database opens on the next start, so the card then just says to restart.
+ */
+function T3ImportCard({ environmentId }: { readonly environmentId: EnvironmentId }) {
+  const gt = useGT();
+  const loadStatus = useAtomCommand(serverEnvironment.t3ImportStatus, { reportFailure: false });
+  const accept = useAtomCommand(serverEnvironment.t3ImportAccept, { reportFailure: false });
+  const [status, setStatus] = useState<T3ImportStatus | null>(null);
+  const [accepted, setAccepted] = useState(false);
+  const [accepting, setAccepting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- reads whether this computer can take the T3 Code import once per environment
+  useEffect(() => {
+    let active = true;
+    void loadStatus({ environmentId, input: {} }).then((result) => {
+      if (active && result._tag === "Success") setStatus(result.value);
+    });
+    return () => {
+      active = false;
+    };
+  }, [environmentId, loadStatus]);
+
+  if (status === null) return null;
+  const pending = accepted || status.reason === "pending";
+  if (!pending && !status.available) return null;
+
+  const runAccept = async () => {
+    setAccepting(true);
+    setError(null);
+    const result = await accept({ environmentId, input: {} });
+    setAccepting(false);
+    if (result._tag === "Success") {
+      setStatus(result.value);
+      setAccepted(true);
+      return;
+    }
+    if (isAtomCommandInterrupted(result)) return;
+    const cause = squashAtomCommandFailure(result);
+    setError(cause instanceof Error ? cause.message : gt("Something went wrong."));
+  };
+
+  if (pending) {
+    return (
+      <WelcomeCard className="py-3">
+        <div role="status" className="flex gap-3">
+          <RowIcon>
+            <RotateCwIcon className="size-4" />
+          </RowIcon>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-foreground">
+              <T>Restart p0code to finish importing</T>
+            </p>
+            <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+              <T>
+                Your T3 Code data is copied in before p0code opens its database, so it moves over on
+                the next start. You can also run{" "}
+                <code className="font-mono text-foreground">p0 migrate from-t3</code>.
+              </T>
+            </p>
+          </div>
+        </div>
+      </WelcomeCard>
+    );
+  }
+
+  return (
+    <WelcomeCard className="py-3">
+      <div className="flex flex-wrap items-start gap-3">
+        <RowIcon>
+          <ArrowDownToLineIcon className="size-4" />
+        </RowIcon>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium text-foreground">
+            <T>Move my T3 Code data over</T>
+          </p>
+          <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+            <T>
+              Brings your threads, projects, settings, and provider accounts from{" "}
+              <code className="font-mono">
+                <Var>{status.stockHome}</Var>
+              </code>
+              . T3 Code's own data is never modified.
+            </T>
+          </p>
+        </div>
+        <Button size="sm" disabled={accepting} onClick={() => void runAccept()}>
+          {accepting ? gt("Importing…") : gt("Import", { $context: "verb, imports T3 Code data" })}
+        </Button>
+      </div>
+      {error !== null ? (
+        <p role="alert" className="mt-2 pl-8 text-sm text-destructive">
+          {gt("Could not import from T3 Code. {error}", { error })}
+        </p>
+      ) : null}
+    </WelcomeCard>
   );
 }
 
@@ -419,6 +561,7 @@ function AgentsSection({
   const canManageProviders = useEnvironmentScope(environmentId, AuthProvidersManageScope);
   const [terminalSession, setTerminalSession] = useState<AgentTerminalSession | null>(null);
   const [moreOpen, setMoreOpen] = useState<boolean | null>(null);
+  const [readyOpen, setReadyOpen] = useState(false);
   const [addingProvider, setAddingProvider] = useState(false);
   const [codexSetupId, setCodexSetupId] = useState<ProviderInstanceId | null>(null);
   const [cliTerminalFor, setCliTerminalFor] = useState<ProviderInstanceId | null>(null);
@@ -434,6 +577,8 @@ function AgentsSection({
   const showMore = moreOpen ?? false;
   const acpAllowed = isManagedDriverAllowed(serverConfig?.managedPolicy, ACP_REGISTRY_DRIVER_KIND);
   const stateOf = (provider: ServerProvider) => welcomeAgentState(provider, serverConfig?.settings);
+  const ready = found.filter((provider) => stateOf(provider) === "ready");
+  const needsStep = found.filter((provider) => stateOf(provider) !== "ready");
   const needsInstallOrSignIn = (provider: ServerProvider) => {
     const state = stateOf(provider);
     return (
@@ -610,8 +755,38 @@ function AgentsSection({
   ].filter((note) => note !== null);
 
   return (
-    <WelcomeSection title={gt("Agents")}>
-      {found.map((provider) => (
+    <>
+      {ready.length > 0 ? (
+        <Collapsible open={readyOpen} onOpenChange={setReadyOpen}>
+          <CollapsibleTrigger className="group flex min-h-10 w-full items-center gap-3 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset">
+            <RowIcon>
+              <CheckIcon className="size-4 text-success-foreground" />
+            </RowIcon>
+            <span className="text-sm font-medium text-foreground">
+              {gt("{count, plural, one {{count} agent ready} other {{count} agents ready}}", {
+                count: ready.length,
+              })}
+            </span>
+            <AgentLogoStack providers={ready} acp={false} muted={false} />
+            <span className="ml-auto text-xs text-muted-foreground group-hover:text-foreground">
+              {readyOpen ? gt("Hide") : gt("Show", { $context: "verb, shows the ready agents" })}
+            </span>
+            <ChevronDownIcon className="size-4 text-muted-foreground group-data-panel-open:rotate-180 motion-safe:transition-transform" />
+          </CollapsibleTrigger>
+          <CollapsiblePanel>
+            {ready.map((provider) => (
+              <AgentRow
+                key={provider.instanceId}
+                provider={provider}
+                state={stateOf(provider)}
+                action={actionFor(provider)}
+              />
+            ))}
+          </CollapsiblePanel>
+        </Collapsible>
+      ) : null}
+      {/* Agents that still need a step stay in view; only the ready ones fold away. */}
+      {needsStep.map((provider) => (
         <AgentRow
           key={provider.instanceId}
           provider={provider}
@@ -722,22 +897,30 @@ function AgentsSection({
           }}
         />
       ) : null}
-    </WelcomeSection>
+    </>
   );
 }
 
-// A quiet preview of what the fold holds; the names are inside it.
+// A preview of what a fold holds; the names are inside it.
 function AgentLogoStack({
   providers,
   acp,
+  muted = true,
 }: {
   readonly providers: ReadonlyArray<ServerProvider>;
   readonly acp: boolean;
+  readonly muted?: boolean;
 }) {
   if (providers.length === 0 && !acp) return null;
   return (
-    <span className="flex items-center gap-2 opacity-60 grayscale" aria-hidden>
-      {providers.slice(0, 6).map((provider) => (
+    <span
+      className={cn(
+        "flex min-w-0 items-center gap-2 overflow-hidden",
+        muted && "opacity-60 grayscale",
+      )}
+      aria-hidden
+    >
+      {(muted ? providers.slice(0, 6) : providers).map((provider) => (
         <ProviderInstanceIcon
           key={provider.instanceId}
           driverKind={provider.driver}
@@ -776,13 +959,13 @@ function ProjectsSection({
   if (scan === undefined) return null;
   if (scan.isPending && candidates.length === 0) {
     return (
-      <WelcomeSection title={gt("Projects")}>
+      <WelcomeCard>
         <p className="text-sm leading-10 text-muted-foreground">
           <T>
             Looking for projects in your <Var>{importSourcesLabel}</Var> history…
           </T>
         </p>
-      </WelcomeSection>
+      </WelcomeCard>
     );
   }
   const retry = (
@@ -792,7 +975,7 @@ function ProjectsSection({
   );
   if (scan.error !== null && candidates.length === 0) {
     return (
-      <WelcomeSection title={gt("Projects")}>
+      <WelcomeCard>
         <div
           role="alert"
           className="flex min-h-10 items-center justify-between gap-3 text-sm text-muted-foreground"
@@ -800,16 +983,16 @@ function ProjectsSection({
           <span>{gt("Could not check projects. {error}", { error: scan.error })}</span>
           {retry}
         </div>
-      </WelcomeSection>
+      </WelcomeCard>
     );
   }
   if (candidates.length === 0) {
     return scan.data?.truncated ? (
-      <WelcomeSection title={gt("Projects")}>
+      <WelcomeCard>
         <p className="text-xs leading-10 text-muted-foreground" role="status">
           {m(SCAN_LIMIT_MESSAGE)}
         </p>
-      </WelcomeSection>
+      </WelcomeCard>
     ) : null;
   }
 
@@ -824,7 +1007,7 @@ function ProjectsSection({
     selected.length < candidates.length &&
     !(selected.length === defaultKeys.length && defaultKeys.every((key) => selectedKeys.has(key)));
   return (
-    <WelcomeSection title={gt("Projects")}>
+    <WelcomeCard>
       <div className="flex min-h-10 items-center gap-3 py-1">
         <label className="flex min-w-0 flex-1 items-center gap-3">
           <RowIcon>
@@ -839,17 +1022,17 @@ function ProjectsSection({
           </RowIcon>
           <span className="min-w-0 flex-1">
             <span className="block text-sm font-medium text-foreground">
+              <T>
+                Import projects from <Var>{importSourcesLabel}</Var> history
+              </T>
+            </span>
+            <span className="block text-xs text-muted-foreground">
               {canWrite && selected.length > 0
                 ? gt(
                     "{count, plural, one {Import {count} project and their threads} other {Import {count} projects and their threads}}",
                     { count: selected.length },
                   )
                 : gt("Import projects and their threads")}
-            </span>
-            <span className="block text-xs text-muted-foreground">
-              <T>
-                From your <Var>{importSourcesLabel}</Var> history
-              </T>
             </span>
           </span>
         </label>
@@ -929,7 +1112,7 @@ function ProjectsSection({
       {visibleImportError ? (
         <p className="pt-1 pl-8 text-sm text-destructive">{m(visibleImportError)}</p>
       ) : null}
-    </WelcomeSection>
+    </WelcomeCard>
   );
 }
 
@@ -938,44 +1121,46 @@ function PhoneSection() {
   const [open, setOpen] = useState(false);
   return (
     <WelcomeSection title={gt("Phone")}>
-      <Collapsible open={open} onOpenChange={setOpen}>
-        <div className="flex min-h-10 items-center gap-3 py-1">
-          <RowIcon>
-            <SmartphoneIcon className="size-4" />
-          </RowIcon>
-          <span className="min-w-0 flex-1 text-sm font-medium text-foreground">
-            <T>Use p0code on your phone</T>
-          </span>
-          <CollapsibleTrigger render={<Button variant="ghost-muted" size="xs" />}>
-            {open ? gt("Hide") : gt("Set up")}
-            <ChevronDownIcon className={cn("size-3.5", open && "rotate-180")} />
-          </CollapsibleTrigger>
-        </div>
-        <CollapsiblePanel>
-          <div className="flex items-center gap-8 pt-2 pb-3 pl-8">
-            <ol className="min-w-0 flex-1 space-y-5">
-              <PhoneStep step={1}>
-                <p className="text-sm text-foreground">
-                  <T>Scan with your phone to get the app.</T>
-                </p>
-              </PhoneStep>
-              <PhoneStep step={2}>
-                <T>Add this computer using its pairing link.</T>
-              </PhoneStep>
-            </ol>
-            {/* One code for both stores: the link opens the store that matches the phone. */}
-            <div className="shrink-0 rounded-lg bg-white p-1.5">
-              <QRCodeSvg
-                value={MOBILE_APP_URL}
-                size={124}
-                level="M"
-                marginSize={2}
-                title={gt("p0code app for iPhone and Android")}
-              />
-            </div>
+      <WelcomeCard>
+        <Collapsible open={open} onOpenChange={setOpen}>
+          <div className="flex min-h-10 items-center gap-3 py-1">
+            <RowIcon>
+              <SmartphoneIcon className="size-4" />
+            </RowIcon>
+            <span className="min-w-0 flex-1 text-sm font-medium text-foreground">
+              <T>Use p0code on your phone</T>
+            </span>
+            <CollapsibleTrigger render={<Button variant="ghost-muted" size="xs" />}>
+              {open ? gt("Hide") : gt("Set up")}
+              <ChevronDownIcon className={cn("size-3.5", open && "rotate-180")} />
+            </CollapsibleTrigger>
           </div>
-        </CollapsiblePanel>
-      </Collapsible>
+          <CollapsiblePanel>
+            <div className="flex items-center gap-8 pt-2 pb-3 pl-8">
+              <ol className="min-w-0 flex-1 space-y-5">
+                <PhoneStep step={1}>
+                  <p className="text-sm text-foreground">
+                    <T>Scan with your phone to get the app.</T>
+                  </p>
+                </PhoneStep>
+                <PhoneStep step={2}>
+                  <T>Add this computer using its pairing link.</T>
+                </PhoneStep>
+              </ol>
+              {/* One code for both stores: the link opens the store that matches the phone. */}
+              <div className="shrink-0 rounded-lg bg-white p-1.5">
+                <QRCodeSvg
+                  value={MOBILE_APP_URL}
+                  size={124}
+                  level="M"
+                  marginSize={2}
+                  title={gt("p0code app for iPhone and Android")}
+                />
+              </div>
+            </div>
+          </CollapsiblePanel>
+        </Collapsible>
+      </WelcomeCard>
     </WelcomeSection>
   );
 }

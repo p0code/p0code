@@ -1567,6 +1567,15 @@ export function createServerEnvironmentAtoms<R, E>(
       tag: WS_METHODS.serverRunStorageCleanup,
       concurrency: { mode: "singleFlight", key: ({ environmentId }) => environmentId },
     }),
+    t3ImportStatus: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:t3-import:status",
+      tag: WS_METHODS.t3ImportStatus,
+    }),
+    t3ImportAccept: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:t3-import:accept",
+      tag: WS_METHODS.t3ImportAccept,
+      concurrency: { mode: "singleFlight", key: ({ environmentId }) => environmentId },
+    }),
     prepareTriage: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:prepare-triage",
       tag: WS_METHODS.serverPrepareTriage,

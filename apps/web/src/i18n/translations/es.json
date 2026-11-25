@@ -5772,10 +5772,13 @@
   "b923ddc935ea2555": "No se pudo terminar la configuración",
   "152184c4aefef5d1": "No se pudieron guardar tus ajustes. Vuelve a intentarlo.",
   "23ec0110d2170502": "Te damos la bienvenida",
+  "988e8c4b349b11fa": "Trae tus cosas",
+  "9af4fcd401aa9ef3": "Tus agentes",
   "fd8f75f97a5c0e6d": "Importando…",
-  "cd609620fafff02b": "{count, plural, one {Importar {count} proyecto y empezar} other {Importar {count} proyectos y empezar}}",
-  "99decfb4ea686b61": "Importar hilos y empezar",
+  "06b428b511f2bf10": "Importar y empezar",
   "88ddebac4d96eb62": "Empezar",
+  "1e43b5cc89279fca": "Importar",
+  "b2a5cf21e520a888": "No se pudo importar desde T3 Code. {error}",
   "9877b52c6722fe99": "No se pudo activar {agent}",
   "15903f7ea6a43f95": "{action}: {agent}",
   "82e9b02a3e95e425": "Activar: {agent}",
@@ -5786,13 +5789,14 @@
   "c193540d6298ce6a": "Configurar",
   "2ca89fd7bbd7ea94": "Esta conexión no puede controlar terminales.",
   "fb41d01d5dadcac0": "Esta conexión no puede gestionar agentes.",
-  "2632f324dc2d9c48": "Agentes",
+  "1e8657513ceeee69": "{count, plural, one {{count} agente listo} other {{count} agentes listos}}",
+  "18d144bcd97f0371": "Ocultar",
+  "2a7c937bc65f4b62": "Mostrar",
   "598d1d38b945c279": "Añadir más agentes",
   "615a8310fb4afa0b": "Configurar un agente",
   "878c6bcda7eb5adc": "No se pudieron comprobar los proyectos. {error}",
   "e6bcf138d25188d7": "{count, plural, one {Importar {count} proyecto y sus hilos} other {Importar {count} proyectos y sus hilos}}",
   "d72f296745294c3a": "Importar proyectos y sus hilos",
-  "18d144bcd97f0371": "Ocultar",
   "54fc1526df1c0cce": "{count, plural, one {Revisar {count}} other {Revisar los {count}}}",
   "bd2304f25f6f999e": "{selected, plural, one {{selected} de {total} seleccionado} other {{selected} de {total} seleccionados}}",
   "228cd9fd55a55070": "No se pudieron volver a comprobar los proyectos. {error}",
@@ -5810,6 +5814,7 @@
   "a506c135c2183ac3": "{count, plural, one {{count} carpeta} other {{count} carpetas}}",
   "efc48b9736a534bc": "ahora",
   "eac5ab08ff2ab51f": "Te damos la bienvenida a p0code",
+  "8fcf2e3fcfa54409": "Un solo lugar para ejecutar tus agentes de programación en paralelo y conservar sus hilos.",
   "3cc77f9daa7eeafd": [
     "Configurando",
     " ",
@@ -5825,7 +5830,34 @@
     "."
   ],
   "216ab7514aea1d61": "Empezar sin agente",
+  "5fc35138b0ff1aea": "Empezar de cero",
   "501ce2d99da8bfd1": "Configura un agente para empezar.",
+  "0dfafed03706f50e": "Reinicia p0code para terminar la importación",
+  "e0af330a3647d10a": [
+    "Tus datos de T3 Code se copian antes de que p0code abra su base de datos, así que se trasladan en el próximo inicio. También puedes ejecutar",
+    " ",
+    {
+      "t": "code",
+      "i": 1,
+      "c": "p0 migrate from-t3"
+    },
+    "."
+  ],
+  "674d4f463ccdedfd": "Trasladar mis datos de T3 Code",
+  "e7f96f059e56bf23": [
+    "Trae tus hilos, proyectos, ajustes y cuentas de proveedores desde",
+    " ",
+    {
+      "t": "code",
+      "i": 1,
+      "c": {
+        "i": 2,
+        "k": "_gt_value_2",
+        "v": "v"
+      }
+    },
+    ". Los datos propios de T3 Code nunca se modifican."
+  ],
   "f77d000c0710f066": "Activar",
   "4ed27bf946e504db": "Configurar",
   "7a26eaacff0607f7": [
@@ -5848,8 +5880,8 @@
     },
     "…"
   ],
-  "45194b35dc6d858a": [
-    "De tu historial de ",
+  "c843bead50fb78e3": [
+    "Importar proyectos del historial de ",
     {
       "i": 1,
       "k": "_gt_value_1",
@@ -9341,7 +9373,6 @@
   "5c0c973276a61fdb": "No se pudo guardar el permiso de enrutamiento de pull requests",
   "1bfcffe8411e2439": "Enrutamiento de pull requests de {environment}",
   "ae4761ddc038b102": "Las máquinas en las que confías aquí pueden leer datos de PR a través del acceso al control de versiones de las otras. Activa ambas máquinas. Leer y actuar puede usar permisos más amplios que los de la máquina propietaria. Solo se aplica a este dispositivo.",
-  "e2549e5d689d8fa9": "Puerto local",
   "02bca2d9c90e5f1e": "{value} s",
   "af22f973466903c3": "{value} min",
   "401ba3f2391d8742": "{value} h",
@@ -9745,6 +9776,7 @@
   "d1a3cd9429a624e9": "Etiqueta del enlace",
   "a0988e4e9321c1b0": "Nivel de acceso",
   "d9ba7309688b3241": "Caducidad del enlace",
+  "e2549e5d689d8fa9": "Puerto local",
   "3432aa767653c49d": "Acceso al puerto",
   "d7dc565616d13a5c": "Compartir enlace",
   "de603f12452a7942": "Código QR del enlace compartido",
@@ -11580,6 +11612,7 @@
   "4ec62c39ca3192bf": "Versiones e issues",
   "f2bf529f85e05494": "Compartir y acceso",
   "7cf24feddad00a5e": "Preferencias",
+  "2632f324dc2d9c48": "Agentes",
   "58058320796d28f6": "Código",
   "1a07e4d043f5df4e": "Conexiones",
   "d8cd577c915539bd": "Cuentas y token de {label}",

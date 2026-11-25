@@ -5773,10 +5773,13 @@
   "b923ddc935ea2555": "Kunde inte slutföra konfigurationen",
   "152184c4aefef5d1": "Dina inställningar kunde inte sparas. Försök igen.",
   "23ec0110d2170502": "Välkommen",
+  "988e8c4b349b11fa": "Ta med dina saker",
+  "9af4fcd401aa9ef3": "Dina agenter",
   "fd8f75f97a5c0e6d": "Importerar…",
-  "cd609620fafff02b": "{count, plural, one {Importera {count} projekt och starta} other {Importera {count} projekt och starta}}",
-  "99decfb4ea686b61": "Importera trådar och starta",
+  "06b428b511f2bf10": "Importera och starta",
   "88ddebac4d96eb62": "Starta",
+  "1e43b5cc89279fca": "Importera",
+  "b2a5cf21e520a888": "Kunde inte importera från T3 Code. {error}",
   "9877b52c6722fe99": "Kunde inte aktivera {agent}",
   "15903f7ea6a43f95": "{action}: {agent}",
   "82e9b02a3e95e425": "Aktivera: {agent}",
@@ -5787,13 +5790,14 @@
   "c193540d6298ce6a": "Konfigurera",
   "2ca89fd7bbd7ea94": "Den här anslutningen kan inte styra terminaler.",
   "fb41d01d5dadcac0": "Den här anslutningen kan inte hantera agenter.",
-  "2632f324dc2d9c48": "Agenter",
+  "1e8657513ceeee69": "{count, plural, one {{count} agent redo} other {{count} agenter redo}}",
+  "18d144bcd97f0371": "Dölj",
+  "2a7c937bc65f4b62": "Visa",
   "598d1d38b945c279": "Lägg till fler agenter",
   "615a8310fb4afa0b": "Konfigurera en agent",
   "878c6bcda7eb5adc": "Kunde inte kontrollera projekt. {error}",
   "e6bcf138d25188d7": "{count, plural, one {Importera {count} projekt och dess trådar} other {Importera {count} projekt och deras trådar}}",
   "d72f296745294c3a": "Importera projekt och deras trådar",
-  "18d144bcd97f0371": "Dölj",
   "54fc1526df1c0cce": "{count, plural, one {Granska alla {count}} other {Granska alla {count}}}",
   "bd2304f25f6f999e": "{selected, plural, one {{selected} av {total} markerad} other {{selected} av {total} markerade}}",
   "228cd9fd55a55070": "Kunde inte kontrollera projekten igen. {error}",
@@ -5811,6 +5815,7 @@
   "a506c135c2183ac3": "{count, plural, one {{count} mapp} other {{count} mappar}}",
   "efc48b9736a534bc": "nu",
   "eac5ab08ff2ab51f": "Välkommen till p0code",
+  "8fcf2e3fcfa54409": "En plats för att köra dina kodagenter sida vid sida och behålla deras trådar.",
   "3cc77f9daa7eeafd": [
     "Konfigurerar",
     " ",
@@ -5826,7 +5831,34 @@
     "."
   ],
   "216ab7514aea1d61": "Starta utan agent",
+  "5fc35138b0ff1aea": "Börja från början",
   "501ce2d99da8bfd1": "Konfigurera en agent för att starta.",
+  "0dfafed03706f50e": "Starta om p0code för att slutföra importen",
+  "e0af330a3647d10a": [
+    "Dina T3 Code-data kopieras innan p0code öppnar sin databas, så de flyttas över vid nästa start. Du kan också köra",
+    " ",
+    {
+      "t": "code",
+      "i": 1,
+      "c": "p0 migrate from-t3"
+    },
+    "."
+  ],
+  "674d4f463ccdedfd": "Flytta över mina T3 Code-data",
+  "e7f96f059e56bf23": [
+    "Tar med dina trådar, projekt, inställningar och leverantörskonton från",
+    " ",
+    {
+      "t": "code",
+      "i": 1,
+      "c": {
+        "i": 2,
+        "k": "_gt_value_2",
+        "v": "v"
+      }
+    },
+    ". T3 Codes egna data ändras aldrig."
+  ],
   "f77d000c0710f066": "Aktivera",
   "4ed27bf946e504db": "Konfigurera",
   "7a26eaacff0607f7": [
@@ -5849,14 +5881,13 @@
     },
     "-historik…"
   ],
-  "45194b35dc6d858a": [
-    "Från din ",
+  "c843bead50fb78e3": [
+    "Importera projekt från historiken i ",
     {
       "i": 1,
       "k": "_gt_value_1",
       "v": "v"
-    },
-    "-historik"
+    }
   ],
   "e164e238c1e22cce": "Använd p0code på telefonen",
   "37c66042ce1906da": "Skanna med telefonen för att skaffa appen.",
@@ -9349,7 +9380,6 @@
   "5c0c973276a61fdb": "Kunde inte spara behörigheten för routning av pull requests",
   "1bfcffe8411e2439": "Routning av pull requests för {environment}",
   "ae4761ddc038b102": "Datorer du litar på här kan läsa PR-data via varandras åtkomst till versionshantering. Aktivera på båda datorerna. Läs och agera kan använda bredare behörigheter än den dator som äger dem. Gäller bara den här enheten.",
-  "e2549e5d689d8fa9": "Lokal port",
   "02bca2d9c90e5f1e": "{value} s",
   "af22f973466903c3": "{value} min",
   "401ba3f2391d8742": "{value} h",
@@ -9755,6 +9785,7 @@
   "d1a3cd9429a624e9": "Länketikett",
   "a0988e4e9321c1b0": "Åtkomstnivå",
   "d9ba7309688b3241": "Länkens utgång",
+  "e2549e5d689d8fa9": "Lokal port",
   "3432aa767653c49d": "Portåtkomst",
   "d7dc565616d13a5c": "Dela länk",
   "de603f12452a7942": "QR-kod för delad länk",
@@ -11593,6 +11624,7 @@
   "4ec62c39ca3192bf": "Versioner och ärenden",
   "f2bf529f85e05494": "Delning och åtkomst",
   "7cf24feddad00a5e": "Inställningar",
+  "2632f324dc2d9c48": "Agenter",
   "58058320796d28f6": "Kod",
   "1a07e4d043f5df4e": "Anslutningar",
   "d8cd577c915539bd": "{label}-konton och token",
