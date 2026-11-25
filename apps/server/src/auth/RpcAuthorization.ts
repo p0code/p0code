@@ -97,9 +97,6 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.serverRemoveKeybinding]: AuthSettingsWriteScope,
   [WS_METHODS.serverGetStorageCleanupReport]: AuthOrchestrationReadScope,
   [WS_METHODS.serverGetDatabaseStorage]: AuthOrchestrationReadScope,
-  [WS_METHODS.sharedMemoryStatus]: AuthOrchestrationReadScope,
-  [WS_METHODS.sharedMemoryVaults]: AuthProvidersManageScope,
-  [WS_METHODS.sharedMemoryCommand]: AuthProvidersManageScope,
   [WS_METHODS.serverGetSettings]: AuthOrchestrationReadScope,
   [WS_METHODS.peerLinksList]: AuthAccessReadScope,
   // Names only, so a client that reads threads can open a linked environment's.
@@ -342,8 +339,6 @@ export const requiredScopesForRpcCall = (
         : AuthOrchestrationReadScope,
     ];
   }
-  if (method === WS_METHODS.sharedMemoryCommand)
-    return [AuthSettingsWriteScope, AuthProvidersManageScope];
   if (method === WS_METHODS.serverUpdateSettings) return requiredScopesForSettingsUpdate(payload);
   // These send the credential they are given to a URL the caller names, as a saved setting would.
   if (

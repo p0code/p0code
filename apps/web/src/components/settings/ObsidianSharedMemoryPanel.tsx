@@ -1,37 +1,82 @@
 import { useAtomValue } from "@effect/atom-react";
-import { useState } from "react";
-import { T, useGT, useMessages, Var } from "gt-react";
-import { type SharedMemoryVaults, type SharedMemoryCommand } from "@t3tools/contracts";
-import { usePrimaryEnvironmentId } from "~/state/environments";
+import type { EnvironmentId } from "@t3tools/contracts";
+import {
+  OBSIDIAN_SHARED_MEMORY_ID,
+  type SharedMemoryCommand,
+  SharedMemoryStatus,
+  SharedMemoryVaults,
+} from "@t3tools/plugin-obsidian-shared-memory/actions";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import { useEffect, useState } from "react";
+import { T, useGT, Var } from "gt-react";
 import { useEnvironmentQuery } from "~/state/query";
-import { sharedMemory } from "~/state/sharedMemory";
+import { serverEnvironment } from "~/state/server";
 import { useAtomCommand } from "~/state/use-atom-command";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Switch } from "../ui/switch";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
-import { useOptionalSettingsScope } from "./SettingsScopeContext";
-import { SettingsRow, SettingsSection } from "./settingsLayout";
+import { SettingsRow } from "./settingsLayout";
 
-export function SharedMemorySettings() {
-  const gt = useGT();
-  const m = useMessages();
-  const primaryEnvironmentId = usePrimaryEnvironmentId();
-  const scope = useOptionalSettingsScope();
-  const environmentId = scope?.target?.environmentId ?? primaryEnvironmentId;
-  const canManage = useAtomValue(sharedMemory.command.permissionAtom(environmentId));
-  const status = useEnvironmentQuery(
-    environmentId ? sharedMemory.status({ environmentId, input: {} }) : null,
-    m,
+const decodeStatus = Schema.decodeUnknownOption(SharedMemoryStatus);
+const decodeVaults = Schema.decodeUnknownOption(SharedMemoryVaults);
+
+export function ObsidianSharedMemoryDisclosure() {
+  return (
+    <p className="text-muted-foreground">
+      <T>
+        Syncs a shared agent memory folder through Obsidian Sync and adds a short note to every
+        agent turn naming that folder. Needs Obsidian Headless with Node 22 or later on this
+        environment.
+      </T>
+    </p>
   );
-  const listVaults = useAtomCommand(sharedMemory.vaults);
-  const [vaults, setVaults] = useState<typeof SharedMemoryVaults.Type | null>(null);
+}
+
+export function ObsidianSharedMemoryPanel({
+  environmentId,
+}: {
+  readonly environmentId: EnvironmentId;
+}) {
+  const gt = useGT();
+  const canManage = useAtomValue(serverEnvironment.pluginsInvoke.permissionAtom(environmentId));
+  const invoke = useAtomCommand(serverEnvironment.pluginsInvoke);
+  const plugins = useEnvironmentQuery(serverEnvironment.plugins({ environmentId, input: {} }));
+  const message =
+    plugins.data?.plugins.find((plugin) => plugin.manifest.id === OBSIDIAN_SHARED_MEMORY_ID)
+      ?.message ?? null;
+  const [state, setState] = useState<SharedMemoryStatus | null>(null);
+  const call = async (action: "status" | "vaults" | "command", input: unknown = {}) => {
+    const result = await invoke({
+      environmentId,
+      input: { pluginId: OBSIDIAN_SHARED_MEMORY_ID, action, input },
+    });
+    return result._tag === "Success" ? Option.some(result.value) : Option.none();
+  };
+  const refresh = async () => {
+    const value = await call("status");
+    const decoded = Option.flatMap(value, decodeStatus);
+    if (Option.isSome(decoded)) setState(decoded.value);
+  };
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- the server pushes only the plugin's one-line status; the details come back from its status action.
+  useEffect(() => {
+    // Re-read full status whenever the server pushes a new status line (including clearing to null).
+    if (message === undefined) return;
+    void invoke({
+      environmentId,
+      input: { pluginId: OBSIDIAN_SHARED_MEMORY_ID, action: "status", input: {} },
+    }).then((result) => {
+      if (result._tag !== "Success") return;
+      const decoded = decodeStatus(result.value);
+      if (Option.isSome(decoded)) setState(decoded.value);
+    });
+  }, [environmentId, invoke, message]);
+  const [vaults, setVaults] = useState<SharedMemoryVaults | null>(null);
   async function refreshVaults() {
-    if (!environmentId) return;
-    const result = await listVaults({ environmentId, input: {} });
-    if (result._tag === "Success") setVaults(result.value);
+    const decoded = Option.flatMap(await call("vaults"), decodeVaults);
+    if (Option.isSome(decoded)) setVaults(decoded.value);
   }
-  const command = useAtomCommand(sharedMemory.command);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [mfa, setMfa] = useState("");
@@ -42,33 +87,29 @@ export function SharedMemorySettings() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   async function act(input: SharedMemoryCommand) {
-    if (!environmentId) return;
     setBusy(true);
     setError(null);
-    const result = await command({ environmentId, input });
+    const result = Option.flatMap(await call("command", input), decodeStatus);
     setPassword("");
     setMfa("");
     setVaultPassword("");
     setBusy(false);
-    if (result._tag === "Failure")
+    if (Option.isSome(result)) setState(result.value);
+    else
       setError(
         gt(
           "Shared memory could not be updated. Check Obsidian Headless, credentials, and vault access.",
         ),
       );
-    status.refresh();
     if (input.action === "login") await refreshVaults();
   }
-  const state = status.data;
+  if (state === null) return null;
   const disabled = busy || !canManage;
   return (
-    <SettingsSection id="shared-memory" title={gt("Shared memory")}>
-      <div className="space-y-2 px-4 py-3.5 text-sm text-muted-foreground">
+    <div className="space-y-1">
+      <div className="space-y-2 py-1 text-sm text-muted-foreground">
         <p>
-          <T>
-            Share agent memory through Obsidian Sync. Install Obsidian Headless with Node 22 or
-            later on this environment.
-          </T>{" "}
+          <T>Install Obsidian Headless:</T>{" "}
           <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground">
             bun install -g obsidian-headless
           </code>
@@ -76,37 +117,37 @@ export function SharedMemorySettings() {
         <p>
           <T>Do not sync this folder with the Obsidian desktop app on the same machine.</T>
         </p>
-        {(error || status.error || state?.lastError) && (
+        {(error || state.lastError) && (
           <p role="alert" className="text-sm text-destructive">
-            {error || status.error || state?.lastError}
+            {error || state.lastError}
           </p>
         )}
       </div>
       <SettingsRow
         title={gt("Sync status")}
         description={
-          state?.lastSyncedAt
+          state.lastSyncedAt
             ? gt("Last synced: {time}", { time: new Date(state.lastSyncedAt).toLocaleString() })
             : gt("No completed sync yet")
         }
         control={
           <div className="flex items-center gap-2.5">
             <span className="text-xs font-medium text-muted-foreground">
-              {state?.phase === "syncing"
+              {state.phase === "syncing"
                 ? gt("Syncing")
-                : state?.phase === "error"
+                : state.phase === "error"
                   ? gt("Sync error")
-                  : state?.paused
+                  : state.paused
                     ? gt("Paused")
                     : gt("Idle")}
             </span>
-            <Button variant="outline" size="sm" onClick={status.refresh}>
+            <Button variant="outline" size="sm" onClick={() => void refresh()}>
               <T>Refresh</T>
             </Button>
           </div>
         }
       />
-      {!state?.connected ? (
+      {!state.connected ? (
         <div className="px-4 py-4">
           <div className="grid max-w-md gap-3">
             <Input
@@ -272,6 +313,6 @@ export function SharedMemorySettings() {
           </div>
         </>
       )}
-    </SettingsSection>
+    </div>
   );
 }

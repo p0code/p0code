@@ -279,9 +279,6 @@ const RPC_AGGREGATES = {
   [WS_METHODS.subscribeDeviceState]: "device",
   [WS_METHODS.subscribeServerConfig]: "server",
   [WS_METHODS.subscribeServerLifecycle]: "server",
-  [WS_METHODS.sharedMemoryStatus]: "sharedMemory",
-  [WS_METHODS.sharedMemoryVaults]: "sharedMemory",
-  [WS_METHODS.sharedMemoryCommand]: "sharedMemory",
   [WS_METHODS.subscribeAuthAccess]: "auth",
 } as const satisfies Readonly<Record<WsRpcMethod, string>>;
 

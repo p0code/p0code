@@ -1,4 +1,3 @@
-import * as SharedMemorySync from "./memory/SharedMemorySync.ts";
 import * as SelfRelay from "./selfRelay/SelfRelay.ts";
 import * as SelfRelayHttp from "./selfRelay/http.ts";
 import * as PluginHost from "./plugins/PluginHost.ts";
@@ -771,7 +770,7 @@ const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
 );
 
 const layerRuntimeCoreDependencies = layerRuntimeCoreDependenciesBase.pipe(
-  Layer.provideMerge(SharedMemorySync.layer),
+  Layer.provideMerge(PluginHost.layerAgentInstructions),
   Layer.provideMerge(layerPtyAdapter),
   Layer.provideMerge(AcpRegistrySupport.layerFromHost.pipe(Layer.provide(ProviderHostLive.layer))),
   Layer.provideMerge(

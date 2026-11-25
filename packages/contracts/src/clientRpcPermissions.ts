@@ -21,8 +21,6 @@ import { WS_METHODS } from "./rpc.ts";
 
 /** Incremental client enforcement; the server still authorizes every request. */
 export const CLIENT_GUARDED_RPC_SCOPES = {
-  [WS_METHODS.sharedMemoryCommand]: AuthProvidersManageScope,
-  [WS_METHODS.sharedMemoryVaults]: AuthProvidersManageScope,
   [WS_METHODS.serverRelayLink]: AuthRelayWriteScope,
   [WS_METHODS.serverRelayUnlink]: AuthRelayWriteScope,
   [WS_METHODS.serverExposePort]: AuthRelayWriteScope,
@@ -126,8 +124,6 @@ export function clientRpcRequiredScopes(
   method: string,
   input: unknown,
 ): readonly AuthEnvironmentScope[] {
-  if (method === WS_METHODS.sharedMemoryCommand)
-    return [AuthSettingsWriteScope, AuthProvidersManageScope];
   if (method === WS_METHODS.serverRelayLink || method === WS_METHODS.serverRelayUnlink)
     return [AuthAccessWriteScope, AuthRelayWriteScope, AuthRelayConfigureScope];
   if (method === WS_METHODS.serverExposePort)

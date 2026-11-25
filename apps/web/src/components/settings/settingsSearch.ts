@@ -785,9 +785,10 @@ export const SETTINGS_SEARCH_ITEMS = [
   {
     id: "shared-memory",
     title: msg("Shared memory"),
-    to: "/settings/general",
-    targetId: "shared-memory",
+    to: "/settings/plugins",
+    targetId: "plugin-obsidian-shared-memory",
     searchTerms: [msg("Obsidian Sync shared agent identity memory vault notes")],
+    pluginsOnly: true,
   },
   {
     id: "thread-notifications",

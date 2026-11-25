@@ -1,5 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
 import type { EnvironmentId, PluginInfo } from "@t3tools/contracts";
+import { OBSIDIAN_SHARED_MEMORY_ID } from "@t3tools/plugin-obsidian-shared-memory/actions";
 import { T3_CONNECT_BRIDGE_ID } from "@t3tools/plugin-t3-connect-bridge/actions";
 import { T, useGT } from "gt-react";
 import type { ComponentType } from "react";
@@ -10,6 +11,10 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { Switch } from "../ui/switch";
 import { useSettingsScope } from "./SettingsScopeContext";
 import { SettingsPageContainer, SettingsSection } from "./settingsLayout";
+import {
+  ObsidianSharedMemoryDisclosure,
+  ObsidianSharedMemoryPanel,
+} from "./ObsidianSharedMemoryPanel";
 import { T3ConnectBridgeDisclosure, T3ConnectBridgePanel } from "./T3ConnectBridgePanel";
 
 interface PluginPanel {
@@ -21,6 +26,10 @@ interface PluginPanel {
 /** Settings panels for bundled plugins, by plugin id. */
 const PLUGIN_PANELS: Readonly<Record<string, PluginPanel>> = {
   [T3_CONNECT_BRIDGE_ID]: { Disclosure: T3ConnectBridgeDisclosure, Panel: T3ConnectBridgePanel },
+  [OBSIDIAN_SHARED_MEMORY_ID]: {
+    Disclosure: ObsidianSharedMemoryDisclosure,
+    Panel: ObsidianSharedMemoryPanel,
+  },
 };
 
 export function PluginsSettingsPanel() {

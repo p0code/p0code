@@ -1,6 +1,5 @@
 import { PublicOrigin } from "./selfRelay/PublicOrigin.ts";
-import { ServerSettingsError, SharedMemoryError } from "@t3tools/contracts";
-import * as SharedMemorySync from "./memory/SharedMemorySync.ts";
+import { ServerSettingsError } from "@t3tools/contracts";
 import * as SelfRelay from "./selfRelay/SelfRelay.ts";
 import { PluginHost } from "./plugins/PluginHost.ts";
 import { SelfRelayOperationError } from "@t3tools/contracts";
@@ -1496,7 +1495,6 @@ export const layerWsRpc = (
       const storageCleanup = yield* StorageCleanup.StorageCleanup;
       const databaseStorage = yield* DatabaseStorage.DatabaseStorage;
       const serverSettings = yield* ServerSettings.ServerSettingsService;
-      const sharedMemory = yield* Effect.serviceOption(SharedMemorySync.SharedMemorySync);
       const secretResolver = yield* SecretResolver.SecretResolver;
       const peerLinks = yield* PeerLinks.PeerLinks;
       const peerLinkRequests = yield* PeerLinkRequests.PeerLinkRequests;
@@ -2742,18 +2740,6 @@ export const layerWsRpc = (
           Effect.annotateCurrentSpan({ "orchestration_v2.thread_id": input.threadId }).pipe(
             Effect.andThen(peerLinkRequests.answer(input)),
           ),
-        [WS_METHODS.sharedMemoryStatus]: () =>
-          Option.isSome(sharedMemory)
-            ? sharedMemory.value.status
-            : Effect.fail(new SharedMemoryError({ stage: "unavailable" })),
-        [WS_METHODS.sharedMemoryVaults]: () =>
-          Option.isSome(sharedMemory)
-            ? sharedMemory.value.vaults
-            : Effect.fail(new SharedMemoryError({ stage: "unavailable" })),
-        [WS_METHODS.sharedMemoryCommand]: (input) =>
-          Option.isSome(sharedMemory)
-            ? sharedMemory.value.command(input)
-            : Effect.fail(new SharedMemoryError({ stage: "unavailable" })),
         [WS_METHODS.serverGetSettings]: (_input) =>
           Effect.map(serverSettings.getSettings, (settings) =>
             ServerSettings.redactServerSettingsForClient(settings, settingsClient),
@@ -3709,7 +3695,6 @@ export const WS_RPC_SERVER_OPTIONS = {
 
 export const layer = Layer.unwrap(
   Effect.gen(function* () {
-    const sharedMemory = yield* Effect.serviceOption(SharedMemorySync.SharedMemorySync);
     const serverBrowser = yield* ServerBrowser.ServerBrowser;
     const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
     const providerMaintenanceRunner = yield* ProviderMaintenanceRunner.ProviderMaintenanceRunner;
@@ -3787,11 +3772,6 @@ export const layer = Layer.unwrap(
               // Handler-context reporters see only request defects, not server-wide defects.
               Layer.provide(DefectReporter.layer),
               Layer.provide(AcpRegistrySessions.layer),
-              Layer.provide(
-                Option.isSome(sharedMemory)
-                  ? Layer.succeed(SharedMemorySync.SharedMemorySync, sharedMemory.value)
-                  : Layer.empty,
-              ),
               Layer.provide(Layer.succeed(SqlClient.SqlClient, sql)),
               // Installs outlive the connection that started them and lock across clients.
               Layer.provide(

@@ -654,10 +654,6 @@
     "./pull-request-references": {
       "types": "./src/pullRequestReferences.ts",
       "default": "./src/pullRequestReferences.ts"
-    },
-    "./state/sharedMemory": {
-      "types": "./src/state/sharedMemory.ts",
-      "default": "./src/state/sharedMemory.ts"
     }
   },
   "scripts": {

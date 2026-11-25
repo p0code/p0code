@@ -1,10 +1,4 @@
 import {
-  SharedMemoryStatus,
-  SharedMemoryVaults,
-  SharedMemoryCommand,
-  SharedMemoryError,
-} from "./sharedMemory.ts";
-import {
   SelfRelayStatus,
   SelfRelayLink,
   RelayExposePort,
@@ -632,9 +626,6 @@ export const WS_METHODS = {
   peerLinksThreadItem: "peerLinks.threadItem",
   peerLinksPairClient: "peerLinks.pairClient",
   peerLinksPairLink: "peerLinks.pairLink",
-  sharedMemoryStatus: "sharedMemory.status",
-  sharedMemoryVaults: "sharedMemory.vaults",
-  sharedMemoryCommand: "sharedMemory.command",
   serverGetSettings: "server.getSettings",
   serverUpdateSettings: "server.updateSettings",
   serverDeleteEnvironmentTheme: "server.deleteEnvironmentTheme",
@@ -1053,23 +1044,6 @@ const WsPeerLinksPairLinkRpc = Rpc.make(WS_METHODS.peerLinksPairLink, {
 const WsPeerLinksAnswerRequestRpc = Rpc.make(WS_METHODS.peerLinksAnswerRequest, {
   payload: PeerLinkRequestAnswerInput,
   error: Schema.Union([PeerLinkRequestError, EnvironmentAuthorizationError]),
-});
-
-// No in-tree caller; installed Swift TestFlight builds still request it.
-const WsSharedMemoryStatusRpc = Rpc.make(WS_METHODS.sharedMemoryStatus, {
-  payload: Schema.Struct({}),
-  success: SharedMemoryStatus,
-  error: Schema.Union([SharedMemoryError, EnvironmentAuthorizationError]),
-});
-const WsSharedMemoryVaultsRpc = Rpc.make(WS_METHODS.sharedMemoryVaults, {
-  payload: Schema.Struct({}),
-  success: SharedMemoryVaults,
-  error: Schema.Union([SharedMemoryError, EnvironmentAuthorizationError]),
-});
-const WsSharedMemoryCommandRpc = Rpc.make(WS_METHODS.sharedMemoryCommand, {
-  payload: SharedMemoryCommand,
-  success: SharedMemoryStatus,
-  error: Schema.Union([SharedMemoryError, EnvironmentAuthorizationError]),
 });
 
 const WsServerGetSettingsRpc = Rpc.make(WS_METHODS.serverGetSettings, {
@@ -2615,9 +2589,6 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerRunStorageCleanupRpc,
   WsServerGetStorageCleanupReportRpc,
   WsServerGetDatabaseStorageRpc,
-  WsSharedMemoryStatusRpc,
-  WsSharedMemoryVaultsRpc,
-  WsSharedMemoryCommandRpc,
   WsServerGetSettingsRpc,
   WsServerReclaimDatabaseSpaceRpc,
   WsServerUpdateSettingsRpc,

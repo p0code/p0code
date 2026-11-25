@@ -1,4 +1,3 @@
-import { SharedMemorySettings } from "./SharedMemorySettings";
 import { useAtomValue } from "@effect/atom-react";
 import {
   managedUpdatesDenial,
@@ -872,7 +871,6 @@ export function GeneralSettingsPanel() {
 
   return (
     <SettingsPageContainer>
-      <SharedMemorySettings />
       <SettingsSection id="notifications" title={gt("Notifications")}>
         <NotificationSettings />
         <SettingsRow

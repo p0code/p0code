@@ -1,0 +1,6 @@
+[submodule "plugins/t3-connect-bridge"]
+	path = plugins/t3-connect-bridge
+	url = https://github.com/p0code/t3-connect-bridge
+[submodule "plugins/obsidian-shared-memory"]
+	path = plugins/obsidian-shared-memory
+	url = https://github.com/p0code/obsidian-sync
