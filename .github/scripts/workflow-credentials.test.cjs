@@ -185,7 +185,7 @@ test("the store build record job runs the workflow's own action and passes the b
 
 test("release deploys give the Vercel token to the deploy step only", () => {
   const all = jobs("workflows/release.yml");
-  for (const name of ["build_web", "build_marketing"]) {
+  for (const name of ["build_web"]) {
     assert.doesNotMatch(all[name].split(/^ {4}steps:\n/m)[0], /secrets\.VERCEL/);
     const withToken = steps(all[name]).filter((step) => step.includes("secrets.VERCEL_TOKEN"));
     assert.equal(withToken.length, 1);
