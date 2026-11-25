@@ -259,6 +259,7 @@ const make = Effect.gen(function* () {
     Effect.sync(() => {
       for (const { plugin, started } of running.values()) {
         if (!plugin.manifest.capabilities.includes("http:routes")) continue;
+        if (!plugin.manifest.httpRoutes.includes(path)) continue;
         const handler = started.routes.get(path);
         if (handler !== undefined) return handler;
       }

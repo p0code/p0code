@@ -177,6 +177,7 @@ const authorizeParams = (clientId: string, redirect = "http://localhost:51234/ca
   code_challenge_method: "S256",
   state: "state-1",
   resource: `${ORIGIN}/mcp`,
+  scope: "orchestration:read orchestration:operate",
 });
 
 it.effect("derives discovery metadata from the origin the client reached", () =>
@@ -321,6 +322,7 @@ it.effect("registers loopback and https clients and never redirects for an unver
         clientName: "Claude Code",
         redirectHost: "localhost:51234",
         environmentHost: "box.example.ts.net",
+        requestedScopes: ["orchestration:read", "orchestration:operate"],
       });
 
       const forgedDetails = yield* handler(
@@ -627,9 +629,9 @@ it.live(
         expect(stillValid).toBe(true);
 
         const readOnly = yield* auth.issuePairingCredential({ scopes: ["orchestration:read"] });
+        // A level-bound ask is clamped to the code's scopes, not refused, and never widened.
         const readOnlyResponse = yield* approveWith(readOnly.credential);
-        expect(readOnlyResponse.status).toBe(400);
-        expect(readOnlyResponse.message).toContain("cannot grant this access");
+        expect(readOnlyResponse.status).toBe(200);
         const operator = yield* auth.issuePairingCredential({
           scopes: ["orchestration:read", "orchestration:operate"],
         });
@@ -638,12 +640,12 @@ it.live(
           access: "full-access",
           code: operator.credential,
         });
-        expect(operatorFull.status).toBe(400);
+        expect(operatorFull.status).toBe(200);
 
         const readOnlyApproval = yield* decide(handler, params, {
           _tag: "pairing-code",
           access: "read-only",
-          code: readOnly.credential,
+          code: (yield* auth.issuePairingCredential({ scopes: ["orchestration:read"] })).credential,
         });
         expect(readOnlyApproval.status).toBe(200);
         const readOnlyToken = yield* handler(
@@ -682,6 +684,85 @@ it.live("a code minted with an access level's scopes approves that access", () =
           code: code.credential,
         });
         expect(approval.status, access).toBe(200);
+      }
+    }),
+  ),
+);
+
+it.live("grants only the scopes the MCP client asked for, never wider than the approver", () =>
+  withRoutes((handler, auth) =>
+    Effect.gen(function* () {
+      const clientId = yield* registeredClientId(handler);
+      const params = authorizeParams(clientId);
+      const exchange = (
+        authorization: Record<string, string>,
+        code: string,
+        access: AuthMcpClientAccess,
+      ) =>
+        decide(handler, authorization, { _tag: "pairing-code", access, code }).pipe(
+          Effect.flatMap((approved) =>
+            handler(
+              at(
+                "/oauth/mcp/token",
+                form({
+                  grant_type: "authorization_code",
+                  code: new URL(approved.redirectTo!).searchParams.get("code")!,
+                  redirect_uri: authorization.redirect_uri!,
+                  client_id: clientId,
+                  code_verifier: verifier,
+                  resource: `${ORIGIN}/mcp`,
+                }),
+              ),
+            ),
+          ),
+          Effect.flatMap(json<{ scope: string }>),
+        );
+
+      // Asked for read only, approved at Auto: the token still only reads.
+      const readOnly = yield* exchange(
+        { ...params, scope: "orchestration:read" },
+        (yield* auth.issuePairingCredential()).credential,
+        "auto",
+      );
+      expect(readOnly.scope).toBe("orchestration:read");
+
+      // No scope at all means the narrowest grant, not the approver's default.
+      const { scope: _omitted, ...withoutScope } = params;
+      const missing = yield* exchange(
+        withoutScope,
+        (yield* auth.issuePairingCredential()).credential,
+        "auto",
+      );
+      expect(missing.scope).toBe("orchestration:read");
+
+      // Asked for operate, but the approver's code only holds read: clamp down to read.
+      const clamped = yield* exchange(
+        params,
+        (yield* auth.issuePairingCredential({ scopes: ["orchestration:read"] })).credential,
+        "auto",
+      );
+      expect(clamped.scope).toBe("orchestration:read");
+    }),
+  ),
+);
+
+it.live("refuses a malformed or unsupported MCP scope before showing consent", () =>
+  withRoutes((handler) =>
+    Effect.gen(function* () {
+      const clientId = yield* registeredClientId(handler);
+      const params = authorizeParams(clientId);
+      for (const scope of [
+        "orchestration:read bogus",
+        "settings:write",
+        "",
+        "orchestration:read  orchestration:operate",
+      ]) {
+        const response = yield* handler(
+          at(`/oauth/mcp/authorize?${new URLSearchParams({ ...params, scope })}`),
+        );
+        expect(response.status, scope).toBe(302);
+        const location = new URL(response.headers.get("location")!, ORIGIN);
+        expect(location.searchParams.get("error"), scope).toBe("invalid_scope");
       }
     }),
   ),
@@ -801,7 +882,6 @@ it.live("one-click approves only access the browser session holds the scopes for
         "approval-required",
         "auto-accept-edits",
         "auto",
-        "full-access",
       ]);
       const oneClick = yield* decide(
         handler,
@@ -832,7 +912,7 @@ it.live("one-click approves only access the browser session holds the scopes for
         { _tag: "browser-session", access: "auto", csrfToken: readerDetails.csrfToken! },
         reader,
       );
-      expect(tooBroad.status).toBe(400);
+      expect(new URL(tooBroad.redirectTo!).searchParams.get("code")).toEqual(expect.any(String));
       const readOnly = yield* decide(
         handler,
         params,
@@ -844,7 +924,7 @@ it.live("one-click approves only access the browser session holds the scopes for
       // The hosted app approves with the owner's self-hosted relay session, which sends no cookie.
       const connect = `Bearer ${(yield* auth.issueSession({ scopes: [...AuthStandardClientScopes] })).token}`;
       const connectDetails = yield* details(connect);
-      expect(connectDetails.oneClickAccess).toContain("full-access");
+      expect(connectDetails.oneClickAccess).toContain("auto");
       const viaConnect = yield* decide(
         handler,
         params,

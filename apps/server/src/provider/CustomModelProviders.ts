@@ -4,6 +4,8 @@ import {
   type ListTextGeneratorModelsResult,
   type ListUserModelProvidersInput,
   type ListUserModelProvidersResult,
+  AuthProvidersManageScope,
+  type SettingsSecretValue,
   TextGeneratorError,
 } from "@t3tools/contracts";
 import * as SecretResolver from "@t3tools/secret-provider-core/server/SecretResolver";
@@ -17,6 +19,7 @@ import { FetchHttpClient, HttpClient } from "effect/http";
 import * as SecretResolverLayer from "../secrets/SecretResolver.ts";
 import { requireSettingsSecret } from "../secrets/settingsSecretValue.ts";
 import * as ServerSettings from "../serverSettings.ts";
+import { RpcCallerScopes } from "../auth/RpcCallerScopes.ts";
 import { SECRET_REDACTED } from "../settingsSecrets.ts";
 import {
   TEXT_GENERATOR_DRIVERS,
@@ -57,7 +60,7 @@ export const make = Effect.gen(function* () {
   const http = yield* HttpClient.HttpClient;
   const registry = yield* ProviderInstanceRegistry.ProviderInstanceRegistry;
 
-  const savedKey = Effect.fn("CustomModelProviders.savedKey")(function* (
+  const savedProvider = Effect.fn("CustomModelProviders.savedProvider")(function* (
     input: ListCustomProviderModelsInput,
   ) {
     const settings = yield* settingsService.getSettings.pipe(
@@ -69,21 +72,54 @@ export const make = Effect.gen(function* () {
     const saved = decodeCustomProviderSettings(
       settings.providerInstances[input.instanceId]?.config ?? {},
     ).pipe(Option.getOrUndefined);
-    const provider = saved?.customProviders.find((entry) => entry.id === input.provider.id);
-    const key = saved?.customProviderApiKeys[input.provider.id];
+    return {
+      provider: saved?.customProviders.find((entry) => entry.id === input.provider.id),
+      key: saved?.customProviderApiKeys[input.provider.id],
+    };
+  });
+
+  const savedKey = (
+    input: ListCustomProviderModelsInput,
+    saved: {
+      readonly provider: { readonly baseUrl: string } | undefined;
+      readonly key: SettingsSecretValue | undefined;
+    },
+  ) => {
     // The saved key goes only to the endpoint it was saved for.
-    if (provider?.baseUrl !== input.provider.baseUrl || key === undefined) return "";
-    return yield* requireSettingsSecret(secrets, key).pipe(
+    if (saved.provider?.baseUrl !== input.provider.baseUrl || saved.key === undefined) {
+      return Effect.succeed("");
+    }
+    return requireSettingsSecret(secrets, saved.key).pipe(
       Effect.mapError((cause) => new TextGeneratorRequestError({ detail: cause.message, cause })),
     );
-  });
+  };
+
+  // A saved endpoint keeps working with settings:write alone; a caller-named one is a manager's
+  // call, so a narrow token cannot make the server probe arbitrary hosts.
+  const requireProviderManager = (adHoc: boolean) =>
+    adHoc
+      ? Effect.serviceOption(RpcCallerScopes).pipe(
+          Effect.flatMap((caller) =>
+            Option.isNone(caller) || caller.value.scopes.includes(AuthProvidersManageScope)
+              ? Effect.void
+              : Effect.fail(
+                  new TextGeneratorRequestError({
+                    detail:
+                      "Checking an unsaved model endpoint needs the providers:manage permission.",
+                  }),
+                ),
+          ),
+        )
+      : Effect.void;
 
   const listModels = Effect.fn("CustomModelProviders.listModels")(
     function* (input: ListCustomProviderModelsInput) {
+      const saved = yield* savedProvider(input);
+      yield* requireProviderManager(saved.provider?.baseUrl !== input.provider.baseUrl);
       const typed = input.apiKey !== "" && input.apiKey !== SECRET_REDACTED;
       const connection = {
         baseUrl: input.provider.baseUrl,
-        apiKey: typed ? input.apiKey : yield* savedKey(input),
+        apiKey: typed ? input.apiKey : yield* savedKey(input, saved),
         label: hostOf(input.provider.baseUrl),
       };
       const driver = TEXT_GENERATOR_DRIVERS[input.provider.kind];

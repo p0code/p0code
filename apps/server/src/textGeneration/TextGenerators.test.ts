@@ -1,6 +1,8 @@
 import { it } from "@effect/vitest";
 import {
   type ManagedPolicySummary,
+  AuthProvidersManageScope,
+  AuthSettingsWriteScope,
   ProviderDriverKind,
   ProviderInstanceId,
   type TextGeneratorConfig,
@@ -13,6 +15,7 @@ import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import { expect, vi } from "vite-plus/test";
 
 import * as ServerSettings from "../serverSettings.ts";
+import { RpcCallerScopes } from "../auth/RpcCallerScopes.ts";
 import { SECRET_REDACTED } from "../settingsSecrets.ts";
 import * as TextGenerators from "./TextGenerators.ts";
 
@@ -240,5 +243,49 @@ it.effect("checks unsaved settings, keeping the saved key behind a redaction mar
       .pipe(Effect.provideService(FetchHttpClient.Fetch, upstream), Effect.flip);
     expect(refused.detail).toContain("policy");
     expect(seen).toHaveLength(requestsBefore);
+  }),
+);
+
+it.effect("needs providers:manage to probe an endpoint the caller names, not a saved one", () =>
+  Effect.gen(function* () {
+    const upstream = vi.fn<typeof fetch>(async () => Response.json({ data: [{ id: "model-a" }] }));
+    const generators = yield* TextGenerators.TextGenerators.pipe(
+      Effect.provide(layer({ apiKey: "saved-key" })),
+    );
+    const listAs = (
+      scopes: ReadonlyArray<typeof AuthSettingsWriteScope | typeof AuthProvidersManageScope>,
+      input: Parameters<typeof generators.listModels>[0],
+    ) =>
+      generators
+        .listModels(input)
+        .pipe(
+          Effect.provideService(FetchHttpClient.Fetch, upstream),
+          Effect.provideService(RpcCallerScopes, RpcCallerScopes.of({ scopes })),
+        );
+
+    const adHoc = {
+      kind: "openaiCompatible",
+      baseUrl: "https://new.test/v1",
+      apiKey: "",
+      enabled: true,
+    } as const;
+
+    const refused = yield* listAs([AuthSettingsWriteScope], {
+      id: ProviderInstanceId.make("draft"),
+      config: adHoc,
+    }).pipe(Effect.flip);
+    expect(refused.detail).toContain("providers:manage");
+    expect(upstream).not.toHaveBeenCalled();
+
+    const allowed = yield* listAs([AuthSettingsWriteScope, AuthProvidersManageScope], {
+      id: ProviderInstanceId.make("draft"),
+      config: adHoc,
+    });
+    expect(allowed.models).toEqual([{ id: "model-a", name: "model-a" }]);
+
+    // The saved endpoint stays usable with settings:write alone.
+    upstream.mockClear();
+    yield* listAs([AuthSettingsWriteScope], { id: ID });
+    expect(upstream).toHaveBeenCalledTimes(1);
   }),
 );

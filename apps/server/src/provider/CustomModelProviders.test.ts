@@ -1,6 +1,8 @@
 import { it } from "@effect/vitest";
 import {
   type ListCustomProviderModelsInput,
+  AuthProvidersManageScope,
+  AuthSettingsWriteScope,
   ProviderDriverKind,
   ProviderInstanceId,
 } from "@t3tools/contracts";
@@ -11,6 +13,7 @@ import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import { expect, vi } from "vite-plus/test";
 
 import * as ServerSettings from "../serverSettings.ts";
+import { RpcCallerScopes } from "../auth/RpcCallerScopes.ts";
 import { SECRET_REDACTED } from "../settingsSecrets.ts";
 import * as CustomModelProviders from "./CustomModelProviders.ts";
 import * as ProviderInstanceRegistry from "./ProviderInstanceRegistry.ts";
@@ -84,5 +87,42 @@ it.effect("sends a custom provider's saved key only to the base URL it was saved
       { url: "https://api.acme.test/v1/models", auth: "Bearer typed-key" },
       { url: "https://api.acme.test/v1/chat/completions", auth: "Bearer saved-key" },
     ]);
+  }).pipe(Effect.provide(layer)),
+);
+
+it.effect("needs providers:manage to probe an unsaved base URL, not a saved one", () =>
+  Effect.gen(function* () {
+    const upstream = vi.fn<typeof fetch>(async () =>
+      Response.json({ data: [{ id: "acme-chat" }] }),
+    );
+    const service = yield* CustomModelProviders.CustomModelProviders;
+    const listAs = (
+      scopes: ReadonlyArray<typeof AuthSettingsWriteScope | typeof AuthProvidersManageScope>,
+      provider: ListCustomProviderModelsInput["provider"],
+    ) =>
+      service
+        .listModels({ instanceId, provider, apiKey: "" })
+        .pipe(
+          Effect.provideService(FetchHttpClient.Fetch, upstream),
+          Effect.provideService(RpcCallerScopes, RpcCallerScopes.of({ scopes })),
+        );
+
+    const refused = yield* listAs([AuthSettingsWriteScope], {
+      ...saved,
+      baseUrl: "https://elsewhere.test/v1",
+    }).pipe(Effect.flip);
+    expect(refused.detail).toContain("providers:manage");
+    expect(upstream).not.toHaveBeenCalled();
+
+    const allowed = yield* listAs([AuthSettingsWriteScope, AuthProvidersManageScope], {
+      ...saved,
+      baseUrl: "https://elsewhere.test/v1",
+    });
+    expect(allowed.models).toEqual([{ id: "acme-chat", name: "acme-chat" }]);
+
+    // The saved base URL stays usable with settings:write alone.
+    upstream.mockClear();
+    yield* listAs([AuthSettingsWriteScope], saved);
+    expect(upstream).toHaveBeenCalledTimes(1);
   }).pipe(Effect.provide(layer)),
 );

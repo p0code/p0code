@@ -36,6 +36,7 @@ import {
   RPC_REQUIRED_SCOPES,
   requiredScopeForRpcMethod,
   requiredScopeForDeviceList,
+  requiredScopesForRpcCall,
 } from "./RpcAuthorization.ts";
 import * as RpcAuthorization from "./RpcAuthorization.ts";
 
@@ -51,6 +52,24 @@ it("requires operate permission for tool updates even alongside a read-only chec
     AuthOrchestrationOperateScope,
   );
   expect(requiredScopeForDeviceList({ updateTool: "hub" })).toBe(AuthOrchestrationOperateScope);
+});
+
+it("needs providers:manage to check unsaved text generator settings", () => {
+  const id = ProviderInstanceId.make("router");
+  expect(requiredScopesForRpcCall(WS_METHODS.serverListTextGeneratorModels, { id })).toEqual([
+    AuthSettingsWriteScope,
+  ]);
+  expect(
+    requiredScopesForRpcCall(WS_METHODS.serverListTextGeneratorModels, {
+      id,
+      config: {
+        kind: "openaiCompatible",
+        baseUrl: "https://attacker.example/v1",
+        apiKey: "",
+        enabled: true,
+      },
+    }),
+  ).toEqual([AuthSettingsWriteScope, AuthProvidersManageScope]);
 });
 
 describe("RPC scope middleware", () => {
