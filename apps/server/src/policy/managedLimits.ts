@@ -1,6 +1,7 @@
 /**
- * managedLimits - what `limits.clients` and `limits.connect` in the managed policy allow, and the
- * one error every refusal uses so each transport can show the administrator's organization.
+ * managedLimits - what `limits.clients`, `limits.connect` and `limits.previewTunnel` in the managed
+ * policy allow, and the one error every refusal uses so each transport can show the
+ * administrator's organization.
  *
  * @module managedLimits
  */
@@ -84,6 +85,16 @@ const refuse = (policy: PolicyDocument, action: string, detail?: string) =>
   });
 
 export const refuseConnect = (policy: PolicyDocument) => refuse(policy, "self-hosted relay");
+
+/**
+ * Port forwarding is a preview tunnel, so `limits.previewTunnel` covers it too. This mirrors
+ * `ManagedPolicy.deniedBy(policy, "previewTunnel")` without importing it, since ManagedPolicy
+ * already imports this module.
+ */
+export const allowsPreviewTunnel = (policy: PolicyDocument) =>
+  policy.document?.limits?.previewTunnel !== false;
+
+export const refusePreviewTunnel = (policy: PolicyDocument) => refuse(policy, "port forwarding");
 
 // Node throws ENOTDIR, outside the spawner's error mapping, when PATH ends in a file.
 const isMissingCli = (cause: unknown) =>

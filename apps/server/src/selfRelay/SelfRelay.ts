@@ -396,6 +396,11 @@ const make = Effect.gen(function* () {
     return `${payload}.${signature}`;
   };
   const portLink = Effect.fn("SelfRelay.portLink")(function* (port: number, sessionId: string) {
+    if (!ManagedLimits.allowsPreviewTunnel(policy))
+      return yield* new SelfRelayError({
+        operation: "authorize",
+        cause: ManagedLimits.refusePreviewTunnel(policy),
+      });
     return yield* Effect.try({
       try: () => {
         const record = state?.ports.find(
@@ -462,6 +467,11 @@ const make = Effect.gen(function* () {
           return yield* new SelfRelayError({
             operation: "expose",
             cause: ManagedLimits.refuseConnect(policy),
+          });
+        if (!ManagedLimits.allowsPreviewTunnel(policy))
+          return yield* new SelfRelayError({
+            operation: "expose",
+            cause: ManagedLimits.refusePreviewTunnel(policy),
           });
         const address = target?.server.address();
         const ownPort = typeof address === "object" && address ? address.port : config.port;
