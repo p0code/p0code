@@ -30,6 +30,8 @@ import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 import { RpcClient, RpcSerialization } from "effect/rpc";
 import { Socket } from "effect/socket";
 
+import { resolveMobileAppIdentifiers } from "../app.config.ts";
+
 const RenderReport = Schema.Struct({
   commits: Schema.Number,
   totalRenders: Schema.Number,
@@ -60,11 +62,15 @@ class MeasureError extends Schema.TaggedError<MeasureError>()("MeasureError", {
 const STREAM_PROMPT =
   "Think it through step by step, then write a 3000-word essay on the history of typesetting in plain paragraphs with a few headings. Do not use any tools.";
 
+// The dev client this measures; the Personal Team override flows through the Expo config.
+const DEFAULT_APP_ID = resolveMobileAppIdentifiers("development").iosBundleIdentifier;
+
 interface Options {
   readonly server: string;
   readonly token: string;
   readonly metro: string;
   readonly scheme: string;
+  readonly appId: string;
   readonly runs: number;
   readonly windowSeconds: number;
   readonly provider: string;
@@ -80,12 +86,15 @@ const median = (values: ReadonlyArray<number>) => {
   return sorted.length % 2 ? sorted[middle]! : (sorted[middle - 1]! + sorted[middle]!) / 2;
 };
 
-const connectInspector = Effect.fn("measure.connectInspector")(function* (metro: string) {
+const connectInspector = Effect.fn("measure.connectInspector")(function* (
+  metro: string,
+  appId: string,
+) {
   const http = yield* HttpClient.HttpClient;
   const targets = yield* http
     .get(`${metro}/json/list`)
     .pipe(Effect.flatMap(HttpClientResponse.schemaBodyJson(InspectorTargets)));
-  const target = targets.find((entry) => entry.appId.startsWith("com.p0code.p0code"));
+  const target = targets.find((entry) => entry.appId.startsWith(appId));
   if (!target)
     return yield* new MeasureError({ message: `No T3 Code app is attached to Metro at ${metro}.` });
   // Expo closes inspector sockets unless Origin matches Metro's advertised URL; pass that URL as --metro.
@@ -186,7 +195,7 @@ const measureStreamReply = Effect.fn("measure.streamReply")(function* (
   route: Option.Option<string>,
 ) {
   if (Option.isSome(route)) yield* reloadAndOpen(options, route.value);
-  const evaluate = yield* connectInspector(options.metro);
+  const evaluate = yield* connectInspector(options.metro, options.appId);
   const { client, environmentId, projectId } = yield* connectServer(options);
   const threadId = ThreadId.make(yield* uuid);
   yield* client["orchestration.launchThread"]({
@@ -257,14 +266,14 @@ const reloadAndOpen = Effect.fn("measure.reloadAndOpen")(function* (
 ) {
   // A link to an already-open screen only refocuses it, so each run starts from a reload.
   yield* Effect.scoped(
-    Effect.flatMap(connectInspector(options.metro), (evaluate) =>
+    Effect.flatMap(connectInspector(options.metro, options.appId), (evaluate) =>
       evaluate("__t3RenderCounterReload()"),
     ),
   );
   yield* Effect.sleep("15 seconds");
   if (route === "/" || route === "") return;
   yield* Effect.scoped(
-    Effect.flatMap(connectInspector(options.metro), (evaluate) =>
+    Effect.flatMap(connectInspector(options.metro, options.appId), (evaluate) =>
       evaluate(appLink(options, route)),
     ),
   );
@@ -277,12 +286,12 @@ const measureRouteOpen = Effect.fn("measure.routeOpen")(function* (
   run: number,
 ) {
   yield* Effect.scoped(
-    Effect.flatMap(connectInspector(options.metro), (evaluate) =>
+    Effect.flatMap(connectInspector(options.metro, options.appId), (evaluate) =>
       evaluate("__t3RenderCounterReload()"),
     ),
   );
   yield* Effect.sleep("15 seconds");
-  const evaluate = yield* connectInspector(options.metro);
+  const evaluate = yield* connectInspector(options.metro, options.appId);
   yield* evaluate("__t3RenderCounterStart()");
   yield* evaluate(appLink(options, route));
   yield* Effect.sleep(`${options.windowSeconds} seconds`);
@@ -353,6 +362,12 @@ const command = Command.make(
     ),
     metro: Flag.String("metro").pipe(Flag.withDefault("http://127.0.0.1:8081")),
     scheme: Flag.String("scheme").pipe(Flag.withDefault("t3code-dev")),
+    appId: Flag.String("app-id").pipe(
+      Flag.withDescription(
+        "Bundle ID or package of the app attached to Metro; defaults to the development variant's iOS bundle ID.",
+      ),
+      Flag.withDefault(DEFAULT_APP_ID),
+    ),
     runs: Flag.Int("runs").pipe(Flag.withDefault(3)),
     window: Flag.Int("window").pipe(
       Flag.withDescription("Seconds to record; defaults to 12 for a reply and 6 for --route."),

@@ -359,7 +359,8 @@ const config: ExpoConfig = {
     ...(iosTeamId ? { appleTeamId: iosTeamId } : {}),
     ...(hostedAppHost ? { associatedDomains: [`applinks:${hostedAppHost}`] } : {}),
     entitlements: {
-      "keychain-access-groups": [`$(AppIdentifierPrefix)${variant.iosBundleIdentifier}`],
+      // The Personal Team build signs with the override above, so the group must follow it.
+      "keychain-access-groups": [`$(AppIdentifierPrefix)${iosBundleIdentifier}`],
     },
     infoPlist: {
       UISupportedInterfaceOrientations: [

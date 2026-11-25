@@ -98,3 +98,14 @@ it("requires the update URL to name the configured EAS project", async () => {
     }),
   ).rejects.toThrow("T3CODE_MOBILE_UPDATES_URL");
 });
+
+it("derives the keychain group from the effective bundle ID", async () => {
+  const config = await loadConfig("development", {
+    T3CODE_IOS_PERSONAL_TEAM: "1",
+    T3CODE_IOS_PERSONAL_TEAM_BUNDLE_ID: "com.example.custom",
+  });
+  expect(config.ios?.bundleIdentifier).toBe("com.example.custom");
+  expect(config.ios?.entitlements?.["keychain-access-groups"]).toEqual([
+    "$(AppIdentifierPrefix)com.example.custom",
+  ]);
+});
