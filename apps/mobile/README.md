@@ -130,6 +130,11 @@ The native lint task runs SwiftLint for Swift plus ktlint and detekt for Kotlin.
 
 ## EAS Builds
 
+The app ships with the fork's own identifiers (`com.p0code.p0code*`, slug `p0code`) and no Expo
+owner, project, or update URL. To build under a real Expo account, set `T3CODE_EAS_OWNER`,
+`T3CODE_EAS_PROJECT_ID`, `T3CODE_MOBILE_UPDATES_URL`, `T3CODE_IOS_TEAM_ID`, and, for universal
+links, `T3CODE_MOBILE_HOSTED_APP_HOST`. Absent values are omitted from the resolved config.
+
 Preview and production variants use Expo fingerprinting so OTA updates only reach binaries with matching native dependencies, config plugins, and patches. CI uses the `preview:dev` profile to reuse a compatible native build when possible.
 
 The development variant uses `appVersion` to avoid recalculating the native fingerprint for each Metro launch manifest. `MOBILE_VERSION_POLICY` can override either default. If you distribute a custom Release build with the development identity and publish OTA updates to it, set `MOBILE_VERSION_POLICY=fingerprint` for both its build and updates. Changing the runtime policy requires a native rebuild for OTA matching; an existing dev client can still load local Metro bundles.

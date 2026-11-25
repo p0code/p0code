@@ -72,8 +72,10 @@ export function buildHostedPairingUrl(input: {
   readonly host: string;
   readonly token: string;
   readonly label?: string | null;
+  /** The hosted app to open, when something other than this build's default owns it. */
+  readonly hostedAppUrl?: string | null;
 }): string {
-  const url = new URL("/pair", configuredHostedAppUrl());
+  const url = new URL("/pair", input.hostedAppUrl?.trim() || configuredHostedAppUrl());
   url.searchParams.set("host", input.host);
 
   const label = input.label?.trim();

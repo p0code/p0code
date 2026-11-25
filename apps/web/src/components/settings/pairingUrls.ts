@@ -10,21 +10,31 @@ export function resolveDesktopPairingUrl(endpointUrl: string, credential: string
   return setPairingTokenOnUrl(url, credential).toString();
 }
 
-export function resolveHostedPairingUrl(endpointUrl: string, credential: string): string | null {
+export function resolveHostedPairingUrl(
+  endpointUrl: string,
+  credential: string,
+  hostedAppUrl?: string | null,
+): string | null {
   const url = new URL(endpointUrl);
   if (url.protocol !== "https:") {
     return null;
   }
 
-  return buildHostedPairingUrl({
-    host: endpointUrl,
-    token: credential,
-  });
+  try {
+    return buildHostedPairingUrl({
+      host: endpointUrl,
+      token: credential,
+      ...(hostedAppUrl === undefined ? {} : { hostedAppUrl }),
+    });
+  } catch {
+    return null;
+  }
 }
 
 export function publicOriginAdvertisedEndpoint(
   origin: string,
   resolve: MessageResolver = m,
+  hostedAppUrl?: string | null,
 ): AdvertisedEndpoint {
   const url = new URL(origin);
   return {
@@ -39,7 +49,12 @@ export function publicOriginAdvertisedEndpoint(
     httpBaseUrl: url.origin,
     wsBaseUrl: url.origin.replace(/^https:/, "wss:"),
     reachability: "public",
-    compatibility: { hostedHttpsApp: "compatible", desktopApp: "compatible" },
+    // The hosted app is upstream's, so only offer it when this environment opted into the
+    // T3 Connect bridge and that bridge named the app to open. Otherwise the QR is direct.
+    compatibility: {
+      hostedHttpsApp: hostedAppUrl?.trim() ? "compatible" : "requires-configuration",
+      desktopApp: "compatible",
+    },
     source: "server",
     status: "available",
     isDefault: true,

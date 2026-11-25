@@ -1,21 +1,15 @@
-import { DEFAULT_HOSTED_APP_URL } from "@t3tools/shared/hostedAppUrl";
-import { afterEach, expect, it, vi } from "vite-plus/test";
-
-import appleAppSiteAssociation from "../web/public/.well-known/apple-app-site-association.json";
-import assetLinks from "../web/public/.well-known/assetlinks.json";
+import { expect, it, vi } from "vite-plus/test";
 
 // Keep config parsing independent of local env files and build credentials.
+const repoEnv = vi.hoisted(() => ({ current: {} as Record<string, string | undefined> }));
+
 vi.mock("../../scripts/lib/public-config.ts", () => ({
-  loadRepoEnv: () => ({ APP_VARIANT: process.env.APP_VARIANT }),
+  loadRepoEnv: () => repoEnv.current,
 }));
 
-afterEach(() => {
-  vi.unstubAllEnvs();
-});
-
-async function loadConfig(variant: string | undefined) {
+async function loadConfig(variant: string | undefined, overrides: Record<string, string> = {}) {
   vi.resetModules();
-  vi.stubEnv("APP_VARIANT", variant);
+  repoEnv.current = { APP_VARIANT: variant, ...overrides };
   return (await import("./app.config.ts")).default;
 }
 
@@ -26,22 +20,42 @@ it.each(["prod", ""])("rejects APP_VARIANT=%j before selecting production IDs", 
 });
 
 it.each([
-  [undefined, "com.t3tools.t3code"],
-  ["development", "com.t3tools.t3code.dev"],
-  ["preview", "com.t3tools.t3code.preview"],
-  ["production", "com.t3tools.t3code"],
-])("keeps the iOS and Android identifiers for APP_VARIANT=%j", async (value, identifier) => {
+  [undefined, "com.p0code.p0code"],
+  ["development", "com.p0code.p0code.dev"],
+  ["preview", "com.p0code.p0code.preview"],
+  ["production", "com.p0code.p0code"],
+])("uses the p0code iOS and Android identifiers for APP_VARIANT=%j", async (value, identifier) => {
   const config = await loadConfig(value);
+  expect(config.slug).toBe("p0code");
   expect(config.ios?.bundleIdentifier).toBe(identifier);
   expect(config.android?.package).toBe(identifier);
-  // Copied thread links open this app only while app.t3.codes lists it.
-  const host = new URL(DEFAULT_HOSTED_APP_URL).host;
-  expect(config.ios?.associatedDomains).toContain(`applinks:${host}`);
-  expect(appleAppSiteAssociation.applinks.details[0]?.appIDs).toContain(
-    `${config.ios?.appleTeamId}.${identifier}`,
-  );
+});
+
+it("omits upstream distribution identities by default", async () => {
+  const config = await loadConfig(undefined);
+  expect(config.owner).toBeUndefined();
+  expect(config.updates).toBeUndefined();
+  expect(config.ios?.appleTeamId).toBeUndefined();
+  expect(config.ios?.associatedDomains).toBeUndefined();
+  expect(config.android?.intentFilters).toBeUndefined();
+  expect((config.extra?.eas as { projectId?: string } | undefined)?.projectId).toBeUndefined();
+});
+
+it("reads EAS and hosted app identities from repo env", async () => {
+  const projectId = "11111111-2222-3333-4444-555555555555";
+  const config = await loadConfig(undefined, {
+    T3CODE_EAS_OWNER: "p0owner",
+    T3CODE_EAS_PROJECT_ID: projectId,
+    T3CODE_MOBILE_UPDATES_URL: `https://u.expo.dev/${projectId}`,
+    T3CODE_IOS_TEAM_ID: "ABCDE12345",
+    T3CODE_MOBILE_HOSTED_APP_HOST: "app.example.com",
+  });
+  expect(config.owner).toBe("p0owner");
+  expect(config.updates?.url).toBe(`https://u.expo.dev/${projectId}`);
+  expect(config.ios?.appleTeamId).toBe("ABCDE12345");
+  expect(config.ios?.associatedDomains).toEqual(["applinks:app.example.com"]);
   expect(config.android?.intentFilters?.[0]?.data).toEqual([
-    { scheme: "https", host, pathPrefix: "/threads/" },
+    { scheme: "https", host: "app.example.com", pathPrefix: "/threads/" },
   ]);
-  expect(assetLinks.map((link) => link.target.package_name)).toContain(identifier);
+  expect((config.extra?.eas as { projectId?: string } | undefined)?.projectId).toBe(projectId);
 });

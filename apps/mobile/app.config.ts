@@ -17,6 +17,12 @@ const runtimeVersionPolicy =
   (APP_VARIANT === "development" ? "appVersion" : "fingerprint");
 
 const personalTeamBundleIdentifier = repoEnv.T3CODE_IOS_PERSONAL_TEAM_BUNDLE_ID?.trim();
+// Distribution identity is the fork's own. Supply a real Expo account or hosted app to opt in.
+const easOwner = repoEnv.T3CODE_EAS_OWNER?.trim();
+const easProjectId = repoEnv.T3CODE_EAS_PROJECT_ID?.trim();
+const updatesUrl = repoEnv.T3CODE_MOBILE_UPDATES_URL?.trim();
+const iosTeamId = repoEnv.T3CODE_IOS_TEAM_ID?.trim();
+const hostedAppHost = repoEnv.T3CODE_MOBILE_HOSTED_APP_HOST?.trim();
 const IOS_BUNDLE_IDENTIFIER_PATTERN = /^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/;
 
 // Compiled into the native project. Without a relay, Observe's native side could dispatch to
@@ -81,22 +87,22 @@ const VARIANT_CONFIG = {
   development: {
     appName: "p0code Dev",
     scheme: "t3code-dev",
-    iosBundleIdentifier: "com.t3tools.t3code.dev",
-    androidPackage: "com.t3tools.t3code.dev",
+    iosBundleIdentifier: "com.p0code.p0code.dev",
+    androidPackage: "com.p0code.p0code.dev",
     assets: DEVELOPMENT_ASSETS,
   },
   preview: {
     appName: "p0code Preview",
     scheme: "t3code-preview",
-    iosBundleIdentifier: "com.t3tools.t3code.preview",
-    androidPackage: "com.t3tools.t3code.preview",
+    iosBundleIdentifier: "com.p0code.p0code.preview",
+    androidPackage: "com.p0code.p0code.preview",
     assets: PREVIEW_ASSETS,
   },
   production: {
     appName: "p0code",
     scheme: "t3code",
-    iosBundleIdentifier: "com.t3tools.t3code",
-    androidPackage: "com.t3tools.t3code",
+    iosBundleIdentifier: "com.p0code.p0code",
+    androidPackage: "com.p0code.p0code",
     assets: RELEASE_ASSETS,
   },
 } as const;
@@ -115,8 +121,6 @@ function resolveAppVariant(value: string | undefined): AppVariant {
 }
 
 const variant = VARIANT_CONFIG[APP_VARIANT];
-// Copied thread links open the app. app.t3.codes/.well-known lists every variant's identifiers.
-const HOSTED_APP_HOST = "app.t3.codes";
 const iosBundleIdentifier = isIosPersonalTeamBuild
   ? personalTeamBundleIdentifier!
   : variant.iosBundleIdentifier;
@@ -231,7 +235,7 @@ const sharingPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
 
 const config: ExpoConfig = {
   name: variant.appName,
-  slug: "t3-code",
+  slug: "p0code",
   platforms: ["ios", "android"],
   scheme: variant.scheme,
   version: repoEnv.T3CODE_MOBILE_VERSION ?? "2.3.0",
@@ -242,20 +246,24 @@ const config: ExpoConfig = {
   orientation: "portrait",
   icon: variant.assets.appIcon,
   userInterfaceStyle: "automatic",
-  updates: {
-    enabled: repoEnv.T3CODE_MOBILE_UPDATES_ENABLED !== "0",
-    url: "https://u.expo.dev/d763fcb8-d37c-41ea-a773-b54a0ab4a454",
-    checkAutomatically: "ON_LOAD",
-    fallbackToCacheTimeout: 0,
-  },
+  ...(updatesUrl
+    ? {
+        updates: {
+          enabled: repoEnv.T3CODE_MOBILE_UPDATES_ENABLED !== "0",
+          url: updatesUrl,
+          checkAutomatically: "ON_LOAD" as const,
+          fallbackToCacheTimeout: 0,
+        },
+      }
+    : {}),
   ios: {
     icon: variant.assets.iosIcon,
     supportsTablet: true,
     requireFullScreen: process.env.T3_SHOWCASE_CAPTURE_BUILD === "1",
     bundleIdentifier: iosBundleIdentifier,
     // Avoid Personal Team fallback: it cannot sign App Groups, Apple sign-in or push entitlements.
-    appleTeamId: "ARK85ZXQ4Z",
-    associatedDomains: [`applinks:${HOSTED_APP_HOST}`],
+    ...(iosTeamId ? { appleTeamId: iosTeamId } : {}),
+    ...(hostedAppHost ? { associatedDomains: [`applinks:${hostedAppHost}`] } : {}),
     entitlements: {
       "keychain-access-groups": [`$(AppIdentifierPrefix)${variant.iosBundleIdentifier}`],
     },
@@ -307,14 +315,18 @@ const config: ExpoConfig = {
     predictiveBackGestureEnabled: true,
     // expo-sensors declares this for its pedometer, which the app does not use.
     blockedPermissions: ["android.permission.ACTIVITY_RECOGNITION"],
-    intentFilters: [
-      {
-        action: "VIEW",
-        autoVerify: true,
-        data: [{ scheme: "https", host: HOSTED_APP_HOST, pathPrefix: "/threads/" }],
-        category: ["BROWSABLE", "DEFAULT"],
-      },
-    ],
+    ...(hostedAppHost
+      ? {
+          intentFilters: [
+            {
+              action: "VIEW" as const,
+              autoVerify: true,
+              data: [{ scheme: "https" as const, host: hostedAppHost, pathPrefix: "/threads/" }],
+              category: ["BROWSABLE", "DEFAULT"],
+            },
+          ],
+        }
+      : {}),
   },
   web: {
     favicon: variant.assets.appIcon,
@@ -468,11 +480,11 @@ const config: ExpoConfig = {
     },
 
     eas: {
-      projectId: "d763fcb8-d37c-41ea-a773-b54a0ab4a454",
+      ...(easProjectId ? { projectId: easProjectId } : {}),
       observe: { endpointUrl: observeEndpointUrl },
     },
   },
-  owner: "pingdotgg",
+  ...(easOwner ? { owner: easOwner } : {}),
   experiments: {
     // Metro only runs babel-plugin-react-compiler when this is set; see src/reactCompilerCoverage.test.ts.
     reactCompiler: true,
