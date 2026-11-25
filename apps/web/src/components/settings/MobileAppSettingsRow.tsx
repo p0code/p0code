@@ -15,7 +15,7 @@ const stores = [
     Icon: AppleIcon,
   },
   {
-    label: msg("Android"),
+    label: "Android",
     store: "Google Play",
     url: import.meta.env.VITE_MOBILE_ANDROID_STORE_URL?.trim() ?? "",
     Icon: AndroidIcon,
