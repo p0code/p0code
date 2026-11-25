@@ -32,7 +32,14 @@ import {
   pullRequestRoutingPermissionFor,
 } from "@t3tools/client-runtime/connection";
 import { EnvironmentQueryStore } from "@t3tools/client-runtime/state/query-persistence";
-import { EnvironmentId, ServerConfig, ThreadId, VcsListRefsResult } from "@t3tools/contracts";
+import {
+  EnvironmentId,
+  ServerConfig,
+  ThreadId,
+  VcsListRefsResult,
+  type ConnectionCatalogError,
+  type DesktopConnectionCatalogReadResult,
+} from "@t3tools/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -512,7 +519,10 @@ const encodeCatalog = Effect.fn("web.connectionStorage.encodeCatalog")(function*
 });
 
 export interface CatalogBackend {
-  readonly read: Effect.Effect<string | null, ConnectionTransientError>;
+  readonly read: Effect.Effect<
+    string | null | DesktopConnectionCatalogReadResult,
+    ConnectionTransientError
+  >;
   readonly write: (raw: string) => Effect.Effect<void, ConnectionTransientError>;
   /** Keeps a copy of a value that cannot be read, and reports where it kept it. */
   readonly quarantine?: (raw: string) => Effect.Effect<string | null, ConnectionTransientError>;
@@ -567,6 +577,7 @@ export type CatalogStoreLoad =
     };
 
 interface CatalogStore {
+  readonly catalogError: Effect.Effect<ConnectionCatalogError | null>;
   readonly read: Effect.Effect<CatalogStoreLoad, ConnectionTransientError>;
   readonly update: (
     transform: (catalog: ConnectionCatalogDocumentType) => ConnectionCatalogDocumentType,
@@ -578,13 +589,22 @@ export const makeCatalogStore = Effect.fn("web.connectionStorage.makeCatalogStor
 ) {
   const state = yield* Ref.make<Option.Option<CatalogStoreLoad>>(Option.none());
   const lock = yield* Semaphore.make(1);
+  const errorState = yield* Ref.make<ConnectionCatalogError | null>(null);
 
   const loadUnlocked = Effect.fn("web.connectionStorage.loadCatalog")(function* () {
     const cached = yield* Ref.get(state);
     if (Option.isSome(cached)) {
       return cached.value;
     }
-    const raw = yield* backend.read;
+    const result = yield* backend.read.pipe(
+      Effect.catch((error) =>
+        Effect.as(Ref.set(errorState, { reason: "read-failed", message: error.message }), null),
+      ),
+    );
+    const raw = typeof result === "object" && result !== null ? result.catalog : result;
+    if (typeof result === "object" && result !== null) {
+      yield* Ref.set(errorState, result.catalogError);
+    }
     let loaded: CatalogStoreLoad = {
       _tag: "loaded",
       catalog: EMPTY_CONNECTION_CATALOG_DOCUMENT,
@@ -641,14 +661,16 @@ export const makeCatalogStore = Effect.fn("web.connectionStorage.makeCatalogStor
       yield* lock.withPermits(1)(
         Effect.gen(function* () {
           const next = transform(yield* loadDocumentUnlocked());
-          yield* backend.write(yield* encodeCatalog(next));
+          if ((yield* Ref.get(errorState))?.reason !== "encryption-unavailable") {
+            yield* backend.write(yield* encodeCatalog(next));
+          }
           yield* Ref.set(state, Option.some({ _tag: "loaded", catalog: next }));
         }),
       );
     },
   );
 
-  return { read, update } satisfies CatalogStore;
+  return { read, update, catalogError: Ref.get(errorState) } satisfies CatalogStore;
 });
 
 // The stored names predate the rename and stay, so a tab still on an older version and an
@@ -811,6 +833,7 @@ export const layer = Layer.effectContext(
     const threadWriteOrder = makeThreadCacheWriteOrder();
 
     const targetStore = Persistence.ConnectionTargetStore.of({
+      catalogError: catalog.catalogError,
       list: catalogDocument.pipe(
         Effect.map((document) => document.targets),
         Effect.mapError((cause) => persistenceError("list-targets", cause)),

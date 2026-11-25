@@ -1,4 +1,7 @@
-import type { EnvironmentId as EnvironmentIdType } from "@t3tools/contracts";
+import type {
+  ConnectionCatalogError,
+  EnvironmentId as EnvironmentIdType,
+} from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Stream from "effect/Stream";
 import * as SubscriptionRef from "effect/SubscriptionRef";
@@ -21,6 +24,7 @@ import {
 } from "./runtime.ts";
 
 export interface EnvironmentCatalogState {
+  readonly storageCatalogError?: ConnectionCatalogError | null;
   readonly isReady: boolean;
   readonly entries: ReadonlyMap<EnvironmentIdType, ConnectionCatalogEntry>;
 }
@@ -51,6 +55,7 @@ export function createEnvironmentCatalogAtoms<R, E>(
         Effect.map((registry) =>
           SubscriptionRef.changes(registry.entries).pipe(
             Stream.map((entries) => ({
+              storageCatalogError: registry.storageCatalogError ?? null,
               isReady: true,
               entries,
             })),

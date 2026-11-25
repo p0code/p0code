@@ -30,6 +30,45 @@ afterEach(() => {
 });
 
 describe("ConnectionStorage.makeCatalogStore", () => {
+  it.effect(
+    "keeps an in-memory catalog usable without overwriting unavailable secure storage",
+    () =>
+      Effect.gen(function* () {
+        const write = vi.fn(() => Effect.void);
+        const store = yield* ConnectionStorage.makeCatalogStore({
+          read: Effect.succeed({
+            catalog: null,
+            catalogError: { reason: "encryption-unavailable", message: "Unlock keychain" },
+          }),
+          write,
+        });
+        yield* store.update((catalog) => ({
+          ...catalog,
+          disabledEnvironmentIds: [EnvironmentId.make("memory")],
+        }));
+        expect(yield* store.read).toMatchObject({
+          _tag: "loaded",
+          catalog: { disabledEnvironmentIds: ["memory"] },
+        });
+        expect(write).not.toHaveBeenCalled();
+        expect((yield* store.catalogError)?.reason).toBe("encryption-unavailable");
+      }),
+  );
+  it.effect("propagates desktop recovery with the preserved copy path", () =>
+    Effect.gen(function* () {
+      const error = {
+        reason: "unreadable",
+        message: "Cannot decrypt",
+        keptPath: "/home/catalog.unreadable-1",
+      } as const;
+      const store = yield* ConnectionStorage.makeCatalogStore({
+        read: Effect.succeed({ catalog: encodeCatalog(emptyCatalog), catalogError: error }),
+        write: () => Effect.void,
+      });
+      expect(yield* store.read).toEqual({ _tag: "loaded", catalog: emptyCatalog });
+      expect(yield* store.catalogError).toEqual(error);
+    }),
+  );
   it.effect("keeps an unreadable catalog as it is and reports it instead of starting empty", () =>
     Effect.gen(function* () {
       const writes: string[] = [];
@@ -59,7 +98,7 @@ describe("ConnectionStorage.makeCatalogStore", () => {
     }),
   );
 
-  it.effect("does not hide catalog read failures", () =>
+  it.effect("starts the runtime with a visible error when the catalog read fails", () =>
     Effect.gen(function* () {
       const failure = new ConnectionTransientError({
         reason: "remote-unavailable",
@@ -70,7 +109,11 @@ describe("ConnectionStorage.makeCatalogStore", () => {
         write: () => Effect.void,
       });
 
-      expect(yield* Effect.flip(store.read)).toBe(failure);
+      expect(yield* store.read).toEqual({ _tag: "loaded", catalog: emptyCatalog });
+      expect(yield* store.catalogError).toEqual({
+        reason: "read-failed",
+        message: failure.message,
+      });
     }),
   );
 });

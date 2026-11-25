@@ -97,6 +97,21 @@ describe("keychainSecrets", () => {
     assert.match(one, /^[0-9a-f]{16}$/);
   });
 
+  it("keeps the namespace and credentials when the home moves", async () => {
+    const before = makeSecretsDir();
+    const after = makeSecretsDir();
+    const namespace = await credentialNamespace(before);
+    const store = memoryKeychainStore();
+    await keychainSecrets(store, namespace).set("token", encode("saved"));
+    NodeFS.rmSync(after, { recursive: true });
+    NodeFS.renameSync(before, after);
+    assert.equal(await credentialNamespace(after), namespace);
+    assert.equal(
+      text(await keychainSecrets(store, await credentialNamespace(after)).get("token")),
+      "saved",
+    );
+  });
+
   it("round-trips binary values, chunked when long, and lists only head names", async () => {
     const store = memoryKeychainStore();
     const secrets = keychainSecrets(store, "ns");
@@ -267,6 +282,20 @@ describe("importCredentialFiles", () => {
       imported: [],
       superseded: [],
     });
+  });
+
+  it("keeps a conflicting credential file and reports its name", async () => {
+    const secretsDir = makeSecretsDir();
+    const file = NodePath.join(secretsDir, "server-signing-key.bin");
+    NodeFS.writeFileSync(file, "rotated key");
+    const secrets = keychainSecrets(memoryKeychainStore(), "ns");
+    await secrets.set("server-signing-key", encode("old key"));
+    assert.deepEqual(await importCredentialFiles(secretsDir, secrets), {
+      imported: [],
+      superseded: ["server-signing-key"],
+    });
+    assert.equal(NodeFS.readFileSync(file, "utf8"), "rotated key");
+    assert.equal(text(await secrets.get("server-signing-key")), "old key");
   });
 
   it("never deletes a file the keychain failed to keep", async () => {

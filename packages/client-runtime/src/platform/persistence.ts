@@ -1,4 +1,5 @@
 import {
+  type ConnectionCatalogError,
   type EnvironmentId,
   type OrchestrationV2ShellSnapshot,
   type OrchestrationV2ThreadDetailSnapshot,
@@ -52,6 +53,7 @@ export class ConnectionPersistenceError extends Schema.TaggedError<ConnectionPer
 export class ConnectionTargetStore extends Context.Service<
   ConnectionTargetStore,
   {
+    readonly catalogError?: Effect.Effect<ConnectionCatalogError | null>;
     readonly list: Effect.Effect<ReadonlyArray<ConnectionTarget>, ConnectionPersistenceError>;
     readonly listDisabled: Effect.Effect<ReadonlyArray<EnvironmentId>, ConnectionPersistenceError>;
   }

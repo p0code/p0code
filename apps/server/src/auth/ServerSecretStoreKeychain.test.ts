@@ -162,6 +162,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))(
               "cloud-mint-jti-1.bin",
               "dpop-proof-1.bin",
               KEYCHAIN_MARKER_FILE,
+              "keychain-namespace",
             ]);
           }),
         {
@@ -255,9 +256,15 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))(
               decode(Option.getOrThrow(yield* store.get("guest-share-signing-key"))),
               "g",
             );
-            // The keychain already won for the conflicting name.
+            // A conflict keeps both versions so the rotated file can be recovered.
             assert.equal(decode(Option.getOrThrow(yield* store.get("server-signing-key"))), "new");
-            assert.deepEqual(yield* files(secretsDir), [KEYCHAIN_MARKER_FILE]);
+            assert.deepEqual((yield* files(secretsDir)).toSorted(), [
+              KEYCHAIN_MARKER_FILE,
+              "keychain-namespace",
+              "server-signing-key.bin",
+            ]);
+            const fs = yield* FileSystem.FileSystem;
+            assert.equal(yield* fs.readFileString(`${secretsDir}/server-signing-key.bin`), "stale");
           }),
         {
           prepare: (secretsDir) =>

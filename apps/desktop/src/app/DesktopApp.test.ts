@@ -226,6 +226,7 @@ const runStubbedDesktop = (stub: StubbedDesktop) =>
             DesktopConnectionCatalogStore.DesktopConnectionCatalogStore,
             DesktopConnectionCatalogStore.DesktopConnectionCatalogStore.of({
               get: Effect.succeedNone,
+              read: Effect.succeed({ catalog: null, catalogError: null }),
               set: () => Effect.succeed(false),
               recovery:
                 stub.catalogRecovery === undefined

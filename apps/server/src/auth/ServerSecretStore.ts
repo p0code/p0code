@@ -532,7 +532,7 @@ const resolveKeychain = Effect.fn("ServerSecretStore.resolveKeychain")(function*
     });
   }
   if (moved.superseded.length > 0) {
-    yield* Effect.logWarning("Removed credential files the OS keychain already replaced.", {
+    yield* Effect.logWarning("Kept credential files that conflict with the OS keychain.", {
       names: moved.superseded,
     });
   }
