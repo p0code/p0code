@@ -236,7 +236,7 @@ it("opens an idle child beside the thread, and in its place with the modifier", 
   expect(panel().surfaces).toHaveLength(1);
 });
 
-it("keeps focus on the list when Show more pages reveal the last rows", async () => {
+it("loads the rest of the agents when the list scrolls to its end", async () => {
   setup();
   const projection = makeThreadProjectionFixture();
   const environmentId = EnvironmentId.make("local");
@@ -274,8 +274,10 @@ it("keeps focus on the list when Show more pages reveal the last rows", async ()
     />,
   );
   await screen.getByRole("button", { name: /Previous agents/ }).click();
-  await screen.getByRole("button", { name: "Show 1 more" }).click();
-  await expect.element(screen.getByRole("list", { name: "Related threads" })).toHaveFocus();
+  expect(screen.getByText("Agent 6", { exact: true }).query()).toBeNull();
+  const list = screen.getByRole("list", { name: "Related threads" }).element();
+  list.scrollTop = list.scrollHeight;
+  await expect.element(screen.getByText("Agent 6", { exact: true })).toBeInTheDocument();
 });
 
 it("shows a lineage thread's full title in its tooltip", async () => {
@@ -580,7 +582,8 @@ it.each([1, 18])("continues scrolling the panel past a list of %i subagents", as
     </div>,
   );
   if (count > 6) {
-    await screen.getByRole("button", { name: "Show 12 more" }).click();
+    const rows = screen.getByRole("list", { name: "Related threads" }).element();
+    rows.scrollTop = rows.scrollHeight;
     await expect.element(screen.getByText("Subagent 17", { exact: true })).toBeInTheDocument();
   }
   const list = screen.getByRole("list", { name: "Related threads" }).element();

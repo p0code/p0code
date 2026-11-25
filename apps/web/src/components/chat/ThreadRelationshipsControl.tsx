@@ -53,7 +53,6 @@ import {
   GitForkIcon,
   MessagesSquareIcon,
   MoreHorizontalIcon,
-  PlusIcon,
   SquareIcon,
   UnplugIcon,
 } from "lucide-react";
@@ -62,6 +61,7 @@ import { useRef, useState, type ReactNode } from "react";
 import type { MessageResolver } from "~/i18n/messages";
 
 import { useArchivedThreadSnapshots } from "../../lib/archivedThreadsState";
+import { observeIntersection } from "../../lib/observeIntersection";
 import { buildThreadRouteParams } from "../../threadRoutes";
 import type { SideThreadOpenIntent } from "@t3tools/client-runtime/side-thread";
 import { useLinkedThreadOpener } from "../../state/linkedThreadView";
@@ -100,7 +100,6 @@ import {
   THREAD_DETAILS_PANEL_ICON_CLASS,
   THREAD_DETAILS_PANEL_LABEL_CLASS,
   THREAD_DETAILS_PANEL_SPLIT_GROUP_CLASS,
-  THREAD_DETAILS_PANEL_ROW_CONTENT_CLASS,
   THREAD_DETAILS_PANEL_SPLIT_SEPARATOR_CLASS,
 } from "./threadDetailsPanelStyles";
 
@@ -122,12 +121,6 @@ function ThreadLineageRowList(props: {
 }) {
   const gt = useGT();
   const listRef = useRef<HTMLUListElement>(null);
-  const showMore = () => {
-    const exhausting = props.hiddenCount <= THREAD_LINEAGE_PAGE_COUNT;
-    props.onShowMore();
-    // The button unmounts on the final page; focus the list so focus isn't dropped.
-    if (exhausting) listRef.current?.focus({ preventScroll: true });
-  };
   return (
     <>
       {/* ScrollArea's max-height viewport measures badly inside this scrolling panel. */}
@@ -138,19 +131,27 @@ function ThreadLineageRowList(props: {
         className="m-0 max-h-[13.5rem] list-none overflow-y-auto p-0 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70 has-data-workflow-expanded:max-h-[min(28rem,55dvh)]"
       >
         {props.children}
+        {props.hiddenCount > 0 ? (
+          // Scrolling to the end loads the next page. Keyed by what is left, so each page is a new
+          // target and keeps loading while the list is still short enough to show it.
+          <li
+            key={props.hiddenCount}
+            aria-hidden
+            className="h-px"
+            ref={(sentinel) =>
+              sentinel === null
+                ? undefined
+                : observeIntersection(
+                    sentinel,
+                    (entry) => {
+                      if (entry.isIntersecting) props.onShowMore();
+                    },
+                    { root: sentinel.parentElement, rootMargin: "0px 0px 64px 0px" },
+                  )
+            }
+          />
+        ) : null}
       </ul>
-      {props.hiddenCount > 0 ? (
-        <button
-          type="button"
-          onClick={showMore}
-          className={`flex h-8 w-full cursor-pointer items-center rounded-lg ${THREAD_DETAILS_PANEL_ROW_CONTENT_CLASS} text-sm font-medium text-muted-foreground/70 hover:bg-black/[0.055] hover:text-foreground/80 dark:hover:bg-white/[0.075]`}
-        >
-          <PlusIcon aria-hidden className="size-4 shrink-0" />
-          <T>
-            Show <Var>{Math.min(props.hiddenCount, THREAD_LINEAGE_PAGE_COUNT)}</Var> more
-          </T>
-        </button>
-      ) : null}
     </>
   );
 }
