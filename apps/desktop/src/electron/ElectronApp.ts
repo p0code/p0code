@@ -7,6 +7,17 @@ import * as Scope from "effect/Scope";
 
 import * as Electron from "electron";
 
+// An AppImage runs from a mount that vanishes when this process exits, so relaunch the image file.
+export function resolveRelaunchOptions(
+  options: Electron.RelaunchOptions,
+  host: { readonly execPath: string; readonly appImagePath: string | undefined },
+): Electron.RelaunchOptions {
+  const appImagePath = host.appImagePath?.trim();
+  if (!appImagePath) return options;
+  if (options.execPath !== undefined && options.execPath !== host.execPath) return options;
+  return { ...options, execPath: appImagePath };
+}
+
 export interface ElectronAppMetadata {
   readonly appVersion: string;
   readonly appPath: string;
@@ -173,10 +184,11 @@ export const make = ElectronApp.of({
       Electron.app.exit(code);
     });
   }),
-  relaunch: Effect.fn("ElectronApp.relaunch")(function (options) {
-    return Effect.sync(() => {
-      Electron.app.relaunch(options);
-    });
+  relaunch: Effect.fn("ElectronApp.relaunch")(function* (options) {
+    const execPath = yield* HostProcess.ExecutablePath;
+    const env = yield* HostProcess.Environment;
+    const resolved = resolveRelaunchOptions(options, { execPath, appImagePath: env.APPIMAGE });
+    yield* Effect.sync(() => Electron.app.relaunch(resolved));
   }),
   setPath: Effect.fn("ElectronApp.setPath")(function (name, path) {
     return Effect.sync(() => {

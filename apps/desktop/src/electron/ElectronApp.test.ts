@@ -87,3 +87,38 @@ it.effect("reads both macOS hour preferences without overriding explicit formats
     }
   }),
 );
+
+describe("resolveRelaunchOptions", () => {
+  const execPath = "/tmp/.mount_p0codeAbc/p0code";
+
+  it("relaunches the AppImage file instead of its temporary mount", () => {
+    assert.deepEqual(
+      ElectronApp.resolveRelaunchOptions(
+        { args: ["--flag"] },
+        { execPath, appImagePath: "/home/u/p0code.AppImage" },
+      ),
+      { args: ["--flag"], execPath: "/home/u/p0code.AppImage" },
+    );
+    assert.deepEqual(
+      ElectronApp.resolveRelaunchOptions(
+        { execPath },
+        { execPath, appImagePath: "/home/u/p0code.AppImage" },
+      ),
+      { execPath: "/home/u/p0code.AppImage" },
+    );
+  });
+
+  it("keeps the options outside an AppImage or for another executable", () => {
+    assert.deepEqual(
+      ElectronApp.resolveRelaunchOptions({}, { execPath, appImagePath: undefined }),
+      {},
+    );
+    assert.deepEqual(
+      ElectronApp.resolveRelaunchOptions(
+        { execPath: "/usr/bin/other" },
+        { execPath, appImagePath: "/home/u/p0code.AppImage" },
+      ),
+      { execPath: "/usr/bin/other" },
+    );
+  });
+});
