@@ -3,13 +3,17 @@ import type {
   ServerProviderResetCredits,
   ServerProviderUsageLimits,
   ServerProviderUsageWindow,
+  UsageDisplayMode,
 } from "@t3tools/contracts";
 import { mFallback, msg } from "gt-i18n";
 import type { MFunctionType } from "gt-i18n/types";
 
 import {
   collectExternalUsageLinks as collectExternalUsageLinksWith,
+  contextWindowDisplay,
   cursorUsageWindowDetails as cursorUsageWindowDetailsBase,
+  displayUsagePercent,
+  formatContextWindowTokens,
   type LimitPool,
   type LimitPresentations,
   providersWithLimits,
@@ -231,4 +235,116 @@ export function formatResetsIn(
   }
   if (style === "refill") return resolve(msg("↻ {duration}", { duration }));
   return resolve(msg("resets in {duration}", { duration }));
+}
+
+/** @public */
+export function formatUsagePercent(
+  percent: number,
+  mode: UsageDisplayMode,
+  resolve: MFunctionType = mFallback,
+): string {
+  return mode === "used"
+    ? resolve(msg("{percent}% used", { percent }))
+    : resolve(msg("{percent}% left", { percent }));
+}
+
+/** @public */
+export function formatWindowUsagePercent(
+  window: Pick<ServerProviderUsageWindow, "usedPercent">,
+  mode: UsageDisplayMode,
+  resolve: MFunctionType = mFallback,
+): string {
+  return formatUsagePercent(displayUsagePercent(window, mode), mode, resolve);
+}
+
+/** @public */
+export function formatPaceWindowPercent(
+  percent: number,
+  mode: UsageDisplayMode,
+  resolve: MFunctionType = mFallback,
+): string {
+  return mode === "used"
+    ? resolve(msg("{percent}% of the window elapsed", { percent }))
+    : resolve(msg("{percent}% of the window left", { percent }));
+}
+
+/** @public */
+export function formatEvenPaceByNow(
+  percent: number,
+  mode: UsageDisplayMode,
+  resolve: MFunctionType = mFallback,
+): string {
+  return mode === "used"
+    ? resolve(msg("{percent}% used by now", { percent }))
+    : resolve(msg("{percent}% left by now", { percent }));
+}
+
+/** @public */
+export function formatUsageModeWord(
+  mode: UsageDisplayMode,
+  resolve: MFunctionType = mFallback,
+): string {
+  return mode === "used"
+    ? resolve(msg("used", { $context: "spent usage percentage" }))
+    : resolve(msg("left", { $context: "remaining usage percentage" }));
+}
+
+/** @public */
+export function formatContextWindowValue(
+  usage: {
+    readonly usedTokens: number;
+    readonly maxTokens?: number | null | undefined;
+  },
+  mode: UsageDisplayMode,
+  resolve: MFunctionType = mFallback,
+): string {
+  const metrics = contextWindowDisplay(usage, mode);
+  if (metrics.maxTokens !== null && metrics.remainingTokens !== null) {
+    const max = formatContextWindowTokens(metrics.maxTokens);
+    return mode === "left"
+      ? resolve(
+          msg("{left} left of {max}", {
+            left: formatContextWindowTokens(metrics.remainingTokens),
+            max,
+          }),
+        )
+      : resolve(
+          msg("{used} / {max} used", {
+            used: formatContextWindowTokens(metrics.usedTokens),
+            max,
+          }),
+        );
+  }
+  return resolve(msg("{used} used", { used: formatContextWindowTokens(metrics.usedTokens) }));
+}
+
+/** @public */
+export function formatContextWindowLabel(
+  usage: {
+    readonly usedTokens: number;
+    readonly maxTokens?: number | null | undefined;
+  },
+  mode: UsageDisplayMode,
+  resolve: MFunctionType = mFallback,
+): string {
+  const metrics = contextWindowDisplay(usage, mode);
+  if (metrics.maxTokens !== null && metrics.remainingTokens !== null) {
+    const max = formatContextWindowTokens(metrics.maxTokens);
+    return mode === "left"
+      ? resolve(
+          msg("Context {left} left of {max}", {
+            left: formatContextWindowTokens(metrics.remainingTokens),
+            max,
+          }),
+        )
+      : resolve(
+          msg("Context {used} / {max} used", {
+            used: formatContextWindowTokens(metrics.usedTokens),
+            max,
+          }),
+        );
+  }
+  return resolve(
+    msg("Context {used} used", { used: formatContextWindowTokens(metrics.usedTokens) }),
+  );
 }

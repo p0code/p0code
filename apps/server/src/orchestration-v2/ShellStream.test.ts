@@ -66,6 +66,44 @@ describe("subagent shell events", () => {
     expect(shouldPublishShellApplicationEvent(stored("child", "run.updated"), subagents)).toBe(
       true,
     );
+    expect(
+      shouldPublishShellApplicationEvent(
+        {
+          event: { threadId: "child", type: "provider-turn.updated", payload: {} },
+        } as ApplicationStoredEvent,
+        subagents,
+      ),
+    ).toBe(false);
+    expect(
+      shouldPublishShellApplicationEvent(
+        {
+          event: {
+            threadId: "child",
+            type: "provider-turn.updated",
+            payload: {
+              tokenUsage: {
+                usedTokens: 1200,
+                maxTokens: 10000,
+                updatedAt: "2026-01-01T00:00:00.000Z",
+              },
+            },
+          },
+        } as ApplicationStoredEvent,
+        subagents,
+      ),
+    ).toBe(true);
+    expect(
+      shouldPublishShellApplicationEvent(
+        {
+          event: {
+            threadId: "child",
+            type: "turn-item.updated",
+            payload: { type: "compaction", status: "completed" },
+          },
+        } as ApplicationStoredEvent,
+        subagents,
+      ),
+    ).toBe(true);
   });
 
   it("tracks subagents created after the subscription starts", () => {

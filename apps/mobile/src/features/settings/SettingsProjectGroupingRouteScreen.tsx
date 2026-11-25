@@ -2,6 +2,7 @@ import { msg, useGT, useMessages } from "gt-react-native";
 import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScrollView";
 import { useAtomValue } from "@effect/atom-react";
 import type { SidebarProjectGroupingMode } from "@t3tools/contracts";
+import { DEFAULT_USAGE_DISPLAY_MODE, type UsageDisplayMode } from "@t3tools/contracts/settings";
 import { AsyncResult } from "effect/reactivity";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -39,6 +40,23 @@ const GROUPING_OPTIONS: ReadonlyArray<{
   },
 ];
 
+const USAGE_DISPLAY_OPTIONS: ReadonlyArray<{
+  readonly mode: UsageDisplayMode;
+  readonly label: string;
+  readonly description: string;
+}> = [
+  {
+    mode: "left",
+    label: msg("Left", { $context: "usage display mode option: remaining usage" }),
+    description: msg("Show remaining usage limits and context left."),
+  },
+  {
+    mode: "used",
+    label: msg("Used", { $context: "usage display mode option: consumed usage" }),
+    description: msg("Show usage limits and context used so far."),
+  },
+];
+
 export function SettingsProjectGroupingRouteScreen() {
   const gt = useGT();
   const m = useMessages();
@@ -48,6 +66,9 @@ export function SettingsProjectGroupingRouteScreen() {
   const preferencesReady = AsyncResult.isSuccess(preferencesResult) && !preferencesResult.waiting;
   const selectedMode = AsyncResult.isSuccess(preferencesResult)
     ? resolveMobileProjectGroupingSettings(preferencesResult.value).sidebarProjectGroupingMode
+    : null;
+  const usageDisplayMode = AsyncResult.isSuccess(preferencesResult)
+    ? (preferencesResult.value.usageDisplayMode ?? DEFAULT_USAGE_DISPLAY_MODE)
     : null;
 
   return (
@@ -60,6 +81,21 @@ export function SettingsProjectGroupingRouteScreen() {
         contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 18) + 18 }}
       >
         <LanguageSettingsSection />
+        <SettingsSection title={gt("Show usage as")}>
+          {USAGE_DISPLAY_OPTIONS.map((option, index) => (
+            <SettingsChoiceRow
+              key={option.mode}
+              label={m(option.label)}
+              description={m(option.description)}
+              selected={usageDisplayMode === option.mode}
+              separated={index > 0}
+              disabled={!preferencesReady}
+              onPress={() => {
+                void savePreferences({ usageDisplayMode: option.mode });
+              }}
+            />
+          ))}
+        </SettingsSection>
         <SettingsSection title={gt("Project grouping")}>
           {GROUPING_OPTIONS.map((option, index) => (
             <SettingsChoiceRow

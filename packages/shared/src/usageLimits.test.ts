@@ -20,15 +20,31 @@ import {
   collectLimitAccounts,
   collectExternalUsageLinks,
   collectLimitPools,
+  contextWindowDisplay,
+  displayPoolUsagePercent,
+  displayUsagePercent,
   elapsedShare,
   exhaustedUsageWindow,
+  formatContextWindowTokens,
+  paceDisplayPercent,
   paceOf,
   paceRemainingPercent,
+  remainingPercent,
+  usedPercent,
   usesChatGptSharing,
   resolveNewThreadModelSelection,
   tightestSubscriptionWindow,
 } from "./usageLimits.ts";
-import { collectLimitNotices } from "./usageLimitsCopy.ts";
+import {
+  collectLimitNotices,
+  formatContextWindowLabel,
+  formatContextWindowValue,
+  formatEvenPaceByNow,
+  formatPaceWindowPercent,
+  formatUsageModeWord,
+  formatUsagePercent,
+  formatWindowUsagePercent,
+} from "./usageLimitsCopy.ts";
 
 const now = Date.parse("2026-09-03T12:00:00.000Z");
 
@@ -217,9 +233,68 @@ describe("pace", () => {
   it("places the clock three fifths through a five-hour window with two hours left", () => {
     expect(elapsedShare(window, now)).toBeCloseTo(0.6);
     expect(paceRemainingPercent(window, now)).toBe(40);
+    expect(paceDisplayPercent(window, now, "left")).toBe(40);
+    expect(paceDisplayPercent(window, now, "used")).toBe(60);
     expect(paceOf(window, now)).toBe("under");
     expect(paceOf({ ...window, usedPercent: 62 }, now)).toBe("on");
     expect(paceOf({ ...window, usedPercent: 80 }, now)).toBe("ahead");
+  });
+});
+
+describe("usage display modes", () => {
+  it("formats window, pool, pace, and context values consistently in left and used modes", () => {
+    const sample = { ...window, usedPercent: 41 };
+    expect(remainingPercent(sample)).toBe(59);
+    expect(usedPercent(sample)).toBe(41);
+    expect(displayUsagePercent(sample, "left")).toBe(59);
+    expect(displayUsagePercent(sample, "used")).toBe(41);
+    expect(displayPoolUsagePercent({ remainingPercent: 59, usedPercent: 41 }, "left")).toBe(59);
+    expect(displayPoolUsagePercent({ remainingPercent: 59, usedPercent: 41 }, "used")).toBe(41);
+
+    expect(formatUsagePercent(59, "left")).toBe("59% left");
+    expect(formatUsagePercent(41, "used")).toBe("41% used");
+    expect(formatWindowUsagePercent(sample, "left")).toBe("59% left");
+    expect(formatWindowUsagePercent(sample, "used")).toBe("41% used");
+    expect(formatPaceWindowPercent(40, "left")).toBe("40% of the window left");
+    expect(formatPaceWindowPercent(60, "used")).toBe("60% of the window elapsed");
+    expect(formatEvenPaceByNow(40, "left")).toBe("40% left by now");
+    expect(formatEvenPaceByNow(60, "used")).toBe("60% used by now");
+    expect(formatUsageModeWord("left")).toBe("left");
+    expect(formatUsageModeWord("used")).toBe("used");
+
+    // Fractional rounding keeps left + used summing to 100.
+    expect(remainingPercent({ usedPercent: 41.5 }) + usedPercent({ usedPercent: 41.5 })).toBe(100);
+
+    const ctx = { usedTokens: 553_000, maxTokens: 1_000_000, autoCompactThreshold: 800_000 };
+    expect(formatContextWindowTokens(553_000)).toBe("553k");
+    expect(contextWindowDisplay(ctx, "used")).toMatchObject({
+      usedTokens: 553_000,
+      maxTokens: 1_000_000,
+      remainingTokens: 447_000,
+      usedPercent: 55,
+      remainingPercent: 45,
+      fillPercent: 55,
+      tickPercent: 80,
+    });
+    expect(contextWindowDisplay(ctx, "left")).toMatchObject({
+      usedPercent: 55,
+      remainingPercent: 45,
+      fillPercent: 45,
+      tickPercent: 20,
+    });
+    expect(formatContextWindowValue(ctx, "used")).toBe("553k / 1m used");
+    expect(formatContextWindowValue(ctx, "left")).toBe("447k left of 1m");
+    expect(formatContextWindowLabel(ctx, "used")).toBe("Context 553k / 1m used");
+    expect(formatContextWindowLabel(ctx, "left")).toBe("Context 447k left of 1m");
+
+    const unbounded = { usedTokens: 42_000, maxTokens: null };
+    expect(contextWindowDisplay(unbounded, "left")).toMatchObject({
+      fillPercent: null,
+      tickPercent: null,
+    });
+    expect(formatContextWindowValue(unbounded, "used")).toBe("42k used");
+    expect(formatContextWindowValue(unbounded, "left")).toBe("42k used");
+    expect(formatContextWindowLabel(unbounded, "left")).toBe("Context 42k used");
   });
 });
 

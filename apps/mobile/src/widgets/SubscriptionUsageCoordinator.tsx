@@ -1,11 +1,13 @@
 import { useAtomValue } from "@effect/atom-react";
-import { Atom } from "effect/reactivity";
+import { DEFAULT_USAGE_DISPLAY_MODE } from "@t3tools/contracts/settings";
+import { AsyncResult, Atom } from "effect/reactivity";
 import { useLocale, useMessages } from "gt-react-native";
 import * as Linking from "expo-linking";
 import { useEffect, useEffectEvent } from "react";
 import { Platform } from "react-native";
 import { useAppearancePreferences } from "../features/settings/appearance/AppearancePreferencesProvider";
 import { environmentCatalog } from "../connection/catalog";
+import { mobilePreferencesAtom } from "../state/preferences";
 import { environmentPresentations } from "../state/presentation";
 import { republishAgentActivityWidget } from "./publishAgentActivityWidget";
 import { publishSubscriptionUsage } from "./publishSubscriptionUsage";
@@ -18,14 +20,19 @@ import type { MessageResolver } from "../i18n/messages";
 const snapshotAtoms = new Map<string, ReturnType<typeof makeSnapshotAtom>>();
 
 function makeSnapshotAtom(resolve: MessageResolver) {
-  return Atom.make((get) =>
-    buildSubscriptionUsageSnapshot(
+  return Atom.make((get) => {
+    const preferencesResult = get(mobilePreferencesAtom);
+    const displayMode = AsyncResult.isSuccess(preferencesResult)
+      ? (preferencesResult.value.usageDisplayMode ?? DEFAULT_USAGE_DISPLAY_MODE)
+      : DEFAULT_USAGE_DISPLAY_MODE;
+    return buildSubscriptionUsageSnapshot(
       get(environmentPresentations.presentationsWithProvidersAtom),
       Linking.createURL("settings/usage", { queryParams: { tab: "limits" } }),
       Platform.OS === "android" ? Infinity : 6,
       resolve,
-    ),
-  ).pipe(Atom.withEquality((a, b) => JSON.stringify(a) === JSON.stringify(b)));
+      displayMode,
+    );
+  }).pipe(Atom.withEquality((a, b) => JSON.stringify(a) === JSON.stringify(b)));
 }
 
 function snapshotAtom(locale: string, resolve: MessageResolver) {

@@ -1167,6 +1167,20 @@
   "522713f306fbe418": "in {duration}",
   "391f43ef06ab0614": "↻ {duration}",
   "c47ebef856c52c5f": "resets in {duration}",
+  "060b77448f13f63a": "{percent}% used",
+  "df130193fd8be551": "{percent}% left",
+  "22b8a13abfe621b3": "{percent}% of the window elapsed",
+  "5be59cbeb4303948": "{percent}% of the window left",
+  "0fb11606e028c4bb": "{percent}% used by now",
+  "a23059a594ce34d8": "{percent}% left by now",
+  "ae1ecc39cf087f78": "used",
+  "ef3dba1a8c5ccbf7": "left",
+  "351f9a02c93fc616": "{left} left of {max}",
+  "47dd3a79477db74d": "{used} / {max} used",
+  "f7bd708b6710047a": "{used} used",
+  "b3a88de58850f36d": "Context {left} left of {max}",
+  "5a879586f6e062e0": "Context {used} / {max} used",
+  "e045e018a6f69317": "Context {used} used",
   "0a75e464d833bca8": "Settings",
   "b5adbf54cbefee38": "Environments",
   "6d9bf91f0d4b7ba3": "Threads",
@@ -1591,16 +1605,19 @@
   "9a4907d3650b1250": "Open {app} to refresh",
   "a0b256b49573c479": "No session limit reported",
   "bdb25fc7329e1ea7": "No weekly limit reported",
+  "4de5fcfb9d79a954": "Subscription used",
   "2a868f5893b8a3d0": "Subscription remaining",
+  "a34c676b80bfa56e": "{remaining}% used",
   "07f5912af296f9ea": "{remaining}% left",
+  "7d07d773ef7b25dc": "{window} · {remaining}% used",
   "f60ed5fcf4fd471c": "{window} · {remaining}% left",
-  "30106fc3a8643199": "left",
   "bd8554c7671b01a1": "N/A",
   "8963e62b7e4f94cf": "Open {app}",
   "b6ce773a43c1b2a9": "No subscription limits available.",
   "6974bbcf31d9230a": "As of {time}",
   "29519653f14c6817": "Tap to connect in {app}",
   "0a3b9942c9a76f23": "{provider}. {detail}.",
+  "c86f27b5191cb017": "{provider}, {window}, {remaining} percent used. {reset}. {detail}.",
   "5270189c209360dd": "{provider}, {window}, {remaining} percent remaining. {reset}. {detail}.",
   "f7288c2957dc484a": "{count, plural, one {{count} more in {app}} other {{count} more in {app}}}",
   "67651da8154563a1": "No limits available",
@@ -3279,6 +3296,11 @@
   "6c0baae0cb823c61": "Keep monorepo paths separate.",
   "27b88cb89b5cb56d": "Keep separate",
   "21e3a43e89b1cf74": "Show every workspace as its own project.",
+  "c94200c47834c81e": "Left",
+  "0f7b199bbe545ca0": "Show remaining usage limits and context left.",
+  "ab1b99ab3395dcea": "Used",
+  "ff8245f14dba4296": "Show usage limits and context used so far.",
+  "a9bd3aba080887fa": "Show usage as",
   "cd5452cc9e13c818": "Project grouping",
   "b88b9f277cd45075": "Failed to update project",
   "91decca53812ee0f": "This connection can no longer change it.",
@@ -3777,6 +3799,11 @@
   "69d7f7a05be41dc6": "working section",
   "8904cb0b34fca351": "new threads",
   "ec3e27b261ec1fdc": "last project",
+  "d040aabca7f00e55": "show usage as",
+  "de6a1645307ae9f4": "usage limits",
+  "a76e2fff097f99d0": "left",
+  "dd021842b243f91a": "used",
+  "a29c9a056921665c": "context window",
   "2b1b6a77ea4e48b2": "default workspace",
   "bc3f78610c8510ef": "default permissions",
   "d0f938923abcda05": "access",
@@ -3786,7 +3813,6 @@
   "c5c44c33381fd92b": "auto-settle",
   "b8804bb452387717": "settle",
   "5c243705c81dcbf5": "snooze",
-  "de6a1645307ae9f4": "usage limits",
   "765476de2079311a": "auto-resume",
   "c53a7db7fa6e18b4": "thread behavior",
   "dcc002d055e544b4": "follow-ups",
@@ -4849,35 +4875,20 @@
   "b16fdf56b16d99c9": "On pace",
   "90f977e97ae8b6c6": "Under pace",
   "897aceb6c7196649": "Account",
-  "811008ce95331531": "Segment {index}, {account}, {remaining}% left",
-  "bfb2d0ef476d295b": "Segment {index}, {account}, {remaining}% left, {timeLeft}% of the window left",
+  "c2257dce280d4be5": "Segment {index}, {account}, {usage}",
+  "4836a36132553c86": "Segment {index}, {account}, {usage}, {pace}",
   "e71c96e5114f7718": "Show account details",
-  "27cd137302298f71": "Segment {index}, {account}, {remaining}% left, {resetsIn}, {credits, plural, other {{credits} reset credits banked}}",
-  "288ade531cfcf90c": "Segment {index}, {account}, {remaining}% left, {resetsIn}",
-  "f78edbddd70ee41d": "Segment {index}, {account}, {remaining}% left, {credits, plural, other {{credits} reset credits banked}}",
+  "43ccb8b46daf0f06": "Segment {index}, {account}, {usage}, {resetsIn}, {credits, plural, other {{credits} reset credits banked}}",
+  "75b29afcaf4b1abe": "Segment {index}, {account}, {usage}, {resetsIn}",
+  "29d1e40ada6f47be": "Segment {index}, {account}, {usage}, {credits, plural, other {{credits} reset credits banked}}",
   "d2d071e45a2d6b89": "Select an environment to see limits.",
   "f411a8cef140a5ea": "No provider on the selected environments reports subscription limits.",
   "b29a752dd8ee9aa7": "Account",
   "55a38e69338c54ee": "Hide account email",
   "0d3e9f1f27c0e780": "Reveal account email",
+  "20a3e1f63941fcea": "Even pace: {pace}",
   "9217e0c91cee3cf8": "Signed in",
   "5f12a194d158f9b1": "Source",
-  "65a7507ffde6d3f8": [
-    {
-      "t": "Text",
-      "i": 1,
-      "c": [
-        {
-          "i": 2,
-          "k": "_gt_value_2",
-          "v": "v"
-        },
-        "%"
-      ]
-    },
-    " ",
-    "left"
-  ],
   "6af5e3cf03861f55": [
     {
       "i": 1,
@@ -4887,14 +4898,6 @@
     " could not refresh limits. Showing the last known values."
   ],
   "726ece0c7139ce8a": "This account is no longer reporting limits on the selected environments.",
-  "412e3b93454812aa": [
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    "% left"
-  ],
   "82d204e1a9e7da17": [
     "Resets",
     " ",
@@ -4903,15 +4906,6 @@
       "k": "_gt_value_1",
       "v": "v"
     }
-  ],
-  "23d0be01844d163c": [
-    "Even pace: ",
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    "% left by now"
   ],
   "a6ae2f414eb6349a": [
     "Restores ",

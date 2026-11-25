@@ -818,6 +818,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: [msg("timestamp clock locale system browser os 12 hour 24 hour")],
   },
   {
+    id: "usage-display-mode",
+    title: msg("Show usage as"),
+    to: "/settings/general",
+    searchTerms: [msg("usage limits left remaining used percentage context window bar quota")],
+  },
+  {
     id: "response-streaming",
     title: msg("Response streaming"),
     to: "/settings/threads",

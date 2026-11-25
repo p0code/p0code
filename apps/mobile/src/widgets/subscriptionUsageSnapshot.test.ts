@@ -183,6 +183,33 @@ describe("subscription widget snapshots", () => {
     expect(snapshot.providers[0]?.detail).toBe("Subscription remaining");
     expect(snapshot.providers[0]?.windows[0]?.remaining).toBe(20);
   });
+  it("switches widget copy and displayMode when usageDisplayMode is used", () => {
+    const leftSnapshot = buildSubscriptionUsageSnapshot(
+      presentations(),
+      deepLink,
+      6,
+      undefined,
+      "left",
+    );
+    expect(leftSnapshot.displayMode).toBe("left");
+    expect(leftSnapshot.text?.percentLeft).toBe("{remaining}% left");
+    expect(leftSnapshot.text?.left).toBe("left");
+    expect(leftSnapshot.providers[0]?.detail).toBe("Subscription remaining");
+
+    const usedSnapshot = buildSubscriptionUsageSnapshot(
+      presentations(),
+      deepLink,
+      6,
+      undefined,
+      "used",
+    );
+    expect(usedSnapshot.displayMode).toBe("used");
+    expect(usedSnapshot.text?.percentLeft).toBe("{remaining}% used");
+    expect(usedSnapshot.text?.left).toBe("used");
+    expect(usedSnapshot.text?.windowAccessibility).toContain("percent used");
+    expect(usedSnapshot.providers[0]?.detail).toBe("Subscription used");
+    expect(usedSnapshot.providers[0]?.windows[0]?.remaining).toBe(60);
+  });
 });
 
 describe("subscription widget expiry", () => {

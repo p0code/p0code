@@ -12,7 +12,7 @@ import { page, userEvent } from "vite-plus/test/browser";
 import "~/index.css";
 
 import { render } from "../../../test/render";
-import { __setClientSettingsForTests } from "../../hooks/useSettings";
+import { __setClientSettingsForTests, updateClientSettings } from "../../hooks/useSettings";
 import { deriveProviderInstanceEntries } from "../../providerInstances";
 import { ProviderModelPicker } from "./ProviderModelPicker";
 
@@ -342,4 +342,64 @@ it("keeps the touch keyboard down while choosing a provider", async () => {
   await page.getByRole("button", { name: /^Claude/ }).click();
   await expect.element(page.getByRole("option", { name: /Claude model/ })).toBeVisible();
   await expect.element(search).not.toHaveFocus();
+});
+
+it("formats provider sidebar usage bars and labels according to usageDisplayMode", async () => {
+  const checkedAt = "2026-10-25T16:00:00.000Z";
+  const entries = deriveProviderInstanceEntries([
+    {
+      instanceId: ProviderInstanceId.make("codex"),
+      driver: ProviderDriverKind.make("codex"),
+      displayName: "Codex",
+      enabled: true,
+      installed: true,
+      version: null,
+      status: "ready" as const,
+      auth: { status: "authenticated" as const },
+      checkedAt,
+      models: [{ slug: "gpt-5.4", name: "GPT-5.4", isCustom: false, capabilities: {} }],
+      slashCommands: [],
+      skills: [],
+      usageLimits: {
+        checkedAt,
+        windows: [{ id: "session", kind: "session", label: "5 hours", usedPercent: 41 }],
+      },
+    },
+  ]);
+  const [codex] = entries;
+
+  try {
+    __setClientSettingsForTests({ ...DEFAULT_CLIENT_SETTINGS, usageDisplayMode: "left" });
+    await using screen = await render(
+      <ProviderModelPicker
+        environmentId={null}
+        activeInstanceId={codex!.instanceId}
+        model="gpt-5.4"
+        lockedProvider={null}
+        instanceEntries={entries}
+        modelOptionsByInstance={new Map(entries.map((entry) => [entry.instanceId, entry.models]))}
+        triggerAriaLabel="Choose model"
+        onInstanceModelChange={() => {}}
+      />,
+    );
+    await screen.getByRole("button", { name: "Choose model" }).click();
+    const leftBtn = page.getByRole("button", { name: "Codex · 5 hours: 59% left" });
+    await expect.element(leftBtn).toBeVisible();
+    await expect
+      .element(
+        leftBtn.element().querySelector("[data-model-picker-usage-displayed]") as HTMLElement,
+      )
+      .toHaveAttribute("data-model-picker-usage-displayed", "59");
+
+    await updateClientSettings({ usageDisplayMode: "used" });
+    const usedBtn = page.getByRole("button", { name: "Codex · 5 hours: 41% used" });
+    await expect.element(usedBtn).toBeVisible();
+    await expect
+      .element(
+        usedBtn.element().querySelector("[data-model-picker-usage-displayed]") as HTMLElement,
+      )
+      .toHaveAttribute("data-model-picker-usage-displayed", "41");
+  } finally {
+    __setClientSettingsForTests(DEFAULT_CLIENT_SETTINGS);
+  }
 });

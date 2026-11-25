@@ -135,6 +135,17 @@ describe("ClientSettings terminal close confirmation", () => {
   });
 });
 
+describe("ClientSettings usage display mode", () => {
+  it("defaults to left and accepts used in settings and patches", () => {
+    expect(decodeClientSettings({}).usageDisplayMode).toBe("left");
+    expect(decodeClientSettings({ usageDisplayMode: "used" }).usageDisplayMode).toBe("used");
+    expect(decodeClientSettingsPatch({ usageDisplayMode: "used" })).toEqual({
+      usageDisplayMode: "used",
+    });
+    expect(() => decodeClientSettingsPatch({ usageDisplayMode: "other" })).toThrow();
+  });
+});
+
 describe("ServerSettings usage price overrides", () => {
   const prices = { inputCostPerMillionTokens: 2, outputCostPerMillionTokens: 8 };
 

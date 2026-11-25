@@ -19,6 +19,7 @@ import { SymbolView } from "../../components/ui/AppSymbol";
 import { ProviderIcon, ProviderInstanceIcon } from "../../components/ProviderIcon";
 import { cn } from "../../lib/cn";
 import { useEnvironmentServerConfig, useProject, useThreadShell } from "../../state/entities";
+import { SubagentContextRing } from "./ContextUsageRing";
 import { SUBAGENT_TONE_TEXT_CLASS, SubagentStatusDot } from "./SubagentStatusDot";
 import { resolveSubagentRowPresentation } from "./threadAgentsPresentation";
 
@@ -36,6 +37,7 @@ type SubagentRowSubagent = Pick<
   | "progress"
   | "result"
   | "remoteChild"
+  | "contextUsage"
 >;
 
 export function SubagentRow(props: {
@@ -46,6 +48,12 @@ export function SubagentRow(props: {
   readonly canOpenRemote?: boolean;
 }) {
   const messages = useMessages();
+  const child = useThreadShell(
+    props.subagent.childThreadId === null
+      ? null
+      : scopeThreadRef(props.environmentId, props.subagent.childThreadId),
+  )?.source;
+  const contextUsage = child?.contextUsage ?? props.subagent.contextUsage;
   const presentation = resolveSubagentRowPresentation(
     props.subagent,
     props.canOpenRemote,
@@ -89,6 +97,7 @@ export function SubagentRow(props: {
               </Text>
             ) : null}
           </View>
+          <SubagentContextRing usage={contextUsage} />
           {props.elapsed}
           {presentation.canOpenThread ? (
             <SymbolView name="chevron.right" size={12} tintColorClassName="accent-icon-subtle" />

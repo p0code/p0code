@@ -1,4 +1,5 @@
 import {
+  DEFAULT_CLIENT_SETTINGS,
   EnvironmentId,
   ProviderDriverKind,
   ProviderInstanceId,
@@ -10,6 +11,7 @@ import { describe, expect, it } from "vite-plus/test";
 import "~/index.css";
 
 import { render } from "../../../test/render";
+import { __setClientSettingsForTests } from "../../hooks/useSettings";
 import { UsageLimitsPooled } from "./UsageLimitsPooled";
 
 const checkedAt = "2026-10-25T16:00:00.000Z";
@@ -101,5 +103,56 @@ describe("UsageLimitsPooled next refill", () => {
       <UsageLimitsPooled presentations={presentations} now={Date.parse("2026-10-25T18:00:00Z")} />,
     );
     await expect.element(screen.getByText(/^↻ \+\d+%$/)).not.toBeInTheDocument();
+  });
+});
+
+describe("UsageLimitsPooled usageDisplayMode", () => {
+  it("renders left vs used wording, bar fills, and pace labels consistently", async () => {
+    using _resetSettings = {
+      [Symbol.dispose]() {
+        __setClientSettingsForTests(DEFAULT_CLIENT_SETTINGS);
+      },
+    };
+    const provider: ServerProvider = {
+      ...managedChatGpt("codex", "Codex"),
+      usageLimits: {
+        checkedAt,
+        windows: [
+          {
+            id: "session",
+            label: "5 hours",
+            kind: "session",
+            usedPercent: 41,
+            windowDurationMins: 300,
+            resetsAt: "2026-10-25T19:00:00.000Z",
+          },
+        ],
+      },
+    };
+    const presentations = new Map([
+      [
+        EnvironmentId.make("desk"),
+        { entry: { target: { label: "Desk" } }, serverConfig: { providers: [provider] } },
+      ],
+    ]);
+    const now = Date.parse(checkedAt);
+
+    __setClientSettingsForTests({ ...DEFAULT_CLIENT_SETTINGS, usageDisplayMode: "left" });
+    await using screen = await render(
+      <UsageLimitsPooled presentations={presentations} now={now} />,
+    );
+    await expect.element(screen.getByText("59%", { exact: true })).toBeVisible();
+    await expect.element(screen.getByText("left", { exact: true })).toBeVisible();
+    await expect
+      .element(screen.getByRole("button", { name: /59% left.*60% of the window left/ }))
+      .toBeVisible();
+
+    __setClientSettingsForTests({ ...DEFAULT_CLIENT_SETTINGS, usageDisplayMode: "used" });
+    await screen.rerender(<UsageLimitsPooled presentations={presentations} now={now} />);
+    await expect.element(screen.getByText("41%", { exact: true })).toBeVisible();
+    await expect.element(screen.getByText("used", { exact: true })).toBeVisible();
+    await expect
+      .element(screen.getByRole("button", { name: /41% used.*40% of the window elapsed/ }))
+      .toBeVisible();
   });
 });
