@@ -94,6 +94,7 @@ import { AboutVersionTitle } from "./AboutVersionTitle";
 import { AdvancedSettings } from "./AdvancedSettings";
 import { BackgroundActivitySettingsRow } from "./BackgroundActivitySettings";
 import { CliCommandSettingsRow } from "./CliCommandSettingsRow";
+import { MigrateFromT3Row } from "./MigrateFromT3Row";
 import { PullRequestLinksOpenInAppSetting } from "./IntegrationsSettings";
 import { JudgesSettingsSection } from "./JudgesSettingsSection";
 import { MobileAppSettingsRow } from "./MobileAppSettingsRow";
@@ -472,6 +473,7 @@ function AboutVersionSection() {
         />
       ) : null}
       {hasDesktopBridge ? <CliCommandSettingsRow /> : null}
+      {hasDesktopBridge ? <MigrateFromT3Row /> : null}
       {switchChannel === null ? null : (
         <UpdateTrackSwitchDialog channel={switchChannel} onClose={() => setSwitchChannel(null)} />
       )}

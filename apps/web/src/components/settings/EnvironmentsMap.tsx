@@ -197,7 +197,7 @@ const ROUTE_STYLES: Record<
 function routeKindLabel(kind: ConnectionRouteKind, gt: GT): string {
   switch (kind) {
     case "relay":
-      return gt("Relay");
+      return gt("T3 bridge");
     case "loopback":
       return gt("This device");
     case "lan":
@@ -274,20 +274,40 @@ function useFleetGraph() {
     const connected = environment.connection.phase === "connected";
     const active = connected ? Option.getOrNull(prepared[index] ?? Option.none()) : null;
     const offersLinks = offersLinkedEnvironments(environment.serverConfig);
+    const rawRoutes = connectionRoutes(environment.entry);
+    const publicRouteCount = rawRoutes.filter(
+      (route) => connectionRouteKind(route) === "public",
+    ).length;
+    const selfRelayOrigin = environment.serverConfig?.environment.publicOrigin ?? null;
     return {
       environmentId: environment.environmentId,
       label: environment.label,
       machine: machineById.get(environment.environmentId)?.machine ?? null,
       phase: environment.connection.phase,
       enabled: environment.entry.enabled,
-      routes: connectionRoutes(environment.entry).map((route) => ({
-        id: connectionRouteId(route.target),
-        kind: connectionRouteKind(route),
-        ...(connectionRouteKind(route) === "tailnet" &&
-        routeHttpBaseUrl(route)?.startsWith("https:") === true
-          ? { label: connectionRouteLabelText(route, m) }
-          : {}),
-      })),
+      routes: rawRoutes.map((route) => {
+        const kind = connectionRouteKind(route);
+        const baseUrl = routeHttpBaseUrl(route);
+        let label: string | undefined;
+        if (kind === "tailnet" && baseUrl?.startsWith("https:") === true) {
+          label = connectionRouteLabelText(route, m);
+        } else if (kind === "public" && baseUrl !== null && baseUrl !== undefined) {
+          if (selfRelayOrigin !== null && baseUrl.startsWith(selfRelayOrigin)) {
+            label = gt("E2E relay");
+          } else if (publicRouteCount > 1) {
+            try {
+              label = new URL(baseUrl).hostname;
+            } catch {
+              label = undefined;
+            }
+          }
+        }
+        return {
+          id: connectionRouteId(route.target),
+          kind,
+          ...(label === undefined ? {} : { label }),
+        };
+      }),
       activeRouteId: active === null ? null : connectionRouteId(active.target),
       refusedRouteIds: environment.refusedRouteIds,
       offersLinks,

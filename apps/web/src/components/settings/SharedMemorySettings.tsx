@@ -63,21 +63,25 @@ export function SharedMemorySettings() {
   const disabled = busy || !canManage;
   return (
     <SettingsSection id="shared-memory" title={gt("Shared memory")}>
-      <p className="text-sm text-muted-foreground">
-        <T>
-          Share agent memory through Obsidian Sync. Install Obsidian Headless with Node 22 or later
-          on this environment.
-        </T>{" "}
-        <code>bun install -g obsidian-headless</code>
-      </p>
-      <p className="text-sm text-muted-foreground">
-        <T>Do not sync this folder with the Obsidian desktop app on the same machine.</T>
-      </p>
-      {(error || status.error || state?.lastError) && (
-        <p role="alert" className="text-sm text-destructive">
-          {error || status.error || state?.lastError}
+      <div className="space-y-2 px-4 py-3.5 text-sm text-muted-foreground">
+        <p>
+          <T>
+            Share agent memory through Obsidian Sync. Install Obsidian Headless with Node 22 or
+            later on this environment.
+          </T>{" "}
+          <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground">
+            bun install -g obsidian-headless
+          </code>
         </p>
-      )}
+        <p>
+          <T>Do not sync this folder with the Obsidian desktop app on the same machine.</T>
+        </p>
+        {(error || status.error || state?.lastError) && (
+          <p role="alert" className="text-sm text-destructive">
+            {error || status.error || state?.lastError}
+          </p>
+        )}
+      </div>
       <SettingsRow
         title={gt("Sync status")}
         description={
@@ -86,8 +90,8 @@ export function SharedMemorySettings() {
             : gt("No completed sync yet")
         }
         control={
-          <div className="flex gap-2">
-            <span>
+          <div className="flex items-center gap-2.5">
+            <span className="text-xs font-medium text-muted-foreground">
               {state?.phase === "syncing"
                 ? gt("Syncing")
                 : state?.phase === "error"
@@ -103,97 +107,112 @@ export function SharedMemorySettings() {
         }
       />
       {!state?.connected ? (
-        <div className="grid gap-3">
-          <Input
-            aria-label={gt("Obsidian email")}
-            placeholder={gt("Obsidian email")}
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <Input
-            aria-label={gt("Obsidian password")}
-            placeholder={gt("Obsidian password")}
-            type="password"
-            autoComplete="off"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-          <Input
-            aria-label={gt("MFA code (if enabled)")}
-            placeholder={gt("MFA code (if enabled)")}
-            autoComplete="off"
-            value={mfa}
-            onChange={(e) => setMfa(e.target.value)}
-          />
-          <div>
-            <Button
-              disabled={disabled || !email || !password}
-              onClick={() => void act({ action: "login", email, password, mfa })}
-            >
-              <T>Connect Obsidian</T>
-            </Button>
+        <div className="px-4 py-4">
+          <div className="grid max-w-md gap-3">
+            <Input
+              aria-label={gt("Obsidian email")}
+              placeholder={gt("Obsidian email")}
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+            <Input
+              aria-label={gt("Obsidian password")}
+              placeholder={gt("Obsidian password")}
+              type="password"
+              autoComplete="off"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            <Input
+              aria-label={gt("MFA code (if enabled)")}
+              placeholder={gt("MFA code (if enabled)")}
+              autoComplete="off"
+              value={mfa}
+              onChange={(e) => setMfa(e.target.value)}
+            />
+            <div className="pt-1">
+              <Button
+                disabled={disabled || !email || !password}
+                onClick={() => void act({ action: "login", email, password, mfa })}
+              >
+                <T>Connect Obsidian</T>
+              </Button>
+            </div>
           </div>
         </div>
       ) : (
         <>
-          <div>
-            <Button variant="outline" disabled={disabled} onClick={() => void refreshVaults()}>
-              <T>Load vaults</T>
-            </Button>
-          </div>
           <SettingsRow
             title={gt("Remote vault")}
             control={
-              <Select value={vault || state.vault} onValueChange={(value) => setVault(value ?? "")}>
-                <SelectTrigger>
-                  <SelectValue placeholder={gt("Choose a vault")} />
-                </SelectTrigger>
-                <SelectPopup>
-                  {[...(vaults?.vaults ?? []), ...(vaults?.shared ?? [])].map((item) => (
-                    <SelectItem key={item.id} value={item.id}>
-                      {item.name}
-                    </SelectItem>
-                  ))}
-                </SelectPopup>
-              </Select>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={disabled}
+                  onClick={() => void refreshVaults()}
+                >
+                  <T>Load vaults</T>
+                </Button>
+                <Select
+                  value={vault || state.vault}
+                  onValueChange={(value) => setVault(value ?? "")}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={gt("Choose a vault")} />
+                  </SelectTrigger>
+                  <SelectPopup>
+                    {[...(vaults?.vaults ?? []), ...(vaults?.shared ?? [])].map((item) => (
+                      <SelectItem key={item.id} value={item.id}>
+                        {item.name}
+                      </SelectItem>
+                    ))}
+                  </SelectPopup>
+                </Select>
+              </div>
             }
           />
-          <Input
-            aria-label={gt("Local memory folder")}
-            placeholder={state.folder || gt("Default folder in the server state directory")}
-            value={folder}
-            onChange={(e) => setFolder(e.target.value)}
-          />
-          {state.folder && (
-            <p className="text-sm break-all">
-              <T>
-                Current folder: <Var>{state.folder}</Var>
-              </T>
-            </p>
-          )}
-          <Input
-            aria-label={gt("Vault encryption password (if required)")}
-            placeholder={gt("Vault encryption password (if required)")}
-            type="password"
-            autoComplete="off"
-            value={vaultPassword}
-            onChange={(e) => setVaultPassword(e.target.value)}
-          />
-          <div>
-            <Button
-              disabled={disabled || !(vault || state.vault)}
-              onClick={() =>
-                void act({
-                  action: "configure",
-                  vault: vault || state.vault,
-                  folder: folder || ((vault || state.vault) === state.vault ? state.folder : ""),
-                  password: vaultPassword,
-                })
-              }
-            >
-              <T>Use vault</T>
-            </Button>
+          <div className="px-4 py-4">
+            <div className="grid max-w-md gap-3">
+              <Input
+                aria-label={gt("Local memory folder")}
+                placeholder={state.folder || gt("Default folder in the server state directory")}
+                value={folder}
+                onChange={(e) => setFolder(e.target.value)}
+              />
+              {state.folder && (
+                <p className="text-xs text-muted-foreground break-all">
+                  <T>
+                    Current folder: <Var>{state.folder}</Var>
+                  </T>
+                </p>
+              )}
+              <Input
+                aria-label={gt("Vault encryption password (if required)")}
+                placeholder={gt("Vault encryption password (if required)")}
+                type="password"
+                autoComplete="off"
+                value={vaultPassword}
+                onChange={(e) => setVaultPassword(e.target.value)}
+              />
+              <div className="pt-1">
+                <Button
+                  disabled={disabled || !(vault || state.vault)}
+                  onClick={() =>
+                    void act({
+                      action: "configure",
+                      vault: vault || state.vault,
+                      folder:
+                        folder || ((vault || state.vault) === state.vault ? state.folder : ""),
+                      password: vaultPassword,
+                    })
+                  }
+                >
+                  <T>Use vault</T>
+                </Button>
+              </div>
+            </div>
           </div>
           <SettingsRow
             title={gt("Inject shared memory instructions")}
@@ -217,9 +236,10 @@ export function SharedMemorySettings() {
               />
             }
           />
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 px-4 py-3.5">
             <Button
               variant="outline"
+              size="sm"
               disabled={disabled}
               onClick={() => void act({ action: "preferences", enabled: state.enabled, agentId })}
             >
@@ -227,6 +247,7 @@ export function SharedMemorySettings() {
             </Button>
             <Button
               variant="outline"
+              size="sm"
               disabled={disabled || !state.folder}
               onClick={() => void act({ action: state.paused ? "resume" : "pause" })}
             >
@@ -234,6 +255,7 @@ export function SharedMemorySettings() {
             </Button>
             <Button
               variant="outline"
+              size="sm"
               disabled={!state.snippet}
               onClick={() => void navigator.clipboard.writeText(state.snippet)}
             >
@@ -241,6 +263,7 @@ export function SharedMemorySettings() {
             </Button>
             <Button
               variant="outline"
+              size="sm"
               disabled={disabled}
               onClick={() => void act({ action: "logout" })}
             >

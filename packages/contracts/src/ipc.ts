@@ -1108,6 +1108,26 @@ export const DesktopAppleSpeechTranscribeInputSchema = Schema.Struct({
 export const SystemSettingsPaneSchema = Schema.Literals(["full-disk-access"]);
 export type SystemSettingsPane = typeof SystemSettingsPaneSchema.Type;
 
+export const DesktopT3ImportStateSchema = Schema.Struct({
+  supported: Schema.Boolean,
+  stockHome: Schema.String,
+  appHome: Schema.String,
+  hasStockData: Schema.Boolean,
+  alreadyMigrated: Schema.Boolean,
+});
+export type DesktopT3ImportState = typeof DesktopT3ImportStateSchema.Type;
+
+export const DesktopT3ImportRunInputSchema = Schema.Struct({
+  keepEnvironmentId: Schema.Boolean,
+});
+export type DesktopT3ImportRunInput = typeof DesktopT3ImportRunInputSchema.Type;
+
+export const DesktopT3ImportRunResultSchema = Schema.Struct({
+  ok: Schema.Boolean,
+  error: Schema.optionalKey(Schema.String),
+});
+export type DesktopT3ImportRunResult = typeof DesktopT3ImportRunResultSchema.Type;
+
 export interface DesktopBridge {
   getAppBranding: () => DesktopAppBranding | null;
   /** `null` until the desktop host has read the login shell's environment; ask again later. */
@@ -1234,6 +1254,10 @@ export interface DesktopBridge {
     install: () => Promise<DesktopCliCommandState>;
     uninstall: () => Promise<DesktopCliCommandState>;
     addToPath: () => Promise<DesktopCliCommandState>;
+  };
+  t3Import?: {
+    getState: () => Promise<DesktopT3ImportState>;
+    run: (input: DesktopT3ImportRunInput) => Promise<DesktopT3ImportRunResult>;
   };
   webLinks: {
     setReady: (ready: boolean) => Promise<void>;

@@ -8,15 +8,24 @@ import {
   keyringStore,
   type KeychainStore,
 } from "@t3tools/shared/credentialKeychain";
-import { migrateFromT3, shouldOfferT3Import } from "@t3tools/shared/migrateFromT3";
+import {
+  MIGRATION_MARKER_FILE,
+  migrateFromT3,
+  shouldOfferT3Import,
+} from "@t3tools/shared/migrateFromT3";
+import type { DesktopT3ImportRunResult, DesktopT3ImportState } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
+import * as Ref from "effect/Ref";
 import { msg } from "gt-i18n";
 
 import * as ElectronApp from "../electron/ElectronApp.ts";
 import * as ElectronDialog from "../electron/ElectronDialog.ts";
 import { m } from "../i18n/messages.ts";
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
+import * as DesktopShutdown from "./DesktopShutdown.ts";
+import * as DesktopState from "./DesktopState.ts";
 
 const requireExternal = NodeModule.createRequire(import.meta.url);
 
@@ -101,4 +110,101 @@ export const offerT3Import = Effect.fn("desktop.offerT3Import")(function* () {
   yield* electronApp.relaunch({});
   yield* electronApp.quit;
   return true;
+});
+
+export const getT3ImportState = Effect.fn("desktop.getT3ImportState")(function* () {
+  const environment = yield* DesktopEnvironment.DesktopEnvironment;
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const stockHome = path.join(environment.homeDirectory, STOCK_T3_HOME_DIRECTORY_NAME);
+  const [hasStockData, alreadyMigrated] = yield* Effect.all([
+    fs
+      .exists(path.join(stockHome, "userdata", "statev2.sqlite"))
+      .pipe(Effect.orElseSucceed(() => false)),
+    fs
+      .exists(path.join(environment.baseDir, "userdata", MIGRATION_MARKER_FILE))
+      .pipe(Effect.orElseSucceed(() => false)),
+  ]);
+  return {
+    supported: true,
+    stockHome,
+    appHome: environment.baseDir,
+    hasStockData,
+    alreadyMigrated,
+  } satisfies DesktopT3ImportState;
+});
+
+/**
+ * Stops the running local backend cleanly, imports stock T3 Code data into this home
+ * (credentials straight to the OS keychain), and relaunches HHHCode.
+ */
+export const runT3ImportOnTheFly = Effect.fn("desktop.runT3ImportOnTheFly")(function* (input: {
+  readonly keepEnvironmentId: boolean;
+}) {
+  const environment = yield* DesktopEnvironment.DesktopEnvironment;
+  const path = yield* Path.Path;
+  const platform = yield* HostProcess.Platform;
+  const shutdown = yield* DesktopShutdown.DesktopShutdown;
+  const state = yield* DesktopState.DesktopState;
+  const electronApp = yield* ElectronApp.ElectronApp;
+  const dialog = yield* ElectronDialog.ElectronDialog;
+  const stockHome = path.join(environment.homeDirectory, STOCK_T3_HOME_DIRECTORY_NAME);
+
+  const preflight = yield* Effect.tryPromise({
+    try: async () => {
+      const keychain = await tryLoadKeychain(
+        path.join(environment.baseDir, "userdata", "secrets"),
+        platform,
+      );
+      await migrateFromT3({
+        from: stockHome,
+        to: environment.baseDir,
+        dryRun: true,
+        force: true,
+        keepEnvironmentId: input.keepEnvironmentId,
+        isProcessAlive: () => false,
+        keychain,
+      });
+      return keychain;
+    },
+    catch: (cause) => (cause instanceof Error ? cause.message : String(cause)),
+  }).pipe(Effect.result);
+
+  if (preflight._tag === "Failure") {
+    return { ok: false, error: preflight.failure } satisfies DesktopT3ImportRunResult;
+  }
+
+  const keychain = preflight.success;
+  yield* Effect.gen(function* () {
+    yield* Effect.yieldNow;
+    yield* Ref.set(state.quitting, true);
+    yield* shutdown.request;
+    yield* shutdown.awaitComplete;
+    const failure = yield* Effect.tryPromise({
+      try: () =>
+        migrateFromT3({
+          from: stockHome,
+          to: environment.baseDir,
+          force: true,
+          keepEnvironmentId: input.keepEnvironmentId,
+          keychain,
+        }),
+      catch: (cause) => (cause instanceof Error ? cause.message : String(cause)),
+    }).pipe(Effect.match({ onFailure: (reason) => reason, onSuccess: () => undefined }));
+    if (failure !== undefined) {
+      yield* dialog.showErrorBox(
+        m(msg("Could not import from T3 Code")),
+        m(
+          msg(
+            "{reason} Quit hhhcode and run `t3 migrate from-t3 --force` in a terminal to try again.",
+          ),
+          { reason: failure },
+        ),
+      );
+    }
+    yield* electronApp.relaunch({});
+    yield* electronApp.exit(0);
+  }).pipe(Effect.forkDetach, Effect.asVoid);
+
+  return { ok: true } satisfies DesktopT3ImportRunResult;
 });
