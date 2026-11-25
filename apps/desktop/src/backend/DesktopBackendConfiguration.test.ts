@@ -8,8 +8,11 @@ import {
   desktopReadinessProof,
 } from "@t3tools/shared/desktopReadinessProof";
 import * as HostProcess from "@t3tools/shared/HostProcess";
+import { PRIMARY_LOCAL_ENVIRONMENT_ID } from "@t3tools/contracts";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientResponse from "effect/http/HttpClientResponse";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as ManagedRuntime from "effect/ManagedRuntime";
@@ -27,7 +30,9 @@ import * as DesktopShellEnvironment from "../shell/DesktopShellEnvironment.ts";
 import * as DesktopWslEnvironment from "../wsl/DesktopWslEnvironment.ts";
 import * as DesktopWslServerTree from "../wsl/DesktopWslServerTree.ts";
 import * as DesktopBackendConfiguration from "./DesktopBackendConfiguration.ts";
+import * as DesktopBackendPool from "./DesktopBackendPool.ts";
 import * as DesktopBackendService from "./DesktopBackendService.ts";
+import * as DesktopLocalEnvironmentAuth from "./DesktopLocalEnvironmentAuth.ts";
 import * as DesktopServerExposure from "./DesktopServerExposure.ts";
 
 const layerShellEnvironment = (prepared = true) =>
@@ -230,6 +235,123 @@ const withPackagedWslHarness = <A, E, R>(
   }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)));
 
 describe("DesktopBackendConfiguration", () => {
+  it.effect(
+    "signs the desktop in to a local-service backend instead of failing as not configured",
+    () =>
+      Effect.gen(function* () {
+        const fileSystem = yield* FileSystem.FileSystem;
+        const baseDir = yield* fileSystem.makeTempDirectoryScoped({
+          prefix: "t3-desktop-backend-config-test-",
+        });
+        const serviceSecret = "ab".repeat(32);
+        // Another app (stock T3 Code) holds the default port; the service runs elsewhere.
+        const serviceUrl = new URL("http://127.0.0.1:51234");
+        const serviceInfo: DesktopBackendService.BackendServiceInfo = {
+          running: true,
+          installed: true,
+          pid: 4321,
+          version: "1.2.3",
+          url: serviceUrl,
+          binaryPath: "/server/bin.mjs",
+          managedByService: true,
+          driverKind: "legacy-node",
+        };
+        const driver: DesktopBackendService.BackendServiceDriver = {
+          kind: "legacy-node",
+          binaryPath: "/server/bin.mjs",
+          desktopBootstrapSecret: serviceSecret,
+          status: Effect.succeed(serviceInfo),
+          ensureRunning: Effect.succeed(serviceInfo),
+          start: Effect.succeed(serviceInfo),
+          stop: Effect.void,
+          restart: Effect.succeed(serviceInfo),
+        };
+
+        const config = yield* Effect.gen(function* () {
+          const configuration = yield* DesktopBackendConfiguration.DesktopBackendConfiguration;
+          return yield* configuration.resolvePrimary;
+        }).pipe(
+          Effect.provide(
+            DesktopBackendConfiguration.layer.pipe(
+              Layer.provide(layerShellEnvironment()),
+              Layer.provide(DesktopState.layer),
+              Layer.provide(
+                DesktopBackendService.layerTest({
+                  resolveEffectiveMode: Effect.succeed("local-service"),
+                  resolveServiceDriver: Effect.succeed(driver),
+                }),
+              ),
+              Layer.provideMerge(layerServerExposure),
+              Layer.provideMerge(DesktopAppSettings.layerTest()),
+              Layer.provideMerge(DesktopWslEnvironment.layerTest()),
+              Layer.provideMerge(DesktopWslServerTree.layerTest()),
+              Layer.provideMerge(layerEnvironment(baseDir)),
+            ),
+          ),
+        );
+
+        assert.equal(config.backendMode, "local-service");
+        assert.equal(config.httpBaseUrl.href, serviceUrl.href);
+        assert.equal(config.bootstrap.desktopBootstrapSecret, serviceSecret);
+
+        const presented: string[] = [];
+        const layerAuth = DesktopLocalEnvironmentAuth.layer.pipe(
+          Layer.provide(
+            Layer.mergeAll(
+              Layer.succeed(DesktopBackendPool.DesktopBackendPool, {
+                list: Effect.succeed([
+                  {
+                    id: PRIMARY_LOCAL_ENVIRONMENT_ID,
+                    currentConfig: Effect.succeedSome(config),
+                    waitForReady: () => Effect.succeed(true),
+                  },
+                ]),
+              } as unknown as DesktopBackendPool.DesktopBackendPool["Service"]),
+              Layer.succeed(
+                HttpClient.HttpClient,
+                HttpClient.make((request) => {
+                  const body =
+                    request.body._tag === "Uint8Array"
+                      ? new TextDecoder().decode(request.body.body)
+                      : "";
+                  presented.push(
+                    `${new URL(request.url).origin} ${new URLSearchParams(body).get("subject_token")}`,
+                  );
+                  return Effect.succeed(
+                    HttpClientResponse.fromWeb(
+                      request,
+                      new Response(
+                        JSON.stringify({
+                          access_token: "desktop-bearer-token",
+                          issued_token_type: "urn:ietf:params:oauth:token-type:access_token",
+                          token_type: "Bearer",
+                          expires_in: 3600,
+                          scope: "orchestration:read",
+                        }),
+                        { status: 200, headers: { "content-type": "application/json" } },
+                      ),
+                    ),
+                  );
+                }),
+              ),
+              NodeCrypto.layerMac,
+            ),
+          ),
+        );
+        const token = yield* Effect.gen(function* () {
+          return yield* (yield* DesktopLocalEnvironmentAuth.DesktopLocalEnvironmentAuth)
+            .getBearerToken;
+        }).pipe(Effect.provide(layerAuth));
+
+        assert.equal(token, "desktop-bearer-token");
+        const expected = yield* currentDesktopBootstrapToken(
+          serviceSecret,
+          yield* Clock.currentTimeMillis,
+        ).pipe(Effect.provide(NodeCrypto.layerMac));
+        assert.deepEqual(presented, [`${serviceUrl.origin} ${expected}`]);
+      }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
+  );
+
   it.effect("resolvePrimary produces a stable scoped bootstrap token", () =>
     withHarness(
       Effect.gen(function* () {
@@ -274,7 +396,7 @@ describe("DesktopBackendConfiguration", () => {
           ).pipe(Effect.provide(NodeCrypto.layerMac)),
         );
         assert.equal(
-          yield* configuration.currentBootstrapToken,
+          yield* configuration.currentBootstrapToken(first.bootstrap.desktopBootstrapSecret ?? ""),
           first.bootstrap.desktopBootstrapToken,
         );
       }),

@@ -298,6 +298,7 @@ function layerTest(input: {
     setBackendConfig: () => Effect.die("unexpected backend config update"),
     applyWslWindowsFallback: Effect.die("unexpected WSL Windows fallback"),
     applyWslWindowsFallbackInMemory: Effect.die("unexpected WSL Windows fallback"),
+    applyBuiltInBackendFallbackInMemory: Effect.die("unexpected built-in backend fallback"),
   } satisfies DesktopAppSettings.DesktopAppSettings["Service"]);
 
   const layerElectronWindow = Layer.succeed(ElectronWindow.ElectronWindow, {

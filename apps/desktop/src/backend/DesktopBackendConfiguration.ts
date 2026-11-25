@@ -63,7 +63,8 @@ export class DesktopBackendConfiguration extends Context.Service<
       PlatformError.PlatformError
     >;
     readonly resolvePrimaryLabel: Effect.Effect<string>;
-    readonly currentBootstrapToken: Effect.Effect<string, PlatformError.PlatformError>;
+    /** The token a backend launched with `secret` accepts right now. */
+    readonly currentBootstrapToken: (secret: string) => Effect.Effect<string>;
   }
 >()("@t3tools/desktop/backend/DesktopBackendConfiguration") {}
 
@@ -935,8 +936,14 @@ export const make = Effect.gen(function* () {
     const driver = yield* backendService.resolveServiceDriver;
     const backendExposure = yield* serverExposure.backendConfig;
     const port = backendExposure.port > 0 ? backendExposure.port : 3773;
+    // Startup brought the service up already; its own URL avoids another app on the default port.
+    const service = yield* driver.status;
     const httpBaseUrl =
-      backendExposure.port > 0 ? backendExposure.httpBaseUrl : new URL(`http://127.0.0.1:${port}`);
+      service.running && service.url !== null
+        ? service.url
+        : backendExposure.port > 0
+          ? backendExposure.httpBaseUrl
+          : new URL(`http://127.0.0.1:${port}`);
     const config: DesktopBackendManager.DesktopBackendStartConfig = {
       backendMode: "local-service",
       serviceDriver: driver,
@@ -953,6 +960,9 @@ export const make = Effect.gen(function* () {
         t3Home: environment.baseDir,
         host: backendExposure.bindHost,
         desktopBootstrapToken: "",
+        ...(driver.desktopBootstrapSecret === null
+          ? {}
+          : { desktopBootstrapSecret: driver.desktopBootstrapSecret }),
         tailscaleServeEnabled: backendExposure.tailscaleServeEnabled,
         tailscaleServePort: backendExposure.tailscaleServePort,
       },
@@ -977,12 +987,13 @@ export const make = Effect.gen(function* () {
     return { backendMode, useWsl, wslRequested, distro: persistedSettings.wslDistro };
   });
 
-  const currentBootstrapToken = Effect.gen(function* () {
-    const secret = yield* getOrCreateBootstrapSecret;
-    return yield* currentDesktopBootstrapToken(secret, yield* Clock.currentTimeMillis).pipe(
-      Effect.provideService(Mac.Mac, mac),
-    );
-  });
+  const currentBootstrapToken = Effect.fn("desktop.backendConfiguration.currentBootstrapToken")(
+    function* (secret: string) {
+      return yield* currentDesktopBootstrapToken(secret, yield* Clock.currentTimeMillis).pipe(
+        Effect.provideService(Mac.Mac, mac),
+      );
+    },
+  );
 
   return DesktopBackendConfiguration.of({
     currentBootstrapToken,

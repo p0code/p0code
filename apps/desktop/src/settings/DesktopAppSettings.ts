@@ -203,6 +203,7 @@ export class DesktopAppSettings extends Context.Service<
       DesktopSettingsWriteError
     >;
     readonly applyWslWindowsFallbackInMemory: Effect.Effect<DesktopSettingsChange>;
+    readonly applyBuiltInBackendFallbackInMemory: Effect.Effect<DesktopSettingsChange>;
   }
 >()("@t3tools/desktop/settings/DesktopAppSettings") {}
 
@@ -479,6 +480,9 @@ function setBackendConfig(
   };
 }
 
+const applyBuiltInBackendFallback = (settings: DesktopSettings): DesktopSettings =>
+  setBackendConfig(settings, { mode: "legacy-embedded" });
+
 function applyWslWindowsFallback(settings: DesktopSettings): DesktopSettings {
   return setWslOnly(setWslBackendEnabled(settings, false), false);
 }
@@ -711,6 +715,9 @@ export const make = Effect.gen(function* () {
     applyWslWindowsFallbackInMemory: updateInMemory(applyWslWindowsFallback).pipe(
       Effect.withSpan("desktop.settings.applyWslWindowsFallbackInMemory"),
     ),
+    applyBuiltInBackendFallbackInMemory: updateInMemory(applyBuiltInBackendFallback).pipe(
+      Effect.withSpan("desktop.settings.applyBuiltInBackendFallbackInMemory"),
+    ),
   });
 });
 
@@ -773,6 +780,7 @@ export const layerTest = (initialSettings: DesktopSettings = DEFAULT_DESKTOP_SET
         }),
         applyWslWindowsFallback: update(applyWslWindowsFallback),
         applyWslWindowsFallbackInMemory: update(applyWslWindowsFallback),
+        applyBuiltInBackendFallbackInMemory: update(applyBuiltInBackendFallback),
       });
     }),
   );

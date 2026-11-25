@@ -1,12 +1,22 @@
 import {
+  DesktopBackendBootstrap,
   type DesktopBackendAction,
   type DesktopBackendConfigUpdate,
   type DesktopBackendMode,
   type DesktopBackendStatus,
 } from "@t3tools/contracts";
+import {
+  DESKTOP_READINESS_CHALLENGE_PARAM,
+  DESKTOP_READINESS_PROOF_PATH,
+  isValidDesktopReadinessProof,
+} from "@t3tools/shared/desktopReadinessProof";
+import * as NetService from "@t3tools/shared/Net";
 import * as Context from "effect/Context";
+import * as Mac from "effect/crypto/Mac";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
+import * as Hex from "effect/encoding/Hex";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -31,6 +41,7 @@ const SERVICE_START_POLL_INTERVAL = Duration.millis(200);
 const COMMAND_TIMEOUT = Duration.seconds(15);
 const P0D_READY_FILE_NAME = "p0d-ready.json";
 const LEGACY_SERVICE_READY_FILE_NAME = "p0d-legacy-service.json";
+const LEGACY_SERVICE_SECRETS_FILE_NAME = "p0d-legacy-service-secrets.json";
 
 const { logWarning: logServiceWarning } =
   DesktopObservability.makeComponentLogger("desktop-backend-service");
@@ -79,6 +90,8 @@ export interface BackendServiceInfo {
 export interface BackendServiceDriver {
   readonly kind: "p0d" | "legacy-node";
   readonly binaryPath: string | null;
+  /** Derives the desktop's sign-in tokens; null when the service cannot accept them. */
+  readonly desktopBootstrapSecret: string | null;
   readonly status: Effect.Effect<BackendServiceInfo>;
   readonly ensureRunning: Effect.Effect<BackendServiceInfo, BackendServiceDriverError>;
   readonly start: Effect.Effect<BackendServiceInfo, BackendServiceDriverError>;
@@ -608,6 +621,7 @@ export function makeP0dServiceDriver(input: MakeP0dServiceDriverInput): BackendS
   return {
     kind: "p0d",
     binaryPath: input.binaryPath,
+    desktopBootstrapSecret: null,
     status: probeStatus,
     ensureRunning,
     start,
@@ -615,6 +629,95 @@ export function makeP0dServiceDriver(input: MakeP0dServiceDriverInput): BackendS
     restart,
   };
 }
+
+/** Persisted so a relaunched GUI can prove and sign in to the service an earlier launch started. */
+export interface LocalServiceSecrets {
+  readonly bootstrapSecret: string;
+  readonly readinessSecret: string;
+}
+
+const LocalServiceSecretsSchema = Schema.Struct({
+  bootstrapSecret: Schema.String,
+  readinessSecret: Schema.String,
+});
+const decodeLocalServiceSecretsJson = Schema.decodeUnknownOption(
+  Schema.fromJsonString(LocalServiceSecretsSchema),
+);
+const encodeLocalServiceSecretsJson = Schema.encodeEffect(
+  Schema.fromJsonString(LocalServiceSecretsSchema),
+);
+const LOCAL_SERVICE_SECRET_PATTERN = /^[0-9a-f]{64}$/;
+
+export const readOrCreateLocalServiceSecrets = Effect.fn(
+  "desktop.backendService.readOrCreateLocalServiceSecrets",
+)(function* (input: {
+  readonly fileSystem: FileSystem.FileSystem;
+  readonly random: SecureRandom.SecureRandom["Service"];
+  readonly stateDir: string;
+  readonly secretsPath: string;
+}) {
+  const existing = yield* input.fileSystem.readFileString(input.secretsPath).pipe(
+    Effect.map(decodeLocalServiceSecretsJson),
+    Effect.orElseSucceed(() => Option.none<LocalServiceSecrets>()),
+  );
+  if (
+    Option.isSome(existing) &&
+    LOCAL_SERVICE_SECRET_PATTERN.test(existing.value.bootstrapSecret) &&
+    LOCAL_SERVICE_SECRET_PATTERN.test(existing.value.readinessSecret)
+  ) {
+    return existing.value;
+  }
+  const secrets: LocalServiceSecrets = {
+    bootstrapSecret: Hex.encode(yield* input.random.randomBytes(32).pipe(Effect.orDie)),
+    readinessSecret: Hex.encode(yield* input.random.randomBytes(32).pipe(Effect.orDie)),
+  };
+  yield* encodeLocalServiceSecretsJson(secrets).pipe(
+    Effect.flatMap((encoded) =>
+      input.fileSystem
+        .makeDirectory(input.stateDir, { recursive: true })
+        .pipe(
+          Effect.andThen(
+            input.fileSystem.writeFileString(input.secretsPath, `${encoded}\n`, { mode: 0o600 }),
+          ),
+        ),
+    ),
+    Effect.catch((cause) =>
+      logServiceWarning("could not persist the local service secrets", { cause }),
+    ),
+  );
+  return secrets;
+});
+
+/** True only for the backend holding `readinessSecret`, never for another app on the same port. */
+export const proveLocalServiceIdentity = Effect.fn(
+  "desktop.backendService.proveLocalServiceIdentity",
+)(function* (
+  input: {
+    readonly httpClient: HttpClient.HttpClient;
+    readonly mac: Mac.Mac["Service"];
+    readonly random: SecureRandom.SecureRandom["Service"];
+    readonly readinessSecret: string;
+  },
+  baseUrl: URL,
+): Effect.fn.Return<boolean> {
+  const challenge = Hex.encode(yield* input.random.randomBytes(16).pipe(Effect.orDie));
+  const proofUrl = new URL(
+    `${DESKTOP_READINESS_PROOF_PATH}?${DESKTOP_READINESS_CHALLENGE_PARAM}=${challenge}`,
+    baseUrl,
+  );
+  const body = yield* input.httpClient.execute(HttpClientRequest.get(proofUrl)).pipe(
+    Effect.flatMap((response) => (response.status === 200 ? response.text : Effect.succeed(""))),
+    Effect.timeoutOption(HEALTH_PROBE_TIMEOUT),
+    Effect.map((result) => Option.getOrElse(result, () => "")),
+    Effect.orElseSucceed(() => ""),
+  );
+  if (body.length === 0) return false;
+  return yield* isValidDesktopReadinessProof(input.readinessSecret, challenge, body).pipe(
+    Effect.provideService(Mac.Mac, input.mac),
+  );
+});
+
+const encodeBootstrapJson = Schema.encodeEffect(Schema.fromJsonString(DesktopBackendBootstrap));
 
 export interface MakeLegacyNodeServiceDriverInput {
   readonly executablePath: string;
@@ -624,11 +727,16 @@ export interface MakeLegacyNodeServiceDriverInput {
   readonly baseDir: string;
   readonly readyFilePath: string;
   readonly host: string;
-  readonly port: number;
+  readonly preferredPort: number;
   readonly version: string;
+  readonly secrets: LocalServiceSecrets;
   readonly fileSystem: FileSystem.FileSystem;
   readonly spawner: ChildProcessSpawner.ChildProcessSpawner["Service"];
   readonly httpClient: HttpClient.HttpClient;
+  readonly mac: Mac.Mac["Service"];
+  readonly random: SecureRandom.SecureRandom["Service"];
+  /** Returns the preferred port when free, else another free one. */
+  readonly pickPort: (preferred: number) => Effect.Effect<number, BackendServiceDriverError>;
   readonly killProcess?: (pid: number) => Effect.Effect<void>;
   readonly waitTimeout?: Duration.Duration;
   readonly pollInterval?: Duration.Duration;
@@ -651,25 +759,40 @@ const defaultKillProcess = (pid: number): Effect.Effect<void> =>
 export function makeLegacyNodeServiceDriver(
   input: MakeLegacyNodeServiceDriverInput,
 ): BackendServiceDriver {
-  const defaultUrl = new URL(`http://${input.host}:${input.port}`);
   const killProcess = input.killProcess ?? defaultKillProcess;
   const waitTimeout = input.waitTimeout ?? SERVICE_START_WAIT_TIMEOUT;
   const pollInterval = input.pollInterval ?? SERVICE_START_POLL_INTERVAL;
+  const provesIdentity = (url: URL) =>
+    proveLocalServiceIdentity(
+      {
+        httpClient: input.httpClient,
+        mac: input.mac,
+        random: input.random,
+        readinessSecret: input.secrets.readinessSecret,
+      },
+      url,
+    );
+
+  // Only the ready file names our service; probing a default port would adopt any server there.
+  const readOwnService = Effect.gen(function* () {
+    const readyFile = yield* readReadyFileFromDisk(input.fileSystem, input.readyFilePath);
+    const url = parseUrlOrNull(readyFile?.url ?? null);
+    if (url === null || !(yield* provesIdentity(url))) {
+      return Option.none<{ readonly url: URL; readonly readyFile: BackendReadyFileData | null }>();
+    }
+    return Option.some({ url, readyFile });
+  });
 
   const probeStatus: Effect.Effect<BackendServiceInfo> = Effect.gen(function* () {
-    const readyFile = yield* readReadyFileFromDisk(input.fileSystem, input.readyFilePath);
-    const candidateUrl = parseUrlOrNull(readyFile?.url ?? null) ?? defaultUrl;
-    const healthy = yield* probeBackendHealth(input.httpClient, candidateUrl, {
-      allowLegacyWellKnown: true,
-    });
+    const own = yield* readOwnService;
     return {
-      running: healthy,
+      running: Option.isSome(own),
       installed: yield* input.fileSystem
         .exists(input.entryPath)
         .pipe(Effect.orElseSucceed(() => false)),
-      pid: healthy ? (readyFile?.pid ?? null) : null,
-      version: readyFile?.version ?? input.version,
-      url: healthy ? candidateUrl : null,
+      pid: Option.isSome(own) ? (own.value.readyFile?.pid ?? null) : null,
+      version: Option.isSome(own) ? (own.value.readyFile?.version ?? input.version) : input.version,
+      url: Option.isSome(own) ? own.value.url : null,
       binaryPath: input.entryPath,
       managedByService: true,
       driverKind: "legacy-node",
@@ -688,6 +811,31 @@ export function makeLegacyNodeServiceDriver(
         });
       }
 
+      const port = yield* input.pickPort(input.preferredPort);
+      const url = new URL(`http://${input.host}:${port}`);
+      const bootstrapJson = yield* encodeBootstrapJson({
+        mode: "desktop",
+        noBrowser: true,
+        port,
+        t3Home: input.baseDir,
+        host: input.host,
+        // Unused: the secret derives rotating tokens instead of seeding this one.
+        desktopBootstrapToken: "",
+        desktopBootstrapSecret: input.secrets.bootstrapSecret,
+        desktopReadinessSecret: input.secrets.readinessSecret,
+        tailscaleServeEnabled: false,
+        tailscaleServePort: 443,
+      }).pipe(
+        Effect.mapError(
+          (cause) =>
+            new BackendServiceDriverError({
+              operation: "start",
+              message: "Failed to encode the local service bootstrap payload.",
+              cause,
+            }),
+        ),
+      );
+
       const pid = yield* Effect.scoped(
         Effect.gen(function* () {
           const handle = yield* input.spawner
@@ -696,11 +844,16 @@ export function makeLegacyNodeServiceDriver(
                 input.executablePath,
                 [
                   input.entryPath,
+                  // Web mode: a desktop-mode server exits when its launcher (this GUI) does.
+                  "--mode",
+                  "web",
                   "--no-browser",
                   "--host",
                   input.host,
                   "--port",
-                  String(input.port),
+                  String(port),
+                  "--bootstrap-fd",
+                  "0",
                 ],
                 {
                   cwd: input.cwd,
@@ -709,9 +862,11 @@ export function makeLegacyNodeServiceDriver(
                     ELECTRON_RUN_AS_NODE: "1",
                     P0D_HOME: input.baseDir,
                     T3CODE_HOME: input.baseDir,
+                    // Web mode would otherwise add the app bundle directory as a project.
+                    T3CODE_AUTO_BOOTSTRAP_PROJECT_FROM_CWD: "false",
                   },
                   extendEnv: true,
-                  stdin: "ignore",
+                  stdin: Stream.encodeText(Stream.make(`${bootstrapJson}\n`)),
                   stdout: "ignore",
                   stderr: "ignore",
                 },
@@ -727,17 +882,33 @@ export function makeLegacyNodeServiceDriver(
                   }),
               ),
             );
+          const ready = provesIdentity(url).pipe(
+            Effect.repeat({ until: (ok) => ok, schedule: Schedule.spaced(pollInterval) }),
+            Effect.timeoutOption(waitTimeout),
+            Effect.map((result) =>
+              Option.isSome(result)
+                ? null
+                : `Timed out waiting for the legacy Node backend at ${url.href}.`,
+            ),
+          );
+          const exited = handle.exitCode.pipe(
+            Effect.map((code) => `The legacy Node backend exited with code ${Number(code)}.`),
+            Effect.orElseSucceed(() => "The legacy Node backend exited."),
+          );
+          const failure = yield* Effect.raceFirst(ready, exited);
+          if (failure !== null) {
+            // Still referenced, so closing the scope stops the half-started process.
+            return yield* new BackendServiceDriverError({
+              operation: "waitForReady",
+              message: failure,
+            });
+          }
           yield* handle.unref.pipe(Effect.ignore);
           return Number(handle.pid);
         }),
       );
 
-      yield* encodeReadyFileJson({
-        pid,
-        port: input.port,
-        url: defaultUrl.href,
-        version: input.version,
-      }).pipe(
+      yield* encodeReadyFileJson({ pid, port, url: url.href, version: input.version }).pipe(
         Effect.flatMap((encoded) =>
           input.fileSystem
             .makeDirectory(input.stateDir, { recursive: true })
@@ -748,28 +919,12 @@ export function makeLegacyNodeServiceDriver(
         Effect.ignore,
       );
 
-      const becameHealthy = yield* probeBackendHealth(input.httpClient, defaultUrl, {
-        allowLegacyWellKnown: true,
-      }).pipe(
-        Effect.repeat({
-          until: (ok) => ok,
-          schedule: Schedule.spaced(pollInterval),
-        }),
-        Effect.timeoutOption(waitTimeout),
-      );
-      if (Option.isNone(becameHealthy) || !becameHealthy.value) {
-        return yield* new BackendServiceDriverError({
-          operation: "waitForHealthz",
-          message: `Timed out waiting for legacy Node backend at ${defaultUrl.href}.`,
-        });
-      }
-
       return {
         running: true,
         installed: true,
         pid,
         version: input.version,
-        url: defaultUrl,
+        url,
         binaryPath: input.entryPath,
         managedByService: true,
         driverKind: "legacy-node",
@@ -788,9 +943,11 @@ export function makeLegacyNodeServiceDriver(
   );
 
   const stop: Effect.Effect<void, BackendServiceDriverError> = Effect.gen(function* () {
-    const readyFile = yield* readReadyFileFromDisk(input.fileSystem, input.readyFilePath);
-    if (readyFile?.pid !== null && readyFile?.pid !== undefined) {
-      yield* killProcess(readyFile.pid);
+    const own = yield* readOwnService;
+    // A dead service's recorded pid may since belong to an unrelated process.
+    const pid = Option.isSome(own) ? (own.value.readyFile?.pid ?? null) : null;
+    if (pid !== null) {
+      yield* killProcess(pid);
     }
     yield* input.fileSystem.remove(input.readyFilePath, { force: true }).pipe(Effect.ignore);
   });
@@ -805,6 +962,7 @@ export function makeLegacyNodeServiceDriver(
   return {
     kind: "legacy-node",
     binaryPath: input.entryPath,
+    desktopBootstrapSecret: input.secrets.bootstrapSecret,
     status: probeStatus,
     ensureRunning,
     start,
@@ -820,6 +978,14 @@ export class DesktopBackendService extends Context.Service<
     readonly resolveEffectiveMode: Effect.Effect<DesktopBackendMode>;
     readonly findP0dBinary: Effect.Effect<Option.Option<string>>;
     readonly resolveServiceDriver: Effect.Effect<BackendServiceDriver>;
+    /**
+     * Brings an external backend up before any window loads; if it cannot serve the desktop,
+     * switches this install back to legacy-embedded and says why.
+     */
+    readonly prepareSelectedBackend: Effect.Effect<{
+      readonly mode: DesktopBackendMode;
+      readonly fallbackReason: string | null;
+    }>;
     readonly getStatus: (input: {
       readonly embeddedReady: boolean;
       readonly embeddedDesiredRunning: boolean;
@@ -842,6 +1008,17 @@ export const make = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const httpClient = yield* HttpClient.HttpClient;
+  const mac = yield* Mac.Mac;
+  const random = yield* SecureRandom.SecureRandom;
+  const net = yield* NetService.NetService;
+  const localServiceSecrets = yield* Effect.cached(
+    readOrCreateLocalServiceSecrets({
+      fileSystem,
+      random,
+      stateDir: environment.stateDir,
+      secretsPath: environment.path.join(environment.stateDir, LEGACY_SERVICE_SECRETS_FILE_NAME),
+    }),
+  );
 
   const firstExistingPath = Effect.fn("desktop.backendService.firstExistingPath")(function* (
     candidates: readonly string[],
@@ -927,13 +1104,63 @@ export const make = Effect.gen(function* () {
       baseDir: environment.baseDir,
       readyFilePath: environment.path.join(environment.stateDir, LEGACY_SERVICE_READY_FILE_NAME),
       host: DEFAULT_SERVICE_HOST,
-      port: defaultPort,
+      preferredPort: defaultPort,
       version: environment.appVersion,
+      secrets: yield* localServiceSecrets,
       fileSystem,
       spawner,
       httpClient,
+      mac,
+      random,
+      pickPort: (preferred) =>
+        net.findAvailablePort(preferred, DEFAULT_SERVICE_HOST).pipe(
+          Effect.mapError(
+            (cause) =>
+              new BackendServiceDriverError({
+                operation: "pickPort",
+                message: "No free port for the local backend service.",
+                cause,
+              }),
+          ),
+        ),
     });
   });
+
+  const externalBackendFailure = Effect.fn("desktop.backendService.externalBackendFailure")(
+    function* (mode: DesktopBackendMode): Effect.fn.Return<string | null> {
+      if (mode === "remote") {
+        return "Remote backend mode can't sign this app in yet: there is no way to give it a pairing credential for the remote server.";
+      }
+      if (mode !== "local-service") return null;
+      const driver = yield* resolveServiceDriver;
+      if (driver.desktopBootstrapSecret === null) {
+        return `The ${driver.kind} backend service can't sign this app in yet.`;
+      }
+      return yield* driver.ensureRunning.pipe(
+        Effect.as(null),
+        Effect.catch((error) => Effect.succeed(error.message)),
+      );
+    },
+  );
+
+  const prepareSelectedBackend: DesktopBackendService["Service"]["prepareSelectedBackend"] =
+    Effect.gen(function* () {
+      const mode = yield* resolveEffectiveMode;
+      const fallbackReason = yield* externalBackendFailure(mode);
+      if (fallbackReason === null) return { mode, fallbackReason };
+      yield* logServiceWarning("selected backend mode failed; falling back to legacy-embedded", {
+        mode,
+        reason: fallbackReason,
+      });
+      yield* appSettings.setBackendConfig({ mode: "legacy-embedded" }).pipe(
+        Effect.catch((error) =>
+          logServiceWarning("failed to persist the legacy-embedded fallback", {
+            error: error.message,
+          }).pipe(Effect.andThen(appSettings.applyBuiltInBackendFallbackInMemory)),
+        ),
+      );
+      return { mode: "legacy-embedded" as const, fallbackReason };
+    }).pipe(Effect.withSpan("desktop.backendService.prepareSelectedBackend"));
 
   const getStatus: DesktopBackendService["Service"]["getStatus"] = Effect.fn(
     "desktop.backendService.getStatus",
@@ -1052,6 +1279,7 @@ export const make = Effect.gen(function* () {
     resolveEffectiveMode,
     findP0dBinary,
     resolveServiceDriver,
+    prepareSelectedBackend,
     getStatus,
     updateConfig,
     controlService,
@@ -1070,6 +1298,7 @@ export const layerTest = (
       resolveEffectiveMode: Effect.succeed("legacy-embedded"),
       findP0dBinary: Effect.succeedNone,
       resolveServiceDriver: Effect.die("DesktopBackendService.layerTest resolveServiceDriver"),
+      prepareSelectedBackend: Effect.succeed({ mode: "legacy-embedded", fallbackReason: null }),
       getStatus: Effect.fn("DesktopBackendService.getStatus")(function () {
         return Effect.succeed({
           mode: "legacy-embedded" as const,

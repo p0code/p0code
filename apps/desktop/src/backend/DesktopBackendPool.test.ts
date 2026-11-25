@@ -191,7 +191,7 @@ function layerPool(
               : Effect.die("unexpected primary config resolve")),
           resolvePrimaryLabel: Ref.get(labelRef),
           resolveWsl: () => Effect.die("unexpected WSL config resolve"),
-          currentBootstrapToken: Effect.die("unexpected bootstrap token read"),
+          currentBootstrapToken: () => Effect.die("unexpected bootstrap token read"),
         } satisfies DesktopBackendConfiguration.DesktopBackendConfiguration["Service"]),
         DesktopAppSettings.layerTest(),
         DesktopState.layer,

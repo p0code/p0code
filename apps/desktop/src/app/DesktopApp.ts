@@ -231,7 +231,16 @@ const startLocalBackend = Effect.gen(function* () {
   const primaryBackend = yield* (yield* DesktopBackendPool.DesktopBackendPool).primary;
   const serverExposure = yield* DesktopServerExposure.DesktopServerExposure;
   const backendService = yield* DesktopBackendService.DesktopBackendService;
-  const effectiveBackendMode = yield* backendService.resolveEffectiveMode;
+  if (yield* offerT3Import()) return false;
+  // Before any window: an external backend the app can't use would only show a dead-end error.
+  const selectedBackend = yield* backendService.prepareSelectedBackend;
+  if (selectedBackend.fallbackReason !== null) {
+    yield* (yield* ElectronDialog.ElectronDialog).showErrorBox(
+      m(msg("The selected backend couldn't start")),
+      `${selectedBackend.fallbackReason}\n\n${m(msg("Switched back to the built-in backend so the app can open. You can choose another backend again in Settings."))}`,
+    );
+  }
+  const effectiveBackendMode = selectedBackend.mode;
   const isExternalMode = DesktopBackendService.isExternalBackendMode(effectiveBackendMode);
 
   if (
@@ -241,8 +250,6 @@ const startLocalBackend = Effect.gen(function* () {
   ) {
     return yield* new DesktopDevelopmentBackendPortRequiredError();
   }
-
-  if (yield* offerT3Import()) return false;
   if (!isExternalMode) {
     yield* DesktopBackendPool.recoverLocalBackend;
     // A backend started while another server holds this home's lock can only exit with code 78.

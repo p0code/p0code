@@ -1,5 +1,7 @@
 {
   "743bb98558dcdddf": "T3 Code no pudo iniciarse",
+  "d4941338b5cbc767": "No se pudo iniciar el backend seleccionado",
+  "e1608a589d8320d4": "Se volvió al backend integrado para que la app pueda abrirse. Puedes elegir otro backend de nuevo en Ajustes.",
   "45e444e807bececb": "Este directorio de T3 no está disponible",
   "97665653aa9129ad": "Buscando una versión más reciente…",
   "dce25e68e60eb512": "La versión {version} está disponible. Puede incluir una corrección.",

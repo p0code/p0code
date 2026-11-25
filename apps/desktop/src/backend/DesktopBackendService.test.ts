@@ -1,4 +1,12 @@
 import { assert, describe, it } from "@effect/vitest";
+import {
+  DESKTOP_READINESS_CHALLENGE_PARAM,
+  DESKTOP_READINESS_PROOF_PATH,
+  desktopReadinessProof,
+} from "@t3tools/shared/desktopReadinessProof";
+import * as NetService from "@t3tools/shared/Net";
+import * as Mac from "effect/crypto/Mac";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Duration from "effect/Duration";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeHttpClient from "@effect/platform-node/NodeHttpClient";
@@ -6,11 +14,12 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as FileSystem from "effect/FileSystem";
 import * as Ref from "effect/Ref";
 import * as Sink from "effect/Sink";
 import * as Stream from "effect/Stream";
-import { HttpClient, HttpClientResponse } from "effect/http";
+import { HttpClient, HttpClientResponse, UrlParams } from "effect/http";
 import { ChildProcessSpawner } from "effect/process";
 
 import * as DesktopBackendService from "./DesktopBackendService.ts";
@@ -23,6 +32,7 @@ function makeProcessHandle(options: {
   readonly exitCode?: number;
   readonly stdout?: string;
   readonly stderr?: string;
+  readonly running?: boolean;
   readonly onUnref?: () => void;
 }): ChildProcessSpawner.ChildProcessHandle {
   const encoder = new TextEncoder();
@@ -31,8 +41,10 @@ function makeProcessHandle(options: {
     stdout: options.stdout ? Stream.make(encoder.encode(options.stdout)) : Stream.empty,
     stderr: options.stderr ? Stream.make(encoder.encode(options.stderr)) : Stream.empty,
     all: Stream.empty,
-    exitCode: Effect.succeed(ChildProcessSpawner.ExitCode(options.exitCode ?? 0)),
-    isRunning: Effect.succeed(false),
+    exitCode: options.running
+      ? Effect.never
+      : Effect.succeed(ChildProcessSpawner.ExitCode(options.exitCode ?? 0)),
+    isRunning: Effect.succeed(options.running ?? false),
     kill: () => Effect.void,
     stdin: Sink.drain,
     getInputFd: () => Sink.drain,
@@ -314,13 +326,117 @@ describe("makeP0dServiceDriver", () => {
   );
 });
 
-describe("makeLegacyNodeServiceDriver", () => {
-  it.effect("starts Node server detached and supports stop via PID file", () =>
+const SERVICE_SECRETS: DesktopBackendService.LocalServiceSecrets = {
+  bootstrapSecret: "b0".repeat(32),
+  readinessSecret: "c0".repeat(32),
+};
+
+/** Loopback ports: one held by another app (stock T3 Code), others by servers this test spawns. */
+function makeLoopbackWorld(mac: Mac.Mac["Service"]) {
+  const servers = new Map<number, { readonly readinessSecret: string | null }>([
+    [3773, { readinessSecret: null }],
+  ]);
+  const httpClient = HttpClient.make((request) =>
     Effect.gen(function* () {
-      const runningRef = yield* Ref.make(false);
+      const url = new URL(request.url);
+      const server = servers.get(Number(url.port));
+      if (server === undefined) {
+        return yield* Effect.fail(new Error("connection refused") as never);
+      }
+      if (url.pathname !== DESKTOP_READINESS_PROOF_PATH) {
+        // The foreign server is healthy too, which is how it used to get adopted.
+        return HttpClientResponse.fromWeb(request, new Response("ok", { status: 200 }));
+      }
+      if (server.readinessSecret === null) {
+        return HttpClientResponse.fromWeb(request, new Response(null, { status: 404 }));
+      }
+      const proof = yield* desktopReadinessProof(
+        server.readinessSecret,
+        Option.getOrElse(
+          UrlParams.getFirst(request.urlParams, DESKTOP_READINESS_CHALLENGE_PARAM),
+          () => "",
+        ),
+      ).pipe(Effect.provideService(Mac.Mac, mac));
+      return HttpClientResponse.fromWeb(request, new Response(proof, { status: 200 }));
+    }),
+  );
+  return { servers, httpClient };
+}
+
+function makeMemoryFileSystem() {
+  const files = new Map<string, string>();
+  const fileSystem = FileSystem.makeNoop({
+    exists: () => Effect.succeed(true),
+    makeDirectory: () => Effect.void,
+    writeFileString: (path, content) =>
+      Effect.sync(() => {
+        files.set(path, content);
+      }),
+    readFileString: (path) => {
+      const content = files.get(path);
+      return content === undefined
+        ? Effect.fail(new Error("missing") as never)
+        : Effect.succeed(content);
+    },
+    remove: (path) =>
+      Effect.sync(() => {
+        files.delete(path);
+      }),
+  });
+  return { files, fileSystem };
+}
+
+const legacyDriverInput = {
+  executablePath: "/electron",
+  entryPath: "/app/apps/server/dist/bin.mjs",
+  cwd: "/app",
+  stateDir: "/tmp/p0code/userdata",
+  baseDir: "/tmp/p0code",
+  readyFilePath: "/tmp/p0code/userdata/p0d-legacy-service.json",
+  host: "127.0.0.1",
+  preferredPort: 3773,
+  version: "0.1.11",
+  secrets: SERVICE_SECRETS,
+  pickPort: (preferred: number) => Effect.succeed(preferred === 3773 ? 51234 : preferred),
+  waitTimeout: Duration.seconds(2),
+  pollInterval: Duration.millis(10),
+};
+
+describe("makeLegacyNodeServiceDriver", () => {
+  it.effect("does not adopt another app's server on the default port", () =>
+    Effect.gen(function* () {
+      const mac = yield* Mac.Mac;
+      const random = yield* SecureRandom.SecureRandom;
+      const world = makeLoopbackWorld(mac);
+      const { fileSystem } = makeMemoryFileSystem();
+      const driver = DesktopBackendService.makeLegacyNodeServiceDriver({
+        ...legacyDriverInput,
+        fileSystem,
+        spawner: ChildProcessSpawner.make(() => Effect.die("status must not spawn")),
+        httpClient: world.httpClient,
+        mac,
+        random,
+      });
+
+      const status = yield* driver.status;
+      assert.equal(status.running, false);
+      assert.equal(status.url, null);
+    }).pipe(Effect.provide(NodeCrypto.layer)),
+  );
+
+  it.effect("starts its own signed-in service beside a foreign server, then reattaches", () =>
+    Effect.gen(function* () {
+      const mac = yield* Mac.Mac;
+      const random = yield* SecureRandom.SecureRandom;
+      const world = makeLoopbackWorld(mac);
+      const { fileSystem } = makeMemoryFileSystem();
       let unreffed = false;
+      const spawned: Array<{
+        readonly args: ReadonlyArray<string>;
+        readonly bootstrap: Record<string, unknown>;
+        readonly env: Record<string, string | undefined>;
+      }> = [];
       const killedPids: number[] = [];
-      let readyFileContent: string | null = null;
 
       const spawner = ChildProcessSpawner.make((command) =>
         Effect.gen(function* () {
@@ -328,9 +444,22 @@ describe("makeLegacyNodeServiceDriver", () => {
             return yield* Effect.die("expected StandardCommand");
           }
           assert.equal(command.options.detached, true);
-          yield* Ref.set(runningRef, true);
+          const stdin = command.options.stdin;
+          const bootstrapText = Stream.isStream(stdin)
+            ? yield* stdin.pipe(Stream.decodeText(), Stream.mkString, Effect.orDie)
+            : "";
+          const bootstrap = JSON.parse(bootstrapText) as Record<string, unknown>;
+          const args = command.args.map(String);
+          spawned.push({
+            args,
+            bootstrap,
+            env: (command.options.env ?? {}) as Record<string, string | undefined>,
+          });
+          const port = Number(args[args.indexOf("--port") + 1]);
+          world.servers.set(port, { readinessSecret: String(bootstrap.desktopReadinessSecret) });
           return makeProcessHandle({
             pid: 5511,
+            running: true,
             onUnref: () => {
               unreffed = true;
             },
@@ -338,64 +467,76 @@ describe("makeLegacyNodeServiceDriver", () => {
         }),
       );
 
-      const httpClient = HttpClient.make((request) =>
-        Ref.get(runningRef).pipe(
-          Effect.map((running) =>
-            HttpClientResponse.fromWeb(
-              request,
-              new Response(null, { status: running ? 200 : 503 }),
-            ),
-          ),
-        ),
-      );
-
-      const fileSystem = FileSystem.makeNoop({
-        exists: () => Effect.succeed(true),
-        makeDirectory: () => Effect.void,
-        writeFileString: (_path, content) =>
-          Effect.sync(() => {
-            readyFileContent = content;
-          }),
-        readFileString: () =>
-          readyFileContent === null
-            ? Effect.fail(new Error("missing") as never)
-            : Effect.succeed(readyFileContent),
-        remove: () =>
-          Effect.sync(() => {
-            readyFileContent = null;
-          }),
-      });
-
-      const driver = DesktopBackendService.makeLegacyNodeServiceDriver({
-        executablePath: "/electron",
-        entryPath: "/app/apps/server/dist/bin.mjs",
-        cwd: "/app",
-        stateDir: "/tmp/p0code/userdata",
-        baseDir: "/tmp/p0code",
-        readyFilePath: "/tmp/p0code/userdata/p0d-legacy-service.json",
-        host: "127.0.0.1",
-        port: 3773,
-        version: "0.1.11",
-        fileSystem,
-        spawner,
-        httpClient,
-        killProcess: (pid) =>
-          Effect.sync(() => {
-            killedPids.push(pid);
-          }).pipe(Effect.andThen(Ref.set(runningRef, false))),
-        waitTimeout: Duration.seconds(2),
-        pollInterval: Duration.millis(10),
-      });
+      const makeDriver = () =>
+        DesktopBackendService.makeLegacyNodeServiceDriver({
+          ...legacyDriverInput,
+          fileSystem,
+          spawner,
+          httpClient: world.httpClient,
+          mac,
+          random,
+          killProcess: (pid) =>
+            Effect.sync(() => {
+              killedPids.push(pid);
+            }),
+        });
+      const driver = makeDriver();
 
       const started = yield* driver.ensureRunning;
       assert.equal(started.running, true);
-      assert.equal(started.driverKind, "legacy-node");
       assert.equal(started.pid, 5511);
+      assert.equal(started.url?.href, "http://127.0.0.1:51234/");
+      assert.equal(driver.desktopBootstrapSecret, SERVICE_SECRETS.bootstrapSecret);
       assert.equal(unreffed, true);
+      assert.equal(spawned.length, 1);
+      const launch = spawned[0]!;
+      assert.deepEqual(launch.args.slice(1, 4), ["--mode", "web", "--no-browser"]);
+      assert.includeMembers([...launch.args], ["--bootstrap-fd", "0", "--port", "51234"]);
+      assert.equal(launch.bootstrap.desktopBootstrapSecret, SERVICE_SECRETS.bootstrapSecret);
+      assert.equal(launch.bootstrap.desktopReadinessSecret, SERVICE_SECRETS.readinessSecret);
+      assert.equal(launch.env.T3CODE_AUTO_BOOTSTRAP_PROJECT_FROM_CWD, "false");
+
+      // A relaunched GUI finds the same service through the ready file and its proof.
+      const reattached = yield* makeDriver().ensureRunning;
+      assert.equal(reattached.url?.href, "http://127.0.0.1:51234/");
+      assert.equal(spawned.length, 1);
 
       yield* driver.stop;
       assert.deepEqual(killedPids, [5511]);
-    }),
+    }).pipe(Effect.provide(NodeCrypto.layer)),
+  );
+
+  it.effect("fails fast and keeps nothing when the service exits during startup", () =>
+    Effect.gen(function* () {
+      const mac = yield* Mac.Mac;
+      const random = yield* SecureRandom.SecureRandom;
+      const world = makeLoopbackWorld(mac);
+      const { files, fileSystem } = makeMemoryFileSystem();
+      let unreffed = false;
+      const driver = DesktopBackendService.makeLegacyNodeServiceDriver({
+        ...legacyDriverInput,
+        waitTimeout: Duration.minutes(5),
+        fileSystem,
+        spawner: ChildProcessSpawner.make(() =>
+          Effect.succeed(
+            makeProcessHandle({
+              exitCode: 78,
+              onUnref: () => {
+                unreffed = true;
+              },
+            }),
+          ),
+        ),
+        httpClient: world.httpClient,
+        mac,
+        random,
+      });
+
+      const error = yield* driver.ensureRunning.pipe(Effect.flip);
+      assert.include(error.message, "exited with code 78");
+      assert.equal(unreffed, false);
+      assert.equal(files.has(legacyDriverInput.readyFilePath), false);
+    }).pipe(Effect.provide(NodeCrypto.layer)),
   );
 });
 
@@ -403,47 +544,107 @@ describe("makeLegacyNodeServiceDriver", () => {
 // oxlint-disable-next-line t3code/no-manual-effect-runtime-in-tests -- asserts the effect completes synchronously
 const runLikeSyncIpc = <A>(effect: Effect.Effect<A>) => Effect.runSyncExit(effect);
 
+const layerService = (baseDir: string, settings: DesktopAppSettings.DesktopSettings) =>
+  DesktopBackendService.layer.pipe(
+    Layer.provideMerge(
+      Layer.mergeAll(
+        DesktopEnvironment.layer({
+          dirname: "/repo/apps/desktop/src",
+          homeDirectory: baseDir,
+          platform: "darwin",
+          processArch: "arm64",
+          appVersion: "1.2.3",
+          appPath: "/repo",
+          isPackaged: true,
+          resourcesPath: "/missing/resources",
+          runningUnderArm64Translation: false,
+        }).pipe(
+          Layer.provide(
+            Layer.mergeAll(
+              NodeServices.layer,
+              NodeCrypto.layer,
+              DesktopConfig.layerTest({ T3CODE_HOME: baseDir }),
+            ),
+          ),
+        ),
+        DesktopAppSettings.layerTest(settings),
+        NodeServices.layer,
+        NodeCrypto.layer,
+        NetService.layer,
+        NodeHttpClient.layerUndici,
+      ),
+    ),
+  );
+
 describe("DesktopBackendService.layer", () => {
   it.effect("answers the backend mode synchronously for sync IPC handlers", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const baseDir = yield* fileSystem.makeTempDirectoryScoped();
       const service = yield* DesktopBackendService.DesktopBackendService.pipe(
-        Effect.provide(
-          DesktopBackendService.layer.pipe(
-            Layer.provide(
-              Layer.mergeAll(
-                DesktopEnvironment.layer({
-                  dirname: "/repo/apps/desktop/src",
-                  homeDirectory: baseDir,
-                  platform: "darwin",
-                  processArch: "arm64",
-                  appVersion: "1.2.3",
-                  appPath: "/repo",
-                  isPackaged: true,
-                  resourcesPath: "/missing/resources",
-                  runningUnderArm64Translation: false,
-                }).pipe(
-                  Layer.provide(
-                    Layer.mergeAll(
-                      NodeServices.layer,
-                      NodeCrypto.layer,
-                      DesktopConfig.layerTest({ T3CODE_HOME: baseDir }),
-                    ),
-                  ),
-                ),
-                DesktopAppSettings.layerTest(DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS),
-                NodeServices.layer,
-                NodeHttpClient.layerUndici,
-              ),
-            ),
-          ),
-        ),
+        Effect.provide(layerService(baseDir, DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS)),
       );
       assert.deepEqual(
         runLikeSyncIpc(service.resolveEffectiveMode),
         Exit.succeed("legacy-embedded"),
       );
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("falls back to legacy-embedded when the local service cannot start", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const baseDir = yield* fileSystem.makeTempDirectoryScoped();
+      const { result, settings } = yield* Effect.gen(function* () {
+        const service = yield* DesktopBackendService.DesktopBackendService;
+        const result = yield* service.prepareSelectedBackend;
+        const settings = yield* (yield* DesktopAppSettings.DesktopAppSettings).get;
+        return { result, settings };
+      }).pipe(
+        Effect.provide(
+          layerService(baseDir, {
+            ...DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS,
+            backendMode: "local-service",
+            backendModeConfiguredByUser: true,
+          }),
+        ),
+      );
+      // No server bundle in this environment, so the service can never come up.
+      assert.equal(result.mode, "legacy-embedded");
+      assert.include(result.fallbackReason ?? "", "Legacy server bundle not found");
+      assert.equal(settings.backendMode, "legacy-embedded");
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("refuses remote mode, which has no credential to sign the desktop in", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const baseDir = yield* fileSystem.makeTempDirectoryScoped();
+      const result = yield* Effect.gen(function* () {
+        return yield* (yield* DesktopBackendService.DesktopBackendService).prepareSelectedBackend;
+      }).pipe(
+        Effect.provide(
+          layerService(baseDir, {
+            ...DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS,
+            backendMode: "remote",
+            backendModeConfiguredByUser: true,
+            backendRemoteUrl: "http://127.0.0.1:1",
+          }),
+        ),
+      );
+      assert.equal(result.mode, "legacy-embedded");
+      assert.isNotNull(result.fallbackReason);
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("keeps legacy-embedded without touching any service", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const baseDir = yield* fileSystem.makeTempDirectoryScoped();
+      const result = yield* Effect.gen(function* () {
+        return yield* (yield* DesktopBackendService.DesktopBackendService).prepareSelectedBackend;
+      }).pipe(Effect.provide(layerService(baseDir, DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS)));
+      assert.deepEqual(result, { mode: "legacy-embedded", fallbackReason: null });
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
 });

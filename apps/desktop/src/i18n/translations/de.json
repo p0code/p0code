@@ -1,5 +1,7 @@
 {
   "743bb98558dcdddf": "T3 Code konnte nicht gestartet werden",
+  "d4941338b5cbc767": "Das gewählte Backend konnte nicht starten",
+  "e1608a589d8320d4": "Zurück zum integrierten Backend gewechselt, damit sich die App öffnen lässt. In den Einstellungen kannst du erneut ein anderes Backend wählen.",
   "45e444e807bececb": "Dieses T3-Home ist nicht verfügbar",
   "97665653aa9129ad": "Nach einer neueren Version wird gesucht…",
   "dce25e68e60eb512": "Version {version} ist verfügbar. Sie enthält möglicherweise eine Korrektur.",

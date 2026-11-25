@@ -996,6 +996,7 @@ describe("DesktopBackendManager", () => {
         serviceDriver: {
           kind: "p0d",
           binaryPath: "/usr/local/bin/p0d",
+          desktopBootstrapSecret: null,
           status: Effect.succeed({
             running: true,
             installed: true,

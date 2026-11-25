@@ -168,7 +168,11 @@ export const getLocalEnvironmentBootstraps = DesktopIpc.makeSyncIpcMethod({
         ...(!snapshot.ready
           ? {}
           : bootstrap.desktopBootstrapSecret
-            ? { bootstrapToken: yield* configuration.currentBootstrapToken }
+            ? {
+                bootstrapToken: yield* configuration.currentBootstrapToken(
+                  bootstrap.desktopBootstrapSecret,
+                ),
+              }
             : bootstrap.desktopBootstrapToken
               ? { bootstrapToken: bootstrap.desktopBootstrapToken }
               : {}),

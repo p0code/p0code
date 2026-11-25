@@ -86,7 +86,7 @@ const backendConfigurationLayer = Layer.succeed(
     resolvePrimary: Effect.die("unexpected resolvePrimary"),
     resolvePrimaryLabel: Effect.succeed("Windows"),
     resolveWsl: () => Effect.die("unexpected resolveWsl"),
-    currentBootstrapToken: Effect.succeed("current-window-token"),
+    currentBootstrapToken: () => Effect.succeed("current-window-token"),
   } satisfies DesktopBackendConfiguration.DesktopBackendConfiguration["Service"],
 );
 
