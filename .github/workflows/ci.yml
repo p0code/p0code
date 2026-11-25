@@ -5,6 +5,9 @@ on:
   push:
     branches:
       - main
+  # The mobile native lint below runs only when CI is dispatched; everything
+  # else stays on the PR and main-push paths.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -16,7 +19,8 @@ concurrency:
 jobs:
   # Skips jobs a pull request cannot affect: a web change does not run the
   # server shards, a server change does not run the mobile tests, and the macOS
-  # lint (~10x a Linux minute) runs only for native mobile sources.
+  # lint (~10x a Linux minute) runs only for native mobile sources and only when
+  # CI is dispatched by hand — this repo's mobile app is not the app that ships.
   # .github/scripts/ci-changes.cjs maps changed files to workspace packages and
   # their dependents. Pushes to main still run every Linux job. Detection fails
   # open: if the diff cannot be resolved, everything runs.
@@ -598,7 +602,7 @@ jobs:
   mobile_native_static_analysis:
     name: Mobile Native Static Analysis
     needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.mobile_native != 'false' }}
+    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && needs.changes.outputs.mobile_native != 'false' }}
     runs-on: macos-latest
     timeout-minutes: 20
     steps:
@@ -680,15 +684,17 @@ jobs:
       - name: Require every job to pass
         env:
           RESULTS: ${{ toJSON(needs) }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
           # A job may skip only when `changes` said every gate it represents was
-          # not needed. Gates are keyed by job name, except merged Build and the
-          # macOS lint.
-          echo "$RESULTS" | jq -e '.changes.outputs as $gates
+          # not needed. Gates are keyed by job name, except merged Build. The
+          # macOS mobile lint also skips on every run that is not dispatched.
+          echo "$RESULTS" | jq -e --arg event "$EVENT_NAME" '.changes.outputs as $gates
             | {build: ["build", "typecheck", "desktop_launch"], mobile_native_static_analysis: ["mobile_native"]} as $renamed
             | all(to_entries[];
                 .value.result == "success"
+                or (.key == "mobile_native_static_analysis" and $event != "workflow_dispatch")
                 or (.value.result == "skipped"
                   and (($renamed[.key] // [.key]) | all(.[]; $gates[.] == "false"))))' > /dev/null
 

@@ -33,8 +33,12 @@ relay.
 
 ## Mobile releases
 
-- **iOS TestFlight / App Store:** Merges to `main` publish compatible OTAs and build TestFlight prereleases (`testflight` profile at `3.0.0`). To cut an App Store build, dispatch **Mobile EAS Production** (`mode=build`, `profile=production`, `platform=ios`, explicit version). Before shipping `3.0.0` to the App Store, advance `build.testflight.env.T3CODE_MOBILE_VERSION` in `apps/mobile/eas.json` to the next unreleased major.
-- **Android APK mirror:** `.github/workflows/mobile-android-apk.yml` polls Google Play Alpha hourly and mirrors new Play-signed universal APKs to `android-beta-<build-number>` prereleases (`GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`). Nightlies attach the latest internal-testing APK when available.
+The app here is not the one that ships from the store, so nothing mobile runs on a
+push or a pull request: every mobile workflow is `workflow_dispatch` only, and the
+macOS mobile native lint in CI runs only when CI is dispatched.
+
+- **iOS TestFlight / App Store:** dispatch **Mobile EAS Production** (`mode=build`, `profile=production`, `platform=ios`, explicit version) to cut a build, or `mode=update` to publish an OTA. Before shipping `3.0.0` to the App Store, advance `build.testflight.env.T3CODE_MOBILE_VERSION` in `apps/mobile/eas.json` to the next unreleased major.
+- **Android APK mirror:** dispatch `.github/workflows/mobile-android-apk.yml` to check Google Play Alpha and mirror a new Play-signed universal APK to an `android-beta-<build-number>` prerelease (`GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`). Nightlies attach the latest internal-testing APK when available.
 
 ## Windows payload topology and update validation
 
