@@ -59,3 +59,42 @@ it("reads EAS and hosted app identities from repo env", async () => {
   ]);
   expect((config.extra?.eas as { projectId?: string } | undefined)?.projectId).toBe(projectId);
 });
+
+it("omits blank identity overrides", async () => {
+  const config = await loadConfig(undefined, {
+    T3CODE_EAS_OWNER: "   ",
+    T3CODE_EAS_PROJECT_ID: "",
+    T3CODE_MOBILE_UPDATES_URL: " ",
+    T3CODE_IOS_TEAM_ID: "",
+    T3CODE_MOBILE_HOSTED_APP_HOST: "   ",
+  });
+  expect(config.owner).toBeUndefined();
+  expect(config.updates).toBeUndefined();
+  expect(config.ios?.appleTeamId).toBeUndefined();
+  expect(config.ios?.associatedDomains).toBeUndefined();
+  expect((config.extra?.eas as { projectId?: string } | undefined)?.projectId).toBeUndefined();
+});
+
+it.each([
+  ["T3CODE_EAS_OWNER", "Not A Slug"],
+  ["T3CODE_EAS_PROJECT_ID", "not-a-uuid"],
+  ["T3CODE_IOS_TEAM_ID", "short"],
+  ["T3CODE_IOS_TEAM_ID", "abcde12345"],
+  ["T3CODE_MOBILE_HOSTED_APP_HOST", "https://app.example.com"],
+  ["T3CODE_MOBILE_HOSTED_APP_HOST", "app.example.com:443"],
+  ["T3CODE_MOBILE_UPDATES_URL", "not a url"],
+  ["T3CODE_MOBILE_UPDATES_URL", "http://u.expo.dev/11111111-2222-3333-4444-555555555555"],
+  ["T3CODE_MOBILE_UPDATES_URL", "https://expo.dev/11111111-2222-3333-4444-555555555555"],
+  ["T3CODE_MOBILE_UPDATES_URL", "https://u.expo.dev/"],
+])("rejects a malformed %s override", async (variable, value) => {
+  await expect(loadConfig(undefined, { [variable]: value })).rejects.toThrow(variable);
+});
+
+it("requires the update URL to name the configured EAS project", async () => {
+  await expect(
+    loadConfig(undefined, {
+      T3CODE_EAS_PROJECT_ID: "11111111-2222-3333-4444-555555555555",
+      T3CODE_MOBILE_UPDATES_URL: "https://u.expo.dev/99999999-8888-7777-6666-555555555555",
+    }),
+  ).rejects.toThrow("T3CODE_MOBILE_UPDATES_URL");
+});

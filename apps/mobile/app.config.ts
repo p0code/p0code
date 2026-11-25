@@ -22,13 +22,87 @@ const runtimeVersionPolicy =
   (APP_VARIANT === "development" ? "appVersion" : "fingerprint");
 
 const personalTeamBundleIdentifier = repoEnv.T3CODE_IOS_PERSONAL_TEAM_BUNDLE_ID?.trim();
-// Distribution identity is the fork's own. Supply a real Expo account or hosted app to opt in.
-const easOwner = repoEnv.T3CODE_EAS_OWNER?.trim();
-const easProjectId = repoEnv.T3CODE_EAS_PROJECT_ID?.trim();
-const updatesUrl = repoEnv.T3CODE_MOBILE_UPDATES_URL?.trim();
-const iosTeamId = repoEnv.T3CODE_IOS_TEAM_ID?.trim();
-const hostedAppHost = repoEnv.T3CODE_MOBILE_HOSTED_APP_HOST?.trim();
 const IOS_BUNDLE_IDENTIFIER_PATTERN = /^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/;
+const EAS_OWNER_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$/;
+const EAS_PROJECT_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const APPLE_TEAM_ID_PATTERN = /^[A-Z0-9]{10}$/;
+// A bare DNS hostname: at least two labels, no scheme, port, path, or port-shaped suffix.
+const BARE_HOSTNAME_PATTERN =
+  /^(?=.{1,253}$)(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/;
+
+const invalidIdentity = (variable: string, expectation: string) =>
+  new Error(`${variable} must be ${expectation}.`);
+
+/** Blank values stay omitted; anything set must look like what Expo and EAS expect. */
+function validatedEnv(
+  value: string | undefined,
+  pattern: RegExp,
+  variable: string,
+  expectation: string,
+): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) return undefined;
+  if (!pattern.test(trimmed)) throw invalidIdentity(variable, expectation);
+  return trimmed;
+}
+
+function resolveUpdatesUrl(
+  value: string | undefined,
+  projectId: string | undefined,
+): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) return undefined;
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    throw invalidIdentity("T3CODE_MOBILE_UPDATES_URL", "an https URL on u.expo.dev");
+  }
+  if (url.protocol !== "https:" || url.hostname !== "u.expo.dev") {
+    throw invalidIdentity("T3CODE_MOBILE_UPDATES_URL", "an https URL on u.expo.dev");
+  }
+  if (url.username || url.password) {
+    throw invalidIdentity("T3CODE_MOBILE_UPDATES_URL", "an https URL on u.expo.dev");
+  }
+  const projectPath = url.pathname.replace(/^\/+|\/+$/g, "");
+  if (!projectPath) {
+    throw invalidIdentity("T3CODE_MOBILE_UPDATES_URL", "an https URL on u.expo.dev");
+  }
+  if (projectId !== undefined && projectPath.split("/")[0] !== projectId) {
+    throw invalidIdentity(
+      "T3CODE_MOBILE_UPDATES_URL",
+      "the URL of the T3CODE_EAS_PROJECT_ID project",
+    );
+  }
+  return trimmed;
+}
+
+// Distribution identity is the fork's own. Supply a real Expo account or hosted app to opt in.
+const easOwner = validatedEnv(
+  repoEnv.T3CODE_EAS_OWNER,
+  EAS_OWNER_PATTERN,
+  "T3CODE_EAS_OWNER",
+  "an Expo account slug",
+);
+const easProjectId = validatedEnv(
+  repoEnv.T3CODE_EAS_PROJECT_ID,
+  EAS_PROJECT_ID_PATTERN,
+  "T3CODE_EAS_PROJECT_ID",
+  "a UUID",
+);
+const updatesUrl = resolveUpdatesUrl(repoEnv.T3CODE_MOBILE_UPDATES_URL, easProjectId);
+const iosTeamId = validatedEnv(
+  repoEnv.T3CODE_IOS_TEAM_ID,
+  APPLE_TEAM_ID_PATTERN,
+  "T3CODE_IOS_TEAM_ID",
+  "a 10-character Apple Team ID",
+);
+const hostedAppHost = validatedEnv(
+  repoEnv.T3CODE_MOBILE_HOSTED_APP_HOST,
+  BARE_HOSTNAME_PATTERN,
+  "T3CODE_MOBILE_HOSTED_APP_HOST",
+  "a bare hostname such as app.example.com",
+);
 
 // Compiled into the native project. Without a relay, Observe's native side could dispatch to
 // Expo's own ingest before observe.ts turns it off; `.invalid` never resolves (RFC 6761).
