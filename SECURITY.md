@@ -22,20 +22,83 @@ revocation and ceilings hold, not what a full-scope session can do once issued.
 
 ## Principals
 
-| Principal                                                                     | How it gets in                                                           | What it may do                                                                                                                                                                                                                    |
-| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Anyone who reaches the port                                                   | Network                                                                  | Read the environment descriptor, pair with a valid one-time credential, run OAuth flows. Nothing else.                                                                                                                            |
-| Full-scope client (desktop, paired browser or phone, `t3 auth session issue`) | Pairing, token exchange                                                  | Everything the server's OS user can do. This is the default grant.                                                                                                                                                                |
-| Narrow client                                                                 | Pairing link with explicit scopes                                        | Only the RPCs and routes its scopes allow. Can never widen its own grant.                                                                                                                                                         |
-| MCP client (outside agent, subject `mcp-client`)                              | OAuth on `/mcp`                                                          | Only `/mcp`, within a read-only grant or a runtime-mode ceiling. Every other route rejects it.                                                                                                                                    |
-| Linked environment (peer link)                                                | OAuth client `t3code-peer-link`                                          | Work it starts carries an immutable `linkOrigin` and never exceeds the access it was paired with.                                                                                                                                 |
-| Agent run by T3                                                               | Thread's runtime mode and thread credential                              | Within its runtime mode, managed policy, and the MCP access declared per tool.                                                                                                                                                    |
-| Guest link                                                                    | HMAC token for one share                                                 | Read one thread and propose messages. Never a session; no RPC, WebSocket, or MCP path accepts it.                                                                                                                                 |
-| Signed asset URL                                                              | Minted with `filesystem:read`                                            | One file, by device and inode identity, until it expires.                                                                                                                                                                         |
-| Webhook sender                                                                | A task's webhook URL, plus its signing secret when the task requires one | Start that one task's run with content of its choosing. Nothing in the request is trusted beyond the signature check.                                                                                                             |
-| Self-hosted relay                                                             | Environment enrollment                                                   | TLS passthrough; confidentiality requires CAA account pinning and a relay without DNS control. A DNS operator can remove CAA and obtain a certificate (visible in Certificate Transparency). Self-operation avoids a third party. |
-| Managed policy                                                                | Admin-deployed file, read at startup                                     | Ceilings and locks the server enforces for every client.                                                                                                                                                                          |
-| Preview pages, HTML renders, file previews, agent output                      | Rendered by clients                                                      | Untrusted content. It must never run script in the app's origin or reach Electron IPC or Node.                                                                                                                                    |
+| Principal                                                                     | How it gets in                                                           | What it may do                                                                                                                                                                                                  |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Anyone who reaches the port                                                   | Network                                                                  | Read the environment descriptor, pair with a valid one-time credential, run OAuth flows. Nothing else.                                                                                                          |
+| Full-scope client (desktop, paired browser or phone, `t3 auth session issue`) | Pairing, token exchange                                                  | Everything the server's OS user can do. This is the default grant.                                                                                                                                              |
+| Narrow client                                                                 | Pairing link with explicit scopes                                        | Only the RPCs and routes its scopes allow. Can never widen its own grant.                                                                                                                                       |
+| MCP client (outside agent, subject `mcp-client`)                              | OAuth on `/mcp`                                                          | Only `/mcp`, within a read-only grant or a runtime-mode ceiling. Every other route rejects it.                                                                                                                  |
+| Linked environment (peer link)                                                | OAuth client `t3code-peer-link`                                          | Work it starts carries an immutable `linkOrigin` and never exceeds the access it was paired with.                                                                                                               |
+| Agent run by T3                                                               | Thread's runtime mode and thread credential                              | Within its runtime mode, managed policy, and the MCP access declared per tool.                                                                                                                                  |
+| Guest link                                                                    | HMAC token for one share                                                 | Read one thread's conversation and attachments, redacted file-change summaries, and status; propose messages. Never a session; no RPC, WebSocket, or MCP path accepts it.                                       |
+| Signed asset URL                                                              | Minted with `filesystem:read`                                            | One file, by device and inode identity, until it expires.                                                                                                                                                       |
+| Webhook sender                                                                | A task's webhook URL, plus its signing secret when the task requires one | Start that one task's run with content of its choosing. Nothing in the request is trusted beyond the signature check.                                                                                           |
+| Self-hosted relay                                                             | Environment enrollment, by relay account or one-time token               | A blind TLS pipe: reads the SNI hostname and tunnel label, forwards the rest untouched, stores no user content. Cannot read traffic; a hostile one can deny service or misroute, which the environment rejects. |
+| Managed policy                                                                | Admin-deployed file, read at startup                                     | Ceilings and locks the server enforces for every client.                                                                                                                                                        |
+| Preview pages, HTML renders, file previews, agent output                      | Rendered by clients                                                      | Untrusted content. It must never run script in the app's origin or reach Electron IPC or Node.                                                                                                                  |
+
+## Self-hosted relay
+
+The relay is a blind pipe. TLS terminates on the environment: the relay reads the
+ClientHello SNI and the tunnel label, then forwards the untouched bytes over the
+environment's WebSocket mux. It stores no user content — only environments, one-time
+tokens, accounts, and blocked labels — so it cannot read paths, headers, cookies, or
+bodies. A compromised relay can refuse or delay service and send a connection to the
+wrong tunnel, but it holds no environment key, and the environment rejects a stream
+whose TLS SNI does not match its label.
+
+Environments authenticate with an Ed25519 key generated locally and registered under
+their slug; every tunnel connection signs a fresh nonce bound to the relay host and
+slug. The relay re-checks the enrolled key every second and closes a tunnel whose key
+no longer matches.
+
+People link an environment from the app with a relay account: username and password,
+salted scrypt and constant-time comparison, five attempts a minute per source IP, and
+indistinguishable failures so signup cannot list accounts. Signup is off by default,
+and without an account the relay's auth endpoints answer 404. Agents and CI use
+one-time enrollment tokens instead: 256-bit, stored hashed, and consumed in the same
+transaction that registers the key.
+
+Labels are `<slug>` and `<port>-<slug>` under the relay host. `<name>-<slug>` public
+tunnels live under an optional separate `publicDomain`, are off unless the operator
+starts the relay with public hosts, and are refused at SNI otherwise. The relay keeps
+no tunnel registry: the environment decides which names and ports exist. An operator
+can block one public name without revoking the environment; a bare or port label is
+taken down with `revoke`.
+
+## Plugins
+
+Plugins run in-process, in the server process, with the OS user's privileges. Enabling
+one is running its code: it can read files and credentials the user can, make outbound
+requests, and hold whatever the host hands it. The capability list is a disclosure, not
+a sandbox.
+
+The host refuses a brokered API unless the manifest declares its capability:
+`agent:instructions`, `auth:issue-device-credentials`, `orchestration:read-activity`,
+`usage:read`, `http:routes`, and `data:backup`. Disabling a plugin closes its scope and
+revokes the sessions and pairing links it issued. `network:outbound` and
+`process:spawn` are declarations only; the host cannot stop either in-process, and
+`process:spawn` means a real child process with the same access.
+
+The enable dialog shows host-written text for every declared capability, not the
+plugin's own description. A plugin route requires `http:routes`, answers only the
+p0code UI (same origin or a desktop renderer origin) or a caller holding the
+host-issued route secret, and its body is capped like the API's.
+
+This build ships first-party plugins only. External plugins are meant to be installed
+as bundles; the loader has not landed in this build. There is no sandbox or process
+isolation today, so a third-party plugin is code with the user's rights.
+
+## Importing a stock T3 Code home
+
+The one-time import reads the stock `~/.t3` home without writing to it: files are
+copied, SQLite databases are snapshotted from a read-only connection, and nothing
+under the source is created, renamed, or deleted. The welcome screen stages consent as
+a marker; the migration runs at the next start, before the server opens its database.
+A destination that already holds data is renamed to `<home>.replaced-<time>` before the
+migrated home takes its place, so it is moved aside rather than overwritten; the CLI
+requires `--force` for that. A source written by a newer T3 Code is refused before
+anything is replaced.
 
 ## A real finding crosses one of these
 
@@ -48,10 +111,13 @@ revocation and ceilings hold, not what a full-scope session can do once issued.
 3. **Mode or policy escalation.** An agent, MCP client, or peer link acting
    above its runtime-mode ceiling, `linkOrigin`, `T3-Mode-Limit`, or managed
    policy.
-4. **Guest escape.** Guest links expose conversation messages, status, and file-change summaries
-   with diff text removed, never raw execution records or command output.
-   A guest token reading another thread, acting beyond
-   proposing messages, or surviving a closed or replaced share.
+4. **Guest escape.** A guest stream carries only the shared thread's conversation text
+   and attachments, redacted file-change summaries (name, additions, deletions), run
+   and message status, and the share's own messages; every other event is dropped.
+   Worktree paths, branches, PR links, checkpoint file lists, subagent prompts and
+   results, and command output must not reach it. It is a finding when a guest token
+   reads another thread, acts beyond proposing messages, fetches command output, or
+   survives a closed or replaced share.
 5. **Revocation that doesn't take effect.** A revoked session, device key,
    pairing link, or peer link that still works. Documented exception: signed
    asset URLs last until they expire.
@@ -66,6 +132,14 @@ revocation and ceilings hold, not what a full-scope session can do once issued.
    origin, the desktop renderer, or with access to preload or IPC.
 9. **Filesystem writes escaping workspace path rules.** Reads are separate:
    `filesystem:read` intentionally covers the whole OS account.
+10. **Plugin overreach.** A plugin using a brokered host API whose capability it did not
+    declare; a plugin route answering a caller outside the UI without the route secret;
+    or a session or pairing link a plugin issued outliving the plugin's disable.
+    Installing or enabling a plugin is not itself a finding: it runs with the user's
+    rights.
+11. **T3 import overreach.** The import writing to the stock home, running before
+    consent or on a home that is not fresh, or replacing a destination without moving
+    it aside.
 
 ## Intended, not vulnerabilities
 
@@ -103,7 +177,19 @@ revocation and ceilings hold, not what a full-scope session can do once issued.
   tokens. It holds no environment key, but HTTP-01 without CAA account pinning lets it obtain
   a trusted certificate and impersonate the environment. Pin the environment account for every
   served hostname. A relay without DNS control cannot bypass that pin; a DNS operator can remove
-  it and mis-issue (detectable in Certificate Transparency). Self-operation avoids a third party.
+  it, mis-issue, or repoint a public domain, all visible in TLS and Certificate Transparency
+  (the environment rejects a stream whose SNI does not match its label). Self-operation avoids a
+  third party.
+- The relay learns the SNI hostname and tunnel label, visitor IP and port, connection timing
+  and byte counts. That is how it routes; it is not an anonymity layer. It cannot read request
+  paths, headers, cookies, or bodies.
+- A plugin has the user's rights. Enabling one trusts its code with the account, and the
+  capability dialog governs only the APIs the host brokers; `network:outbound` and
+  `process:spawn` are beyond host enforcement in-process.
+- A guest link is a capability, not a sandbox. It exposes only what the server projects
+  into the guest stream: the shared conversation, its attachments, redacted file changes
+  and status. Holding the link does not reach the rest of the thread. A guest reaching
+  anything outside that projection is a finding; content the projection omits is not.
 - `T3CODE_DEV_AUTH_TOKEN` and dev startup URLs are administrative by design and
   ignored outside development servers.
 - A webhook URL is a credential for one task. Unless the task requires a
@@ -134,10 +220,13 @@ revocation and ceilings hold, not what a full-scope session can do once issued.
 - Credential storage: [`ServerSecretStore.ts`](apps/server/src/auth/ServerSecretStore.ts), [`credentialKeychain.ts`](packages/shared/src/credentialKeychain.ts) (OS keychain by default; owner-only file fallback only when no keychain is available; single-use replay markers stay on disk).
 - Per-RPC scopes: [`auth/RpcAuthorization.ts`](apps/server/src/auth/RpcAuthorization.ts). [`clientRpcPermissions.ts`](packages/contracts/src/clientRpcPermissions.ts) only drives client UI and is never the boundary.
 - MCP: [`auth/McpOAuth.ts`](apps/server/src/auth/McpOAuth.ts), [`mcp/McpToolAccess.ts`](apps/server/src/mcp/McpToolAccess.ts), [`mcp/threadAccess.ts`](apps/server/src/mcp/threadAccess.ts), [`mcp/linkOrigin.ts`](apps/server/src/mcp/linkOrigin.ts)
-- Guest links: [`guest/GuestShareService.ts`](apps/server/src/guest/GuestShareService.ts)
+- Guest links: [`guest/GuestShareService.ts`](apps/server/src/guest/GuestShareService.ts), [`guestProjection.ts`](apps/server/src/guest/guestProjection.ts), [`guestView.ts`](apps/server/src/guest/guestView.ts), [`guest/http.ts`](apps/server/src/guest/http.ts)
 - Files and assets: [`workspace/WorkspaceFileSystem.ts`](apps/server/src/workspace/WorkspaceFileSystem.ts), [`assets/AssetAccess.ts`](apps/server/src/assets/AssetAccess.ts)
-- Managed policy: [`apps/server/src/policy`](apps/server/src/policy)
-- Self-hosted relay: [`SelfRelay.ts`](apps/server/src/selfRelay/SelfRelay.ts), [`RelayTunnelClient`](packages/relay-tunnel/src/client.ts), [`RelayServer`](apps/relay/src/server.ts)
+- Managed policy: [`apps/server/src/policy`](apps/server/src/policy). `limits.previewTunnel` refuses forwarded ports as well as in-app previews ([`managedLimits.ts`](apps/server/src/policy/managedLimits.ts), [`SelfRelay.ts`](apps/server/src/selfRelay/SelfRelay.ts)); there is no separate public-tunnel limit on main.
+- Self-hosted relay: [`server.ts`](apps/relay/src/server.ts), [`state.ts`](apps/relay/src/state.ts), [`cli.ts`](apps/relay/src/cli.ts); [`RelayTunnelClient`](packages/relay-tunnel/src/client.ts), [`auth.ts`](packages/relay-tunnel/src/auth.ts)
+- Forwarded ports: [`SelfRelay.ts`](apps/server/src/selfRelay/SelfRelay.ts), [`portProxy.ts`](apps/server/src/selfRelay/portProxy.ts)
+- Plugins: [`PluginHost.ts`](apps/server/src/plugins/PluginHost.ts), [`bindings.ts`](apps/server/src/plugins/bindings.ts), [`http.ts`](apps/server/src/plugins/http.ts), [`registry.ts`](apps/server/src/plugins/registry.ts); manifests in [`contracts/plugins.ts`](packages/contracts/src/plugins.ts)
+- T3 import: [`migrateFromT3.ts`](packages/shared/src/migrateFromT3.ts), [`t3Import.ts`](apps/server/src/t3Import.ts), applied before the database opens in [`server.ts`](apps/server/src/server.ts)
 - Desktop preview isolation: [`preview/WebviewPreferences.ts`](apps/desktop/src/preview/WebviewPreferences.ts)
 
 ## How to audit and triage
