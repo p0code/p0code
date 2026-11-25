@@ -12,6 +12,23 @@ import {
   SelfRelayOperationError,
 } from "./selfRelay.ts";
 import {
+  PublicTunnel,
+  PublicTunnelCreateInput,
+  PublicTunnelCreateResult,
+  PublicTunnelDecideRequestInput,
+  PublicTunnelIdInput,
+  PublicTunnelLinkResult,
+  PublicTunnelListInput,
+  PublicTunnelListResult,
+  PublicTunnelOperationError,
+  PublicTunnelRotateResult,
+  PublicTunnelStopAllResult,
+  PublicTunnelStreamEvent,
+  PublicTunnelUpdateInput,
+  PublicTunnelVisitsInput,
+  PublicTunnelVisitsResult,
+} from "./publicTunnels.ts";
+import {
   PluginInvokeInput,
   PluginOperationError,
   PluginSetEnabledInput,
@@ -697,6 +714,17 @@ export const WS_METHODS = {
   serverUnexposePort: "relay.unexposePort",
   serverPortLink: "relay.portLink",
 
+  tunnelsList: "tunnels.list",
+  tunnelsCreate: "tunnels.create",
+  tunnelsUpdate: "tunnels.update",
+  tunnelsRotate: "tunnels.rotate",
+  tunnelsRemove: "tunnels.remove",
+  tunnelsStopAll: "tunnels.stopAll",
+  tunnelsVisits: "tunnels.visits",
+  tunnelsLink: "tunnels.link",
+  tunnelsDecideRequest: "tunnels.decideRequest",
+  tunnelsSubscribe: "tunnels.subscribe",
+
   pluginsSubscribe: "plugins.subscribe",
   pluginsSetEnabled: "plugins.setEnabled",
   pluginsInvoke: "plugins.invoke",
@@ -1298,6 +1326,62 @@ const WsserverPortLinkRpc = Rpc.make(WS_METHODS.serverPortLink, {
   payload: Schema.Struct({ port: PortSchema }),
   success: RelayPortLink,
   error: Schema.Union([SelfRelayOperationError, EnvironmentAuthorizationError]),
+});
+
+const PublicTunnelRpcError = Schema.Union([
+  PublicTunnelOperationError,
+  EnvironmentAuthorizationError,
+]);
+const WsTunnelsListRpc = Rpc.make(WS_METHODS.tunnelsList, {
+  payload: PublicTunnelListInput,
+  success: PublicTunnelListResult,
+  error: PublicTunnelRpcError,
+});
+const WsTunnelsCreateRpc = Rpc.make(WS_METHODS.tunnelsCreate, {
+  payload: PublicTunnelCreateInput,
+  success: PublicTunnelCreateResult,
+  error: PublicTunnelRpcError,
+});
+const WsTunnelsUpdateRpc = Rpc.make(WS_METHODS.tunnelsUpdate, {
+  payload: PublicTunnelUpdateInput,
+  success: PublicTunnel,
+  error: PublicTunnelRpcError,
+});
+const WsTunnelsRotateRpc = Rpc.make(WS_METHODS.tunnelsRotate, {
+  payload: PublicTunnelIdInput,
+  success: PublicTunnelRotateResult,
+  error: PublicTunnelRpcError,
+});
+const WsTunnelsRemoveRpc = Rpc.make(WS_METHODS.tunnelsRemove, {
+  payload: PublicTunnelIdInput,
+  success: Schema.Void,
+  error: PublicTunnelRpcError,
+});
+const WsTunnelsStopAllRpc = Rpc.make(WS_METHODS.tunnelsStopAll, {
+  payload: Schema.Struct({}),
+  success: PublicTunnelStopAllResult,
+  error: PublicTunnelRpcError,
+});
+const WsTunnelsVisitsRpc = Rpc.make(WS_METHODS.tunnelsVisits, {
+  payload: PublicTunnelVisitsInput,
+  success: PublicTunnelVisitsResult,
+  error: PublicTunnelRpcError,
+});
+const WsTunnelsLinkRpc = Rpc.make(WS_METHODS.tunnelsLink, {
+  payload: PublicTunnelIdInput,
+  success: PublicTunnelLinkResult,
+  error: PublicTunnelRpcError,
+});
+const WsTunnelsDecideRequestRpc = Rpc.make(WS_METHODS.tunnelsDecideRequest, {
+  payload: PublicTunnelDecideRequestInput,
+  success: PublicTunnel,
+  error: PublicTunnelRpcError,
+});
+const WsTunnelsSubscribeRpc = Rpc.make(WS_METHODS.tunnelsSubscribe, {
+  payload: Schema.Struct({}),
+  success: PublicTunnelStreamEvent,
+  error: PublicTunnelRpcError,
+  stream: true,
 });
 
 const WsPluginsSubscribeRpc = Rpc.make(WS_METHODS.pluginsSubscribe, {
@@ -2694,6 +2778,16 @@ export const WsRpcGroup = RpcGroup.make(
   WsserverExposePortRpc,
   WsserverUnexposePortRpc,
   WsserverPortLinkRpc,
+  WsTunnelsListRpc,
+  WsTunnelsCreateRpc,
+  WsTunnelsUpdateRpc,
+  WsTunnelsRotateRpc,
+  WsTunnelsRemoveRpc,
+  WsTunnelsStopAllRpc,
+  WsTunnelsVisitsRpc,
+  WsTunnelsLinkRpc,
+  WsTunnelsDecideRequestRpc,
+  WsTunnelsSubscribeRpc,
   WsPluginsSubscribeRpc,
   WsPluginsSetEnabledRpc,
   WsPluginsInvokeRpc,

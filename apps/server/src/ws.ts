@@ -1,6 +1,8 @@
 import { PublicOrigin } from "./selfRelay/PublicOrigin.ts";
 import { ServerSettingsError } from "@t3tools/contracts";
 import * as SelfRelay from "./selfRelay/SelfRelay.ts";
+import * as PublicTunnels from "./tunnels/PublicTunnels.ts";
+import * as TunnelsRpc from "./tunnels/rpc.ts";
 import { PluginHost } from "./plugins/PluginHost.ts";
 import { SelfRelayOperationError } from "@t3tools/contracts";
 import { GitCommandError, OrchestrationDispatchCommandError } from "@t3tools/contracts";
@@ -1549,6 +1551,12 @@ export const layerWsRpc = (
       const processResourceMonitor = yield* ProcessResourceMonitor.ProcessResourceMonitor;
       const resourceTelemetry = yield* ResourceTelemetry.ResourceTelemetry;
       const relay = yield* SelfRelay.SelfRelay;
+      const publicTunnels = yield* PublicTunnels.PublicTunnels;
+      const tunnelsHandlers = TunnelsRpc.createTunnelsWsHandlers({
+        publicTunnels,
+        sessionId: currentSessionId,
+        scopes: new Set(currentSession.scopes),
+      });
       const pluginHost = yield* PluginHost;
       const readPublicOrigin = yield* PublicOrigin;
       const relayError = (cause: SelfRelay.SelfRelayError) =>
@@ -2852,6 +2860,16 @@ export const layerWsRpc = (
           relay.unexposePort(input.port).pipe(Effect.mapError(relayError)),
         [WS_METHODS.serverPortLink]: (input) =>
           relay.portLink(input.port, currentSessionId).pipe(Effect.mapError(relayError)),
+        [WS_METHODS.tunnelsList]: (input) => tunnelsHandlers.list(input),
+        [WS_METHODS.tunnelsCreate]: (input) => tunnelsHandlers.create(input),
+        [WS_METHODS.tunnelsUpdate]: (input) => tunnelsHandlers.update(input),
+        [WS_METHODS.tunnelsRotate]: (input) => tunnelsHandlers.rotate(input),
+        [WS_METHODS.tunnelsRemove]: (input) => tunnelsHandlers.remove(input),
+        [WS_METHODS.tunnelsStopAll]: () => tunnelsHandlers.stopAll(),
+        [WS_METHODS.tunnelsVisits]: (input) => tunnelsHandlers.visits(input),
+        [WS_METHODS.tunnelsLink]: (input) => tunnelsHandlers.link(input),
+        [WS_METHODS.tunnelsDecideRequest]: (input) => tunnelsHandlers.decideRequest(input),
+        [WS_METHODS.tunnelsSubscribe]: () => tunnelsHandlers.subscribe(),
         [WS_METHODS.pluginsSubscribe]: () => pluginHost.changes,
         [WS_METHODS.pluginsSetEnabled]: (input) => pluginHost.setEnabled(input),
         [WS_METHODS.pluginsInvoke]: (input) => pluginHost.invoke(input),

@@ -138,6 +138,7 @@ revocation and ceilings hold, not what a full-scope session can do once issued.
 - Files and assets: [`workspace/WorkspaceFileSystem.ts`](apps/server/src/workspace/WorkspaceFileSystem.ts), [`assets/AssetAccess.ts`](apps/server/src/assets/AssetAccess.ts)
 - Managed policy: [`apps/server/src/policy`](apps/server/src/policy)
 - Self-hosted relay: [`SelfRelay.ts`](apps/server/src/selfRelay/SelfRelay.ts), [`RelayTunnelClient`](packages/relay-tunnel/src/client.ts), [`RelayServer`](apps/relay/src/server.ts)
+- Public tunnels and session isolation: [`PublicTunnels.ts`](apps/server/src/tunnels/PublicTunnels.ts), [`publicHttp.ts`](apps/server/src/tunnels/publicHttp.ts), [`staticFiles.ts`](apps/server/src/tunnels/staticFiles.ts). HTTPS session cookies use the host-locked `__Host-` prefix, and tunnel proxies strip session cookies and drop `__Host-hhh`/`__Host-p0` cookies so public tunnel visitors and upstreams cannot read or forge host sessions.
 - Desktop preview isolation: [`preview/WebviewPreferences.ts`](apps/desktop/src/preview/WebviewPreferences.ts)
 
 ## How to audit and triage

@@ -5,6 +5,20 @@ import {
   RelayExposePort,
   RelayPortLink,
 } from "./selfRelay.ts";
+import {
+  PublicTunnel,
+  PublicTunnelCreateInput,
+  PublicTunnelCreateResult,
+  PublicTunnelDecideRequestPayload,
+  PublicTunnelId,
+  PublicTunnelLinkResult,
+  PublicTunnelListResult,
+  PublicTunnelRotateResult,
+  PublicTunnelStopAllResult,
+  PublicTunnelUpdatePayload,
+  PublicTunnelVisitsQuery,
+  PublicTunnelVisitsResult,
+} from "./publicTunnels.ts";
 import { PortSchema } from "./baseSchemas.ts";
 import * as Context from "effect/Context";
 import type * as DateTime from "effect/DateTime";
@@ -885,6 +899,89 @@ class EnvironmentSelfRelayHttpApi extends HttpApiGroup.make("selfRelay")
     }).middleware(EnvironmentAuthenticatedAuth),
   ) {}
 
+const TunnelIdParams = Schema.Struct({ id: PublicTunnelId });
+const TunnelMutationErrors = [
+  ...EnvironmentScopedOperationErrors,
+  EnvironmentHttpBadRequestError,
+  EnvironmentHttpForbiddenError,
+  EnvironmentHttpConflictError,
+] as const;
+
+class EnvironmentTunnelsHttpApi extends HttpApiGroup.make("tunnels")
+  .add(
+    HttpApiEndpoint.get("list", "/api/tunnels", {
+      headers: OptionalBearerHeaders,
+      success: PublicTunnelListResult,
+      error: EnvironmentScopedOperationErrors,
+    }).middleware(EnvironmentAuthenticatedAuth),
+  )
+  .add(
+    HttpApiEndpoint.post("create", "/api/tunnels", {
+      headers: OptionalBearerHeaders,
+      payload: PublicTunnelCreateInput,
+      success: PublicTunnelCreateResult,
+      error: TunnelMutationErrors,
+    }).middleware(EnvironmentAuthenticatedAuth),
+  )
+  .add(
+    HttpApiEndpoint.patch("update", "/api/tunnels/:id", {
+      headers: OptionalBearerHeaders,
+      params: TunnelIdParams,
+      payload: PublicTunnelUpdatePayload,
+      success: PublicTunnel,
+      error: TunnelMutationErrors,
+    }).middleware(EnvironmentAuthenticatedAuth),
+  )
+  .add(
+    HttpApiEndpoint.post("rotate", "/api/tunnels/:id/rotate", {
+      headers: OptionalBearerHeaders,
+      params: TunnelIdParams,
+      success: PublicTunnelRotateResult,
+      error: TunnelMutationErrors,
+    }).middleware(EnvironmentAuthenticatedAuth),
+  )
+  .add(
+    HttpApiEndpoint.delete("remove", "/api/tunnels/:id", {
+      headers: OptionalBearerHeaders,
+      params: TunnelIdParams,
+      success: Schema.Void,
+      error: TunnelMutationErrors,
+    }).middleware(EnvironmentAuthenticatedAuth),
+  )
+  .add(
+    HttpApiEndpoint.post("stopAll", "/api/tunnels/stop-all", {
+      headers: OptionalBearerHeaders,
+      success: PublicTunnelStopAllResult,
+      error: EnvironmentScopedOperationErrors,
+    }).middleware(EnvironmentAuthenticatedAuth),
+  )
+  .add(
+    HttpApiEndpoint.get("visits", "/api/tunnels/:id/visits", {
+      headers: OptionalBearerHeaders,
+      params: TunnelIdParams,
+      query: PublicTunnelVisitsQuery,
+      success: PublicTunnelVisitsResult,
+      error: TunnelMutationErrors,
+    }).middleware(EnvironmentAuthenticatedAuth),
+  )
+  .add(
+    HttpApiEndpoint.post("link", "/api/tunnels/:id/link", {
+      headers: OptionalBearerHeaders,
+      params: TunnelIdParams,
+      success: PublicTunnelLinkResult,
+      error: TunnelMutationErrors,
+    }).middleware(EnvironmentAuthenticatedAuth),
+  )
+  .add(
+    HttpApiEndpoint.post("decideRequest", "/api/tunnels/:id/decide", {
+      headers: OptionalBearerHeaders,
+      params: TunnelIdParams,
+      payload: PublicTunnelDecideRequestPayload,
+      success: PublicTunnel,
+      error: TunnelMutationErrors,
+    }).middleware(EnvironmentAuthenticatedAuth),
+  ) {}
+
 /**
  * What a linking environment asks of this one over its link, outside `/mcp`. The handler accepts
  * only a peer link's own session, so no agent's tool list ever carries it.
@@ -932,5 +1029,6 @@ export class EnvironmentHttpApi extends HttpApi.make("environment")
   .add(EnvironmentProjectsHttpApi)
   .add(EnvironmentVoiceHttpApi)
   .add(EnvironmentSelfRelayHttpApi)
+  .add(EnvironmentTunnelsHttpApi)
   .add(EnvironmentWebhooksHttpApi)
   .add(EnvironmentPeerLinkHttpApi) {}

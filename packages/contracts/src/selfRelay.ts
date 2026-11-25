@@ -23,6 +23,10 @@ export const SelfRelayStatus = Schema.Struct({
     Schema.withDecodingDefaultKey(Effect.succeed(null)),
   ),
   caaRecords: Schema.Array(Schema.String).pipe(Schema.withDecodingDefaultKey(Effect.succeed([]))),
+  publicHosts: Schema.Boolean.pipe(Schema.withDecodingDefaultKey(Effect.succeed(false))),
+  publicDomain: Schema.NullOr(Schema.String).pipe(
+    Schema.withDecodingDefaultKey(Effect.succeed(null)),
+  ),
   ports: Schema.Array(RelayPort),
 });
 export type SelfRelayStatus = typeof SelfRelayStatus.Type;

@@ -2,6 +2,8 @@ import * as Schema from "effect/Schema";
 import { GitPreparePullRequestThreadInput, GitRunStackedActionInput } from "./git.ts";
 import {
   AuthAccessWriteScope,
+  AuthFilesystemReadScope,
+  AuthRelayReadScope,
   AuthRelayWriteScope,
   AuthRelayConfigureScope,
   AuthEnvironmentMaintainScope,
@@ -16,6 +18,11 @@ import {
   mcpClientScopes,
 } from "./auth.ts";
 import { PeerLinkLinkPairingInput } from "./peerLink.ts";
+import {
+  PublicTunnelCreateInput,
+  PublicTunnelDecideRequestInput,
+  PublicTunnelUpdateInput,
+} from "./publicTunnels.ts";
 import { ORCHESTRATION_V2_WS_METHODS } from "./orchestrationV2.ts";
 import { WS_METHODS } from "./rpc.ts";
 
@@ -26,6 +33,13 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
   [WS_METHODS.serverExposePort]: AuthRelayWriteScope,
   [WS_METHODS.serverUnexposePort]: AuthRelayWriteScope,
   [WS_METHODS.serverPortLink]: AuthTerminalOperateScope,
+  [WS_METHODS.tunnelsCreate]: AuthRelayWriteScope,
+  [WS_METHODS.tunnelsUpdate]: AuthRelayWriteScope,
+  [WS_METHODS.tunnelsRotate]: AuthRelayWriteScope,
+  [WS_METHODS.tunnelsRemove]: AuthRelayWriteScope,
+  [WS_METHODS.tunnelsStopAll]: AuthRelayWriteScope,
+  [WS_METHODS.tunnelsLink]: AuthAccessWriteScope,
+  [WS_METHODS.tunnelsDecideRequest]: AuthRelayWriteScope,
   [WS_METHODS.pluginsSetEnabled]: AuthRelayConfigureScope,
   [WS_METHODS.pluginsInvoke]: AuthRelayConfigureScope,
   [WS_METHODS.providerAuthRemoveMethod]: AuthProvidersManageScope,
@@ -122,6 +136,9 @@ export type ClientGuardedRpcTag = keyof typeof CLIENT_GUARDED_RPC_SCOPES;
 const decodePrepareThread = Schema.decodeUnknownSync(GitPreparePullRequestThreadInput);
 const decodeStackedAction = Schema.decodeUnknownSync(GitRunStackedActionInput);
 const decodeLinkPairing = Schema.decodeUnknownSync(PeerLinkLinkPairingInput);
+const decodeTunnelCreate = Schema.decodeUnknownSync(PublicTunnelCreateInput);
+const decodeTunnelUpdate = Schema.decodeUnknownSync(PublicTunnelUpdateInput);
+const decodeTunnelDecideRequest = Schema.decodeUnknownSync(PublicTunnelDecideRequestInput);
 
 export function clientRpcRequiredScopes(
   method: string,
@@ -132,6 +149,25 @@ export function clientRpcRequiredScopes(
   if (method === WS_METHODS.serverExposePort)
     return [AuthAccessWriteScope, AuthRelayWriteScope, AuthTerminalOperateScope];
   if (method === WS_METHODS.serverPortLink) return [AuthAccessWriteScope, AuthTerminalOperateScope];
+  if (method === WS_METHODS.tunnelsCreate && input !== undefined) {
+    const payload = decodeTunnelCreate(input);
+    return [
+      AuthRelayWriteScope,
+      AuthAccessWriteScope,
+      payload.target.kind === "port" ? AuthTerminalOperateScope : AuthFilesystemReadScope,
+    ];
+  }
+  if (method === WS_METHODS.tunnelsUpdate && input !== undefined) {
+    const payload = decodeTunnelUpdate(input);
+    return payload.enabled === true || payload.expiresAt !== undefined
+      ? [AuthRelayWriteScope, AuthAccessWriteScope]
+      : [AuthRelayWriteScope];
+  }
+  if (method === WS_METHODS.tunnelsDecideRequest && input !== undefined) {
+    const payload = decodeTunnelDecideRequest(input);
+    return payload.approve ? [AuthRelayWriteScope, AuthAccessWriteScope] : [AuthRelayWriteScope];
+  }
+  if (method === WS_METHODS.tunnelsLink) return [AuthAccessWriteScope, AuthRelayReadScope];
 
   if (method === WS_METHODS.gitPreparePullRequestThread && input !== undefined) {
     const payload = decodePrepareThread(input);

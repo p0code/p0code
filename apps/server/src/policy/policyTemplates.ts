@@ -126,6 +126,12 @@ const policies = (): ReadonlyArray<Policy> => [
     toggle: "PreviewTunnel",
   },
   {
+    id: "PublicTunnels",
+    title: "Allow public tunnels",
+    help: "Disabled stops p0code from publishing local ports, files, or folders publicly through the self-hosted relay. Existing public tunnels stay saved but are never served.",
+    toggle: "PublicTunnels",
+  },
+  {
     id: "WorktreeLayoutCommands",
     title: "Allow project worktree layout commands",
     help: "Disabled stops p0code from running the worktreeLayout commands a project's t3.json declares, whether or not a user approved them. Such a project gets no new worktree threads; existing thread folders are restored and removed without the project's commands.",

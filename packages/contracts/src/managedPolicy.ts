@@ -83,6 +83,8 @@ export const ManagedPolicyLimits = Schema.Struct({
   browserCookieImport: Schema.optionalKey(Schema.Boolean),
   /** `false` turns the preview tunnel off: no client reaches this machine's loopback ports. */
   previewTunnel: Schema.optionalKey(Schema.Boolean),
+  /** `false` turns public tunnels off: nothing is published anonymously through the relay. */
+  publicTunnels: Schema.optionalKey(Schema.Boolean),
   /** `false` turns a project's `worktreeLayout` commands off: none runs, approved or not. */
   worktreeLayoutCommands: Schema.optionalKey(Schema.Boolean),
   providers: Schema.optionalKey(ManagedProviderLimits),
@@ -100,6 +102,7 @@ export const ManagedPolicySummaryLimits = Schema.Struct({
 
   browserCookieImport: Schema.optionalKey(Schema.Boolean),
   previewTunnel: Schema.optionalKey(Schema.Boolean),
+  publicTunnels: Schema.optionalKey(Schema.Boolean),
   worktreeLayoutCommands: Schema.optionalKey(Schema.Boolean),
   providers: Schema.optionalKey(
     Schema.Struct({
@@ -216,6 +219,7 @@ const CAPABILITY_LABELS = {
   webhookTasks: "webhook tasks",
   browserCookieImport: "importing browser cookies",
   previewTunnel: "opening this machine's local servers on other devices",
+  publicTunnels: "public tunnels",
   worktreeLayoutCommands: "project worktree layout commands",
 } as const;
 
@@ -242,6 +246,20 @@ export function allowsPreviewTunnel(config: {
 }): boolean {
   return (
     config.settings.enablePreviewTunnel && config.managedPolicy?.limits?.previewTunnel !== false
+  );
+}
+
+/** Whether public tunnels may serve: the setting is on and policy allows connect, preview, and public tunnels. */
+export function allowsPublicTunnels(config: {
+  readonly settings: { readonly publicTunnels: { readonly enabled: boolean } };
+  readonly managedPolicy?: ManagedPolicySummary | undefined;
+}): boolean {
+  const limits = config.managedPolicy?.limits;
+  return (
+    config.settings.publicTunnels.enabled &&
+    limits?.connect !== false &&
+    limits?.previewTunnel !== false &&
+    limits?.publicTunnels !== false
   );
 }
 

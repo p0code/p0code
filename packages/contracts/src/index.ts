@@ -82,4 +82,5 @@ export * from "./customModelProvider.ts";
 export * from "./clientRpcPermissions.ts";
 
 export * from "./selfRelay.ts";
+export * from "./publicTunnels.ts";
 export * from "./plugins.ts";
