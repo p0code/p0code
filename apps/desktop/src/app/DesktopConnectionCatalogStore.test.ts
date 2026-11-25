@@ -237,7 +237,7 @@ describe("DesktopConnectionCatalogStore", () => {
     ),
   );
 
-  it.effect("surfaces malformed catalog documents without deleting them", () =>
+  it.effect("replaces a malformed catalog with an empty one and keeps the original", () =>
     withStore(
       Effect.gen(function* () {
         const path = yield* Path.Path;
@@ -248,19 +248,35 @@ describe("DesktopConnectionCatalogStore", () => {
         yield* fileSystem.makeDirectory(environment.stateDir, { recursive: true });
         yield* fileSystem.writeFileString(catalogPath, "{not-json");
 
-        const error = yield* store.get.pipe(Effect.flip);
-        assert.instanceOf(
-          error,
-          DesktopConnectionCatalogStore.DesktopConnectionCatalogStoreDocumentDecodeError,
+        const recovered = yield* store.get;
+        assert.isTrue(Option.isSome(recovered));
+        assert.deepEqual(yield* decodeConnectionCatalog(Option.getOrThrow(recovered)), {
+          schemaVersion: 1,
+          targets: [],
+          profiles: [],
+          credentials: [],
+          remoteDpopTokens: [],
+          disabledEnvironmentIds: [],
+        });
+
+        const recovery = yield* store.recovery;
+        assert.isTrue(Option.isSome(recovery));
+        assert.equal(Option.getOrThrow(recovery).reason, "decode-catalog");
+        assert.equal(Option.getOrThrow(recovery).catalogPath, catalogPath);
+        assert.match(Option.getOrThrow(recovery).keptPath, /\.broken-\d+$/);
+        assert.equal(
+          yield* fileSystem.readFileString(Option.getOrThrow(recovery).keptPath),
+          "{not-json",
         );
-        assert.equal(error.catalogPath, catalogPath);
-        assert.exists(error.cause);
-        assert.equal(yield* fileSystem.readFileString(catalogPath), "{not-json");
+        assert.notEqual(yield* fileSystem.readFileString(catalogPath), "{not-json");
+        // The next read is healthy and does not report another recovery.
+        assert.deepStrictEqual(yield* store.get, recovered);
+        assert.deepStrictEqual(yield* store.recovery, recovery);
       }),
     ),
   );
 
-  it.effect("surfaces a catalog that can no longer be decrypted without deleting it", () =>
+  it.effect("keeps a catalog that can no longer be decrypted, then starts from an empty one", () =>
     Effect.gen(function* () {
       const path = yield* Path.Path;
       const fileSystem = yield* FileSystem.FileSystem;
@@ -268,32 +284,53 @@ describe("DesktopConnectionCatalogStore", () => {
         prefix: "t3-desktop-connection-catalog-test-",
       });
       const failDecrypt = yield* Ref.make(false);
-      const layer = layerFor(baseDir, true, failDecrypt);
       const store = yield* DesktopConnectionCatalogStore.DesktopConnectionCatalogStore.pipe(
-        Effect.provide(layer),
+        Effect.provide(layerFor(baseDir, true, failDecrypt)),
       );
+      const catalogPath = path.join(baseDir, "userdata", "connection-catalog.json");
 
       assert.isTrue(yield* store.set('{"schemaVersion":1,"targets":[]}'));
+      const original = yield* fileSystem.readFileString(catalogPath);
       yield* Ref.set(failDecrypt, true);
-      const error = yield* store.get.pipe(Effect.flip);
-      assert.instanceOf(
-        error,
-        DesktopConnectionCatalogStore.DesktopConnectionCatalogStoreProtectionError,
-      );
-      assert.equal(error.operation, "decrypt-catalog");
-      assert.equal(error.catalogPath, path.join(baseDir, "userdata", "connection-catalog.json"));
-      assert.instanceOf(error.cause, ElectronSafeStorage.ElectronSafeStorageDecryptError);
-      const decryptError = error.cause as ElectronSafeStorage.ElectronSafeStorageDecryptError;
-      assert.instanceOf(decryptError.cause, Error);
-      assert.equal(decryptError.cause.message, "invalid encrypted catalog");
+
+      const recovered = yield* store.get;
+      assert.isTrue(Option.isSome(recovered));
+      assert.deepEqual(yield* decodeConnectionCatalog(Option.getOrThrow(recovered)), {
+        schemaVersion: 1,
+        targets: [],
+        profiles: [],
+        credentials: [],
+        remoteDpopTokens: [],
+        disabledEnvironmentIds: [],
+      });
+
+      const recovery = yield* store.recovery;
+      assert.isTrue(Option.isSome(recovery));
+      assert.equal(Option.getOrThrow(recovery).reason, "decrypt-catalog");
+      assert.equal(Option.getOrThrow(recovery).catalogPath, catalogPath);
+      assert.match(Option.getOrThrow(recovery).keptPath, /\.broken-\d+$/);
       assert.equal(
-        error.message,
-        `Desktop connection catalog protection failed during decrypt-catalog at ${path.join(baseDir, "userdata", "connection-catalog.json")}.`,
+        yield* fileSystem.readFileString(Option.getOrThrow(recovery).keptPath),
+        original,
       );
-      assert.notEqual(error.message, decryptError.message);
+      assert.notEqual(yield* fileSystem.readFileString(catalogPath), original);
+
+      // The fresh catalog decrypts once this build can use the key again.
       yield* Ref.set(failDecrypt, false);
-      assert.deepStrictEqual(yield* store.get, Option.some('{"schemaVersion":1,"targets":[]}'));
-    }).pipe(Effect.provide(NodeServices.layer)),
+      assert.deepStrictEqual(yield* store.get, recovered);
+    }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
+  );
+
+  it.effect("loads a healthy catalog without a recovery notice", () =>
+    withStore(
+      Effect.gen(function* () {
+        const store = yield* DesktopConnectionCatalogStore.DesktopConnectionCatalogStore;
+        const catalog = '{"schemaVersion":1,"targets":[]}';
+        assert.isTrue(yield* store.set(catalog));
+        assert.deepStrictEqual(yield* store.get, Option.some(catalog));
+        assert.deepStrictEqual(yield* store.recovery, Option.none());
+      }),
+    ),
   );
 
   const emptyCatalog =
@@ -351,7 +388,7 @@ describe("DesktopConnectionCatalogStore", () => {
       );
 
       yield* Ref.set(failDecrypt, true);
-      yield* store.get.pipe(Effect.flip);
+      yield* store.get;
       assert.isTrue(yield* store.set(emptyCatalog));
 
       assert.isNotEmpty(yield* savedFilesHolding(stateDir, original));

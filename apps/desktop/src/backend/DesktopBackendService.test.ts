@@ -73,6 +73,82 @@ describe("DesktopBackendService helpers", () => {
     );
   });
 
+  it.effect("adopts a local service that answers for this home", () =>
+    Effect.gen(function* () {
+      const modes: string[] = [];
+      const driver = {
+        kind: "legacy-node",
+        binaryPath: "/app/server.mjs",
+        desktopBootstrapSecret: "secret",
+        status: Effect.succeed({
+          running: true,
+          installed: true,
+          pid: 123,
+          version: "1.0.0",
+          url: new URL("http://127.0.0.1:3773"),
+          binaryPath: "/app/server.mjs",
+          managedByService: true,
+          driverKind: "legacy-node" as const,
+        }),
+        ensureRunning: Effect.die("not used"),
+        start: Effect.die("not used"),
+        stop: Effect.die("not used"),
+        restart: Effect.die("not used"),
+      } satisfies DesktopBackendService.BackendServiceDriver;
+
+      const reattached = yield* DesktopBackendService.adoptRunningLocalService({
+        driver,
+        settings: { backendMode: "embedded" },
+        setMode: (mode) =>
+          Effect.sync(() => {
+            modes.push(mode);
+            return true;
+          }),
+      });
+
+      assert.isTrue(reattached);
+      assert.deepEqual(modes, ["local-service"]);
+    }),
+  );
+
+  it.effect("leaves the backend alone when no local service is ready", () =>
+    Effect.gen(function* () {
+      let changed = false;
+      const driver = {
+        kind: "legacy-node",
+        binaryPath: "/app/server.mjs",
+        desktopBootstrapSecret: "secret",
+        status: Effect.succeed({
+          running: false,
+          installed: false,
+          pid: null,
+          version: null,
+          url: null,
+          binaryPath: "/app/server.mjs",
+          managedByService: true,
+          driverKind: "legacy-node" as const,
+        }),
+        ensureRunning: Effect.die("not used"),
+        start: Effect.die("not used"),
+        stop: Effect.die("not used"),
+        restart: Effect.die("not used"),
+      } satisfies DesktopBackendService.BackendServiceDriver;
+
+      const reattached = yield* DesktopBackendService.adoptRunningLocalService({
+        driver,
+        settings: { backendMode: "embedded" },
+        setMode: () =>
+          Effect.sync(() => {
+            changed = true;
+            return true;
+          }),
+      });
+
+      assert.isFalse(reattached);
+      assert.isFalse(changed);
+    }),
+  );
+
   it("never overrides an explicit backend mode", () => {
     assert.equal(
       DesktopBackendService.resolveEffectiveBackendMode(

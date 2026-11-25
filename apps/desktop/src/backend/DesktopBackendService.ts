@@ -129,6 +129,34 @@ export function isExternalBackendMode(mode: DesktopBackendMode): boolean {
 }
 
 /**
+ * Adopts a local service that answers for this home, so a recovered catalog still finds its
+ * projects instead of starting an embedded backend that would only lose the home lock.
+ */
+export const adoptRunningLocalService = Effect.fn(
+  "desktop.backendService.adoptRunningLocalService",
+)(function* (input: {
+  readonly driver: BackendServiceDriver;
+  readonly settings: Pick<DesktopAppSettings.DesktopSettings, "backendMode">;
+  readonly setMode: (mode: DesktopBackendMode) => Effect.Effect<boolean>;
+}): Effect.fn.Return<boolean> {
+  const info = yield* input.driver.status;
+  if (!info.running || info.url === null) {
+    yield* logServiceInfo("no running local backend service to reattach after catalog recovery", {
+      driverKind: input.driver.kind,
+    });
+    return false;
+  }
+  if (input.settings.backendMode === "local-service") {
+    return true;
+  }
+  yield* logServiceInfo("reattaching the running local backend service", {
+    driverKind: input.driver.kind,
+    url: info.url.href,
+  });
+  return yield* input.setMode("local-service");
+});
+
+/**
  * The auto default follows p0d availability instead of the stored mode. A document that
  * recorded the embedded default (no explicit choice) moves to local-service as
  * soon as p0d resolves, and moves back if it disappears.
@@ -1004,6 +1032,11 @@ export class DesktopBackendService extends Context.Service<
     readonly controlService: (
       action: DesktopBackendAction,
     ) => Effect.Effect<void, BackendServiceDriverError>;
+    /**
+     * After the saved connection list is lost, adopt a local p0d/service that is already serving
+     * this home instead of starting another backend over it.
+     */
+    readonly reattachLocalEnvironment: Effect.Effect<boolean>;
   }
 >()("@t3tools/desktop/backend/DesktopBackendService") {}
 
@@ -1304,6 +1337,28 @@ export const make = Effect.gen(function* () {
     yield* driver.restart;
   });
 
+  const reattachLocalEnvironment: DesktopBackendService["Service"]["reattachLocalEnvironment"] =
+    Effect.gen(function* () {
+      const settings = yield* appSettings.get;
+      return yield* adoptRunningLocalService({
+        driver: yield* resolveServiceDriver,
+        settings,
+        // An adopted legacy service has no p0d binary to make the auto default pick it, and the
+        // user's projects live there, so record the choice explicitly for this recovery.
+        setMode: (mode) =>
+          appSettings.setBackendConfig({ mode, modeConfiguredByUser: true }).pipe(
+            Effect.tap(() => logServiceInfo("recorded the reattached backend mode", { mode })),
+            Effect.as(true),
+            Effect.catch((error) =>
+              logServiceWarning("failed to record the reattached backend mode", {
+                mode,
+                error: error.message,
+              }).pipe(Effect.as(false)),
+            ),
+          ),
+      });
+    }).pipe(Effect.withSpan("desktop.backendService.reattachLocalEnvironment"));
+
   return DesktopBackendService.of({
     hasP0d,
     resolveEffectiveMode,
@@ -1313,6 +1368,7 @@ export const make = Effect.gen(function* () {
     getStatus,
     updateConfig,
     controlService,
+    reattachLocalEnvironment,
   });
 });
 
@@ -1352,6 +1408,7 @@ export const layerTest = (
       controlService: Effect.fn("DesktopBackendService.controlService")(function () {
         return logServiceWarning("controlService called on DesktopBackendService.layerTest");
       }),
+      reattachLocalEnvironment: Effect.succeed(false),
       ...overrides,
     }),
   );
