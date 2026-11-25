@@ -2434,6 +2434,7 @@
       "v": "v"
     }
   ],
+  "5fa4bc74fa5e9a8e": "Startskärm för {appName}",
   "b4b98a0287c282e2": "Finns på en annan dator, så den här datorns agent kan inte läsa den. Ta bort den eller byt tillbaka för att skicka.",
   "5bbac0e5afeec779": "Aktuell tråd",
   "33c7e68fca089036": "Tråd, {title}",
@@ -2857,6 +2858,11 @@
   "c8440b29bc95ca71": "Ogiltigt kortkommando.",
   "f9e2c203389660f8": "Ingen miljö är vald.",
   "372f4d4a1c650763": "Den här anslutningen kan inte starta om resursövervakaren.",
+  "9cac8a8e72ee1257": "Startar server",
+  "b378ab0abbce35d4": "Uppdaterar databas ({current}/{total})",
+  "9668ede5c3e72d7a": "Uppdaterar databas",
+  "a044effb791c0a10": "Läser in trådar",
+  "333885e895f94647": "Redo",
   "08da470047ab82f5": "Stäng terminalen ”{label}”?",
   "4f14e3fc3a216f44": "Det här stoppar den körande processen och rensar dess historik.",
   "16ce8443044b45fd": "Stäng {count, plural, one {{count} terminal} other {{count} terminaler}}?",

@@ -2434,6 +2434,7 @@
       "v": "v"
     }
   ],
+  "5fa4bc74fa5e9a8e": "Pantalla de inicio de {appName}",
   "b4b98a0287c282e2": "Está en otra máquina, así que el agente de esta máquina no puede leerlo. Quítalo o vuelve a cambiar para enviar.",
   "5bbac0e5afeec779": "Hilo actual",
   "33c7e68fca089036": "Hilo, {title}",
@@ -2857,6 +2858,11 @@
   "c8440b29bc95ca71": "Atajo de teclado no válido.",
   "f9e2c203389660f8": "No hay ningún entorno seleccionado.",
   "372f4d4a1c650763": "Esta conexión no puede reiniciar el monitor de recursos.",
+  "9cac8a8e72ee1257": "Iniciando servidor",
+  "b378ab0abbce35d4": "Actualizando base de datos ({current}/{total})",
+  "9668ede5c3e72d7a": "Actualizando base de datos",
+  "a044effb791c0a10": "Cargando hilos",
+  "333885e895f94647": "Listo",
   "08da470047ab82f5": "¿Cerrar la terminal \"{label}\"?",
   "4f14e3fc3a216f44": "Esto detiene el proceso en ejecución y borra su historial.",
   "16ce8443044b45fd": "{count, plural, one {¿Cerrar {count} terminal?} other {¿Cerrar {count} terminales?}}",

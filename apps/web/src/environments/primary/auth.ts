@@ -7,7 +7,11 @@ import type {
   AuthSessionId,
   AuthSessionState,
 } from "@t3tools/contracts";
-import { EnvironmentHttpCommonError, PRIMARY_LOCAL_ENVIRONMENT_ID } from "@t3tools/contracts";
+import {
+  EnvironmentHttpCommonError,
+  PRIMARY_LOCAL_ENVIRONMENT_ID,
+  ServerStartupStatus,
+} from "@t3tools/contracts";
 import type { EnvironmentHttpCommonError as EnvironmentHttpCommonErrorType } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -20,6 +24,7 @@ import {
 
 import { PrimaryEnvironmentHttpClient } from "./httpClient";
 import { runPrimaryHttp } from "../../lib/runtime";
+import { reportBootStage, reportServerStartupStatus } from "../../lib/startupProgress";
 import { msg } from "gt-react";
 import { m } from "../../i18n/messages";
 
@@ -178,12 +183,47 @@ function getDesktopBootstrapCredential(): string | null {
     : null;
 }
 
+const decodeServerStartupStatus = Schema.decodeUnknownEffect(ServerStartupStatus);
+
+function reportStartupStatusFromError(error: unknown) {
+  if (
+    !HttpClientError.isHttpClientError(error) ||
+    error.response === undefined ||
+    error.response.status !== 503
+  ) {
+    return Effect.void;
+  }
+  return error.response.json.pipe(
+    Effect.flatMap(decodeServerStartupStatus),
+    Effect.tap((startupStatus) =>
+      Effect.sync(() => {
+        reportServerStartupStatus(startupStatus);
+      }),
+    ),
+    Effect.ignore,
+  );
+}
+
+async function pollDesktopMigrationProgressDuringBootstrap(): Promise<void> {
+  const readMigrationProgress = window.desktopBridge?.getDatabaseMigrationProgress;
+  if (!readMigrationProgress) return;
+  try {
+    const progress = await readMigrationProgress();
+    if (progress) {
+      reportBootStage("updating-database", progress);
+    }
+  } catch {
+    // Desktop bridge may be unavailable while the preload settles.
+  }
+}
+
 export async function fetchSessionState(): Promise<AuthSessionState> {
   return retryTransientBootstrap(async () => {
     try {
       return await runPrimaryHttp(
         PrimaryEnvironmentHttpClient.pipe(
           Effect.flatMap((client) => client.auth.session({ headers: {} })),
+          Effect.tapError(reportStartupStatusFromError),
         ),
       );
     } catch (error) {
@@ -227,6 +267,7 @@ async function exchangeBootstrapCredential(credential: string): Promise<AuthBrow
       return await runPrimaryHttp(
         PrimaryEnvironmentHttpClient.pipe(
           Effect.flatMap((client) => client.auth.browserSession({ payload: { credential } })),
+          Effect.tapError(reportStartupStatusFromError),
         ),
       );
     } catch (error) {
@@ -287,6 +328,7 @@ async function retryTransientBootstrap<T>(operation: () => Promise<T>): Promise<
         throw error;
       }
 
+      await pollDesktopMigrationProgressDuringBootstrap();
       await waitForBootstrapRetry(BOOTSTRAP_RETRY_STEP_MS);
     }
   }

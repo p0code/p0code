@@ -1,15 +1,29 @@
 import { RefreshIcon } from "~/components/ui/refresh-icon";
+import {
+  AVAILABLE_CONNECTION_STATE,
+  type SupervisorConnectionPhase,
+} from "@t3tools/client-runtime/connection";
+import { enabledEnvironmentIds } from "@t3tools/client-runtime/state/connections";
 import { useAtomValue } from "@effect/atom-react";
 import { useLocation, useNavigate } from "@tanstack/react-router";
-import { Atom } from "effect/reactivity";
+import * as Option from "effect/Option";
+import { AsyncResult, Atom } from "effect/reactivity";
 import { useGT } from "gt-react";
 import { useEffect, useState } from "react";
 
+import { environmentCatalog } from "../../connection/catalog";
 import {
   ensureClientSettingsHydrated,
   useClientSettings,
   useClientSettingsHydrationStatus,
 } from "../../hooks/useSettings";
+import {
+  advanceStartupProgress,
+  createStartupProgress,
+  getBootStartupProgress,
+  resolveClientStartupStage,
+  type StartupProgressSnapshot,
+} from "../../lib/startupProgress";
 import { completeOnboarding } from "../../onboarding/firstRun";
 import {
   isFirstRunWorkspaceProvenanceAuthoritative,
@@ -21,15 +35,76 @@ import {
 } from "../../onboarding/firstRun.logic";
 import { useAllEnvironmentShellsBootstrapped, useProjects } from "../../state/entities";
 import { useEnvironments } from "../../state/environments";
+import { primaryEnvironmentIdAtom } from "../../state/primaryEnvironment";
 import { environmentProjects } from "../../state/projects";
 import { primaryServerConfigAtom, primaryServerWelcomeAtom } from "../../state/server";
 import { environmentShell } from "../../state/shell";
 import { environmentThreadShells } from "../../state/threads";
+import { StartupLoadingScreen } from "../StartupLoadingScreen";
 import { Button } from "../ui/button";
 
 /** Pending blocks all rendering, including EventRouter welcome navigation. */
 
 const FIRST_RUN_DECISION_TIMEOUT_MS = 4_000;
+const STARTUP_LOADING_TIMEOUT_MS = 6_000;
+
+interface StartupReadinessSnapshot {
+  readonly enabledEnvironmentCount: number;
+  readonly primaryEnvironmentDiscovered: boolean;
+  readonly primaryConnectionPhase: SupervisorConnectionPhase | null;
+  readonly primaryShellHasSnapshot: boolean;
+}
+
+const SETTLED_STARTUP_READINESS: StartupReadinessSnapshot = {
+  enabledEnvironmentCount: 0,
+  primaryEnvironmentDiscovered: true,
+  primaryConnectionPhase: "connected",
+  primaryShellHasSnapshot: true,
+};
+
+const SETTLED_STARTUP_READINESS_ATOM = Atom.make(SETTLED_STARTUP_READINESS).pipe(
+  Atom.withLabel("web-onboarding-settled-startup-readiness"),
+);
+
+let previousStartupReadiness: StartupReadinessSnapshot | null = null;
+
+const primaryStartupReadinessAtom = Atom.make((get): StartupReadinessSnapshot => {
+  const catalog = get(environmentCatalog.catalogValueAtom);
+  const enabledEnvironmentCount = [...enabledEnvironmentIds(catalog)].length;
+  const primaryEnvironmentId = get(primaryEnvironmentIdAtom);
+  let next: StartupReadinessSnapshot;
+  if (primaryEnvironmentId === null) {
+    next = {
+      enabledEnvironmentCount,
+      primaryEnvironmentDiscovered: false,
+      primaryConnectionPhase: null,
+      primaryShellHasSnapshot: false,
+    };
+  } else {
+    const connection = AsyncResult.getOrElse(
+      get(environmentCatalog.stateAtom(primaryEnvironmentId)),
+      () => AVAILABLE_CONNECTION_STATE,
+    );
+    const shell = get(environmentShell.stateValueAtom(primaryEnvironmentId));
+    next = {
+      enabledEnvironmentCount,
+      primaryEnvironmentDiscovered: true,
+      primaryConnectionPhase: connection.phase,
+      primaryShellHasSnapshot: Option.isSome(shell.snapshot),
+    };
+  }
+  if (
+    previousStartupReadiness !== null &&
+    previousStartupReadiness.enabledEnvironmentCount === next.enabledEnvironmentCount &&
+    previousStartupReadiness.primaryEnvironmentDiscovered === next.primaryEnvironmentDiscovered &&
+    previousStartupReadiness.primaryConnectionPhase === next.primaryConnectionPhase &&
+    previousStartupReadiness.primaryShellHasSnapshot === next.primaryShellHasSnapshot
+  ) {
+    return previousStartupReadiness;
+  }
+  previousStartupReadiness = next;
+  return next;
+}).pipe(Atom.withLabel("web-onboarding-primary-startup-readiness"));
 
 const primaryShellLiveAtom = Atom.make((get) => {
   const serverConfig = get(primaryServerConfigAtom);
@@ -95,6 +170,14 @@ export function FirstRunGate({
         : "pending",
     stalled: false,
   }));
+  const [startupSettled, setStartupSettled] = useState(() => !enabled && !hostedStatic);
+  const [startupTimedOut, setStartupTimedOut] = useState(false);
+  const [startupProgress, setStartupProgress] = useState<StartupProgressSnapshot>(() =>
+    getBootStartupProgress(),
+  );
+  const startupReadiness = useAtomValue(
+    startupSettled ? SETTLED_STARTUP_READINESS_ATOM : primaryStartupReadinessAtom,
+  );
   const { decision, stalled } = gateState;
   const settingsReadFailed = hydrationStatus === "failed" || hydrationStatus === "retrying";
   // The server's sole cwd-bootstrap project/thread still counts as fresh so npx p0 users see onboarding.
@@ -141,6 +224,34 @@ export function FirstRunGate({
     if (transitioned !== gateState) setGateState(transitioned);
   }
 
+  const liveStartupStage = startupSettled
+    ? "ready"
+    : resolveClientStartupStage({
+        enabled,
+        hostedStatic,
+        hydrated,
+        firstRunDecision: decision,
+        catalogReady: environmentCatalogReady,
+        enabledEnvironmentCount: startupReadiness.enabledEnvironmentCount,
+        primaryEnvironmentDiscovered: startupReadiness.primaryEnvironmentDiscovered,
+        primaryConnectionPhase: startupReadiness.primaryConnectionPhase,
+        primaryServerConfigReady: serverConfig !== null,
+        primaryShellHasSnapshot: startupReadiness.primaryShellHasSnapshot,
+        allShellsBootstrapped: bootstrapped,
+        startupTimedOut,
+      });
+
+  const displayProgress =
+    liveStartupStage === "ready"
+      ? startupProgress
+      : advanceStartupProgress(startupProgress, createStartupProgress(liveStartupStage));
+
+  if (!startupSettled && liveStartupStage === "ready") {
+    setStartupSettled(true);
+  } else if (!startupSettled && displayProgress !== startupProgress) {
+    setStartupProgress(displayProgress);
+  }
+
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- persists onboarding completion to settings once the gate settles on skipping the wizard
   useEffect(() => {
     if (decision === "wizard" || !hydrated) return;
@@ -159,6 +270,13 @@ export function FirstRunGate({
     return () => window.clearTimeout(timer);
   }, [decision, enabled, hydrated]);
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- timer releases the startup loading screen if primary discovery stalls after auth
+  useEffect(() => {
+    if (startupSettled || startupTimedOut || decision !== "app") return;
+    const timer = window.setTimeout(() => setStartupTimedOut(true), STARTUP_LOADING_TIMEOUT_MS);
+    return () => window.clearTimeout(timer);
+  }, [decision, startupSettled, startupTimedOut]);
+
   // Setup opens by itself only from the home route. A direct link, such as
   // Settings, opens as asked so setup can never lock a user out of the app.
   const wizardOwnsRoute = pathname === "/";
@@ -176,7 +294,14 @@ export function FirstRunGate({
     return children;
   }
   if (decision !== "app") {
-    return stalled ? <FirstRunRecovery reason="connection" /> : null;
+    return stalled ? (
+      <FirstRunRecovery reason="connection" />
+    ) : (
+      <StartupLoadingScreen progress={displayProgress} />
+    );
+  }
+  if (!startupSettled && liveStartupStage !== "ready") {
+    return <StartupLoadingScreen progress={displayProgress} />;
   }
   return children;
 }

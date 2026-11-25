@@ -59,11 +59,20 @@ export function rejectRequestsUntilServing<T extends NodeHttp.Server>(
     const migration = migrationProgress();
     const html = request.headers.accept?.includes("text/html") === true;
     const status: ServerStartupStatus = { status: "starting", migration };
+    const hasValidMigration =
+      migration !== null &&
+      Number.isSafeInteger(migration.current) &&
+      Number.isSafeInteger(migration.total) &&
+      migration.current > 0 &&
+      migration.total > 0;
+    const percent = hasValidMigration
+      ? 25 + Math.round((Math.min(migration.current, migration.total) / migration.total) * 30)
+      : 15;
     const message = migration
       ? `Upgrading database (${migration.current} of ${migration.total})`
       : "Starting p0code…";
     const body = html
-      ? `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="1"><title>Starting p0code</title><style>:root{color-scheme:light dark}body{margin:0;min-height:100vh;display:grid;place-content:center;text-align:center;font:16px system-ui}h1{font-size:20px}p{opacity:.7}</style></head><body><h1>${message}</h1><p>The app will open when startup finishes.</p></body></html>`
+      ? `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="1"><title>Starting p0code</title><style>:root{color-scheme:light dark}body{margin:0;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;font:14px system-ui}.bar{width:min(220px,72vw);height:3px;border-radius:9999px;overflow:hidden;background:color-mix(in srgb,currentColor 15%,transparent)}.fill{width:${percent}%;height:100%;border-radius:inherit;background:#4f46e5;transition:width 200ms ease-out}@media (prefers-color-scheme:dark){.fill{background:#818cf8}}@media (prefers-reduced-motion:reduce){.fill{transition:none}}h1{margin:0;font-size:16px;font-weight:500;font-variant-numeric:tabular-nums}p{margin:0;font-size:13px;opacity:.65}</style></head><body><div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}" aria-valuetext="${message}"><div class="fill"></div></div><h1>${message}</h1><p>The app will open when startup finishes.</p></body></html>`
       : JSON.stringify(status);
     response
       .writeHead(503, {

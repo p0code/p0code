@@ -1745,6 +1745,9 @@ describe("DesktopWindow", () => {
           assert.equal(yield* Ref.get(scenario.createCalls), 1);
           yield* TestClock.adjust("1 second");
           assert.include(splashHtml(), "Connecting to WSL…");
+          assert.include(splashHtml(), 'role="progressbar"');
+          assert.include(splashHtml(), 'aria-valuenow="15"');
+          assert.notInclude(splashHtml(), "infinite");
           const initialLoads = splash.loadURL.mock.calls.length;
           yield* TestClock.adjust("1 second");
           assert.equal(splash.loadURL.mock.calls.length, initialLoads);
@@ -1752,6 +1755,7 @@ describe("DesktopWindow", () => {
           yield* Ref.set(state.databaseMigrationProgress, { current: 2, total: 7 });
           yield* TestClock.adjust("1 second");
           assert.include(splashHtml(), "Upgrading database (2 of 7)");
+          assert.include(splashHtml(), 'aria-valuenow="34"');
 
           const readyExit = yield* Effect.exit(
             desktopWindow.handleBackendReady(new URL("http://127.0.0.1:3773")),
