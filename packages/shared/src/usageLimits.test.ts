@@ -1855,6 +1855,125 @@ describe("pooled account columns", () => {
   });
 });
 
+describe("Antigravity window attribution", () => {
+  const antigravity = ProviderDriverKind.make("antigravity");
+  const checkedAt = "2026-09-03T11:00:00.000Z";
+  const rollingWindow = {
+    id: "gemini-5h",
+    kind: "session",
+    label: "Gemini · 5-hour",
+    usedPercent: 40,
+    windowDurationMins: 300,
+    resetsAt: "2026-09-03T14:00:00.000Z",
+  } as const;
+  const weeklyWindow = {
+    id: "gemini-weekly",
+    kind: "weekly",
+    label: "Gemini · Weekly",
+    usedPercent: 20,
+    windowDurationMins: 7 * 24 * 60,
+    resetsAt: "2026-09-06T12:00:00.000Z",
+  } as const;
+  const modelRow = (id: string, label: string) => ({
+    id,
+    kind: "other" as const,
+    label,
+    usedPercent: 0,
+    resetsAt: "2026-09-03T17:00:00.000Z",
+  });
+  const account = (key: string, windows: LimitAccount["limits"]["windows"]): LimitAccount => ({
+    key,
+    driver: antigravity,
+    displayName: key,
+    email: undefined,
+    plan: undefined,
+    accentColor: undefined,
+    environments: [],
+    sourceLabel: null,
+    redeem: null,
+    limits: { checkedAt, windows },
+  });
+
+  it("renders one rolling and one weekly row, not one row per model", () => {
+    const [pool] = collectLimitPools(
+      [
+        account("Antigravity Paid", [
+          rollingWindow,
+          weeklyWindow,
+          modelRow("gemini-3.8-flash-high", "Gemini · Gemini 3.8 Flash (High)"),
+          modelRow("gemini-3.8-flash-low", "Gemini · Gemini 3.8 Flash (Low)"),
+          modelRow("gemini-3.8-flash-medium", "Gemini · Gemini 3.8 Flash (Medium)"),
+          modelRow("claude-opus-4-6-thinking", "All Models · Claude Opus 4.6 (Thinking)"),
+          modelRow("gpt-oss-120b-medium", "All Models · GPT-OSS 120B (Medium)"),
+        ]),
+      ],
+      now,
+    );
+    expect(pool!.windows.map((window) => window.id)).toEqual(["gemini-5h", "gemini-weekly"]);
+    expect(pool!.windows.map((window) => window.columns.length)).toEqual([1, 1]);
+    expect(
+      pool!.windows.map((window) =>
+        window.columns.map((column) => [column.account.key, column.window?.id ?? null]),
+      ),
+    ).toEqual([[["Antigravity Paid", "gemini-5h"]], [["Antigravity Paid", "gemini-weekly"]]]);
+  });
+
+  it("never shows an account in a shared window it did not report", () => {
+    const shared = {
+      ...rollingWindow,
+      id: "3p-5h",
+      label: "Claude & GPT (shared) · 5-hour",
+    };
+    const [pool] = collectLimitPools(
+      [
+        account("Antigravity Paid", [shared, rollingWindow, weeklyWindow]),
+        account("Antigravity Trial", [rollingWindow, weeklyWindow]),
+      ],
+      now,
+    );
+    const sharedRow = pool!.windows.find((window) => window.id === "3p-5h");
+    expect(sharedRow?.members.map((member) => member.account.key)).toEqual(["Antigravity Paid"]);
+    expect(sharedRow?.columns.map((column) => (column.window ? column.account.key : null))).toEqual(
+      ["Antigravity Paid", null],
+    );
+  });
+
+  it("keeps a real model-scoped limit beside the account's rolling window", () => {
+    const scoped = {
+      id: "seven_day_fable",
+      kind: "weekly",
+      label: "Weekly · Fable",
+      modelIds: ["fable"],
+      usedPercent: 100,
+      windowDurationMins: 7 * 24 * 60,
+      resetsAt: rollingWindow.resetsAt,
+    } as const;
+    const [pool] = collectLimitPools(
+      [account("Antigravity Paid", [rollingWindow, weeklyWindow, scoped])],
+      now,
+    );
+    expect(pool!.windows.map((window) => window.id)).toEqual([
+      "gemini-5h",
+      "gemini-weekly",
+      "seven_day_fable",
+    ]);
+    expect(pool!.windows[2]?.members).toHaveLength(1);
+  });
+
+  it("deduplicates one rolling window reported under two ids", () => {
+    const duplicate = {
+      ...rollingWindow,
+      id: "gemini-5h-copy",
+    };
+    const [pool] = collectLimitPools(
+      [account("Antigravity Paid", [rollingWindow, duplicate, weeklyWindow])],
+      now,
+    );
+    expect(pool!.windows.map((window) => window.id)).toEqual(["gemini-5h", "gemini-weekly"]);
+    expect(pool!.windows[0]?.members).toHaveLength(1);
+  });
+});
+
 describe("/usage-limits", () => {
   const limits = { checkedAt: "2026-09-03T11:00:00.000Z", windows: [window] };
   const selected = provider({

@@ -4,6 +4,7 @@ import {
   ProviderDriverKind,
   ProviderInstanceId,
   type ServerProvider,
+  type ServerProviderUsageLimits,
 } from "@t3tools/contracts";
 import { CHATGPT_USAGE_URL } from "@t3tools/shared/usageLimits";
 import { describe, expect, it } from "vite-plus/test";
@@ -103,6 +104,128 @@ describe("UsageLimitsPooled next refill", () => {
       <UsageLimitsPooled presentations={presentations} now={Date.parse("2026-10-25T18:00:00Z")} />,
     );
     await expect.element(screen.getByText(/^↻ \+\d+%$/)).not.toBeInTheDocument();
+  });
+});
+
+describe("UsageLimitsPooled Antigravity attribution", () => {
+  function antigravity(
+    instanceId: string,
+    displayName: string,
+    windows: ServerProviderUsageLimits["windows"],
+  ): ServerProvider {
+    return {
+      instanceId: ProviderInstanceId.make(instanceId),
+      driver: ProviderDriverKind.make("antigravity"),
+      displayName,
+      enabled: true,
+      installed: true,
+      version: "0.1.0",
+      status: "ready",
+      auth: { status: "authenticated" },
+      checkedAt,
+      models: [],
+      slashCommands: [],
+      skills: [],
+      usageLimits: { checkedAt, windows },
+    };
+  }
+  const rolling = {
+    id: "gemini-5h",
+    label: "Gemini · 5-hour",
+    kind: "session" as const,
+    usedPercent: 0,
+    windowDurationMins: 300,
+  };
+  const weekly = {
+    id: "gemini-weekly",
+    label: "Gemini · Weekly",
+    kind: "weekly" as const,
+    usedPercent: 20,
+    windowDurationMins: 7 * 24 * 60,
+  };
+  const modelRows = [
+    "Gemini 3.8 Flash (High)",
+    "Gemini 3.8 Flash (Low)",
+    "Gemini 3.8 Flash (Medium)",
+    "Claude Opus 4.6 (Thinking)",
+    "GPT-OSS 120B (Medium)",
+  ].map((name) => ({
+    id: name.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-"),
+    label: `All Models · ${name}`,
+    kind: "other" as const,
+    usedPercent: 0,
+    resetsAt: "2026-10-25T21:00:00.000Z",
+  }));
+
+  it("renders one row per reported window and no per-model rows", async () => {
+    const paid = antigravity("antigravity_paid", "Antigravity Paid", [
+      {
+        id: "3p-5h",
+        label: "Claude & GPT (shared) · 5-hour",
+        kind: "session",
+        usedPercent: 0,
+        windowDurationMins: 300,
+      },
+      {
+        id: "3p-weekly",
+        label: "Claude & GPT (shared) · Weekly",
+        kind: "weekly",
+        usedPercent: 0,
+        windowDurationMins: 7 * 24 * 60,
+      },
+      rolling,
+      weekly,
+      ...modelRows,
+    ]);
+    const presentations = new Map([
+      [
+        EnvironmentId.make("desk"),
+        { entry: { target: { label: "Desk" } }, serverConfig: { providers: [paid] } },
+      ],
+    ]);
+    await using screen = await render(
+      <UsageLimitsPooled presentations={presentations} now={Date.parse(checkedAt)} />,
+    );
+    await expect.element(screen.getByText("Claude & GPT (shared) · 5-hour")).toBeVisible();
+    await expect.element(screen.getByText("Gemini · Weekly")).toBeVisible();
+    expect(screen.container.textContent).not.toContain("Gemini 3.8 Flash");
+    expect(
+      screen.container.querySelectorAll('button[aria-label^="Antigravity Paid: "]'),
+    ).toHaveLength(4);
+  });
+
+  it("shows an account only in the shared window it reported", async () => {
+    const paid = antigravity("antigravity_paid", "Antigravity Paid", [
+      {
+        id: "3p-5h",
+        label: "Claude & GPT (shared) · 5-hour",
+        kind: "session",
+        usedPercent: 60,
+        windowDurationMins: 300,
+      },
+      rolling,
+      weekly,
+    ]);
+    const trial = antigravity("antigravity_trial", "Antigravity Trial", [rolling, weekly]);
+    const presentations = new Map([
+      [
+        EnvironmentId.make("desk"),
+        {
+          entry: { target: { label: "Desk" } },
+          serverConfig: { providers: [paid, trial] },
+        },
+      ],
+    ]);
+    await using screen = await render(
+      <UsageLimitsPooled presentations={presentations} now={Date.parse(checkedAt)} />,
+    );
+    await expect.element(screen.getByText("Claude & GPT (shared) · 5-hour")).toBeVisible();
+    expect(
+      screen.container.querySelectorAll('button[aria-label^="Antigravity Trial: "]'),
+    ).toHaveLength(2);
+    expect(
+      screen.container.querySelectorAll('button[aria-label^="Antigravity Paid: "]'),
+    ).toHaveLength(3);
   });
 });
 

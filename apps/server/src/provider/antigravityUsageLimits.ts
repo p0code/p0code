@@ -254,6 +254,18 @@ export const antigravityAccountFingerprint = (userInfo: unknown) =>
 export const antigravitySummaryWindows = (response: unknown, requestedAt: number) =>
   decodeSummary(response).pipe(Effect.map((summary) => summaryWindows(summary, requestedAt)));
 
+/**
+ * A summary repeats the account's rolling window once per model. Those buckets carry no window
+ * length or model scope, so they are the same allowance, not per-model quotas.
+ */
+function modelWindowBucket(bucket: typeof Bucket.Type): boolean {
+  return (
+    SUMMARY_WINDOW_MINS.get(bucket.window ?? "") === undefined &&
+    (/(?:flash|pro|opus|sonnet|haiku|oss|thinking|tiered)/i.test(bucket.bucketId) ||
+      /\((?:thinking|high|low|medium|tiered|extra low)\)/i.test(bucket.displayName ?? ""))
+  );
+}
+
 function summaryWindows(summary: typeof Summary.Type, requestedAt: number) {
   const windows = new Map<string, ServerProviderUsageWindow>();
   const groups = summary.groups?.some((group) => group.buckets?.length)
@@ -261,7 +273,7 @@ function summaryWindows(summary: typeof Summary.Type, requestedAt: number) {
     : [{ buckets: summary.buckets }];
   for (const group of groups ?? []) {
     for (const bucket of group.buckets ?? []) {
-      if (bucket.disabled) continue;
+      if (bucket.disabled || modelWindowBucket(bucket)) continue;
       // Argon and Carbon are metered separately from the default Gemini buckets.
       const family = bucket.bucketId.startsWith("gemini-argon-")
         ? group.displayName?.trim() || "Gemini Argon"
