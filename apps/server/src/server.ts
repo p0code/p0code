@@ -1,4 +1,5 @@
 import * as PluginInstaller from "./plugins/installer.ts";
+import * as PluginShop from "./plugins/shop.ts";
 import * as DataBackup from "./persistence/DataBackup.ts";
 import { DataRestoreError } from "@t3tools/contracts";
 import { applyApprovedRestore } from "./persistence/dataBackupFiles.ts";
@@ -1200,6 +1201,7 @@ const layerMakeServer = Layer.unwrap(
     return layerServerApplication.pipe(
       Layer.provide(PluginInstaller.layer),
       Layer.provideMerge(DeployService.layer.pipe(Layer.provide(DeployService.layerThreadModes))),
+      Layer.provide(PluginShop.layer),
       Layer.provideMerge(layerPluginHost),
       Layer.provideMerge(
         DataBackup.layer.pipe(Layer.provide(layerServerRestart), Layer.provide(layerLauncher)),

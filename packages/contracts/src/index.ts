@@ -86,3 +86,4 @@ export * from "./publicTunnels.ts";
 export * from "./plugins.ts";
 export * from "./deploy.ts";
 export * from "./pluginInstallation.ts";
+export * from "./pluginShop.ts";

@@ -1,11 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
-import type {
-  EnvironmentId,
-  PluginInstallRecord,
-  PluginManifest,
-  PluginCatalog,
-} from "@t3tools/contracts";
-import type * as Schema from "effect/Schema";
+import type { EnvironmentId, PluginInstallRecord, PluginManifest } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import { T, useGT, useMessages, Var } from "gt-react";
 import { useRef, useState } from "react";
@@ -26,24 +20,8 @@ import {
   DialogPanel,
 } from "../ui/dialog";
 import { SettingsSection } from "./settingsLayout";
-import { pluginCapabilityCopy } from "./pluginCapabilityCopy";
+import { PluginConsentDialog } from "./PluginConsentDialog";
 import { pluginInstallError, pluginUpload, validGithubInput } from "./pluginInstall.logic";
-
-type Catalog = Schema.Schema.Type<typeof PluginCatalog>;
-
-function PluginCapabilities({ manifest }: { readonly manifest: PluginManifest }) {
-  const m = useMessages();
-  return (
-    <ul className="space-y-2 text-muted-foreground">
-      {manifest.capabilities.map((capability) => (
-        <li key={capability}>
-          <Badge variant="outline">{capability}</Badge>
-          <p className="mt-1">{m(pluginCapabilityCopy[capability])}</p>
-        </li>
-      ))}
-    </ul>
-  );
-}
 
 export function PluginInstaller({
   environmentId,
@@ -61,15 +39,13 @@ export function PluginInstaller({
     serverEnvironment.pluginsInstalledList({ environmentId, input: {} }),
   );
   const installed = installations.data;
-  const catalog = useAtomCommand(serverEnvironment.pluginsCatalog, { reportFailure: false });
   const install = useAtomCommand(serverEnvironment.pluginsInstall, { reportFailure: false });
   const setEnabled = useAtomCommand(serverEnvironment.pluginsSetEnabled, { reportFailure: false });
   const update = useAtomCommand(serverEnvironment.pluginsUpdate, { reportFailure: false });
   const consent = useAtomCommand(serverEnvironment.pluginsConsent, { reportFailure: false });
   const rollback = useAtomCommand(serverEnvironment.pluginsRollback, { reportFailure: false });
   const remove = useAtomCommand(serverEnvironment.pluginsRemove, { reportFailure: false });
-  const [shop, setShop] = useState<Catalog | null>(null);
-  const [mode, setMode] = useState<"closed" | "github" | "local" | "shop">("closed");
+  const [mode, setMode] = useState<"closed" | "github" | "local">("closed");
   const [updateId, setUpdateId] = useState<string | null>(null);
   const [source, setSource] = useState("");
   const [busy, setBusy] = useState(false);
@@ -133,15 +109,6 @@ export function PluginInstaller({
       )
     )
       setMode("closed");
-  };
-  const browse = async () => {
-    setMode("shop");
-    setError(null);
-    setBusy(true);
-    const result = await catalog({ environmentId, input: {} });
-    if (result._tag === "Success") setShop(result.value);
-    else fail(result.cause);
-    setBusy(false);
   };
   const pickFolder = async () => {
     const api = readLocalApi();
@@ -349,14 +316,6 @@ export function PluginInstaller({
               >
                 <T>Local folder or file</T>
               </Button>
-              <Button
-                size="sm"
-                variant={mode === "shop" ? "default" : "outline"}
-                disabled={busy}
-                onClick={() => void browse()}
-              >
-                <T>Browse the shop</T>
-              </Button>
             </div>
             {mode === "github" ? (
               <form
@@ -424,38 +383,6 @@ export function PluginInstaller({
                 />
               </div>
             ) : null}
-            {mode === "shop" ? (
-              <div className="space-y-3">
-                {shop?.plugins.map((entry) => (
-                  <div key={entry.id} className="space-y-2 rounded-lg border p-3">
-                    <p className="font-mono">
-                      {entry.id} · {entry.version}
-                    </p>
-                    <p className="break-all text-xs text-muted-foreground">{entry.repository}</p>
-                    <div className="flex flex-wrap gap-1">
-                      {entry.capabilities.map((capability) => (
-                        <Badge key={capability} variant="outline">
-                          {capability}
-                        </Badge>
-                      ))}
-                    </div>
-                    <Button
-                      size="sm"
-                      disabled={!allowed || busy}
-                      onClick={() =>
-                        void run(() =>
-                          install({ environmentId, input: { source: entry.id } }),
-                        ).then((ok) => {
-                          if (ok) setMode("closed");
-                        })
-                      }
-                    >
-                      <T>Install</T>
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            ) : null}
             {busy ? (
               <p role="status">
                 <T>Working…</T>
@@ -469,75 +396,31 @@ export function PluginInstaller({
           </DialogPanel>
         </DialogPopup>
       </Dialog>
-      <Dialog
+      <PluginConsentDialog
+        manifest={review}
         open={review !== null}
-        onOpenChange={(open) => {
-          if (!open && !busy) setReview(null);
+        busy={busy}
+        allowed={allowed}
+        error={error}
+        onKeepStaged={() => {
+          if (!busy) setReview(null);
         }}
-      >
-        <DialogPopup>
-          <DialogHeader>
-            <DialogTitle>
-              <T>Review plugin capabilities</T>
-            </DialogTitle>
-            <DialogDescription>
-              <T>
-                Plugins run inside the p0code server with your account's access to files, network
-                and credentials. Capabilities are declarations, and only some are enforced. Activate
-                only plugins you trust.
-              </T>
-            </DialogDescription>
-          </DialogHeader>
-          <DialogPanel>
-            {review ? (
-              <div className="space-y-3 text-sm">
-                <p className="font-mono">
-                  {review.id} · {review.version}
-                </p>
-                <p>{review.description}</p>
-
-                <p>
-                  <T>
-                    External services:{" "}
-                    <Var>{review.externalServices.join(", ") || gt("None declared")}</Var>
-                  </T>
-                </p>
-                <PluginCapabilities manifest={review} />
-              </div>
-            ) : null}
-            {error ? (
-              <p role="alert" className="text-sm text-destructive">
-                {error}
-              </p>
-            ) : null}
-          </DialogPanel>
-          <DialogFooter>
-            <Button variant="outline" disabled={busy} onClick={() => setReview(null)}>
-              <T>Keep staged</T>
-            </Button>
-            <Button
-              disabled={!allowed || busy || !review}
-              onClick={() => {
-                if (review)
-                  void run(() =>
-                    consent({
-                      environmentId,
-                      input: {
-                        id: review.id,
-                        version: review.version,
-                        capabilities: review.capabilities,
-                      },
-                    }),
-                  ).then((ok) => {
-                    if (ok) setReview(null);
-                  });
-              }}
-            >
-              <T>Confirm and activate</T>
-            </Button>
-          </DialogFooter>
-        </DialogPopup>
-      </Dialog>
+        onConfirm={() => {
+          if (review)
+            void run(() =>
+              consent({
+                environmentId,
+                input: {
+                  id: review.id,
+                  version: review.version,
+                  capabilities: review.capabilities,
+                },
+              }),
+            ).then((ok) => {
+              if (ok) setReview(null);
+            });
+        }}
+      />
       <Dialog
         open={removing !== null}
         onOpenChange={(open) => {

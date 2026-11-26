@@ -5,13 +5,14 @@ import type { EnvironmentId, PluginInfo } from "@t3tools/contracts";
 import { OBSIDIAN_SHARED_MEMORY_ID } from "@t3tools/plugin-obsidian-shared-memory/actions";
 import { T3_CONNECT_BRIDGE_ID } from "@t3tools/plugin-t3-connect-bridge/actions";
 import { T, useGT, useMessages } from "gt-react";
-import type { ComponentType } from "react";
+import { type ComponentType, useState } from "react";
 
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { desktopLocalBackendId } from "../../connection/desktopLocal";
 import { Switch } from "../ui/switch";
+import { Toggle, ToggleGroup } from "../ui/toggle-group";
 import { useSettingsScope } from "./SettingsScopeContext";
 import { SettingsPageContainer, SettingsSection } from "./settingsLayout";
 import {
@@ -21,6 +22,7 @@ import {
 import { T3ConnectBridgeDisclosure, T3ConnectBridgePanel } from "./T3ConnectBridgePanel";
 import { pluginCapabilityCopy } from "./pluginCapabilityCopy";
 import { PluginInstaller } from "./PluginInstaller";
+import { PluginShopTab } from "./PluginShopTab";
 import { pluginInstallError } from "./pluginInstall.logic";
 
 interface PluginPanel {
@@ -71,19 +73,50 @@ function EnvironmentPlugins({
   readonly environmentId: EnvironmentId;
   readonly nativeTarget: string | null;
 }) {
+  const gt = useGT();
   const snapshot = useEnvironmentQuery(serverEnvironment.plugins({ environmentId, input: {} }));
   const m = useMessages();
+  const [tab, setTab] = useState<"installed" | "shop">("installed");
   return (
     <>
-      <PluginInstaller
-        environmentId={environmentId}
-        nativeTarget={nativeTarget}
-        onChange={snapshot.refresh}
-      />
-      {snapshot.error ? <p role="alert">{m(pluginInstallError(snapshot.error))}</p> : null}
-      {snapshot.data?.plugins.map((plugin) => (
-        <PluginSection key={plugin.manifest.id} environmentId={environmentId} plugin={plugin} />
-      ))}
+      <div className="px-4">
+        <ToggleGroup
+          aria-label={gt("Plugins view")}
+          variant="segmented"
+          value={[tab]}
+          onValueChange={(next) => {
+            if (next[0] === "installed" || next[0] === "shop") setTab(next[0]);
+          }}
+        >
+          <Toggle value="installed">
+            <T>Installed</T>
+          </Toggle>
+          <Toggle value="shop">
+            <T>Shop</T>
+          </Toggle>
+        </ToggleGroup>
+      </div>
+      {tab === "installed" ? (
+        <PluginInstaller
+          environmentId={environmentId}
+          nativeTarget={nativeTarget}
+          onChange={snapshot.refresh}
+        />
+      ) : (
+        <SettingsSection title={gt("Plugin shop")}>
+          <div className="px-4 py-3">
+            <PluginShopTab environmentId={environmentId} onChange={snapshot.refresh} />
+          </div>
+        </SettingsSection>
+      )}
+      {tab === "installed" ? (
+        <>
+          {snapshot.error ? <p role="alert">{m(pluginInstallError(snapshot.error))}</p> : null}
+          {snapshot.data?.plugins.map((plugin) => (
+            <PluginSection key={plugin.manifest.id} environmentId={environmentId} plugin={plugin} />
+          ))}
+        </>
+      ) : null}
     </>
   );
 }
