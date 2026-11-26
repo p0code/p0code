@@ -209,6 +209,78 @@ describe("Antigravity subscription limits", () => {
     }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
   );
 
+  it.effect("keeps one rolling and weekly window, not a row per model", () =>
+    Effect.gen(function* () {
+      yield* TestClock.setTime(DateTime.toEpochMillis(DateTime.makeUnsafe("2026-11-26T14:39:01Z")));
+      const modelBucket = (bucketId: string, displayName: string) => ({
+        bucketId,
+        displayName,
+        remainingFraction: 1,
+        resetTime: "2026-11-26T19:39:01Z",
+      });
+      const { probe } = yield* fixture({
+        summary: {
+          buckets: [
+            { bucketId: "3p-5h", window: "5h", remainingFraction: 1 },
+            { bucketId: "3p-weekly", window: "weekly", remainingFraction: 1 },
+            { bucketId: "gemini-5h", window: "5h", remainingFraction: 1 },
+            { bucketId: "gemini-weekly", window: "weekly", remainingFraction: 0.9 },
+            modelBucket("claude-opus-4-6-thinking", "Claude Opus 4.6 (Thinking)"),
+            modelBucket("claude-sonnet-4-6", "Claude Sonnet 4.6 (Thinking)"),
+            modelBucket("gemini-3.8-flash-high", "Gemini 3.8 Flash (High)"),
+            modelBucket("gemini-3.8-flash-low", "Gemini 3.8 Flash (Low)"),
+            modelBucket("gemini-3.8-flash-medium", "Gemini 3.8 Flash (Medium)"),
+            modelBucket("gpt-oss-120b-medium", "GPT-OSS 120B (Medium)"),
+          ],
+        },
+      });
+      const limits = yield* probe;
+      expect(limits.windows.map((window) => window.id)).toEqual([
+        "3p-5h",
+        "gemini-5h",
+        "3p-weekly",
+        "gemini-weekly",
+      ]);
+      expect(limits.windows.map((window) => window.label)).toEqual([
+        "Claude & GPT (shared) · 5-hour",
+        "Gemini · 5-hour",
+        "Claude & GPT (shared) · Weekly",
+        "Gemini · Weekly",
+      ]);
+    }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
+  );
+
+  it.effect("lists one rolling window once when the summary repeats it per model only", () =>
+    Effect.gen(function* () {
+      yield* TestClock.setTime(DateTime.toEpochMillis(DateTime.makeUnsafe("2026-11-26T14:39:01Z")));
+      const modelBucket = (bucketId: string, displayName: string) => ({
+        bucketId,
+        displayName,
+        remainingFraction: 1,
+        resetTime: "2026-11-26T19:39:01Z",
+      });
+      const { probe } = yield* fixture({
+        summary: {
+          buckets: [
+            modelBucket("gemini-3.8-flash-high", "Gemini 3.8 Flash (High)"),
+            modelBucket("gemini-3.8-flash-low", "Gemini 3.8 Flash (Low)"),
+          ],
+        },
+        models: {
+          models: {
+            "gemini-3.8-flash": {
+              modelProvider: "MODEL_PROVIDER_GOOGLE",
+              quotaInfo: { remainingFraction: 1, resetTime: "2026-11-26T19:39:01Z" },
+            },
+          },
+        },
+      });
+      expect((yield* probe).windows.map(({ id, label }) => ({ id, label }))).toEqual([
+        { id: "gemini-quota", label: "Gemini · Reported quota" },
+      ]);
+    }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
+  );
+
   // Oracle: measure the tolerance from the summary request, after auth.
   it.effect("uses summary request time after authentication for the reset tolerance", () =>
     Effect.gen(function* () {

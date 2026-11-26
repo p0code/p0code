@@ -759,11 +759,49 @@ function compensatedSum(values: readonly number[]): number {
   return sum + correction;
 }
 
+/**
+ * A model-derived id without a window length or a model scope is one account-wide rolling window
+ * listed per model, not a per-model quota.
+ */
+function unscopedModelWindow(window: ServerProviderUsageWindow): boolean {
+  return (
+    !window.modelIds?.length &&
+    window.windowDurationMins === undefined &&
+    (/(?:flash|pro|opus|sonnet|haiku|oss|thinking|tiered)/i.test(window.id) ||
+      /\((?:thinking|high|low|medium|tiered|extra low)\)/i.test(window.label))
+  );
+}
+
 function poolWindows(accounts: readonly LimitAccount[], now: number): readonly LimitPoolWindow[] {
   const byKey = new Map<string, LimitPoolMember[]>();
   for (const account of accounts) {
+    // Antigravity repeats one rolling window under a model-derived id. Codex and Cursor ids name
+    // separate slots, so only Antigravity's reset identifies the same allowance twice.
+    const windows: LimitPoolMember[] = [];
+    const seenIds = new Set<string>();
+    const antigravitySeen = new Map<string, number>();
     for (const reported of account.limits.windows) {
+      if (account.driver === "antigravity" && unscopedModelWindow(reported)) continue;
       const member = poolMember(account, reported, now);
+      const { window } = member;
+      if (seenIds.has(window.id)) continue;
+      seenIds.add(window.id);
+      const reset = resetMillis(window);
+      const identity =
+        account.driver === "antigravity" && !window.modelIds?.length && reset !== null
+          ? `${window.label.split(" · ")[0]}:${window.kind}:${reset}:${window.windowDurationMins ?? ""}:${window.usedPercent}`
+          : null;
+      const previous = identity === null ? undefined : antigravitySeen.get(identity);
+      if (previous !== undefined) {
+        if (window.label.length < windows[previous]!.window.label.length) {
+          windows[previous] = member;
+        }
+        continue;
+      }
+      if (identity !== null) antigravitySeen.set(identity, windows.length);
+      windows.push(member);
+    }
+    for (const member of windows) {
       const { window } = member;
       const pooled = poolKey(account.driver, window);
       const key = byKey.get(pooled)?.some((member) => member.account === account)
@@ -775,7 +813,7 @@ function poolWindows(accounts: readonly LimitAccount[], now: number): readonly L
     }
   }
   const pools = [...byKey].map(([key, members]): LimitPoolWindow => {
-    const memberByAccount = new Map(members.map((member) => [member.account.key, member]));
+    const memberByAccount = new Map(members.map((member) => [member.account, member]));
     const first = members[0]!.window;
     const id = members[0]!.account.driver === "codex" ? key : first.id;
     // One unknown plan makes the pool incomparable by plan, so every member then counts once.
@@ -824,9 +862,7 @@ function poolWindows(accounts: readonly LimitAccount[], now: number): readonly L
       kind: first.kind,
       label: first.label,
       members,
-      columns: accounts.map(
-        (account) => memberByAccount.get(account.key) ?? { account, window: null },
-      ),
+      columns: accounts.map((account) => memberByAccount.get(account) ?? { account, window: null }),
       usedPercent: Math.round(usedPercent),
       remainingPercent: Math.round(100 - usedPercent),
       pace: meanElapsed === null ? null : paceOfShares(timedUsed, meanElapsed),
