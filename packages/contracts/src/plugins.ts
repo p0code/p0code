@@ -18,6 +18,8 @@ export const PluginCapability = Schema.Literals([
   "usage:read",
   "data:backup",
   "agent:instructions",
+  /** Exposes a `DeployProvider` the host lists in Settings → Deploy. */
+  "deploy:provider",
 ]);
 export type PluginCapability = typeof PluginCapability.Type;
 

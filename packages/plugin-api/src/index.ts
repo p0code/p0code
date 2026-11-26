@@ -1,3 +1,15 @@
+import {
+  DeployDomain,
+  DeployLinkInput,
+  DeployLinkResult,
+  DeployProviderDeployInput,
+  DeployProviderProject,
+  DeployProviderStatus,
+  DeployResult,
+  DeployRollbackInput,
+  DeploymentStatus,
+  DeployEnvVars,
+} from "@t3tools/contracts";
 import type {
   DataSnapshotManifest,
   PendingRestore,
@@ -22,7 +34,7 @@ import type * as Path from "effect/Path";
 import type * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 import * as Schema from "effect/Schema";
 import type * as Scope from "effect/Scope";
-import type * as Stream from "effect/Stream";
+import * as Stream from "effect/Stream";
 
 /** A failure a plugin reports to its caller; the message is shown to people. */
 export class PluginError extends Schema.TaggedError<PluginError>()("PluginError", {
@@ -174,6 +186,8 @@ export interface StartedPlugin {
   readonly invoke: (action: string, input: unknown) => Effect.Effect<unknown, PluginError>;
   readonly routes: ReadonlyMap<string, PluginRouteHandler>;
   readonly agentInstructions?: Effect.Effect<string | null>;
+  /** Present for plugins built with `defineDeployProvider`; every call is schema-checked. */
+  readonly deployProvider?: StartedDeployProvider;
 }
 
 export function definePlugin<Actions extends PluginActionSchemas>(definition: {
@@ -181,9 +195,21 @@ export function definePlugin<Actions extends PluginActionSchemas>(definition: {
   readonly actions: Actions;
   readonly start: Effect.Effect<PluginInstance<Actions>, PluginError, PluginServices | Scope.Scope>;
 }): Plugin {
+  const startInstance = instanceStarter(definition.manifest, definition.actions);
+  return {
+    manifest: definition.manifest,
+    start: definition.start.pipe(Effect.flatMap(startInstance)),
+  };
+}
+
+/** Checks a started instance against its manifest and wraps its actions with their codecs. */
+function instanceStarter<Actions extends PluginActionSchemas>(
+  manifest: PluginManifest,
+  actions: Actions,
+) {
   // Compiled once per plugin, not per call.
   const codecs = new Map(
-    Object.entries(definition.actions).map(([action, schema]) => [
+    Object.entries(actions).map(([action, schema]) => [
       action,
       {
         decode: Schema.decodeUnknownEffect(schema.input),
@@ -191,63 +217,207 @@ export function definePlugin<Actions extends PluginActionSchemas>(definition: {
       },
     ]),
   );
+  return (instance: PluginInstance<Actions>): Effect.Effect<StartedPlugin, PluginError> => {
+    const routes = new Map(Object.entries(instance.routes ?? {}));
+    if (manifest.httpRoutes.length > 0 && !manifest.capabilities.includes("http:routes")) {
+      return Effect.fail(new PluginError({ message: "Capability http:routes is not declared." }));
+    }
+    for (const path of routes.keys()) {
+      if (!manifest.httpRoutes.includes(path)) {
+        return Effect.fail(new PluginError({ message: `Route ${path} is not declared.` }));
+      }
+    }
+    if (
+      instance.agentInstructions !== undefined &&
+      !manifest.capabilities.includes("agent:instructions")
+    ) {
+      return Effect.fail(
+        new PluginError({ message: "Capability agent:instructions is not declared." }),
+      );
+    }
+    const invoke = (action: string, input: unknown) => {
+      const codec = codecs.get(action);
+      const handler = Object.hasOwn(instance.actions, action)
+        ? instance.actions[action]
+        : undefined;
+      if (codec === undefined || handler === undefined) {
+        return Effect.fail(new PluginError({ message: `Unknown action ${action}.` }));
+      }
+      return codec.decode(input).pipe(
+        Effect.mapError((cause) => new PluginError({ message: "Invalid action input.", cause })),
+        Effect.flatMap(handler),
+        Effect.flatMap((output) =>
+          codec
+            .encode(output)
+            .pipe(
+              Effect.mapError(
+                (cause) => new PluginError({ message: "Invalid action output.", cause }),
+              ),
+            ),
+        ),
+      );
+    };
+    return Effect.succeed({
+      invoke,
+      routes,
+      ...(instance.agentInstructions === undefined
+        ? {}
+        : { agentInstructions: instance.agentInstructions }),
+    } satisfies StartedPlugin);
+  };
+}
+
+// ── Deploy providers ───────────────────────────────────────────────────────────────────────────
+
+export type {
+  DeployDomain,
+  DeployEnvVars,
+  DeployLinkInput,
+  DeployLinkResult,
+  DeployProviderDeployInput,
+  DeployProviderProject,
+  DeployProviderStatus,
+  DeployResult,
+  DeployRollbackInput,
+  DeploymentStatus,
+} from "@t3tools/contracts";
+
+/**
+ * What a deploy provider plugin implements. Keep account credentials in `PluginContext.storage`
+ * and make API calls with the lent `HttpClient` (declare `network:outbound`); the host never
+ * stores, reads, or returns a provider token. Messages in `PluginError` are shown to people, so
+ * never put a token in one.
+ */
+export interface DeployProvider {
+  /**
+   * Validates and stores `token` when one is given; otherwise starts or completes the provider's
+   * own sign-in, answering `pending` with a URL to open until it completes.
+   */
+  readonly link: (input: DeployLinkInput) => Effect.Effect<DeployLinkResult, PluginError>;
+  /** Forgets the stored credential. */
+  readonly unlink: Effect.Effect<void, PluginError>;
+  readonly status: Effect.Effect<DeployProviderStatus, PluginError>;
+  readonly listProjects: Effect.Effect<ReadonlyArray<DeployProviderProject>, PluginError>;
+  readonly deploy: (input: DeployProviderDeployInput) => Effect.Effect<DeployResult, PluginError>;
+  readonly deploymentStatus: (deploymentId: string) => Effect.Effect<DeploymentStatus, PluginError>;
+  /** Log lines; with `follow`, the stream stays open until the deployment finishes. */
+  readonly logs: (
+    deploymentId: string,
+    options: { readonly follow?: boolean },
+  ) => Stream.Stream<string, PluginError>;
+  readonly rollback: (input: DeployRollbackInput) => Effect.Effect<DeployResult, PluginError>;
+  readonly listDomains: (
+    projectId: string,
+  ) => Effect.Effect<ReadonlyArray<DeployDomain>, PluginError>;
+  readonly setEnv: (projectId: string, vars: DeployEnvVars) => Effect.Effect<void, PluginError>;
+}
+
+export interface DeployProviderDescriptor {
+  /** Stable id of the provider, e.g. `vercel`. */
+  readonly id: string;
+  readonly label: string;
+  /** A lucide icon name or an `https:`/`data:` image URL. */
+  readonly icon?: string;
+}
+
+/** The provider as the host sees it once started: the same calls, checked at the boundary. */
+export interface StartedDeployProvider extends DeployProvider {
+  readonly descriptor: DeployProviderDescriptor;
+}
+
+const invalid = (what: string) => (cause: unknown) =>
+  new PluginError({ message: `The deploy provider returned an invalid ${what}.`, cause });
+const invalidInput = (cause: unknown) =>
+  new PluginError({ message: "Invalid deploy provider input.", cause });
+
+const checked = <A>(schema: Schema.Codec<A, unknown>, what: string) => {
+  const decode = Schema.decodeUnknownEffect(schema);
+  return <E, R>(effect: Effect.Effect<unknown, E, R>) =>
+    effect.pipe(Effect.flatMap((value) => decode(value).pipe(Effect.mapError(invalid(what)))));
+};
+const input = <A>(schema: Schema.Codec<A, unknown>) => {
+  const decode = Schema.decodeUnknownEffect(schema);
+  return (value: unknown) => decode(value).pipe(Effect.mapError(invalidInput));
+};
+
+const checkLink = checked(DeployLinkResult, "link result");
+const checkStatus = checked(DeployProviderStatus, "status");
+const checkProjects = checked(Schema.Array(DeployProviderProject), "project list");
+const checkResult = checked(DeployResult, "deploy result");
+const checkDeployment = checked(DeploymentStatus, "deployment status");
+const checkDomains = checked(Schema.Array(DeployDomain), "domain list");
+const linkInput = input(DeployLinkInput);
+const deployInput = input(DeployProviderDeployInput);
+const rollbackInput = input(DeployRollbackInput);
+const envInput = input(DeployEnvVars);
+
+/** Wraps a provider so a plugin cannot hand the host data outside the contract. */
+const checkProvider = (
+  descriptor: DeployProviderDescriptor,
+  provider: DeployProvider,
+): StartedDeployProvider => ({
+  descriptor,
+  link: (value) => linkInput(value).pipe(Effect.flatMap(provider.link), checkLink),
+  unlink: provider.unlink,
+  status: checkStatus(provider.status),
+  listProjects: checkProjects(provider.listProjects),
+  deploy: (value) => deployInput(value).pipe(Effect.flatMap(provider.deploy), checkResult),
+  deploymentStatus: (id) => checkDeployment(provider.deploymentStatus(id)),
+  logs: (id, options) =>
+    provider
+      .logs(id, options)
+      .pipe(
+        Stream.mapEffect((line) =>
+          typeof line === "string"
+            ? Effect.succeed(line)
+            : Effect.fail(new PluginError({ message: "The deploy provider sent a non-text log." })),
+        ),
+      ),
+  rollback: (value) => rollbackInput(value).pipe(Effect.flatMap(provider.rollback), checkResult),
+  listDomains: (projectId) => checkDomains(provider.listDomains(projectId)),
+  setEnv: (projectId, vars) =>
+    envInput(vars).pipe(Effect.flatMap((decoded) => provider.setEnv(projectId, decoded))),
+});
+
+/**
+ * A plugin that is a deploy provider, mirroring `definePlugin`. The manifest must declare
+ * `deploy:provider`. Extra `actions` (for example a settings panel's own) work as in
+ * `definePlugin`; the provider's calls are not plugin actions, so `plugins.invoke` cannot reach
+ * a deploy around the host's approval rule.
+ */
+export function defineDeployProvider<Actions extends PluginActionSchemas = {}>(definition: {
+  readonly manifest: PluginManifest;
+  readonly provider: DeployProviderDescriptor;
+  readonly actions?: Actions;
+  readonly start: Effect.Effect<
+    Omit<PluginInstance<Actions>, "actions"> & {
+      readonly actions?: PluginInstance<Actions>["actions"];
+      readonly deploy: DeployProvider;
+    },
+    PluginError,
+    PluginServices | Scope.Scope
+  >;
+}): Plugin {
+  const startInstance = instanceStarter(definition.manifest, definition.actions ?? ({} as Actions));
   return {
     manifest: definition.manifest,
     start: definition.start.pipe(
       Effect.flatMap((instance) => {
-        const routes = new Map(Object.entries(instance.routes ?? {}));
-        if (
-          definition.manifest.httpRoutes.length > 0 &&
-          !definition.manifest.capabilities.includes("http:routes")
-        ) {
+        if (!definition.manifest.capabilities.includes("deploy:provider")) {
           return Effect.fail(
-            new PluginError({ message: "Capability http:routes is not declared." }),
+            new PluginError({ message: "Capability deploy:provider is not declared." }),
           );
         }
-        for (const path of routes.keys()) {
-          if (!definition.manifest.httpRoutes.includes(path)) {
-            return Effect.fail(new PluginError({ message: `Route ${path} is not declared.` }));
-          }
-        }
-        if (
-          instance.agentInstructions !== undefined &&
-          !definition.manifest.capabilities.includes("agent:instructions")
-        ) {
-          return Effect.fail(
-            new PluginError({ message: "Capability agent:instructions is not declared." }),
-          );
-        }
-        const invoke = (action: string, input: unknown) => {
-          const codec = codecs.get(action);
-          const handler = Object.hasOwn(instance.actions, action)
-            ? instance.actions[action]
-            : undefined;
-          if (codec === undefined || handler === undefined) {
-            return Effect.fail(new PluginError({ message: `Unknown action ${action}.` }));
-          }
-          return codec.decode(input).pipe(
-            Effect.mapError(
-              (cause) => new PluginError({ message: "Invalid action input.", cause }),
-            ),
-            Effect.flatMap(handler),
-            Effect.flatMap((output) =>
-              codec
-                .encode(output)
-                .pipe(
-                  Effect.mapError(
-                    (cause) => new PluginError({ message: "Invalid action output.", cause }),
-                  ),
-                ),
-            ),
-          );
-        };
-        return Effect.succeed({
-          invoke,
-          routes,
-          ...(instance.agentInstructions === undefined
-            ? {}
-            : { agentInstructions: instance.agentInstructions }),
-        } satisfies StartedPlugin);
+        const { deploy, actions, ...rest } = instance;
+        return startInstance({
+          ...rest,
+          actions: actions ?? ({} as PluginInstance<Actions>["actions"]),
+        }).pipe(
+          Effect.map((started): StartedPlugin => ({
+            ...started,
+            deployProvider: checkProvider(definition.provider, deploy),
+          })),
+        );
       }),
     ),
   };

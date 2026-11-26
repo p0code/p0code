@@ -44,6 +44,7 @@ const host = PluginHost.of({
         : null,
     ),
   agentInstructions: Effect.succeed([]),
+  deployProviders: Effect.succeed([]),
 });
 
 const layerFor = (plugins: ReadonlyArray<{ readonly manifest: PluginManifest }>) =>

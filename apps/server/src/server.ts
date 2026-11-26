@@ -7,6 +7,7 @@ import * as SelfRelayHttp from "./selfRelay/http.ts";
 import * as PublicTunnels from "./tunnels/PublicTunnels.ts";
 import * as TunnelsRpc from "./tunnels/rpc.ts";
 import * as PluginHost from "./plugins/PluginHost.ts";
+import * as DeployService from "./deploy/DeployService.ts";
 import * as PluginHostBindings from "./plugins/bindings.ts";
 import * as PluginHttp from "./plugins/http.ts";
 import * as PluginRegistry from "./plugins/registry.ts";
@@ -1195,6 +1196,7 @@ const layerMakeServer = Layer.unwrap(
 
     return layerServerApplication.pipe(
       Layer.provide(PluginInstaller.layer),
+      Layer.provideMerge(DeployService.layer.pipe(Layer.provide(DeployService.layerThreadModes))),
       Layer.provideMerge(layerPluginHost),
       Layer.provideMerge(
         DataBackup.layer.pipe(Layer.provide(layerServerRestart), Layer.provide(layerLauncher)),

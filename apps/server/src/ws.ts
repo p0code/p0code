@@ -6,6 +6,7 @@ import * as SelfRelay from "./selfRelay/SelfRelay.ts";
 import * as PublicTunnels from "./tunnels/PublicTunnels.ts";
 import * as TunnelsRpc from "./tunnels/rpc.ts";
 import { PluginHost } from "./plugins/PluginHost.ts";
+import { DeployService } from "./deploy/DeployService.ts";
 import { SelfRelayOperationError } from "@t3tools/contracts";
 import { GitCommandError, OrchestrationDispatchCommandError } from "@t3tools/contracts";
 // @effect-diagnostics-next-line nodeBuiltinImport:off -- A synchronous digest inside the pure provider mapping.
@@ -1562,6 +1563,7 @@ export const layerWsRpc = (
         scopes: new Set(currentSession.scopes),
       });
       const pluginHost = yield* PluginHost;
+      const deploy = yield* DeployService;
       const pluginInstaller = yield* PluginInstaller.PluginInstaller;
       const dataBackup = yield* DataBackup;
       const readPublicOrigin = yield* PublicOrigin;
@@ -2921,6 +2923,18 @@ export const layerWsRpc = (
         [WS_METHODS.pluginsRemove]: (input) => pluginInstaller.remove(input),
         [WS_METHODS.pluginsRollback]: (input) => pluginInstaller.rollback(input),
         [WS_METHODS.pluginsInvoke]: (input) => pluginHost.invoke(input),
+        [WS_METHODS.deployOverview]: () => deploy.overview,
+        [WS_METHODS.deployLink]: (input) => deploy.link(input),
+        [WS_METHODS.deployUnlink]: ({ pluginId }) => deploy.unlink(pluginId),
+        [WS_METHODS.deployListProjects]: ({ pluginId }) => deploy.listProjects(pluginId),
+        [WS_METHODS.deployMapProject]: (input) => deploy.mapProject(input),
+        [WS_METHODS.deployStart]: (input) => deploy.start(input),
+        [WS_METHODS.deployDecideApproval]: (input) => deploy.decideApproval(input),
+        [WS_METHODS.deployStatus]: (input) => deploy.status(input),
+        [WS_METHODS.deployLogs]: (input) => deploy.logs(input),
+        [WS_METHODS.deployRollback]: (input) => deploy.rollback(input),
+        [WS_METHODS.deployDomains]: ({ projectId }) => deploy.domains(projectId),
+        [WS_METHODS.deploySetEnv]: (input) => deploy.setEnv(input),
         [WS_METHODS.pullRequestsList]: (input) => pullRequests.list(input),
         [WS_METHODS.pullRequestsListStats]: (input) => pullRequests.listStats(input),
         [WS_METHODS.pullRequestsFilterOptions]: (input) => pullRequests.filterOptions(input),

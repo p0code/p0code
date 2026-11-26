@@ -25,6 +25,7 @@ import {
   isThreadTriageAction,
   threadActionRequiresOperate,
   type ThreadActionMenuId,
+  deploySearchForThread,
 } from "../components/threadActionMenu.logic";
 import { titleRegenerationToast } from "../components/threadTitleRegenerationToast";
 import { stackedThreadToast, toastManager } from "../components/ui/toast";
@@ -37,6 +38,7 @@ import { readEnvironmentScope } from "../state/session";
 import {
   readEnvironmentServerConfigLoaded,
   readEnvironmentSupportsAutoSettleOptOut,
+  readEnvironmentSupportsDeploy,
   readThreadShell,
   useProjects,
 } from "../state/entities";
@@ -158,6 +160,7 @@ export function useThreadActionMenu(input: {
       canShareWithGuest,
       canTurnIntoProject: canTurnThreadIntoProject(threadRef),
       canMoveToProject: canMoveThreadIntoProject(threadRef),
+      canDeploy: readEnvironmentSupportsDeploy(threadRef.environmentId),
     });
     const run = async (action: ThreadActionMenuId) => {
       const api = readLocalApi();
@@ -219,6 +222,9 @@ export function useThreadActionMenu(input: {
           });
           return;
         }
+        case "deploy":
+          void router.navigate({ to: "/settings/deploy", search: deploySearchForThread(thread) });
+          return;
         case "new-thread-on-branch": {
           const result = await settlePromise(() =>
             handleNewThread(scopeProjectRef(threadRef.environmentId, thread.projectId), {

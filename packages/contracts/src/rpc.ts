@@ -30,6 +30,27 @@ import {
   PluginsSnapshot,
 } from "./plugins.ts";
 import {
+  DeployDecideApprovalInput,
+  DeployDeploymentInput,
+  DeployDomain,
+  DeployError,
+  DeployLinkResult,
+  DeployLinkRpcInput,
+  DeployLogsInput,
+  DeployMapProjectInput,
+  DeployOverview,
+  DeployPluginInput,
+  DeployProjectInput,
+  DeployProjectRollbackInput,
+  DeployProviderProject,
+  DeployRecord,
+  DeployResult,
+  DeploySetEnvInput,
+  DeployStartInput,
+  DeployStartResult,
+  DeploymentStatus,
+} from "./deploy.ts";
+import {
   PublicTunnel,
   PublicTunnelCreateInput,
   PublicTunnelCreateResult,
@@ -761,6 +782,19 @@ export const WS_METHODS = {
   pluginsSetEnabled: "plugins.setEnabled",
   pluginsInvoke: "plugins.invoke",
 
+  deployOverview: "deploy.overview",
+  deployLink: "deploy.link",
+  deployUnlink: "deploy.unlink",
+  deployListProjects: "deploy.listProjects",
+  deployMapProject: "deploy.mapProject",
+  deployStart: "deploy.start",
+  deployDecideApproval: "deploy.decideApproval",
+  deployStatus: "deploy.status",
+  deployLogs: "deploy.logs",
+  deployRollback: "deploy.rollback",
+  deployDomains: "deploy.domains",
+  deploySetEnv: "deploy.setEnv",
+
   pullRequestsList: "pullRequests.list",
   pullRequestsListStats: "pullRequests.listStats",
   pullRequestsFilterOptions: "pullRequests.filterOptions",
@@ -1491,6 +1525,73 @@ const WsPluginsInvokeRpc = Rpc.make(WS_METHODS.pluginsInvoke, {
   payload: PluginInvokeInput,
   success: Schema.Unknown,
   error: Schema.Union([PluginOperationError, EnvironmentAuthorizationError]),
+});
+
+const DeployRpcError = Schema.Union([DeployError, EnvironmentAuthorizationError]);
+/** Providers from plugins declaring deploy:provider, project mappings, recent deploys, approvals. */
+const WsDeployOverviewRpc = Rpc.make(WS_METHODS.deployOverview, {
+  payload: Schema.Struct({}),
+  success: DeployOverview,
+  error: DeployRpcError,
+});
+/** The token goes to the provider plugin's own storage; the host never keeps or returns it. */
+const WsDeployLinkRpc = Rpc.make(WS_METHODS.deployLink, {
+  payload: DeployLinkRpcInput,
+  success: DeployLinkResult,
+  error: DeployRpcError,
+});
+const WsDeployUnlinkRpc = Rpc.make(WS_METHODS.deployUnlink, {
+  payload: DeployPluginInput,
+  success: Schema.Void,
+  error: DeployRpcError,
+});
+const WsDeployListProjectsRpc = Rpc.make(WS_METHODS.deployListProjects, {
+  payload: DeployPluginInput,
+  success: Schema.Array(DeployProviderProject),
+  error: DeployRpcError,
+});
+const WsDeployMapProjectRpc = Rpc.make(WS_METHODS.deployMapProject, {
+  payload: DeployMapProjectInput,
+  success: Schema.Void,
+  error: DeployRpcError,
+});
+/** Deploys now, or, for a thread below Full access, files an approval request instead. */
+const WsDeployStartRpc = Rpc.make(WS_METHODS.deployStart, {
+  payload: DeployStartInput,
+  success: DeployStartResult,
+  error: DeployRpcError,
+});
+/** Approving runs the held deploy; declining drops it. */
+const WsDeployDecideApprovalRpc = Rpc.make(WS_METHODS.deployDecideApproval, {
+  payload: DeployDecideApprovalInput,
+  success: Schema.NullOr(DeployRecord),
+  error: DeployRpcError,
+});
+const WsDeployStatusRpc = Rpc.make(WS_METHODS.deployStatus, {
+  payload: DeployDeploymentInput,
+  success: DeploymentStatus,
+  error: DeployRpcError,
+});
+const WsDeployLogsRpc = Rpc.make(WS_METHODS.deployLogs, {
+  payload: DeployLogsInput,
+  success: Schema.String,
+  error: DeployRpcError,
+  stream: true,
+});
+const WsDeployRollbackRpc = Rpc.make(WS_METHODS.deployRollback, {
+  payload: DeployProjectRollbackInput,
+  success: DeployResult,
+  error: DeployRpcError,
+});
+const WsDeployDomainsRpc = Rpc.make(WS_METHODS.deployDomains, {
+  payload: DeployProjectInput,
+  success: Schema.Array(DeployDomain),
+  error: DeployRpcError,
+});
+const WsDeploySetEnvRpc = Rpc.make(WS_METHODS.deploySetEnv, {
+  payload: DeploySetEnvInput,
+  success: Schema.Void,
+  error: DeployRpcError,
 });
 
 const WsServerReportClientActivityRpc = Rpc.make(WS_METHODS.serverReportClientActivity, {
@@ -2888,6 +2989,18 @@ export const WsRpcGroup = RpcGroup.make(
 
   WsPluginsSetEnabledRpc,
   WsPluginsInvokeRpc,
+  WsDeployOverviewRpc,
+  WsDeployLinkRpc,
+  WsDeployUnlinkRpc,
+  WsDeployListProjectsRpc,
+  WsDeployMapProjectRpc,
+  WsDeployStartRpc,
+  WsDeployDecideApprovalRpc,
+  WsDeployStatusRpc,
+  WsDeployLogsRpc,
+  WsDeployRollbackRpc,
+  WsDeployDomainsRpc,
+  WsDeploySetEnvRpc,
   WsPullRequestsListRpc,
   WsPullRequestsListStatsRpc,
   WsPullRequestsFilterOptionsRpc,

@@ -52,6 +52,16 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
   [WS_METHODS.pluginsRollback]: AuthRelayConfigureScope,
   [WS_METHODS.pluginsSetEnabled]: AuthRelayConfigureScope,
   [WS_METHODS.pluginsInvoke]: AuthRelayConfigureScope,
+  // Deploy: linking stores a provider credential (in the plugin's storage), as a provider
+  // sign-in does; mapping a project is a setting; deploying, rolling back and setting a
+  // project's variables change what runs in production, as operating a thread does.
+  [WS_METHODS.deployLink]: AuthProvidersManageScope,
+  [WS_METHODS.deployUnlink]: AuthProvidersManageScope,
+  [WS_METHODS.deployMapProject]: AuthSettingsWriteScope,
+  [WS_METHODS.deployStart]: AuthOrchestrationOperateScope,
+  [WS_METHODS.deployDecideApproval]: AuthOrchestrationOperateScope,
+  [WS_METHODS.deployRollback]: AuthOrchestrationOperateScope,
+  [WS_METHODS.deploySetEnv]: AuthOrchestrationOperateScope,
   [WS_METHODS.providerAuthRemoveMethod]: AuthProvidersManageScope,
   // An MCP sign-in stores a credential for the agent, as an account sign-in does.
   [WS_METHODS.providerMcpSignInStart]: AuthProvidersManageScope,

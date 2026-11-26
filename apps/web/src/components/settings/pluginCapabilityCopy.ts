@@ -22,4 +22,7 @@ export const pluginCapabilityCopy = {
     "Can expose declared web endpoints without requiring a signed-in session while enabled.",
   ),
   "agent:instructions": msg("Can add instructions to every agent turn while enabled."),
+  "deploy:provider": msg(
+    "Can deploy your projects to its service when you or an approved thread ask, using an account you link in Settings → Deploy.",
+  ),
 } satisfies Record<PluginCapability, string>;

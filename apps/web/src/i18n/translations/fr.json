@@ -2705,6 +2705,7 @@
   "65e3725b1c46b314": "Jamais",
   "4bbe9b821de91d9d": "Fil",
   "f053d7461b8ecce5": "ID du fil",
+  "39eba74d1788be0a": "Déployer…",
   "70399412ec5a7026": "Archiver le fil",
   "95184480a503090c": "Supprimer",
   "042d3a13ea7d3f7b": "Échec de la génération du titre.",
@@ -8130,6 +8131,140 @@
     " min. Les agents en cours s’arrêtent au redémarrage."
   ],
   "c56b618d212bf018": "Redémarrer et récupérer",
+  "be1eeddb87fc6fe9": "Déployer",
+  "129164189c938942": "Fournisseurs de déploiement",
+  "3a2e919ca921a60c": "Déploiements",
+  "1e80233b9193116f": "Désactivé dans Plugins",
+  "58b7b0e79013a091": "Associé",
+  "364cae9e608a63d4": "Sign-in expired",
+  "4ad258969e361b3c": "Erreur",
+  "fa83ec856513632c": "Non associé",
+  "8f6976097de6cd25": "Jeton d’accès (facultatif)",
+  "bd33c4006ff50a0b": "Jeton d’accès {provider}",
+  "ce63a11bca54e095": "Dissocier",
+  "19cb8f9ff8df4979": "Réassocier",
+  "e176b5f17630f05b": "Associer",
+  "afdefb17101fac3a": "Cible de déploiement pour {project}",
+  "8a88e44ae853c80d": "Choisir une cible",
+  "e9755757b8a9fdc9": "Aucune cible",
+  "efbb8f3d8336378c": "Restauré vers {deployment}.",
+  "2a1419da20c2bb27": "En file d’attente",
+  "d000f2b5e832a45d": "Compilation",
+  "00add3d1a097078a": "Prêt",
+  "d01b83620a105d50": "Échec",
+  "7318f8b5cbcc0ff0": "Annulé",
+  "5942a61dbfb5214e": "En attente des lignes de journal…",
+  "b1cb84e4eca5b06b": "Production",
+  "bf0f37f53a4e2d62": "Aperçu",
+  "5b84d580f80b3688": "Branche Git",
+  "457bf48449fb47aa": "Build local",
+  "15ed472fb3ba4a6d": "Branche par défaut",
+  "f59d5b9846c2a3c6": "Connectez un environnement exécutant cette version pour déployer depuis celui-ci.",
+  "0c5c6d47c9eec1cd": "Aucun fournisseur de déploiement installé",
+  "3e68a8b268965f62": [
+    "Les cibles de déploiement comme Vercel, Cloudflare ou vos propres hôtes Docker viennent de plugins. Installez-en un dans ",
+    {
+      "t": "Link",
+      "i": 1,
+      "c": "Plugins"
+    },
+    ", activez-le, puis associez votre compte ici."
+  ],
+  "5486b18239ddf78e": "Ajoutez un projet à cet environnement pour le déployer.",
+  "7f9c4906e0c768ca": "Les déploiements lancés depuis cet environnement apparaissent ici.",
+  "7770f2ba0e443fb7": "Activez ce plugin dans Plugins pour associer un compte.",
+  "a4f401eedf02e8ef": [
+    "Compte : ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    }
+  ],
+  "6a4c8edee7d78217": "Terminer la connexion",
+  "fa320e2be19caa64": [
+    "Se déploie sur ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " chez ",
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    }
+  ],
+  "42ff68458bdb217c": "Non associé à une cible de déploiement.",
+  "8279db589cda9dcf": "Déployer",
+  "0834382733f42ced": [
+    "Un fil sans accès complet a demandé à déployer sur ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " (",
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    },
+    ")."
+  ],
+  "4064fb5fc6c6be17": "Approuver et déployer",
+  "7f41545dc72a20ff": "Journaux",
+  "a0305b61cfcc9aaa": "Restaurer celui-ci",
+  "96f6682c6f165666": [
+    "Journaux de ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    }
+  ],
+  "cb4cfd798de4d156": [
+    "Déployer ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    }
+  ],
+  "5b31e4555d3aa954": [
+    "Vers ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " chez ",
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    },
+    "."
+  ],
+  "e269269163d993f6": "Choisissez d’abord une cible de déploiement pour ce projet dans Réglages → Déployer.",
+  "1e984aac74698df6": [
+    "Ce fil n’a pas d’accès complet, le déploiement attend donc votre approbation. Il déploiera ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " vers ",
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    },
+    "."
+  ],
+  "cc5d2f5ce8ee576e": "Environnement",
+  "c317fa79a76d4963": "Source",
   "c0472e6d94fdfac6": "Impossible de lire l'état du backend.",
   "80e9842fba54a764": "Background service",
   "20119adcdeba05d6": "Remote URL (experimental)",
@@ -9308,7 +9443,6 @@
   "179d3c67e76bb669": "Ce lien de connexion n’est pas une adresse web, il n’a donc pas été ouvert.",
   "d80e10905a0fb8fb": "Impossible d’ouvrir la page de connexion. Copiez le lien et ouvrez-le dans votre navigateur.",
   "edaebeea1915f9c1": "Compte",
-  "364cae9e608a63d4": "Sign-in expired",
   "8a1f691337aa0932": "Sign-in expires soon",
   "249cfb7532e0b380": "Méthode de connexion",
   "8e184b3520eac9bc": "Valeur par défaut du fournisseur",
@@ -11751,6 +11885,7 @@
   "75a9da351fa886f6": "Peut se connecter à des services externes et envoyer des données depuis le serveur.",
   "4196d14ac2afb5aa": "Peut exposer les points d’accès web déclarés sans exiger de session connectée tant qu’il est activé.",
   "d9bf51418a4eaf8c": "Peut ajouter des instructions à chaque tour des agents tant qu’il est activé.",
+  "76c518a23f13d801": "Peut déployer vos projets sur son service quand vous ou un fil approuvé le demandez, avec un compte que vous associez dans Réglages → Déployer.",
   "1992d1826db3ccc7": "La somme de contrôle ne correspond pas. Réessayez le téléchargement ou contactez l’auteur. Rien n’a été activé.",
   "001f66f6550c50af": "Ce plugin nécessite une autre version de l’API. Mettez à jour p0code ou choisissez une version compatible du plugin.",
   "650fa9a30ca33c31": "Ce plugin est intégré à p0code. Mettez à jour l’application pour le mettre à jour.",
