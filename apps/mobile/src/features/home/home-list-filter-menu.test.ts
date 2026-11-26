@@ -33,3 +33,12 @@ it("offers only switched-on environments, sorted by label", () => {
     { environmentId: "env-studio", label: "Studio", connectionState: "connected" },
   ]);
 });
+
+it("leaves out machines the active profile hides, so search never asks them", () => {
+  expect(
+    homeListFilterEnvironments(
+      [environment("env-studio", "Studio", true), environment("env-desk", "Desk", true)],
+      new Set(["env-desk" as EnvironmentId]),
+    ),
+  ).toEqual([{ environmentId: "env-studio", label: "Studio", connectionState: "connected" }]);
+});

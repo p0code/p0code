@@ -52,6 +52,7 @@ vi.mock("../../state/server", async () => {
     },
   ];
   return {
+    environmentServerConfigsAtom: Atom.make(new Map()),
     serverEnvironment: {
       usageDetails: ({ input }: { input: UsageDetailsInput }) => {
         const filtered = rows.filter(

@@ -13,10 +13,16 @@ export interface HomeListFilterMenuEnvironment {
   readonly label: string;
 }
 
-export function homeListFilterEnvironments(environments: ReadonlyArray<WorkspaceEnvironment>) {
+export function homeListFilterEnvironments(
+  environments: ReadonlyArray<WorkspaceEnvironment>,
+  hiddenEnvironmentIds: ReadonlySet<EnvironmentId> = new Set(),
+) {
   return Arr.sort(
     environments
-      .filter((environment) => environment.isEnabled)
+      .filter(
+        (environment) =>
+          environment.isEnabled && !hiddenEnvironmentIds.has(environment.environmentId),
+      )
       .map((environment) => ({
         environmentId: environment.environmentId,
         label: environment.environmentLabel,

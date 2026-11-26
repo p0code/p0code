@@ -23,6 +23,7 @@ import { Fragment, useLayoutEffect, useState } from "react";
 
 import { useClientSettings, usePrimarySettings } from "../../hooks/useSettings";
 import { observeResize } from "../../lib/observeResize";
+import { useProfileHiddenEnvironmentIds } from "../../state/entities";
 import { environmentPresentations } from "../../state/presentation";
 import { useEnvironmentScope, readEnvironmentScope } from "../../state/session";
 import { serverEnvironment } from "../../state/server";
@@ -407,12 +408,14 @@ export function UsageLimitsSection({
   readonly now: number;
 }) {
   const presentations = useAtomValue(environmentPresentations.presentationsWithProvidersAtom);
+  const hiddenEnvironments = useProfileHiddenEnvironmentIds();
   const hiddenDrivers = new Set<ServerProvider["driver"]>(
     [...hiddenProviders].map((provider) => PROVIDER_PRESENTATION[provider].driverKind),
   );
   const isVisible = (driver: ServerProvider["driver"]) => !hiddenDrivers.has(driver);
   const selected = new Map(
     [...presentations].flatMap(([id, presentation]) => {
+      if (hiddenEnvironments.has(id)) return [];
       if (selectedEnvironmentIds !== null && !selectedEnvironmentIds.has(id)) return [];
       const config = presentation.serverConfig;
       if (hiddenDrivers.size === 0 || config === null) return [[id, presentation] as const];

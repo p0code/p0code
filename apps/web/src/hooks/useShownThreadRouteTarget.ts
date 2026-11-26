@@ -6,6 +6,7 @@ import {
   getAppModalReturnThreadTarget,
   isAppModalPage,
 } from "../components/sidebar/mainAppLocation";
+import { useProfileHiddenEnvironmentIds } from "../state/entities";
 import type { ThreadRouteTarget } from "../threadRoutes";
 import { useThreadRouteTarget } from "./useThreadRouteTarget";
 
@@ -24,8 +25,17 @@ export function useShownThreadRouteTarget() {
   const [backgroundTarget, setBackgroundTarget] = useState(() =>
     modalOpen ? getAppModalReturnThreadTarget() : routeTarget,
   );
+  const hiddenEnvironments = useProfileHiddenEnvironmentIds();
   if (!modalOpen && threadRouteTargetKey(backgroundTarget) !== threadRouteTargetKey(routeTarget)) {
     setBackgroundTarget(routeTarget);
   }
-  return { shownTarget: modalOpen ? backgroundTarget : routeTarget, modalOpen };
+  const shownTarget = modalOpen ? backgroundTarget : routeTarget;
+  // A profile switch must not keep a thread under an excluded machine alive under Settings or Usage.
+  const visibleShownTarget =
+    modalOpen &&
+    shownTarget?.kind === "server" &&
+    hiddenEnvironments.has(shownTarget.threadRef.environmentId)
+      ? null
+      : shownTarget;
+  return { shownTarget: visibleShownTarget, modalOpen };
 }

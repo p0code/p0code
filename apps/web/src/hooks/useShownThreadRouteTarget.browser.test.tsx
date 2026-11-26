@@ -6,11 +6,17 @@ import {
   Outlet,
   RouterProvider,
 } from "@tanstack/react-router";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import { act, render } from "../../test/render";
 import { startMainAppLocationTracking } from "../components/sidebar/mainAppLocation";
 import { useShownThreadRouteTarget } from "./useShownThreadRouteTarget";
+
+const profileState = vi.hoisted(() => ({ hidden: new Set<string>() }));
+vi.mock(import("../state/entities"), async (original) => ({
+  ...(await original()),
+  useProfileHiddenEnvironmentIds: (() => profileState.hidden) as never,
+}));
 
 function ShownThread() {
   const { shownTarget } = useShownThreadRouteTarget();
@@ -89,5 +95,20 @@ describe("useShownThreadRouteTarget", () => {
     await using screen = await render(<RouterProvider router={router} />, { router: false });
 
     await expect.element(screen.getByRole("status")).toHaveTextContent("thread-a");
+  });
+
+  it("does not keep a thread on a machine the profile hides behind Usage", async () => {
+    profileState.hidden.add("env-1");
+    try {
+      const router = createAppRouter("/env-1/thread-a");
+      await router.load();
+      await using screen = await render(<RouterProvider router={router} />, { router: false });
+      await expect.element(screen.getByRole("status")).toHaveTextContent("thread-a");
+
+      await act(() => router.navigate({ to: "/usage" }));
+      await expect.element(screen.getByRole("status")).toHaveTextContent("none");
+    } finally {
+      profileState.hidden.clear();
+    }
   });
 });

@@ -8,12 +8,36 @@ import {
 import {
   isProjectInActiveAccountProfile,
   isThreadInActiveAccountProfile,
+  withoutHiddenEnvironments,
 } from "@t3tools/shared/accountProfiles";
 import { Atom } from "effect/reactivity";
 
 import { environmentProjects } from "./projects";
-import { serverEnvironment } from "./server";
+import { environmentServerConfigsAtom, serverEnvironment } from "./server";
 import { environmentThreadShells, steadyNavigationThreadShellsAtom } from "./threads";
+
+/** Machines the active account profile leaves out of lists and pickers. */
+export const profileHiddenEnvironmentIdsAtom = Atom.make((get) => {
+  const hidden = new Set<EnvironmentId>();
+  for (const [environmentId, config] of get(environmentServerConfigsAtom)) {
+    if (!isEnvironmentAllowedInActiveProfile(config.settings, environmentId)) {
+      hidden.add(environmentId);
+    }
+  }
+  return hidden;
+}).pipe(Atom.withLabel("mobile-profile-hidden-environment-ids"));
+
+export function useProfileHiddenEnvironmentIds(): ReadonlySet<EnvironmentId> {
+  return useAtomValue(profileHiddenEnvironmentIdsAtom);
+}
+
+/** `items` minus those on machines the active account profile leaves out. */
+export function useProfileEnvironments<T extends { readonly environmentId: EnvironmentId }>(
+  items: ReadonlyArray<T>,
+): ReadonlyArray<T> {
+  const hidden = useAtomValue(profileHiddenEnvironmentIdsAtom);
+  return withoutHiddenEnvironments(items, hidden);
+}
 
 /** Keeps the rows shown under their environment's active account profile, on its linked machines. */
 function inActiveProfileAtom<A extends { readonly environmentId: EnvironmentId }>(

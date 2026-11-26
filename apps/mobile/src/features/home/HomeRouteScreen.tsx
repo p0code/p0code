@@ -12,6 +12,7 @@ import { pickableProjectGroups } from "@t3tools/client-runtime/state/project-gro
 
 import {
   profileNavigationThreadShellsAtom,
+  useProfileHiddenEnvironmentIds,
   useProfileProjects,
 } from "../../state/account-profile-projects";
 import { useLaunchingThreads, usePendingNewTasks } from "../../state/use-pending-new-tasks";
@@ -111,7 +112,10 @@ export function HomeRouteScreen() {
   const pendingTasks = usePendingNewTasks();
   const { openPendingTask, confirmDeletePendingTask } =
     usePendingTaskListActions(selectThreadRoute);
-  const environments = homeListFilterEnvironments(workspaceEnvironments);
+  const environments = homeListFilterEnvironments(
+    workspaceEnvironments,
+    useProfileHiddenEnvironmentIds(),
+  );
   const availableEnvironmentIds = useMemo(
     () => new Set(environments.map((environment) => environment.environmentId)),
     [environments],

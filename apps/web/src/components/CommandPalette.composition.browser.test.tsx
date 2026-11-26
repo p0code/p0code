@@ -7,6 +7,7 @@ import { act, render } from "../../test/render";
 import { CommandPalette } from "./CommandPalette";
 import { openCommandPalette } from "../commandPaletteBus";
 import { primaryServerKeybindingsAtom, primaryServerSettingsAtom } from "../state/server";
+import { profileHiddenEnvironmentIdsAtom } from "../state/projects";
 
 const scopes = vi.hoisted(() => ({
   denied: undefined as string | undefined,
@@ -43,7 +44,9 @@ vi.mock("@effect/atom-react", async (original) => ({
       ? DEFAULT_RESOLVED_KEYBINDINGS
       : atom === primaryServerSettingsAtom
         ? DEFAULT_SERVER_SETTINGS
-        : [],
+        : atom === profileHiddenEnvironmentIdsAtom
+          ? new Set()
+          : [],
 }));
 vi.mock("../hooks/useTheme", () => ({
   useRenderedAppearance: () => "light",

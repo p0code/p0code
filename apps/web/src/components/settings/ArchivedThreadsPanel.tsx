@@ -17,6 +17,10 @@ import { useSettingsScope } from "./SettingsScopeContext";
 import { useThreadActions } from "../../hooks/useThreadActions";
 import { readLocalApi } from "../../localApi";
 import { useArchivedThreadSnapshots } from "../../lib/archivedThreadsState";
+import { useProfileHiddenProjectKeys } from "../../state/entities";
+import { profileSeparatingSettingsAtom } from "../../state/projects";
+import { isThreadInActiveAccountProfile } from "@t3tools/shared/accountProfiles";
+import { useAtomValue } from "@effect/atom-react";
 import { RelativeTime } from "../RelativeTime";
 import { Button } from "../ui/button";
 import { stackedThreadToast, toastManager } from "../ui/toast";
@@ -89,6 +93,8 @@ export function ArchivedThreadsPanel() {
   const gt = useGT();
   const m = useMessages();
   const { scope, groups: projectGroups, environments } = useSettingsScope();
+  const hiddenProjects = useProfileHiddenProjectKeys();
+  const separatingSettings = useAtomValue(profileSeparatingSettingsAtom);
   const { unarchiveThread, confirmAndDeleteThread } = useThreadActions();
   const pendingActionsRef = useRef(new Set<string>());
   const [pendingKeys, setPendingKeys] = useState<ReadonlySet<string>>(() => new Set());
@@ -109,8 +115,9 @@ export function ArchivedThreadsPanel() {
         snapshot.projects
           .filter(
             (project) =>
-              selectedProjectKeys === null ||
-              selectedProjectKeys.has(`${environmentId}:${project.id}`),
+              !hiddenProjects.has(`${environmentId}:${project.id}`) &&
+              (selectedProjectKeys === null ||
+                selectedProjectKeys.has(`${environmentId}:${project.id}`)),
           )
           .map(
             (project) => [`${environmentId}:${project.id}`, { ...project, environmentId }] as const,
@@ -124,10 +131,17 @@ export function ArchivedThreadsPanel() {
       }),
     );
     const threads = archivedSnapshots.flatMap(({ environmentId, snapshot }) =>
-      snapshot.threads.map((thread) => ({
-        ...presentThreadShell(environmentId, thread),
-        environmentLabel: environmentLabels.get(environmentId) ?? environmentId,
-      })),
+      snapshot.threads
+        .filter((thread) =>
+          isThreadInActiveAccountProfile(separatingSettings.get(environmentId) ?? null, {
+            id: thread.id,
+            projectId: thread.projectId,
+          }),
+        )
+        .map((thread) => ({
+          ...presentThreadShell(environmentId, thread),
+          environmentLabel: environmentLabels.get(environmentId) ?? environmentId,
+        })),
     );
     const hasMultipleEnvironments =
       new Set(

@@ -67,6 +67,13 @@ vi.mock(import("../state/threads"), async (original) => {
     },
   };
 });
+vi.mock(import("../state/projects"), async (original) => {
+  const { Atom } = await import("effect/reactivity");
+  return {
+    ...(await original()),
+    profileHiddenEnvironmentIdsAtom: Atom.make(new Set<EnvironmentId>()),
+  };
+});
 vi.mock(import("../hooks/useSettings"), async (original) => ({
   ...(await original()),
   subscribeClientSettings: ((listener: () => void) => {
@@ -86,6 +93,11 @@ vi.mock(import("../threadNotifications"), async (original) => ({
 }));
 
 import { startThreadNotifications } from "./ThreadNotificationCoordinator";
+import { profileHiddenEnvironmentIdsAtom } from "../state/projects";
+
+const hiddenEnvironmentsAtom = profileHiddenEnvironmentIdsAtom as Atom.Writable<
+  ReadonlySet<EnvironmentId>
+>;
 
 let registry: AtomRegistry.AtomRegistry;
 const shellAtom = Atom.family((_id: string) => Atom.make<unknown>(null));
@@ -201,6 +213,7 @@ function setup() {
   state.inApp = false;
   state.settingsListeners.clear();
   registry.set(environmentIdsAtom, ["one", "two"]);
+  registry.set(hiddenEnvironmentsAtom, new Set());
   state.shells.set("one", shell());
   state.shells.set("two", shell());
   focused = false;
@@ -230,6 +243,8 @@ function setup() {
       stack.defer(startThreadNotifications(testRegistry, router));
     },
     setEnvironmentIds: (ids: ReadonlyArray<string>) => testRegistry.set(environmentIdsAtom, ids),
+    setHiddenEnvironmentIds: (ids: ReadonlyArray<string>) =>
+      testRegistry.set(hiddenEnvironmentsAtom, new Set(ids.map((id) => EnvironmentId.make(id)))),
     openThread: (environmentId: string, threadId: string) => {
       route.params = { environmentId, threadId };
       for (const listener of routeListeners) listener();
@@ -260,6 +275,24 @@ it.each(["hasPendingApprovals", "hasPendingUserInput"] as const)(
     expect(notification.close).toHaveBeenCalled();
   },
 );
+
+it("drops notifications from machines the profile switches away from, and stays quiet on return", async () => {
+  await using app = setup();
+  app.start();
+  state.shells.set("one", shell({ hasPendingApprovals: true }));
+  expect(TestNotification.sent).toHaveLength(1);
+  expect(state.badge).toHaveBeenLastCalledWith(1);
+
+  app.setHiddenEnvironmentIds(["one"]);
+  expect(TestNotification.sent[0]!.close).toHaveBeenCalled();
+  expect(state.badge).toHaveBeenLastCalledWith(0);
+
+  // Watching resumes, but the machine's existing request is a baseline, not a new notification.
+  app.setHiddenEnvironmentIds([]);
+  expect(TestNotification.sent).toHaveLength(1);
+  state.shells.set("one", shell({ hasPendingApprovals: true, pendingRequestId: "request-2" }));
+  expect(TestNotification.sent).toHaveLength(2);
+});
 
 it.each(["hasPendingApprovals", "hasPendingUserInput"] as const)(
   "notifies once per %s request, not again as queued runs start behind it",

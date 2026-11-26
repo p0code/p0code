@@ -9,13 +9,16 @@ import { UsageDay } from "@t3tools/contracts";
 import { Link } from "@tanstack/react-router";
 import { formatCount, formatTokens, formatUsd } from "@t3tools/shared/usageFormat";
 import { msg, T, useGT, useLocale, useMessages } from "gt-react";
+import { useAtomValue } from "@effect/atom-react";
 import { useState } from "react";
+import { profileSeparatingSettingsAtom } from "../../state/projects";
 import { serverEnvironment } from "../../state/server";
 import { useEnvironmentQuery } from "../../state/query";
 import type { EnvironmentUsageStatus } from "../../state/usage";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Sheet, SheetPopup, SheetHeader, SheetTitle, SheetDescription } from "../ui/sheet";
+import { usageDetailsInActiveProfile } from "./usageDetailsProfile";
 
 const FIGURE_COLUMNS = [
   ["input", msg("Uncached input")],
@@ -186,24 +189,29 @@ function UsageDetailsQuery({
     descending: true,
   });
   const [selected, setSelected] = useState<UsageDetailsRow | null>(null);
+  const separatingSettings = useAtomValue(profileSeparatingSettingsAtom);
   const query = useEnvironmentQuery(
     serverEnvironment.usageDetails({ environmentId, input: { ...filters, ...paging, limit: 50 } }),
   );
+  const data =
+    query.data === null
+      ? null
+      : usageDetailsInActiveProfile(query.data, separatingSettings.get(environmentId) ?? null);
   return (
     <>
       {query.error ? (
         <p role="alert">{query.error}</p>
-      ) : query.data === null ? (
+      ) : data === null ? (
         <p role="status">
           <T>Loading usage details…</T>
         </p>
       ) : (
         <>
           {filters.threadId ? (
-            <ThreadUsageSummary data={query.data} environmentId={environmentId} />
+            <ThreadUsageSummary data={data} environmentId={environmentId} />
           ) : (
             <UsageDetailsTable
-              data={query.data}
+              data={data}
               environmentId={environmentId}
               sort={paging.sort}
               descending={paging.descending}
@@ -229,7 +237,7 @@ function UsageDetailsQuery({
             <Button
               size="sm"
               variant="outline"
-              disabled={paging.offset + 50 >= query.data.totalRows}
+              disabled={paging.offset + 50 >= data.totalRows}
               onClick={() => setPaging({ ...paging, offset: paging.offset + 50 })}
             >
               <T>Next page</T>

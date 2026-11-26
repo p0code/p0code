@@ -5,7 +5,7 @@ import { visibilityParentKey } from "@t3tools/client-runtime/state/threads";
 import type { ScopedThreadRef } from "@t3tools/contracts";
 import * as Option from "effect/Option";
 import { Link, Navigate, useNavigate } from "@tanstack/react-router";
-import { T } from "gt-react";
+import { T, useGT } from "gt-react";
 import { useEffect, useState } from "react";
 
 import ChatView from "./ChatView";
@@ -13,11 +13,15 @@ import { BackgroundThreadContext, HiddenThreadContext } from "./chat/backgroundT
 import { Button } from "./ui/button";
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from "./ui/empty";
 import { SidebarInset } from "./ui/sidebar";
+import { usePrimarySettings } from "../hooks/useSettings";
+import { setActiveAccountProfile } from "../state/accountProfiles";
+import { usePrimaryEnvironmentId } from "../state/environments";
 import { useComposerDraftStore } from "../composerDraftStore";
 import { useSidebarPendingFileDropStore } from "../sidebarPendingFileDropStore";
 import {
   useEnvironmentThreadRefs,
   useAnyEnvironmentHiding,
+  useProfileHiddenEnvironmentIds,
   useQuietThreadShell,
 } from "../state/entities";
 import { environmentUnreachableAtom } from "../state/presentation";
@@ -71,6 +75,12 @@ export function ThreadRouteView({
     draftId === null ? null : store.getPromotedDraftRedirect(draftId),
   );
   const serverThreadRef = target.kind === "server" ? target.threadRef : null;
+  const hiddenEnvironments = useProfileHiddenEnvironmentIds();
+  const draftEnvironmentId = draftSession?.environmentId ?? draftRedirect?.environmentId ?? null;
+  const hiddenByProfile =
+    serverThreadRef !== null
+      ? hiddenEnvironments.has(serverThreadRef.environmentId)
+      : draftEnvironmentId !== null && hiddenEnvironments.has(draftEnvironmentId);
   const serverThreadShell = useQuietThreadShell(serverThreadRef);
   const shellStatus = useEnvironmentShellStatus(serverThreadRef?.environmentId ?? null);
   const environmentThreadRefs = useEnvironmentThreadRefs(serverThreadRef?.environmentId ?? null);
@@ -108,14 +118,20 @@ export function ThreadRouteView({
   // decides whether it exists. Read only then: once listed, ChatView keeps
   // this stream open and its updates need not re-render the route.
   const unlistedThreadRef =
-    target.kind === "server" && serverThreadShell === null && draftThread === null
+    target.kind === "server" &&
+    !hiddenByProfile &&
+    serverThreadShell === null &&
+    draftThread === null
       ? target.threadRef
       : null;
   const unlistedThreadDetail = useEnvironmentThread(
     unlistedThreadRef?.environmentId ?? null,
     unlistedThreadRef?.threadId ?? null,
   );
-  useOpenThreadFamily(serverThreadRef, bootstrapComplete && unlistedThreadRef !== null);
+  useOpenThreadFamily(
+    hiddenByProfile ? null : serverThreadRef,
+    bootstrapComplete && unlistedThreadRef !== null,
+  );
   const hiddenKeys = useAtomValue(environmentThreadShells.hiddenThreadKeysAtom);
   const unlistedThread = Option.getOrNull(Option.map(unlistedThreadDetail.data, (p) => p.thread));
   const unlistedParentKey =
@@ -150,7 +166,7 @@ export function ThreadRouteView({
 
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- clears pending file drops and navigates the router home once a server thread is confirmed missing
   useEffect(() => {
-    if (target.kind !== "server" || !bootstrapComplete) {
+    if (target.kind !== "server" || !bootstrapComplete || hiddenByProfile) {
       return;
     }
     if (renderState === "missing") {
@@ -160,11 +176,22 @@ export function ThreadRouteView({
         void navigate({ to: "/", replace: true });
       }
     }
-  }, [background, bootstrapComplete, environmentHasAnyThreads, navigate, renderState, target]);
+  }, [
+    background,
+    bootstrapComplete,
+    environmentHasAnyThreads,
+    hiddenByProfile,
+    navigate,
+    renderState,
+    target,
+  ]);
 
   let view: React.ReactNode = null;
   let redirect: React.ReactNode = null;
-  if (target.kind === "draft") {
+  if (hiddenByProfile) {
+    // Switching profiles leaves an open thread on an excluded machine mounted; show why instead.
+    view = background ? null : <HiddenByProfileState />;
+  } else if (target.kind === "draft") {
     if (
       draftSession &&
       hiddenKeys.has(
@@ -244,6 +271,48 @@ export function ThreadRouteView({
       </BackgroundThreadContext>
       {background ? null : redirect}
     </SidebarInset>
+  );
+}
+
+function HiddenByProfileState() {
+  const gt = useGT();
+  const environmentId = usePrimaryEnvironmentId();
+  const { accountProfiles, activeAccountProfileId } = usePrimarySettings((settings) => ({
+    accountProfiles: settings.accountProfiles,
+    activeAccountProfileId: settings.activeAccountProfileId,
+  }));
+  const others = accountProfiles.filter((profile) => profile.id !== activeAccountProfileId);
+  return (
+    <Empty className="flex-1">
+      <EmptyHeader>
+        <EmptyTitle>
+          <T>Hidden by this profile</T>
+        </EmptyTitle>
+        <EmptyDescription>
+          <T>
+            This thread is on a machine the current account profile leaves out. Switch profiles to
+            open it.
+          </T>
+        </EmptyDescription>
+      </EmptyHeader>
+      {environmentId !== null && others.length > 0 ? (
+        <EmptyContent>
+          <p className="text-sm font-medium">{gt("Switch account profile")}</p>
+          <div className="flex flex-wrap justify-center gap-2">
+            {others.map((profile) => (
+              <Button
+                key={profile.id}
+                size="sm"
+                variant="outline"
+                onClick={() => void setActiveAccountProfile(environmentId, profile.id)}
+              >
+                {profile.name}
+              </Button>
+            ))}
+          </div>
+        </EmptyContent>
+      ) : null}
+    </Empty>
   );
 }
 

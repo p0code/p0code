@@ -2487,6 +2487,8 @@
   "89b5e8f3887812da": "Gastanfrage",
   "62e626804919b294": "Eingabe nötig",
   "c6196d99000642b4": "Thread öffnen",
+  "0b967a442b4391af": "Von diesem Profil ausgeblendet",
+  "b1ac948ad39ac592": "Dieser Thread liegt auf einem Rechner, den das aktuelle Kontoprofil auslässt. Wechsle das Profil, um ihn zu öffnen.",
   "70bdebaa3d291d3b": "Thread nicht verfügbar",
   "a351ebbdcf1a3f7a": "Dieser Thread liegt in einer Umgebung, mit der diese App nicht verbunden ist.",
   "826cb862b4a11fb3": "{label}:",

@@ -10,6 +10,7 @@ import type { AnyRouter } from "@tanstack/react-router";
 import { parseThreadKey, threadKey } from "@t3tools/client-runtime/state/entities";
 import type { EnvironmentId, OrchestrationV2ThreadShell, ThreadId } from "@t3tools/contracts";
 import { monitorHoldsWakeCompletion } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
+import { withoutHiddenEnvironmentIds } from "@t3tools/shared/accountProfiles";
 import type { ClientSettings } from "@t3tools/contracts/settings";
 import * as Option from "effect/Option";
 import type { AtomRegistry } from "effect/reactivity";
@@ -23,6 +24,7 @@ import {
 import { getClientSettings, subscribeClientSettings } from "../hooks/useSettings";
 import { isWindowsPlatform } from "../lib/utils";
 import { environmentSummaries } from "../state/presentation";
+import { profileHiddenEnvironmentIdsAtom } from "../state/projects";
 import { environmentShell } from "../state/shell";
 import { environmentThreadShells } from "../state/threads";
 import {
@@ -72,6 +74,15 @@ export function startThreadNotifications(
     { environmentId: EnvironmentId; threadId: ThreadId; notification: Notification }
   >();
   const watched = new Map<EnvironmentId, WatchedEnvironment>();
+
+  /** Connected environments whose threads may notify; machines outside the active profile never do. */
+  const activeEnvironmentIds = () => {
+    const hidden = registry.get(profileHiddenEnvironmentIdsAtom);
+    return withoutHiddenEnvironmentIds(
+      registry.get(environmentSummaries.environmentIdsAtom),
+      hidden,
+    );
+  };
 
   const trackNotification = (
     environmentId: EnvironmentId,
@@ -137,6 +148,7 @@ export function startThreadNotifications(
   ) => {
     const { thread, status } = state;
     if (
+      registry.get(profileHiddenEnvironmentIdsAtom).has(environmentId) ||
       registry
         .get(environmentThreadShells.hiddenThreadKeysAtom)
         .has(threadKey({ environmentId, threadId: thread.id }))
@@ -364,7 +376,7 @@ export function startThreadNotifications(
     const { notificationMode, inAppNotificationsEnabled } = getClientSettings();
     const enabled = notificationMode !== "off" || inAppNotificationsEnabled;
     if (!enabled) closeToasts(() => true);
-    const environmentIds = enabled ? registry.get(environmentSummaries.environmentIdsAtom) : [];
+    const environmentIds = enabled ? activeEnvironmentIds() : [];
     const activeIds = new Set(environmentIds);
     for (const [environmentId, entry] of watched) {
       if (activeIds.has(environmentId)) continue;
@@ -377,7 +389,7 @@ export function startThreadNotifications(
   };
 
   const pruneRemovedEnvironments = () => {
-    const activeIds = new Set(registry.get(environmentSummaries.environmentIdsAtom));
+    const activeIds = new Set(activeEnvironmentIds());
     closeToasts((key) => !activeIds.has(parseThreadKey(key).environmentId));
     const count = pending.size;
     for (const [tag, entry] of pending) {
@@ -434,6 +446,11 @@ export function startThreadNotifications(
       syncEnvironments();
     },
   );
+  // Switching profiles hides machines; their pending notifications and toasts go with them.
+  const unsubscribeHiddenEnvironments = registry.subscribe(profileHiddenEnvironmentIdsAtom, () => {
+    pruneRemovedEnvironments();
+    syncEnvironments();
+  });
   const unsubscribeHidden = [
     registry.subscribe(environmentThreadShells.hiddenThreadKeysAtom, closeHiddenPending),
     registry.subscribe(environmentThreadShells.anyEnvironmentHidingAtom, closeHiddenPending),
@@ -445,6 +462,7 @@ export function startThreadNotifications(
   return () => {
     unsubscribeSettings();
     unsubscribeEnvironmentIds();
+    unsubscribeHiddenEnvironments();
     for (const unsubscribe of unsubscribeHidden) unsubscribe();
     unsubscribeRoute();
     for (const entry of watched.values()) entry.unsubscribe();

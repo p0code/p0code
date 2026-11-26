@@ -183,6 +183,8 @@ import {
   useDelegatedUnderParent,
   useEnvironmentThreadRefs,
   useHiddenThreadKeys,
+  useProfileEnvironments,
+  useProfileProjects,
   useProfileThreads,
   useProjects,
   useServerConfigs,
@@ -512,6 +514,7 @@ function OpenCommandPaletteDialog(props: {
     reportFailure: false,
   });
   const { environments } = useEnvironments();
+  const profileEnvironments = useProfileEnvironments(environments);
   const desktopLocalBootstraps = useDesktopLocalBootstraps();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const availableSettingsSearchItems = useAvailableSettingsSearchItems();
@@ -519,7 +522,7 @@ function OpenCommandPaletteDialog(props: {
     useHandleNewThread();
   const { toggleHideThread } = useThreadActions();
   const paletteRouteTarget = useThreadRouteTarget();
-  const projects = useProjects();
+  const projects = useProfileProjects(useProjects());
   const referenceThreadRef =
     pathname === "/pull-requests"
       ? environments.some((environment) => environment.serverConfig !== null)
@@ -577,7 +580,7 @@ function OpenCommandPaletteDialog(props: {
     referenceThreadRef,
     openPanelPullRequestUrl,
     projects,
-    environments,
+    environments: profileEnvironments,
   });
   const currentView = viewStack.at(-1)?.view ?? null;
   const threadSearchQuery = currentView === null && !isActionsOnly ? deferredQuery : "";
@@ -641,7 +644,7 @@ function OpenCommandPaletteDialog(props: {
   };
 
   const addProjectEnvironmentOptions = (() => {
-    const options = environments
+    const options = profileEnvironments
       .filter((environment) => canCreateProjectInEnvironment(environment.connection.phase))
       .map((environment): AddProjectEnvironmentOption => {
         const isPrimary = environment.entry.target._tag === "PrimaryConnectionTarget";

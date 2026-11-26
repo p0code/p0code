@@ -26,6 +26,7 @@ import {
 } from "../providerInstances";
 import {
   useDelegatedUnderParent,
+  useProfileHiddenEnvironmentIds,
   useProfileThreads,
   useVisibleThreadShells,
 } from "../state/entities";
@@ -35,6 +36,7 @@ import {
   usePrimaryEnvironmentId,
 } from "../state/environments";
 import { useThreadSearch } from "../state/queries";
+import { withoutHiddenEnvironmentIds } from "@t3tools/shared/accountProfiles";
 import { primaryServerProvidersAtom } from "../state/server";
 import { threadEnvironment } from "../state/threads";
 import { useAtomCommand } from "../state/use-atom-command";
@@ -74,9 +76,13 @@ function useProviderEntryByEnvironmentAndInstanceId() {
 function useConnectedThreadSearch(query: string) {
   const { environments } = useEnvironments();
   const { projectEnvironmentLocationById } = useEnvironmentLookups();
-  const environmentIds: ReadonlyArray<EnvironmentId> = environments
-    .filter((environment) => environment.connection.phase === "connected")
-    .map((environment) => environment.environmentId);
+  const hiddenEnvironments = useProfileHiddenEnvironmentIds();
+  const environmentIds: ReadonlyArray<EnvironmentId> = withoutHiddenEnvironmentIds(
+    environments
+      .filter((environment) => environment.connection.phase === "connected")
+      .map((environment) => environment.environmentId),
+    hiddenEnvironments,
+  );
   // The palette matches environment names when there are several; older rows must match the same.
   const environmentLabels =
     environments.length > 1
