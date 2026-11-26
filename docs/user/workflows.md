@@ -2,9 +2,9 @@
 
 A workflow is a TypeScript script that chains agents, plain code, schedules, webhooks, issue and pull request events, and questions to you into one durable run that survives server restarts. Each step's result is saved when it succeeds, so restarts pick up where the run left off and failures do not lose earlier work. Workflows are an early feature: start runs from the `p0` CLI or a trigger, and follow them in the app.
 
-For one prompt on a timer or webhook, use a scheduled task. Use a workflow when work has stages — such as triage, a fix, your approval, and a release.
+Use a **scheduled task** for a single prompt on a timer or webhook; use a **workflow** for multi-stage pipelines (e.g., triage → fix → approval → release).
 
-## Turn on workflows
+## Enable workflows
 
 Workflows are a Labs feature, off by default. Turn on **Settings → Labs → Workflows** for the server that runs them. On a server without a desktop, set `"workflowsEnabled": true` in `userdata/settings.json` in its T3 home (`~/.p0code` by default). While off, nothing in the workflows folder runs and `p0 workflow` says how to turn it on; runs are kept and continue once it is on again.
 
@@ -38,11 +38,7 @@ export default workflow(
 
 Start it with `p0 workflow start release --input '{"name":"v1.4"}' --key v1.4`, then answer its question in the app. `T3`, `Effect`, `Schema` and `Option` are provided; a workflow file imports nothing from T3 or Effect. Name files with letters, digits, `-`, `_` and `.`; other names are skipped with a warning.
 
-Saving checks that the file loads, does not duplicate a workflow name and version, and does not remove a version with unfinished runs. A file that fails these checks keeps its last working version while the Workflows page (and the server log) shows why; other files are not affected. A change held back by unfinished runs goes in by itself once those runs end or are cancelled. Mistakes inside a workflow body surface when a run hits them and pauses. To change steps while runs are unfinished, add the new body under a higher `version` and keep the old one until those runs end.
-
-Dot-files and subfolders are ignored. Keep shared helpers in a subfolder and restart the server after editing an imported file.
-
-## Start and steer
+## CLI commands
 
 ```sh
 p0 workflow start <name> --input '<json>' --key <key>
@@ -61,30 +57,32 @@ p0 workflow store set <key> '<json>'
 
 Every start needs a `--key`: starting twice with the same key returns the same run — even after a version bump — so retries do not duplicate work. Use `signal` with `--run` and `--wait` to answer a question or wake a run, or with `--workflow` and `--channel` to wake whichever run waits on that channel. A signal for a question that is no longer open is kept for a later wait rather than refused, so check `p0 workflow questions` first. Use `withdraw` when a question no longer needs an answer: its `ask` returns `None`, as on a timeout, and the run goes on; the step records who withdrew it and why. A workflow does the same from a step with `withdraw({ run, name, reason })`. Use `store` to read or change state kept between runs.
 
-## Kinds of question and tags
+## Questions, tags, and subjects
 
-A workflow that asks more than one kind of question can name the kinds, so you can answer one kind at a time. List them in the workflow's options with the label to show, and give each `ask` its `kind`:
+- **Question kinds & tags**: Declare `asks: { kindKey: "Label" }` in workflow options and pass `kind` to `ask(...)` to filter open questions under **Needs you** (and `t3 workflow questions --kind <kind>`). Use `tags([...])` to label runs for filtering.
+- **Rich choices & links**: Pass `links: [{ label, url }]` and choice objects `{ value, description, requireReason }` to require an explanation before answering. Answers record `answeredAt` and `answeredBy`.
+- **Subjects**: Call `subject(issueOrPrOrThreadOrUrl)` (or pass `{ subject }` to `start(...)`) to display and link the target item in run lists, issue/PR views, and `t3 workflow list --subject <url>`.
 
-```ts
-const { workflow, ask, tags, Issue } = T3;
+## Concurrency limits
 
 workflow(
-  "triage",
-  {
-    version: 1,
-    payload: Issue,
-    asks: { feature: "Feature wanted?", intended: "Bug or intended?" },
-  },
-  Effect.fn(function* (issue) {
-    yield* tags(["backlog"]);
-    yield* ask("wanted", {
-      kind: "feature",
-      title: `Build ${issue.title}?`,
-      choices: ["Yes", "No"],
-    });
-  }),
+"triage",
+{
+version: 1,
+payload: Issue,
+asks: { feature: "Feature wanted?", intended: "Bug or intended?" },
+},
+Effect.fn(function* (issue) {
+yield* tags(["backlog"]);
+yield* ask("wanted", {
+kind: "feature",
+title: `Build ${issue.title}?`,
+choices: ["Yes", "No"],
+});
+}),
 );
-```
+
+````
 
 Under **Needs you**, a picker then shows each kind with how many questions of it are open, and **Other** for the rest; your pick is remembered on that device. A question whose kind is not in the workflow's own `asks` is asked like any other and shows under **Other**, as do questions asked without a kind. `p0 workflow questions --kind feature` lists the questions asked with exactly that kind from the CLI.
 
@@ -102,7 +100,7 @@ yield *
       { value: "No", description: "It is closed with a note", requireReason: true },
     ],
   });
-```
+````
 
 The app asks for the reason before it sends a choice that requires one, and `p0 workflow signal` refuses that choice without a `reason`. Links open in your browser and are part of `p0 workflow questions --json`. The answer also records when it was given and who sent it (`answeredAt`, `answeredBy`): the device's name as **Connections** lists it, the tool that sent it, or for `p0 workflow signal` run by an agent, that agent's thread. What a signal's own value says for these is ignored; a signal sent before its question opens answers it as whoever sent it, at the time it was received. The run shows both on the question's step, and says **You** only in the session that gave the answer; every other session, even another one on the same device, sees that device's name.
 
@@ -132,9 +130,9 @@ To cap whole runs, give the workflow `concurrency: 4` in its options: its runs s
 - **Webhooks:** `p0 workflow hooks` prints each hook's path; prepend your server's address. The path contains the hook's secret, so share it only with the sender. A sender's retry that repeats its delivery header (such as GitHub's `X-GitHub-Delivery`) starts no second run, and bodies over 1 MiB are refused. A hook starts at most 60 runs a minute; requests past that get `429` and can be sent again a minute later. Organization policies blocking webhook tasks block workflow webhooks too.
 - **Issues and pull requests:** workflows can start on new issues or pull requests and read, comment on, or update them via **Settings → Source control & issues** — no webhook needed. p0code checks roughly once a minute, and only items opened after the workflow was first loaded start runs.
 
-## Follow runs in the app
+## Follow runs, agent threads, and failures
 
-Open the Workflows page with **Open workflows** in the command palette of the web or desktop app; the entry shows once a connected server has workflows on. Filter by **Needs you**, **Running**, or **All** (skipped runs stay hidden unless toggled on), open child runs from their parent, and answer questions, resume paused runs, or cancel active runs (requires permission to operate threads). The issues and pull requests a run touched show as chips under its title and on the steps that touched them; a chip opens the item beside the run, in a tab next to any agent transcripts you opened.
+Open **Open workflows** from the command palette (web/desktop) to filter **Needs you**, **Running**, or **All**, inspect agent threads, answer questions, resume, or cancel runs.
 
 Top-level skipped runs, such as webhook deliveries a workflow chose to ignore, do not keep the payload they started with. Each workflow keeps its latest 500 of them and deletes older ones about an hour after they end; change the number in **Settings → Labs → Skipped runs kept** (0 keeps none), or set `"workflowSkippedRunsKept"` in `userdata/settings.json`. Runs that did anything else are never deleted. Once a skipped run is deleted, a start with its key or a webhook retry with its delivery header starts a new run.
 

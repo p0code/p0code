@@ -1,31 +1,19 @@
 # Usage and limits
 
-Open **Usage** from the sidebar or the command palette, or press `mod+u` on web and
-desktop when the terminal is not focused. Press it again to close Usage. Customize **Usage: Toggle** in
-**Settings → Keybindings**.
+Track token usage, cache hit rates, estimated API-equivalent costs, and pooled subscription quotas across all connected environments.
 
-On mobile, choose **Usage** in the workspace navigation.
+- **Open Usage**: Click **Usage** in the sidebar, press `mod+u` (web/desktop outside terminals), or pick **Usage** on mobile.
+- **Quick shortcuts** (web/desktop on Usage): `C` (Cost), `T` (Tokens), `L` (Limits), `mod+Shift+1/2/3/4` (24h / 7d / 30d / 90d), `Esc` (back).
 
 ## Understand your usage
 
-**Usage** combines Codex, Claude Code, Grok Build, OpenCode, Antigravity, Pi, Muse Code, and Cursor history
-from your connected environments. It shows token use, cache savings, model breakdowns, and estimated API-equivalent
-cost, split by token type and by speed. These estimates are not your subscription bill.
-**Premium** is what Fast and Ultrafast requests cost above standard rates. Cost that cannot be
-split, such as a provider-reported cost for a model without public rates, shows as **Other**.
-Select a model under **Breakdown** to see its trend, cache hit rate, and cost per million tokens.
+Usage aggregates history across Codex, Claude Code, Grok Build, OpenCode, Antigravity, Pi, Muse Code, and Cursor from your selected environments. Estimates reflect API-equivalent rates (not your subscription bill); **Premium** shows Fast/Ultrafast surcharge, and **Other** shows unsplit provider-reported costs.
 
-Totals depend on the history available on each server. Grok turns without a saved completed-turn
-record are missing from the totals.
-Text generation (thread titles, commit messages, PR text, branch names and review guides) is not in
-the totals for Codex or Claude Code 2.0.63 and newer, because those runs save no session history.
+- **Retention**: Servers keep scanned usage history for **92 days** by default (preserving Claude history after Claude's 30-day cleanup). Change `usageHistoryRetentionDays` in `<t3-home>/userdata/settings.json` (e.g. `365` or `"unlimited"`; views show up to 90 days).
+- **Custom data directories**: Honors `CODEX_HOME`, `CLAUDE_CONFIG_DIR`, `GROK_HOME`, `PI_CODING_AGENT_DIR` / `PI_CODING_AGENT_SESSION_DIR`, `OPENCODE_DATA_DIR`, `ANTIGRAVITY_DATA_DIR`, and `XDG_DATA_HOME` (Muse). Use absolute or `~/` paths. Set `T3CODE_HOST_ID` to pin a container's host identity.
+- **Exclusions**: Codex and Claude Code 2.0.63+ text-generation runs (titles, commits, PR text, review guides) and Grok turns without a saved completed-turn record are not included.
 
-The server keeps scanned usage history for 92 days by default. Claude Code deletes its own
-transcripts after 30 days, so for older Claude usage this history is the only record left. To keep
-it longer, set `usageHistoryRetentionDays` in `<T3 home>/userdata/settings.json` to a number of days
-such as `365`, or to `"unlimited"`. Usage views still show at most 90 days. Lowering the value
-prunes older history on the next refresh, and raising it again does not bring pruned history back.
-While `settings.json` cannot be read, nothing is pruned.
+## Custom model prices and filtering
 
 OpenCode reads its SQLite database and older JSON history. Antigravity reads local conversation
 databases, including T3-managed profiles. Set `OPENCODE_DATA_DIR` or `ANTIGRAVITY_DATA_DIR` on the
@@ -105,15 +93,9 @@ To count only some models, or to leave some out, add `usageModelFilter` to the s
 }
 ```
 
-`include` keeps only the listed models and `exclude` leaves the listed models out. `provider` is
-one of `claude`, `codex`, `cursor`, `grok`, `opencode`, `antigravity`, `pi`, or `muse`; omit it
-to match a model ID from any provider. Use the model ID that Usage shows without **Map to**, such
-as a provider-prefixed ID for Pi. Filters apply before **Map to**, so a model you leave out is not
-counted under its mapped name. Usage applies each environment's own filter. Remove the setting to
-show every model again.
+## Subscription limits
 
-If the setting is invalid, Usage ignores it and shows every model, and the next save of any other
-setting removes it from `settings.json`.
+**Usage → Limits** pools subscription quotas per provider across connected environments and hubs (deduplicating the same account signed in on multiple machines).
 
 ## Track subscription limits
 
@@ -211,27 +193,11 @@ handoff, because accounts do not share sessions. A thread set not to resume afte
 
 ## Connect a CLIProxyAPI hub
 
-To see pooled accounts, open **Settings → Providers → Usage providers → Add hub**. Choose the
-environment that will connect to the hub and enter its URL and management key.
-
-The hub's Codex, Claude, xAI (shown as Grok) and Antigravity accounts appear under **Usage → Limits**;
-accounts for other providers are not read. Codex accounts show banked reset credits; select an
-account and choose **Use reset** to redeem one. No hub plugin is required.
-
-This connection supplies usage information; configure
-the provider separately to send agent requests through the hub. A thread uses the hub's limits and
-reset times only when its provider's endpoint has the same address as the hub, for example
-`http://127.0.0.1:8317` for both. Remove the hub from the same settings section when you no longer
-need it.
+Open **Settings → Providers → Usage providers → Add hub**, choose the environment, and enter the hub URL and management key. Pools Codex, Claude, and Grok accounts under **Usage → Limits** (including Codex **Use reset**). Configure the provider's endpoint to the same URL if you want threads to display that hub's limits.
 
 ## Connect an HTTP quota source
 
-In **Settings → Providers → Usage providers → Add HTTP source**, choose the environment that can
-reach your quota server and enter the full endpoint URL. If the endpoint requires authentication,
-supply a bearer token. The selected T3 environment sends a read-only GET with
-`Accept: application/json` and shows the result in **Usage → Limits**.
-
-Return JSON in this format, with stable IDs for accounts and their windows.
+Open **Settings → Providers → Usage providers → Add HTTP source** with a GET endpoint (and optional bearer token) returning:
 
 ```json
 {

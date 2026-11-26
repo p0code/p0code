@@ -1,6 +1,6 @@
-# Visual replies
+# Visual replies and MCP apps
 
-Agents can answer with a page instead of only text: a chart, table, diagram, image collage, or mockup. Ask for one ("show this as a chart", "make a collage of these screenshots") and the agent builds a self-contained HTML page, which appears in the thread above its written reply. It works with every provider, on web, desktop, and mobile.
+Agents can render self-contained HTML visuals (charts, diagrams, tables, image collages, mockups) and interactive MCP Apps inline in a thread on web, desktop, and mobile.
 
 Pages use your current theme, including custom themes, and follow light and dark mode as you switch. Scripts run inside the page, but it is sandboxed away from p0code and your session. Links you click in a page open in your browser. Use the expand button to open a page full screen. On web and desktop, use the zoom controls to see more detail.
 
@@ -12,7 +12,7 @@ Previews can load public resources such as CDN scripts, but nothing on your loca
 
 ## MCP apps
 
-Some MCP servers return an interactive app with their tool results, following the [MCP Apps](https://github.com/modelcontextprotocol/ext-apps) standard. When an agent calls one of those tools, the app appears in the thread below the tool call, on web, desktop, and mobile. The tool call keeps its input and result, so you can still read them when an app shows nothing. Codex and Claude support this today, for any MCP server you have configured for them. Claude needs Claude Code 2.1.301 or newer; older versions and other providers show these calls as ordinary tool calls.
+MCP servers supporting the [MCP Apps](https://github.com/modelcontextprotocol/ext-apps) standard render interactive UIs directly below their tool calls (supported on Codex and Claude Code 2.1.301+ on up-to-date T3 servers).
 
 Apps follow your theme. An app can call tools on its own server and post a message to the thread; p0code asks first unless the server marks the tool as read-only, and it asks before every message. On mobile, an app also asks before opening a link, and p0code asks before saving a file an app offers. An app stays viewable after its agent stops, but using it needs the agent of the thread that created it running, so send a message in that thread first if the app says it is unavailable. An app that navigates away from its own page is stopped. Apps run only on an environment whose p0code server is current: on an older server, the thread shows a line asking you to update it in place of the app.
 

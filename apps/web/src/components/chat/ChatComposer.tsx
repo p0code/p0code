@@ -6,6 +6,18 @@ import {
   resolveProviderSlashCommandsForCwd,
 } from "@t3tools/client-runtime/providerSkills";
 import {
+  draftRuntimeModeLimitsInstance,
+  draftSupportedRuntimeModes,
+  resolveCompatibleRuntimeMode,
+  runtimeModeConfig,
+  resolveRuntimeModeOptions,
+  runtimeModeDenial,
+} from "./runtimeModeConfig";
+import { isLocalEnvironmentDisabled } from "../../localEnvironment";
+import { usePrimaryEnvironmentId } from "../../state/environments";
+import { useRightPanelStore } from "~/rightPanelStore";
+import { importPastedComposerText, readPastedComposerContext } from "../composerInlineTokenPaste";
+import {
   type ComposerDispatchMode,
   composerRunsDraftLocally,
   resolveComposerDispatchMode,
@@ -99,7 +111,7 @@ import { observeResize } from "~/lib/observeResize";
 import { useOpenPrLink } from "~/lib/openPullRequestLink";
 import { threadContextAttachment } from "~/lib/threadContextAttachment";
 import { cn, isMacPlatform, randomUUID } from "~/lib/utils";
-import { useRightPanelStore } from "~/rightPanelStore";
+
 import { readThreadShell } from "~/state/entities";
 import { useLinkedEnvironments } from "~/state/peerLinks";
 import {
@@ -149,7 +161,7 @@ import {
   type TerminalContextDraft,
   type TerminalContextSelection,
 } from "../../lib/terminalContext";
-import { isLocalEnvironmentDisabled } from "../../localEnvironment";
+
 import { type AppModelOption, getAppModelOptionsForInstance } from "../../modelSelection";
 import { usePanelAnimationSettings } from "../../panelAnimations";
 import {
@@ -162,7 +174,7 @@ import type { PendingApproval, PendingUserInput, TimelineEntry } from "../../ses
 import { useDictationShortcut } from "../../speech/useDictationShortcut";
 import { useDictationSubmissionShortcut } from "../../speech/useDictationSubmissionShortcut";
 import { useEnvironmentSpeechInput } from "../../speech/useEnvironmentSpeechInput";
-import { usePrimaryEnvironmentId } from "../../state/environments";
+
 import { useManagedPolicy } from "../../state/managedPolicy";
 import { readEnvironmentScope, readPreparedConnection } from "../../state/session";
 import { buildDraftThreadRouteParams, buildThreadRouteParams } from "../../threadRoutes";
@@ -182,7 +194,7 @@ import {
   shouldUseCompactComposerFooter,
   shouldUseCompactComposerPrimaryActions,
 } from "../composerFooterLayout";
-import { importPastedComposerText, readPastedComposerContext } from "../composerInlineTokenPaste";
+
 import { buildPullRequestReferenceContext } from "../pullRequest/pullRequestDetail.logic";
 import { Button } from "../ui/button";
 import { Kbd } from "../ui/kbd";
@@ -270,6 +282,24 @@ import { copySnapshot } from "./copySnapshot";
 import { type FolderDropTarget, folderDropTarget, resolveDroppedFolderPath } from "./folderDrop";
 import { useFreshSessionArmed } from "./freshSessionArms";
 import { pendingDraftWork } from "./pendingDraftWork";
+
+import { usePendingUserInputDraft } from "./usePendingThreadRequests";
+
+import { useComposerRestingTransition } from "./useComposerRestingTransition";
+
+import { useRestingComposerControlsLayout } from "./useRestingComposerControlsLayout";
+import { useProviderWorkspaceSnapshotRefresh } from "./useProviderWorkspaceSnapshotRefresh";
+import {
+  RuntimeModeLimitsTargetContext,
+  runtimeModeLimitsTarget,
+  useProviderRuntimeModeLimits,
+} from "../../state/runtimeModeLimits";
+import { useComposerProviderModel } from "./useComposerProviderModel";
+import { useComposerImageGroups } from "./useComposerImageGroups";
+import { useComposerStash } from "./useComposerStash";
+import { useComposerContextImport } from "./useComposerContextImport";
+import { useComposerAttachmentIntake } from "./useComposerAttachmentIntake";
+import { isQueuedFileAttachment, isQueuedImageAttachment } from "./queuedMessageEdit";
 import {
   cancelHeldComposerSend,
   countPreparingComposerImages,
@@ -277,31 +307,19 @@ import {
   usePreparingComposerImages,
   useSubmitAfterPreparingImages,
 } from "./preparingComposerImages";
-import { isQueuedFileAttachment, isQueuedImageAttachment } from "./queuedMessageEdit";
-import {
-  draftSupportedRuntimeModes,
-  resolveCompatibleRuntimeMode,
-  resolveRuntimeModeOptions,
-  runtimeModeConfig,
-  runtimeModeDenial,
-} from "./runtimeModeConfig";
+
 import { threadContextDropTargetProps, useThreadContextDrop } from "./threadContextDrag";
 import { droppedThreadContextRecord } from "./threadContextDrop.logic";
 import { useApplyThreadModelPick } from "./useApplyThreadModelPick";
-import { useComposerAttachmentIntake } from "./useComposerAttachmentIntake";
-import { useComposerContextImport } from "./useComposerContextImport";
-import { useComposerImageGroups } from "./useComposerImageGroups";
+
 import { useComposerMenuItems } from "./useComposerMenuItems";
 import { useComposerMultilinePrompt } from "./useComposerMultilinePrompt";
-import { useComposerProviderModel } from "./useComposerProviderModel";
-import { useComposerRestingTransition } from "./useComposerRestingTransition";
-import { useComposerStash } from "./useComposerStash";
+
 import { useComposerTriggerState } from "./useComposerTriggerState";
 import { useComposerTypingGuard } from "./useComposerTypingGuard";
-import { usePendingUserInputDraft } from "./usePendingThreadRequests";
+
 import { promptSuggestionToAccept, usePromptSuggestion } from "./usePromptSuggestion";
-import { useProviderWorkspaceSnapshotRefresh } from "./useProviderWorkspaceSnapshotRefresh";
-import { useRestingComposerControlsLayout } from "./useRestingComposerControlsLayout";
+
 import { splitTransferredFiles } from "./workspaceFileDrop";
 import type { ThreadDetailsUsageInput } from "./ThreadDetailsUsage";
 
@@ -1002,6 +1020,12 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   // Called before the derivation below: a hook between it and its uses stops React Compiler
   // from caching the mode options, and the footer then re-renders on every keystroke.
   const managedPolicy = useManagedPolicy(environmentId);
+  const runtimeModeLimitsFor = runtimeModeLimitsTarget(
+    environmentId,
+    draftRuntimeModeLimitsInstance(selectedProviderEntry?.instanceId, multipleModelSelections),
+    gitCwd,
+  );
+  const runtimeModeLimits = useProviderRuntimeModeLimits(runtimeModeLimitsFor);
   const { modes: compatibleRuntimeModes, mode: compatibleRuntimeMode } =
     resolveCompatibleRuntimeMode(
       runtimeMode,
@@ -1011,11 +1035,13 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         providerStatuses,
       ),
     );
-  // Modes above an administrator's ceiling stay listed, disabled with the reason.
+  // Modes above an administrator's ceiling, or that the provider cannot run in this folder,
+  // stay listed, disabled with the reason.
   const compatibleRuntimeModeOptions = resolveRuntimeModeOptions(
     compatibleRuntimeModes,
     managedPolicy,
     m,
+    runtimeModeLimits,
   );
   // A thread or draft already above the ceiling would be refused; offer the broadest mode left.
   const runtimeModeCeilingDenial = runtimeModeDenial(managedPolicy, compatibleRuntimeMode, m);
@@ -2702,54 +2728,56 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       ? 0
       : expandedControlsIconOnlyBlockCount;
   const composerControls = (
-    <ComposerControlsBar
-      environmentId={environmentId}
-      usage={props.usage}
-      workspaceCwd={gitCwd}
-      routeKind={typeof composerDraftTarget === "string" ? "draft" : routeKind}
-      routeThreadRef={routeThreadRef}
-      draftId={typeof composerDraftTarget === "string" ? composerDraftTarget : draftId}
-      selectedProvider={selectedProvider}
-      selectedInstanceId={selectedInstanceId}
-      selectedModel={selectedModel}
-      selectedProviderModels={selectedProviderModels}
-      composerModelOptions={composerModelOptions}
-      reportedModelSelection={reportedModelSelection}
-      promptUltrathink={promptUltrathink}
-      onPromptEdit={editPromptFromTraitsStable}
-      compatibleRuntimeMode={compatibleRuntimeMode}
-      defaultRuntimeMode={props.defaultRuntimeMode}
-      compatibleRuntimeModeOptions={compatibleRuntimeModeOptions}
-      handleRuntimeModeChange={handleRuntimeModeChange}
-      composerControlsCollapsed={composerControlsCollapsed}
-      effortDisplay={settings.effortDisplay}
-      permissionsShownInStrip={props.permissionsShownInStrip}
-      composerControlsHidden={composerMenusClosed}
-      restingHiddenBlockCount={restingHiddenBlockCount}
-      iconOnlyBlockCount={iconOnlyBlockCount}
-      showProviderUnavailable={showProviderUnavailable}
-      providerSetupInstanceId={providerSetupInstanceId}
-      onOpenProviderSetup={onOpenProviderSetup}
-      providerCatalogPending={providerCatalogPending}
-      isSendBusy={isSendBusy}
-      multipleModelsEnabled={routeKind === "draft" && supportsMultipleModels}
-      multipleModelSelections={multipleModelSelections}
-      onMultipleModelSelectionsChange={handleMultipleModelSelectionsChangeStable}
-      selectedModelSelection={selectedModelSelection}
-      onProviderModelSelect={onProviderModelSelect}
-      activeThreadModelSelection={activeThreadModelSelection}
-      selectedModelForPickerWithCustomFallback={selectedModelForPickerWithCustomFallback}
-      lockedProvider={lockedProvider}
-      lockedContinuationGroupKey={lockedContinuationGroupKey}
-      providerInstanceEntries={providerInstanceEntries}
-      keybindings={keybindings}
-      modelOptionsByInstance={modelOptionsByInstance}
-      terminalOpen={terminalOpen}
-      modelPickerOpen={isComposerModelPickerOpen}
-      onModelPickerOpenChange={setIsComposerModelPickerOpen}
-      modelPickerIconClassName={composerProviderState.modelPickerIconClassName}
-      getModelDisabledReason={getModelDisabledReason}
-    />
+    <RuntimeModeLimitsTargetContext value={runtimeModeLimitsFor}>
+      <ComposerControlsBar
+        environmentId={environmentId}
+        usage={props.usage}
+        workspaceCwd={gitCwd}
+        routeKind={typeof composerDraftTarget === "string" ? "draft" : routeKind}
+        routeThreadRef={routeThreadRef}
+        draftId={typeof composerDraftTarget === "string" ? composerDraftTarget : draftId}
+        selectedProvider={selectedProvider}
+        selectedInstanceId={selectedInstanceId}
+        selectedModel={selectedModel}
+        selectedProviderModels={selectedProviderModels}
+        composerModelOptions={composerModelOptions}
+        reportedModelSelection={reportedModelSelection}
+        promptUltrathink={promptUltrathink}
+        onPromptEdit={editPromptFromTraitsStable}
+        compatibleRuntimeMode={compatibleRuntimeMode}
+        defaultRuntimeMode={props.defaultRuntimeMode}
+        compatibleRuntimeModeOptions={compatibleRuntimeModeOptions}
+        handleRuntimeModeChange={handleRuntimeModeChange}
+        composerControlsCollapsed={composerControlsCollapsed}
+        effortDisplay={settings.effortDisplay}
+        permissionsShownInStrip={props.permissionsShownInStrip}
+        composerControlsHidden={composerMenusClosed}
+        restingHiddenBlockCount={restingHiddenBlockCount}
+        iconOnlyBlockCount={iconOnlyBlockCount}
+        showProviderUnavailable={showProviderUnavailable}
+        providerSetupInstanceId={providerSetupInstanceId}
+        onOpenProviderSetup={onOpenProviderSetup}
+        providerCatalogPending={providerCatalogPending}
+        isSendBusy={isSendBusy}
+        multipleModelsEnabled={routeKind === "draft" && supportsMultipleModels}
+        multipleModelSelections={multipleModelSelections}
+        onMultipleModelSelectionsChange={handleMultipleModelSelectionsChangeStable}
+        selectedModelSelection={selectedModelSelection}
+        onProviderModelSelect={onProviderModelSelect}
+        activeThreadModelSelection={activeThreadModelSelection}
+        selectedModelForPickerWithCustomFallback={selectedModelForPickerWithCustomFallback}
+        lockedProvider={lockedProvider}
+        lockedContinuationGroupKey={lockedContinuationGroupKey}
+        providerInstanceEntries={providerInstanceEntries}
+        keybindings={keybindings}
+        modelOptionsByInstance={modelOptionsByInstance}
+        terminalOpen={terminalOpen}
+        modelPickerOpen={isComposerModelPickerOpen}
+        onModelPickerOpenChange={setIsComposerModelPickerOpen}
+        modelPickerIconClassName={composerProviderState.modelPickerIconClassName}
+        getModelDisabledReason={getModelDisabledReason}
+      />
+    </RuntimeModeLimitsTargetContext>
   );
   // An open question owns the space above the composer. Only a machine problem,
   // which is why an answer could not go through, stays beside it.

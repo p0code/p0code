@@ -3,38 +3,37 @@
 A prompt link opens p0code with a prompt ready to send. Use one to share a prompt on social
 media, or to put a one-click fix in a pull request comment.
 
-A link never runs anything. It opens a draft. You read the prompt, then press Send. A link cannot
-change your permission mode, branch, or worktree. Your own defaults apply.
+Links **never** auto-send or change your permission mode, branch, or worktree. They only open a draft for you to review and send.
 
-## Make a link
+## Create a link
 
-Open the command palette and choose **Copy prompt link**. It copies the draft in the composer.
-When the project is on GitHub, **Copy prompt link with repo and model** also adds the repository
-and the model you picked. Sent messages have a **Copy prompt link** button too.
+- **From the composer**: Open the command palette and choose **Copy prompt link** (or **Copy prompt link with repo and model** on GitHub projects).
+- **From a sent message**: Click **Copy prompt link**.
+- **By hand** (URL-encode the prompt, e.g. with `encodeURIComponent`):
 
-You can also write a link by hand:
-
-```
+```text
 https://app.t3.codes/new?prompt=Rate%20my%20swearing
 https://app.t3.codes/new?prompt=Fix%20the%20build&repo=owner/name&provider=codex&model=gpt-5.5
 https://app.t3.codes/new?pr=owner/name/123&prompt=Fix%20the%20failing%20check
 ```
 
-| Parameter  | Meaning                                                                       |
-| ---------- | ----------------------------------------------------------------------------- |
-| `prompt`   | The prompt. Required, except on pull request links. At most 8,000 characters. |
-| `repo`     | A GitHub repository, as `owner/name` or its URL.                              |
-| `provider` | A provider such as `codex` or `claude`.                                       |
-| `model`    | A model of that provider, by its id or name.                                  |
-| `pr`       | A GitHub pull request, as `owner/name/123` or its URL.                        |
+| Parameter  | Description                                                       |
+| ---------- | ----------------------------------------------------------------- |
+| `prompt`   | Draft text (up to 8,000 characters). Required unless `pr` is set. |
+| `repo`     | GitHub repository (`owner/name` or URL).                          |
+| `provider` | Provider ID (e.g. `codex`, `claude`).                             |
+| `model`    | Model ID or name for that provider.                               |
+| `pr`       | GitHub pull request (`owner/name/123` or URL).                    |
 
-Encode the prompt for a URL. In JavaScript, use `encodeURIComponent`.
+## How links open
 
-## Open a link
+Opening a link on `app.t3.codes` asks whether to use the desktop/mobile app, the current browser, or the download page (**Remember my choice** skips this next time).
 
-On app.t3.codes, the link first asks where to open it: the desktop or mobile app, this browser
-when it is connected to a machine, or the download page. Select **Remember my choice** to skip
-this step next time.
+- **No `repo`**: Opens a no-project draft on your last-used machine.
+- **`repo`**: Opens in your most recent project for that repo (or offers **Clone** / **Use without project**).
+- **`provider` / `model`**: Applied if configured; otherwise falls back to your default with a notice.
+- **`pr`**: Opens the thread linked to that PR, or prepares a new worktree draft on the PR branch after you confirm checkout.
+- **Thread prompt link** (`https://app.t3.codes/<environment>/<thread>?prompt=…`): Prefills that thread's composer (asks before overwriting an existing draft).
 
 - **No `repo`**: the draft opens without a project, on the machine you used last.
 - **`repo`**: the draft opens in your most recently used project for that repository. A fork

@@ -139,7 +139,6 @@ import {
   ComposerContextRecordsContext,
 } from "./composerContextPresentation";
 import type { AssistantCitationSourceAnchor } from "~/lib/assistantTextSelection";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { ComposerCodeBlockNodeView } from "./chat/ComposerCodeBlockNodeView";
 import { resolveAssistantCitationCommentDismissal } from "./chat/assistantCitationCommentDismissal";
 import { composerCodeBlockHighlight } from "./composerCodeBlockHighlight";
@@ -154,6 +153,7 @@ import {
   type ComposerAttachmentInsertion,
 } from "./composerAttachmentInsertion";
 import type { ComposerDraftContextRecords } from "./composerContextPresentation";
+import { SharedTooltipTrigger } from "./ui/shared-tooltip";
 
 export interface ComposerPromptEditorHandle {
   focus: () => void;
@@ -323,16 +323,19 @@ function ComposerMentionNodeView({ node }: NodeViewProps) {
   );
   return (
     <NodeViewWrapper as="span" className={CHIP_NODE_SELECTION_CLASS_NAME}>
-      <Tooltip>
-        <TooltipTrigger render={chip} />
-        <TooltipPopup side="top" className="pointer-events-auto">
-          <WorkspaceEntryTooltip
-            path={path}
-            environmentId={actions.environmentId}
-            cwd={actions.cwd}
-          />
-        </TooltipPopup>
-      </Tooltip>
+      <SharedTooltipTrigger
+        render={chip}
+        label={
+          <>
+            <WorkspaceEntryTooltip
+              path={path}
+              environmentId={actions.environmentId}
+              cwd={actions.cwd}
+            />
+          </>
+        }
+        className="pointer-events-auto"
+      />
     </NodeViewWrapper>
   );
 }
@@ -462,6 +465,21 @@ const ComposerCitationExtension = Node.create({
   },
   addNodeView() {
     return ReactNodeViewRenderer(ComposerCitationNodeView);
+  },
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        props: {
+          handleDOMEvents: {
+            // Tiptap hands a mousedown on the source link to ProseMirror, which would select the
+            // chip, so the next keystroke would replace the citation.
+            mousedown: (_view, event) =>
+              event.target instanceof Element &&
+              event.target.closest("[data-composer-citation-chip] a[href]") !== null,
+          },
+        },
+      }),
+    ];
   },
 });
 

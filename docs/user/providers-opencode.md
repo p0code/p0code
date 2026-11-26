@@ -5,7 +5,7 @@ enable it in **Settings > Providers**. See [provider setup](./install.md#provide
 p0code requires OpenCode 1.14.19 or newer, including when you connect an existing
 OpenCode server.
 
-## OpenCode 2
+## OpenCode 1.x vs. 2.x
 
 p0code supports OpenCode 2.0.18 and newer. It detects the version on its own, so
 the same provider settings work for OpenCode 1.x and 2.x. OpenCode 1.x shows

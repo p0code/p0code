@@ -1,5 +1,7 @@
 # Terminal
 
+T3 Code includes integrated terminals running on the environment's host machine, with persistent scrollback across reconnects.
+
 ## Choose a shell
 
 Set `T3CODE_TERMINAL_SHELL` in the environment that launches the p0code server
@@ -8,8 +10,7 @@ full path, without surrounding quotes or command-line arguments. An unset or
 blank value keeps the platform default. If the executable cannot be started,
 p0code tries its usual fallback shells.
 
-On Windows, to use Git Bash from a standard Git for Windows installation, run
-this in PowerShell:
+Example for Git Bash on Windows (PowerShell, then fully quit and reopen T3 Code):
 
 ```powershell
 [Environment]::SetEnvironmentVariable('T3CODE_TERMINAL_SHELL', 'C:\Program Files\Git\bin\bash.exe', 'User')
@@ -23,11 +24,14 @@ again. Git Bash starts as an interactive login shell. Use `bin\bash.exe`, not
 To restore the default, remove the variable with the same command using `$null`
 as its second argument, then restart p0code.
 
-This setting belongs to the machine hosting the server, including when you
-connect from another device. It does not change provider-run commands or the
-shell used by automatic project setup and settle scripts.
+Each terminal retains up to **5,000 lines** and **8 MiB** of scrollback on the server.
 
-## Terminal history
+| Action                     | macOS                              | Windows / Linux                            |
+| -------------------------- | ---------------------------------- | ------------------------------------------ |
+| Scroll page up/down        | `Shift+PageUp` / `Shift+PageDown`  | `Shift+PageUp` / `Shift+PageDown`          |
+| Jump to start / latest     | `Cmd+Shift+Home` / `Cmd+Shift+End` | `Ctrl+Shift+Home` / `Ctrl+Shift+End`       |
+| Select all retained output | `Cmd+A`                            | `Ctrl+Shift+A` (`Ctrl+A` stays shell home) |
+| Next / previous terminal   | `Cmd+Shift+]` / `Cmd+Shift+[`      | `Ctrl+Alt+]` / `Ctrl+Alt+[`                |
 
 Each terminal keeps up to 5,000 lines and 8 MiB of scrollback on its environment
 server. p0code removes the oldest output when either limit is reached. A long

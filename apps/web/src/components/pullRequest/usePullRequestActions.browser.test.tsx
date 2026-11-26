@@ -1,10 +1,12 @@
+import { scopedProjectKey } from "@t3tools/client-runtime/environment";
 import { EnvironmentId, ProjectId, ThreadId, type PullRequestRef } from "@t3tools/contracts";
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import { expect, it, vi } from "vite-plus/test";
 import { userEvent } from "vite-plus/test/browser";
 
 import { act, render } from "../../../test/render";
-import { useComposerDraftStore } from "~/composerDraftStore";
+import { DraftId, useComposerDraftStore } from "~/composerDraftStore";
+import { readPendingWorkspaceDefault } from "~/lib/draftWorkspaceDefaults";
 import { ToastProvider } from "../ui/toast";
 import { usePullRequestActionRunner, usePullRequestHandoffs } from "./usePullRequestActions";
 

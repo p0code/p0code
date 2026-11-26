@@ -1,3 +1,4 @@
+import { SharedTooltipProvider } from "../components/ui/shared-tooltip";
 import { scopedProjectKey, scopeProjectRef } from "@t3tools/client-runtime/environment";
 import { type ServerLifecycleWelcomePayload } from "@t3tools/contracts";
 import {
@@ -146,7 +147,11 @@ function RootRouteView() {
   return (
     <ToastProvider>
       <AnchoredToastProvider>
-        <RootRouteBranch />
+        {/* One tooltip for every trigger in the app: mounting a tooltip per trigger made opening a
+            thread, panel or message pay for tooltips nobody hovers. */}
+        <SharedTooltipProvider>
+          <RootRouteBranch />
+        </SharedTooltipProvider>
       </AnchoredToastProvider>
     </ToastProvider>
   );

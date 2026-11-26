@@ -1,3 +1,4 @@
+import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 import { useAtomValue } from "@effect/atom-react";
 import {
   connectionErrorText,
@@ -363,26 +364,22 @@ export function SavedBackendListRow({
           appearance="icon"
         />
       ) : null}
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <Switch
-              size="sm"
-              checked={enabled}
-              disabled={isRemoving || blocked}
-              aria-label={
-                enabled
-                  ? gt("Switch off {label}", { label: environment.label })
-                  : gt("Switch on {label}", { label: environment.label })
-              }
-              onCheckedChange={(checked) => onSetEnabled(environmentId, checked)}
-            />
-          }
-        />
-        <TooltipPopup side="top">
-          {blocked ? gt("Client not supported") : enabled ? gt("Switch off") : gt("Switch on")}
-        </TooltipPopup>
-      </Tooltip>
+      <SharedTooltipTrigger
+        render={
+          <Switch
+            size="sm"
+            checked={enabled}
+            disabled={isRemoving || blocked}
+            aria-label={
+              enabled
+                ? gt("Switch off {label}", { label: environment.label })
+                : gt("Switch on {label}", { label: environment.label })
+            }
+            onCheckedChange={(checked) => onSetEnabled(environmentId, checked)}
+          />
+        }
+        label={blocked ? gt("Client not supported") : enabled ? gt("Switch off") : gt("Switch on")}
+      />
       <Menu>
         <MenuTrigger
           render={

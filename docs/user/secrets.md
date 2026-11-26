@@ -4,26 +4,21 @@ p0code can read credentials from a secret provider, so the credential stays in y
 manager and p0code saves only a reference to it. Agents can also ask you for a secret in a
 private card instead of in the chat.
 
-The Secrets settings page is in preview and is not in every build yet. Secret requests from agents
-work everywhere.
+> Note: **Settings → Secrets** is in preview and may not appear in every build. In-thread secret request cards from agents work everywhere.
 
-## Secret providers
+## Connect 1Password
 
 1Password is the supported provider. p0code reads secrets with the
 [1Password CLI](https://developer.1password.com/docs/cli/) (`op`), so `op` must be installed and
 signed in on the machine that runs the p0code server. When you use p0code on another machine or
 from your phone, that is the remote machine, not the device in front of you.
 
-A desktop sign-in asks for approval on that machine, which a remote user cannot answer. On a remote
-or headless server, sign `op` in with a [service account](./secrets-1password-service-account.md) or a
-[Connect server](./secrets-1password-connect.md) instead.
+1. Open **Settings → Secrets → Add provider** (configured per environment).
+2. Enter a name and the 1Password account shorthand, sign-in address (without `https://`), or ID from `op account list`.
 
-To add one, open **Settings → Secrets**, select **Add provider**, and enter a name and the
-1Password account: the shorthand, sign-in address (without `https://`), or ID that
-`op account list` shows. Secret providers belong to the environment you are connected to. Each
-environment keeps its own list.
+## Use secret references
 
-## Use a secret reference
+Credential fields in Settings (provider env vars, source control tokens, usage keys, device host tokens) include a source picker: choose **Value** for a literal value or select your 1Password provider and paste a reference like `op://vault/item/field`.
 
 Credential fields in Settings, such as provider environment variables and credentials, source
 control tokens, usage limit keys, and device host tokens, show a source picker next to the field.
@@ -50,9 +45,7 @@ from it. Removing it clears those fields, so set them again before you need them
 
 ## When an agent asks for a secret
 
-An agent that needs a token or password shows a secret request card in the thread instead of asking
-you to paste it into the chat. Type or paste the value and select **Save securely**, or select
-**Decline**. You can answer from web, desktop, or mobile.
+When an agent calls `request_secret`, T3 Code displays a private card in the thread (web, desktop, and mobile) instead of asking you to paste into chat.
 
 If the environment has a secret provider, the card also lets you pick it and enter a reference
 instead of the value. Answering with a reference needs permission to manage providers, as saving a

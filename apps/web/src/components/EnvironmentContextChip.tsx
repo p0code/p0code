@@ -1,3 +1,4 @@
+import { Tooltip, TooltipTrigger, TooltipPopup } from "./ui/tooltip";
 import { type EnvironmentContextRecord, resolveEnvironmentMachineKind } from "@t3tools/contracts";
 
 import { useGT } from "gt-react";
@@ -6,7 +7,7 @@ import { useEnvironment } from "~/state/environments";
 import { environmentShortLabel } from "./environmentLabel";
 import { ContextChip, ContextChipLabel } from "./ContextChip";
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
+import { SharedTooltipTrigger } from "./ui/shared-tooltip";
 
 /**
  * Inline chip for a mentioned machine, in the composer and in sent messages. Prefers the

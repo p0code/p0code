@@ -27,6 +27,34 @@ import * as OrchestrationMilestones from "./milestones/OrchestrationMilestones.t
 // @effect-diagnostics nodeBuiltinImport:off
 // Effect wraps this raw Node HTTP server after its startup and write-error guards attach.
 // @effect-diagnostics nodeBuiltinImport:off
+// Effect wraps this raw Node HTTP server after its startup and write-error guards attach.
+// @effect-diagnostics nodeBuiltinImport:off
+// Effect wraps this raw Node HTTP server after its startup and write-error guards attach.
+// @effect-diagnostics nodeBuiltinImport:off
+// Effect wraps this raw Node HTTP server after its startup and write-error guards attach.
+// @effect-diagnostics nodeBuiltinImport:off
+// Effect wraps this raw Node HTTP server after its startup and write-error guards attach.
+// @effect-diagnostics nodeBuiltinImport:off
+// Effect wraps this raw Node HTTP server after its startup and write-error guards attach.
+// @effect-diagnostics nodeBuiltinImport:off
+// Effect wraps this raw Node HTTP server after its startup and write-error guards attach.
+// @effect-diagnostics nodeBuiltinImport:off
+// Effect wraps this raw Node HTTP server after its startup and write-error guards attach.
+// @effect-diagnostics nodeBuiltinImport:off
+// Effect wraps this raw Node HTTP server after its startup and write-error guards attach.
+// @effect-diagnostics nodeBuiltinImport:off
+// Effect wraps this raw Node HTTP server after its startup and write-error guards attach.
+// @effect-diagnostics nodeBuiltinImport:off
+// Effect wraps this raw Node HTTP server after its startup and write-error guards attach.
+// @effect-diagnostics nodeBuiltinImport:off
+// Effect wraps this raw Node HTTP server after its startup and write-error guards attach.
+// @effect-diagnostics nodeBuiltinImport:off
+// Effect wraps this raw Node HTTP server after its startup and write-error guards attach.
+// @effect-diagnostics nodeBuiltinImport:off
+// Effect wraps this raw Node HTTP server after its startup and write-error guards attach.
+// @effect-diagnostics nodeBuiltinImport:off
+// Effect wraps this raw Node HTTP server after its startup and write-error guards attach.
+// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeHttp from "node:http";
 
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
@@ -759,7 +787,10 @@ const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
   Layer.provideMerge(Layer.mergeAll(Keybindings.layer, UsageLimitSources.layer)),
   Layer.provideMerge(ProviderRegistry.layer),
   Layer.provideMerge(
-    ProviderInstanceRegistryHydration.layer.pipe(Layer.provide(SqlitePersistence.layerConfig)),
+    ProviderInstanceRegistryHydration.layer.pipe(
+      Layer.provide(SqlitePersistence.layerConfig),
+      Layer.provide(layerNativeTelemetry),
+    ),
   ),
   // One gate for the server, below hydration so the Claude adapter sees it: layers memoize by
   // reference, so the runtime layer shares it.

@@ -64,7 +64,7 @@ connection to see why. The page leaves the phone out on builds without a relay,
 or when your organization turns it off. You can still pair the app with a code
 from **Settings → Sharing & access**.
 
-## Projects
+## Projects and conversation import
 
 p0code finds directories that Claude Code, Codex or Pi has used. Git repositories
 are listed first, newest activity on top. When the remote is on GitHub, the

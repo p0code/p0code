@@ -37,13 +37,7 @@ if that project exists there. Otherwise it selects an environment that has it.
 
 ### Start without a project
 
-A thread does not need a project. To start one without a project, click **or
-start without a project** under a new thread's heading, pick **No project** from
-the project menu in that heading or from **New thread in...** in the command
-palette, or press `mod+alt+n`. On mobile, pick **No project** from the project
-list. It starts on your current machine; before sending, pick another machine
-from the machine menu to move it there. To move a draft into a project, pick the
-project in the heading.
+Threads don't require a project. Pick **No project** (or press `mod+alt+n` on web/desktop) to start a scratch thread in `~/.t3/scratch/<date>-<slug>-<id>`.
 
 Each thread without a project works in its own folder under `~/.p0code/scratch` (the
 `scratch` folder of your T3 data directory), named after its date, the first words
@@ -53,27 +47,22 @@ folder, so the files the agent wrote stay until you delete them. Branch, worktre
 these folders are not Git repositories. This is unavailable when the data
 directory itself sits inside a Git checkout.
 
-When the work grows into something real, pick **Turn into project** from the
-thread's menu. The thread's folder becomes a project where it is, so nothing
-moves and the agent keeps working in the same place. Other threads in that folder
-move with it. Rename the project in its settings, and use **Initialize Git** to
-get branch and diff controls.
+### Start in the background and multi-model runs
 
-### Start in the background
+- **Background start** (web/desktop): Press `Cmd+Enter` (macOS) or `Ctrl+Enter` (Windows/Linux) in a new thread to submit it and immediately open another draft with the same workspace mode and base branch.
+- **Same prompt, multiple models** (web/desktop, Git projects): `Shift`-click models in a new thread's model picker to select several. Sending starts a separate thread and worktree for each model.
 
-In a desktop browser or the desktop app, press `Cmd+Enter` on macOS or `Ctrl+Enter`
-on Windows and Linux to start a new thread and immediately open another draft. The
-next draft keeps the workspace mode and base branch you selected. With **New
-worktree**, each background submission creates its own worktree.
+## Sidebar layout and organization
 
-To send the same prompt to several models on web or desktop, **Shift-click** models
-in a new thread's model picker to add or remove them. A regular click returns to a
-single model. Choose a base branch and send. Each selection starts a separate thread
-and worktree while you stay in the new thread composer. This requires a Git project.
+- **Resize or hide** (web/desktop): Drag the sidebar's right edge past its minimum width to hide it; hover the left window edge and click or drag the handle to bring it back.
+- **Drop files onto a thread** (web/desktop): Drag files from your computer onto any thread row to open it and attach them to its composer.
+- **Pin and reorder**: Pin a thread from its menu or drag threads between **Pinned**, **Active**, and **Settled** (or drag out of **Snoozed** to wake). On mobile, use **Arrange threads** or **Move up / Move down** in the thread menu. Custom order syncs across devices (requires an up-to-date server).
+- **Undo** (web/desktop): Unpinning, settling, snoozing, archiving, or discarding a draft shows a 5-second **Undo** toast (`mod+z`).
+- **Titles**: Choose **Regenerate title** from a thread's menu, or customize title style in **Settings → Threads → Text generation → Thread title instructions** (global or per-project).
 
-## Pin and reorder threads
+### Working section (beta)
 
-Pin a thread from its menu to keep it above your active work.
+Enabled by default (**Settings → General → Working section**, per device). Unpinned threads that are actively running—or waiting on subagents, watched PRs, or monitors—collapse into a **Working** section below Active, and return to the top of Active when they finish, fail, or need input.
 
 On web and desktop, unpinning, settling, snoozing, and archiving a thread each show
 a notification with **Undo** for five seconds. Undo restores the thread's previous
@@ -163,47 +152,25 @@ cannot drag or move threads within it. Your saved order returns when you turn it
 
 ### Group threads by project (beta)
 
-Turn on **Settings → Labs → Boring sidebar (group by project)** on web and desktop to put active
-threads in a folder for each project. Pinned projects come first. A project with no active
-threads has no folder unless it is pinned or you pick it in the project filter. An archived
-project's folder comes last and shows only while it has active threads. Click a folder to open or
-close it. A closed folder shows how many threads it holds, and a dot when one of them
-needs you. Use the pen button on a folder, or right-click it, to start a thread in that project.
-Pinned threads stay above the folders, and Snoozed and Settled stay below them. In this mode you
-can drag a thread onto the composer to mention it, but not within the sidebar, and the Working
-section is off. Each device keeps its own choice.
+Enable **Settings → Labs → Boring sidebar (group by project)** on web/desktop (per device) to group active threads into collapsible project folders. Pinned threads stay above; Snoozed and Settled stay below. In this mode, the Working section and sidebar drag-reordering are disabled (dragging a thread onto the composer still works).
 
-## Settle finished work
+## Settle, snooze, and archive
 
-Choose **Settle thread** from its menu to move finished work out of the active list
-without deleting the conversation. **Un-settle thread** restores it to active work
-and prevents automatic settlement until new activity resumes the usual rules.
-Manually settling an idle thread dismisses unanswered async questions without
-sending an answer or restarting the agent. Settling also closes the thread's
-terminals that wait at an idle prompt, and keeps their output. A terminal that
-runs a command, such as a dev server, stays open unless its action has **Stop this action
-when the thread settles** enabled in Settings > Projects > Actions. You can also set
-`"stopOnSettle": true` on a `t3.json` action and import it there. Start the command through
-that action so T3 can stop its terminal and child processes. Commands started through an
-agent's own shell tools are managed by the provider.
+| Action      | When to use          | Effect                                                                                                                                         |
+| ----------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Settle**  | Task is done for now | Moves to **Settled**; stays searchable; any new message reactivates it. Closes idle terminals (and stops actions with `stopOnSettle: true`).   |
+| **Snooze**  | Defer until later    | Hides until wake time (thread keeps working in the background). Wakes early on approvals, questions, errors, or new messages.                  |
+| **Archive** | Out of the way       | Leaves sidebar and search; lives in **Settings → Archive**. Refuses new messages (including from agents and scheduled tasks) until unarchived. |
 
-You can settle or snooze a thread while its environment is offline. The thread shows
-**Pending** (**Waiting to sync** on mobile), and the change is sent when the environment
-reconnects. Undo, Un-settle, or Wake before then cancels it. If the thread changed there in
-the meantime, the environment's state wins and your change is dropped. A thread with a
-pending settle cannot be snoozed until it syncs.
+> Tip: If a scheduled task targets a thread, settle it instead of archiving—archiving causes scheduled runs to fail.
 
-To reclaim disk space from settled work, turn on **Run in the thread's worktree when the
-thread settles** for one of the project's actions, or set `"runOnSettle": true` on a
-`t3.json` script, for example `cargo clean`. It runs each time a thread in its own
-worktree settles, manually or automatically, even if a terminal there still runs a
-command such as a dev server. Threads in the project's main checkout skip it. Its terminal
-closes when the command succeeds and stays open when it fails.
+### Settlement rules and hooks
 
-On web and desktop, press a thread's **Settle** button and drag up or down to
-settle every thread in that section between it and the one you release on.
-The **Un-settle** and **Wake** buttons work the same way in their sections.
-Press `Escape` while dragging to cancel.
+- **Automatic settlement**: By default, environments settle threads after 7 days of inactivity or when their linked PR merges/closes (even while your apps are closed). Active work, pending questions/approvals, and waited-on background work block auto-settlement. Configure rules in **Settings → Threads** (per environment or **All environments**), including **Keep threads with a PR**.
+- **Per-thread override**: Open a thread's menu → **Auto-settle behavior → Never** to exempt a single thread.
+- **Drag-to-settle** (web/desktop): Press and drag down/up from a thread's **Settle**, **Un-settle**, or **Wake** button to act on a contiguous range (`Esc` cancels).
+- **Offline settle/snooze**: Queues locally (**Pending** / **Waiting to sync**) and syncs on reconnect; remote changes take precedence if the thread changed in the meantime.
+- **Worktree cleanup on settle**: Enable **Run in the thread's worktree when the thread settles** on a project action (or `"runOnSettle": true` in `t3.json`), e.g. `cargo clean`, to reclaim disk space automatically in worktree threads.
 
 By default, environments settle inactive threads after seven days and settle
 threads whose pull request merged. A closed pull request can also settle an idle
@@ -216,58 +183,16 @@ resumed after it closed. Your own messages count as resuming, and so does a
 message an agent sends with `t3_thread_send` or `p0 thread send`. A turn that finished
 background work or a pull request watch starts on its own does not.
 
-To keep one thread out of the settled shelf no matter how long it sits idle, open its menu,
-choose **Auto-settle behavior**, and pick **Never**. The current option is checked. Pick
-**Follow settings** to return to the rules in **Settings → Threads**. While those rules are off,
-a thread on **Follow settings** does not settle automatically either. Manual settle, snooze, and
-archive still work while it is set to **Never**.
-
-Change these rules in **Settings → Threads**.
-They continue to run when your apps are closed. On web and desktop, choose an environment at the
-top to change only its rules, or **All environments** to update connected environments together.
-Mixed values show where the selected environments disagree. Mobile applies these
-rules to connected environments that support shared settings. Offline environments
-and older servers keep their previous values. Changing a rule does not reopen
-already settled threads.
-
-### Settle or archive
-
-Settle is for work that is done for now. A settled thread stays in the sidebar's Settled
-section and in search, and a message to it, from you, an agent, or a scheduled task, makes it
-active again. Archive is for work you want out of the way. An archived thread leaves the
-sidebar and search and shows only in **Settings → Archive**, where you can unarchive or
-delete it. It refuses new messages, including ones from agents and scheduled tasks, until you
-unarchive it. Removing a project deletes its threads either way.
-
-A scheduled task that posts into one thread keeps running after you archive that thread, and
-each run fails. Settle the thread instead, or move or pause the task in **Settings → Scheduled
-tasks**.
+Customize presets in **Settings → Threads → Snooze options** (durations like `3 hours` or times like `9:00 PM tomorrow`), or pick **Snooze → Custom…** for an exact date/time or duration. Choose **Wake thread** to bring a thread back early.
 
 ## Link a pull request
 
-The server finds the PR for each unsettled thread's saved branch, even when your
-apps are closed. Settled threads keep their saved links. Update the server if
-automatic branch links do not appear.
-
-On web and desktop, right-click a pull request link in a thread and choose
-**Link to thread** to select a different PR. Use **Unlink from thread** on the
-same link to return to the branch PR, if one exists.
-The linked pull request participates in automatic settlement.
+The server automatically links open PRs matching an unsettled thread's branch. On web/desktop, right-click any PR link in a thread and choose **Link to thread** or **Unlink from thread** to override it. Linked PRs participate in auto-settlement.
 
 ## Find and reference work
 
-On web and desktop, open the command palette with `Cmd/Ctrl+K` to search threads
-across connected environments by title, branch, pull request, or project.
-Threads you open often or recently rank higher, and for three weeks the thread
-you last picked for a query ranks higher when you type that query again.
-Threads whose messages contain all your words appear below, under **In
-messages**, and open at the matching message. Message search needs at least
-one word of three or more letters, or two for Chinese, Japanese, and Korean.
-Put a search in double quotes, such as `"missing position files"`, to find only
-titles and messages that hold those words together, exactly as typed.
-On mobile, the thread list search also lists message matches and opens them at
-the matching message; on an iPad with a keyboard, `Cmd+K` opens the same
-palette.
+- **Command palette** (`Cmd/Ctrl+K`): Searches threads across connected environments by title, branch, PR, project, and message contents (use `"exact phrase"` for exact matches). On mobile, use the thread list search (or `Cmd+K` on iPad with a keyboard).
+- **Copy reference**: Copies the linked PR URL if one exists, otherwise a thread link that pastes into any composer as a thread chip. Use **Copy → Thread** (or **Copy thread** on mobile) to force a thread link, or **Thread ID** for scripts and the `t3` CLI.
 
 Use **Settings → Keybindings** to find or customize shortcuts for searching files
 and copying a thread reference. A copied reference uses the thread's pull request
@@ -342,33 +267,16 @@ back the standard rows.
 
 ## Open a thread beside the one you are in
 
-On web and desktop, a subagent, a side chat, and a
-[thread on a linked machine](remote-access.md#read-a-linked-machines-threads)
-all open the same way. Click one to open it as a tab in the right panel, so the
-thread you are in stays in view. Hold ⌘ (Ctrl on Windows and Linux) while you
-click, or middle-click, to open it in the main view instead. With the keyboard,
-Enter and ⌘/Ctrl + Enter do the same. Right-click for **Open in side panel** and
-**Open in main view**.
+On web and desktop, subagents, side chats, and [threads on linked machines](./remote-access.md#read-a-linked-machines-threads) open as a tab in the right panel by default so your main thread stays visible.
 
-To make the main view the place a plain click opens them, set **Settings → Chat →
-Open subagents and side chats in** to **Main view**. The modifier then opens
-the side panel.
-
-From a tab, **Open in main view** at the top of the tab, or in the tab's
-right-click menu, moves it to the main view. The bottom of the view depends on
-the thread: a side chat or a subagent you delegated has a composer, a subagent
-the agent started is read-only, and a thread on a linked machine is read-only
-with **Connect to interact**.
-
-Other thread links open in the main view as before.
-
-On mobile these threads open in the inspector on layouts that have one, where
-Maximize fills the screen, and full screen everywhere else.
+- Hold `Cmd`/`Ctrl` while clicking (or middle-click) to open in the main view instead.
+- Change the default in **Settings → Chat → Open subagents and side chats in**.
+- From a right-panel tab, choose **Open in main view** to promote it.
+- On mobile, they open in the inspector where available, or full screen otherwise.
 
 ## Side chats
 
-A side chat lets you ask a question about a thread without adding to it. It starts
-with what the thread knows, and the thread keeps working while you ask.
+Ask a quick side question about a thread without polluting its history. A side chat starts with the parent thread's context, folder, model, and permissions while the parent keeps working.
 
 On web and desktop, start a message with `/side` or `/btw`, then your question.
 You can also choose **Side chat** from the **+** menu in the right panel. The side

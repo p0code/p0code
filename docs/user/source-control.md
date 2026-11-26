@@ -40,7 +40,16 @@ Install Git and configure authentication on the machine running your p0code serv
 environment, do this on the remote machine. After signing in, open **Settings → Source control & issues**
 and choose **Rescan**.
 
-### GitHub
+| Host                               | Setup                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **GitHub**                         | 1) Save a token in **Settings → Source control & issues → GitHub**, 2) set `GH_TOKEN` (`GH_ENTERPRISE_TOKEN` + `GH_HOST` for Enterprise), or 3) sign in with [GitHub CLI](https://cli.github.com/) 2.81.0+ (`gh auth login`; use `--hostname` for Enterprise). Pick accounts or disable hosts in Settings when multiple `gh` logins exist.                                                                                |
+| **GitLab**                         | Install [GitLab CLI](https://gitlab.com/gitlab-org/cli) and run `glab auth login`.                                                                                                                                                                                                                                                                                                                                        |
+| **Forgejo / Gitea**                | Install [`fj`](https://codeberg.org/forgejo-contrib/forgejo-cli) (`fj --host https://your-server auth add-token`) or [`tea`](https://gitea.com/gitea/tea) 0.16+ (`tea login add`). Prefers `fj`, falls back to `tea` (use `tea` for subpath-hosted servers). Use full URLs when multiple servers exist.                                                                                                                   |
+| **Bitbucket**                      | Save a repo/project/workspace **Access token** or **Atlassian email + API token** (with repo/PR read-write, `read:user:bitbucket`, `read:workspace:bitbucket`) in **Settings → Source control & issues → Bitbucket**, or set `T3CODE_BITBUCKET_ACCESS_TOKEN` / `T3CODE_BITBUCKET_EMAIL` + `T3CODE_BITBUCKET_API_TOKEN` in the server env (or [`service.env`](./background-service.md#configure-the-service-environment)). |
+| **Azure DevOps**                   | Install [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/), run `az extension add --name azure-devops`, then `az login`.                                                                                                                                                                                                                                                                                           |
+| **GitCafe**                        | Save a token in Settings, set `CAFE_TOKEN` (+ `CAFE_HOST`), or install `@gitcafe/cli` and run `cafe auth login --host https://git.cafe/api`. Line comments are not yet supported; stack merges/updates are native.                                                                                                                                                                                                        |
+| **Cursor Origin**                  | Install [Origin CLI](https://cursor.com/docs/origin/cli) and run `origin auth login` (`origin auth setup-git` if push prompts for credentials). Uses private HTTPS repos; GitHub-mirrored PRs stay on GitHub.                                                                                                                                                                                                             |
+| **TanStack Source** (private beta) | Set `T3CODE_FEATURE_FLAGS=tanstack_source` and restart the server. Save a token in Settings, set `SRC_TOKEN`, or run `src auth login --web`. Supports live CI logs, private PRs on public repos, and issues.                                                                                                                                                                                                              |
 
 p0code talks to GitHub's API directly and only needs a token. Any of these works, in this
 order of precedence:
@@ -202,52 +211,33 @@ toast or from the banner above the composer. When the host refuses the machine's
 clones over HTTPS with Git's credentials for that host instead, and the project's remote uses the
 HTTPS URL.
 
-To lay clones out like [ghq](https://github.com/x-motemen/ghq), turn on **Clone into host folders**
-under **Settings → Threads** (or **Source control** on mobile). Clones then default to
-`<host>/<owner>/<repo>` under **Add project starts in**, so set that to `~/ghq` to share ghq's
-folders. You can still change the destination before cloning.
+A turn's diff shows only that turn's own edits, commits, and conflict fixes—excluding unrelated files brought in by a pull, merge, or rebase. Use the branch comparison to view everything changed against your base branch.
 
-For a local Git repository without a remote, **Publish Repository** creates a hosted repository,
-adds it as `origin`, and pushes your commits. If there are no commits yet, it creates the remote;
-make your first commit before pushing.
+- **Commits view** (web/desktop): Switch the Diff pane source picker to **Commits** to inspect the latest 100 local commits one by one.
+- **Commit links**: Links to local commits open in the Diff pane (follows **Settings → Diffs → Open pull requests in T3 Code**; `Cmd/Ctrl+Click` opens in browser).
+- **Multi-repo projects**: Use the repository picker in the Diff pane and expand per-repo rows in thread details. See [Projects with several repositories](./multi-repo-projects.md).
 
-## Create a pull request
+## Create, review, and merge pull requests
 
 Use a thread's Git actions to commit, push, and create a pull request. p0code can generate commit
 messages, review titles, and descriptions from your changes. Descriptions also draw on the work in
 the thread, including the checks it ran.
 
-An existing fork PR can appear beside the branch even if you pushed without setting an upstream.
-If its badge is missing because several remotes hold that branch, set the branch's upstream to
-the intended remote with `git branch --set-upstream-to=<remote>/<branch>`.
+### Review guides (beta)
 
-Choose how commit messages and pull request titles and descriptions are written in
-**Settings → Source control & issues → Commits & pull requests**. **Repository conventions** uses the
-project's instructions and recent commit subjects. **Custom instructions** applies your own
-instructions to commits and pull requests.
+Turn on **Settings → Source control & issues → Review guides** to add a **Guide** tab to pull requests. Click **Write guide** to have Claude or Codex read the PR in a temporary read-only checkout and produce an ordered tour of the change (highlighting **Look closely** spots and grouping mechanical changes at the end).
 
-## Review and merge
+- Customize emphasis/ordering via **Review guide instructions** in **Settings → Source control & issues** (project-overridable).
+- On web, select lines in any stop to add review comments or ask an agent about that stop.
+- Agents can also generate guides for multiple PRs when asked. Choose **Rewrite guide** from the PR's **⋯** menu after new pushes.
 
-Open **Pull requests** to review changes and comments, request reviewers, check out a branch,
-or merge. You can edit review titles and descriptions and your own comments where the host allows it.
-Where you can edit a description, you can also tick its checkboxes from the Summary tab
-(the Overview tab on mobile).
-GitLab calls these merge requests.
+### Pull request sharing across environments
 
-A merge or review applies to the commits you opened the pull request on. When someone pushes
-meanwhile, the web and desktop apps offer **Load new commits**; until you do, a merge or review is refused and your
-review draft is kept. Merging from a thread's pull request row, or from the list, lands the head that
-row had when you confirmed.
+Disabled by default. In **Settings → Environments → Pull request sharing** (**Pull request routing** on mobile), opt in trusted environments to **Read PRs** or **Read and act** so review reads/actions can route through another connected environment signed into the same account on the same host (credentials never leave their machines). Enable on both source and target environments; only grant **Read and act** to environments you control.
 
-Save a filter setup with **Views → Save current view** on the Pull Requests page. For example, choose
-**Reviewing** (**Your review** on mobile) and save it as "PRs Requesting My Review". Choose a saved view to restore its search,
-filters, sort order, and server/project scope. After changing filters, use **Update saved view** to
-keep the changes, or save another view. You can also rename or delete views from the same menu.
-Saved views stay in the browser or app where you created them and do not sync across devices.
+## Linked pull requests and watching
 
-A link to part of a pull request opens that part: a comment or review is marked in the activity, a
-changed-line link opens the file at those lines, a checks link opens the checks, and a commit link
-opens that commit's changes. On web and desktop, hovering a comment or commit link previews it.
+Threads can link multiple PRs (even across repos on the same host). Creating a PR via Git actions, `gh pr create`, `glab mr create`, or an agent's `link_pull_request` links it automatically; manage links from **Linked items** or the command palette.
 
 On mobile, **Pull requests** lists reviews across your connected environments. Open a review
 to read its description, activity, commits, and changed files. Line comments stay as drafts
@@ -444,12 +434,22 @@ Writing to a tracker over a remote connection requires the `source-control:write
 
 ## GitHub stacks
 
-The Pull requests page shows each PR's position in its GitHub stack. Open the stack badge in a
-review to navigate its layers. **Merge stack** submits the selected pull request and every unmerged
-layer below it to GitHub together, respecting branch rules and merge queues. The confirmation shows
-the scope and merge strategy. GitHub rebases the remaining stack after merging.
+The Pull requests page displays stack layer positions and navigation:
 
-**Rebase stack** updates remote branches from bottom to top without changing your local checkout.
-It can rewrite history and restart checks. If a layer fails, earlier updates remain; resolve that
-layer before retrying. GitHub may require manual conflict resolution after a lower layer is amended,
-even when its changes look independent. Stack actions require an environment that supports them.
+- **Merge stack**: Merges the selected PR and every open layer below it together, respecting branch rules and merge queues.
+- **Rebase stack**: Updates remote branches bottom-to-top without modifying your local checkout (may rewrite history and restart checks).
+
+## Issues
+
+Open **Issues** from the sidebar utility row or **Open issues** in the command palette to browse, filter, search, save views, comment, edit, and transition issues across GitHub, GitLab, Azure DevOps, Forgejo, and Linear.
+
+- **Linear**: Connect an API key in **Settings → Source control & issues** and bind one or more teams per project (supports multiple Linear accounts). Agents file new issues in the first bound team unless another is named.
+- **Link to threads**: Click **Link to this thread** on an issue beside a thread (or let agents call `link_issue`) to track it in **Linked items**.
+- Remote issue writes require the `source-control:write` scope.
+
+## Troubleshooting
+
+- **Not authenticated**: Run the host's CLI login on the server and click **Rescan** (for Bitbucket/tokens, verify Settings or server env vars).
+- **GitHub verification fails**: Upgrade `gh` to 2.81.0+ or save a token in Settings.
+- **Push fails**: Check Git SSH/HTTPS credentials separately from API auth.
+- **Fork PR badge missing**: Set upstream with `git branch --set-upstream-to=<remote>/<branch>`.
