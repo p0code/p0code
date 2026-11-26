@@ -2,7 +2,6 @@ import type { EnvironmentServerConfig } from "@t3tools/client-runtime/connection
 import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { resolveThreadWorkingStartedAt } from "@t3tools/client-runtime/state/models";
 import { isShownUnderParent } from "@t3tools/client-runtime/state/threads";
-import { backgroundWorkHoldsCompletion } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
 import { threadPullRequestSearchTerms } from "@t3tools/shared/threadPullRequests";
 import * as React from "react";
 import { msg } from "gt-react";
@@ -1313,7 +1312,7 @@ export function resolveThreadStatusPill(input: {
   }
 
   // Background work is work: the thread is not waiting for anything, it is still running.
-  if (backgroundWorkHoldsCompletion(thread.pendingBackgroundTasks ?? [])) return working;
+  if ((thread.pendingBackgroundTasks ?? []).length > 0) return working;
 
   const hasPlanReadyPrompt =
     !thread.hasPendingUserInput &&
