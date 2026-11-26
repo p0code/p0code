@@ -106,15 +106,14 @@ export function T3ConnectBridgePanel({ environmentId }: { readonly environmentId
       ) : (
         <div className="flex flex-wrap items-center gap-2">
           <span className="mr-auto truncate">{status.account ?? gt("Signed in")}</span>
-          {status.linked ? (
-            <Button variant="outline" disabled={busy} onClick={() => void run("unlink")}>
-              <T>Unlink</T>
-            </Button>
-          ) : (
+          {status.linked ? null : (
             <Button disabled={busy} onClick={() => void run("link")}>
               <T>Link</T>
             </Button>
           )}
+          <Button variant="outline" disabled={busy} onClick={() => void run("unlink")}>
+            <T>Unlink</T>
+          </Button>
           <Button variant="ghost" disabled={busy} onClick={() => void run("signOut")}>
             <T>Sign out</T>
           </Button>

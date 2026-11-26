@@ -34,6 +34,11 @@ export const PENDING_T3_IMPORT_FILE = "pending-t3-import.json";
 export const T3_IMPORT_REPORT_FILE = "t3-import-report.json";
 const MIGRATION_TOOL_VERSION = 1;
 
+/** The bridge's secret name for its link key: `plugin-<plugin id>-<storage key>`. */
+const BRIDGE_SIGNING_KEY_SECRET = "plugin-t3-connect-bridge-signing-key";
+/** Stock T3 Code's environment link key; the relay pins it to the environment id. */
+const T3_CLOUD_LINK_KEY_SECRET = "cloud-link-ed25519-key-pair";
+
 export interface MigrationEntry {
   readonly path: string;
   readonly detail: string;
@@ -104,6 +109,7 @@ type Rule =
   | { readonly action: "database" }
   | { readonly action: "secrets" }
   | { readonly action: "environment-id" }
+  | { readonly action: "bridge-key" }
   | { readonly action: "skip"; readonly reason: string }
   | { readonly action: "shared"; readonly reason: string };
 
@@ -205,8 +211,13 @@ const secretRule = (name: string, keepEnvironmentId: boolean): Rule => {
   if (classifySecret(baseName) === "file") {
     return { action: "skip", reason: "single-use replay marker" };
   }
-  // The T3 Connect bridge plugin has to import the old cloud link key
-  // (cloud-link-ed25519-key-pair.bin) on its own if it ever needs it.
+  // The relay pins this key to the environment id, so a kept id must keep the key: below it
+  // becomes the bridge's link key. A new id makes it a credential of a dead identity.
+  if (name === `${T3_CLOUD_LINK_KEY_SECRET}.bin`) {
+    return keepEnvironmentId
+      ? { action: "bridge-key" }
+      : { action: "skip", reason: "T3 Connect credential" };
+  }
   if (name.startsWith("cloud-") || name.startsWith("relay-")) {
     return { action: "skip", reason: "T3 Connect credential" };
   }
@@ -340,6 +351,20 @@ const collectExternalPaths = (
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+
+/** True for the `{ privateKey, publicKey }` JSON both T3 Code and the bridge store. */
+const isStoredKeyPair = async (file: string): Promise<boolean> => {
+  try {
+    const parsed: unknown = JSON.parse(await NodeFSP.readFile(file, "utf8"));
+    return (
+      isRecord(parsed) &&
+      typeof parsed.privateKey === "string" &&
+      typeof parsed.publicKey === "string"
+    );
+  } catch {
+    return false;
+  }
+};
 
 const readProviderInstances = (
   settingsText: string | undefined,
@@ -750,6 +775,30 @@ const buildPlan = async (input: {
             continue;
           }
           const secretSource = NodePath.join(source, name);
+          if (secret.action === "bridge-key") {
+            if (!(await isStoredKeyPair(secretSource))) {
+              skippedByReason.set("T3 Connect credential without a usable key pair", [
+                ...(skippedByReason.get("T3 Connect credential without a usable key pair") ?? []),
+                secretRelative,
+              ]);
+              continue;
+            }
+            copiedCount += 1;
+            plan.copied.push({
+              path: secretRelative,
+              detail: `kept as ${BRIDGE_SIGNING_KEY_SECRET}.bin for the T3 Connect bridge`,
+            });
+            if (keychain !== null) {
+              keychainEntries.push({ name: BRIDGE_SIGNING_KEY_SECRET, source: secretSource });
+            } else {
+              const bridgeKey = NodePath.join(destination, `${BRIDGE_SIGNING_KEY_SECRET}.bin`);
+              plan.steps.push(async () => {
+                await copyFile(secretSource, bridgeKey);
+                await NodeFSP.chmod(bridgeKey, 0o600);
+              });
+            }
+            continue;
+          }
           if (keychain !== null && name.endsWith(".bin")) {
             const info = await NodeFSP.lstat(secretSource);
             if (!info.isFile()) {
