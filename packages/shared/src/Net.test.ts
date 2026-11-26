@@ -5,6 +5,7 @@ import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import { vi } from "vite-plus/test";
 
+import * as HostProcess from "./HostProcess.ts";
 import * as NetService from "./Net.ts";
 
 const closeServer = (server: NodeNet.Server) =>
@@ -110,8 +111,12 @@ it.layer(NetService.layer)("NetService", (it) => {
       ),
     );
 
+    // The probe is a wildcard bind, which only Linux refuses while a specific address holds the
+    // port. macOS (BSD SO_REUSEADDR, which Node sets) lets 0.0.0.0 and :: bind beside a LAN
+    // listener, so there the probe cannot see it. Upstream CI runs this on Linux only.
+    const wildcardBindSeesSpecificListeners = HostProcess.Platform.defaultValue() !== "darwin";
     for (const host of ["0.0.0.0", ""]) {
-      it.effect.skipIf(ownIpv4 === undefined)(
+      it.effect.skipIf(ownIpv4 === undefined || !wildcardBindSeesSpecificListeners)(
         `findAvailablePort skips a port a LAN listener holds for wildcard host "${host}"`,
         () =>
           Effect.acquireUseRelease(

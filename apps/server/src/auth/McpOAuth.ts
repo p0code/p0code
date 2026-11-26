@@ -569,8 +569,12 @@ const make = Effect.gen(function* () {
           () => consume("read-only"),
         ),
       );
-      const granted = intersectScopes(requested, mcpClientScopes(consumed));
-      access = accessForScopes(granted, consumed);
+      // A peer link is another environment of ours, not a third-party app: it names its level in
+      // the decision, the link's pairing code bounds it, and it never asks for OAuth scopes.
+      // Clamping it to its (absent) scope request would turn every link read-only.
+      access = input.authorization.client.peerLink
+        ? consumed
+        : accessForScopes(intersectScopes(requested, mcpClientScopes(consumed)), consumed);
     } else {
       const session = yield* approvingSession(input.request, input.authorization);
       if (
