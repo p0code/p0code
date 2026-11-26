@@ -1,3 +1,4 @@
+import { restrictProfileTo } from "./profile.testkit.ts";
 import * as DocumentText from "../provider/DocumentText.ts";
 import { NodeHttpServer } from "@effect/platform-node";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
@@ -399,7 +400,12 @@ const makeLaptop = Effect.gen(function* () {
       }),
       Effect.provideService(McpSchema.McpServerClient, mcpClient),
     );
-  return { links: Context.get(linking, PeerLinks.PeerLinks), call, callAsClient };
+  return {
+    settings: Context.get(linking, ServerSettings.ServerSettingsService),
+    links: Context.get(linking, PeerLinks.PeerLinks),
+    call,
+    callAsClient,
+  };
 });
 
 const failureOf = (result: McpSchema.CallToolResult) => {
@@ -837,4 +843,56 @@ it.effect("retries a newest-page read without its cursor when the peer refuses t
     expect(page).toBe("forward page");
     expect(sent).toEqual([newest, params]);
   }),
+);
+
+it.effect(
+  "hides excluded links and refuses remote thread, project and scheduling tool families",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const seen = yield* Ref.make<Seen>(nothingSeen);
+        const linkSession = yield* Ref.make("");
+        const b = yield* serveBox(seen, linkSession);
+        const a = yield* makeLaptop;
+        yield* linkTo(a.links, b, "full-access");
+        yield* restrictProfileTo(a.settings, laptop.environmentId);
+        const listed = yield* a.call("thread:laptop-full", "t3_environment_links", {});
+        expect(listed.structuredContent).toMatchObject({
+          links: [],
+          notListed: expect.stringContaining("not allowed in the active profile"),
+        });
+        const calls: ReadonlyArray<readonly [string, Record<string, unknown>]> = [
+          ["t3_thread_list", {}],
+          ["t3_thread_read", { threadId: boxThread }],
+          ["t3_thread_search", { query: "find it" }],
+          ["t3_thread_send", { threadId: boxThread, message: "Hi" }],
+          ["t3_thread_update", { threadId: boxThread, action: "rename", title: "Changed" }],
+          ["t3_thread_organize", { threadId: boxThread, action: "archive" }],
+          ["t3_thread_interrupt", { threadId: boxThread }],
+          ["t3_project_list", {}],
+          ["t3_project_read", { projectId: boxProject }],
+          ["t3_project_create", { workspaceRoot: "/projects/new", title: "New" }],
+          ["run_scheduled_task_now", { taskId: "task:box" }],
+        ];
+        for (const [name, args] of calls) {
+          expect(
+            failureOf(
+              yield* a.call("thread:laptop-full", name, {
+                ...args,
+                environmentId: box.environmentId,
+              }),
+            ),
+            name,
+          ).toMatchObject({
+            code: "invalid_request",
+            message: expect.stringContaining("not allowed in the active profile"),
+          });
+        }
+        expect(yield* Ref.get(seen)).toEqual(nothingSeen);
+        yield* restrictProfileTo(a.settings, box.environmentId);
+        expect(
+          (yield* a.call("thread:laptop-full", "t3_environment_links", {})).structuredContent,
+        ).toMatchObject({ links: [{ environmentId: box.environmentId }] });
+      }),
+    ).pipe(Effect.provide(NodeHttpServer.layerTest)),
 );

@@ -1,3 +1,4 @@
+import { environmentAllowedInActiveProfile, ENVIRONMENT_NOT_IN_PROFILE } from "../activeProfile.ts";
 import {
   AuthMcpClientAccess,
   AuthMcpRegistrationError,
@@ -514,6 +515,15 @@ const make = Effect.gen(function* () {
     if (!(yield* enabled)) {
       return yield* new PeerLinkError({ reason: "disabled", message: LINKED_ENVIRONMENTS_OFF });
     }
+    if (
+      input.expectedEnvironmentId !== undefined &&
+      !(yield* environmentAllowedInActiveProfile(serverSettings, input.expectedEnvironmentId))
+    ) {
+      return yield* new PeerLinkError({
+        reason: "pairing_rejected",
+        message: ENVIRONMENT_NOT_IN_PROFILE,
+      });
+    }
     const urls = [input.url, ...(input.alternateUrls ?? [])];
     // The user picked a machine: link through the addresses that answer as
     // it, so one that now answers as another never receives the pairing code.
@@ -525,6 +535,13 @@ const make = Effect.gen(function* () {
             input.expectedEnvironmentId,
             input.expectedLabel ?? input.expectedEnvironmentId,
           );
+    // Resolve an address-only answer before sending its pairing credential. Unlink stays available.
+    if (!(yield* environmentAllowedInActiveProfile(serverSettings, peer.environmentId))) {
+      return yield* new PeerLinkError({
+        reason: "pairing_rejected",
+        message: ENVIRONMENT_NOT_IN_PROFILE,
+      });
+    }
     const row = yield* readRow(peer.environmentId);
     const stored = Option.isSome(row) ? yield* toLink(row.value) : undefined;
     const current =

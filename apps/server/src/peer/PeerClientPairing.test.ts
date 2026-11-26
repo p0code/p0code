@@ -1,3 +1,4 @@
+import { restrictProfileTo } from "./profile.testkit.ts";
 import { NodeHttpServer } from "@effect/platform-node";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import {
@@ -297,4 +298,38 @@ it.effect("a linked environment from before client pairing is never asked", () =
       expect(yield* Ref.get(b.bearers)).toEqual([]);
     }),
   ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+);
+
+it.effect(
+  "refuses client and link pairings excluded by the synced profile, but still unlinks",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const b = yield* serveBox();
+        const a = yield* makeLaptop;
+        yield* linkTo(a.links, b, "full-access");
+        const phone = yield* a.client(AuthStandardClientScopes);
+        const before = yield* a.pairing.request({ environmentId: box.environmentId }, phone);
+        const pairingsBefore = yield* b.auth.listPairingLinks();
+        yield* restrictProfileTo(a.settings, laptop.environmentId);
+        for (const request of [
+          a.pairing.request({ environmentId: box.environmentId }, phone),
+          a.pairing.requestForLink({ environmentId: box.environmentId, access: "auto" }, phone),
+        ]) {
+          expect(yield* request.pipe(Effect.flip)).toMatchObject({
+            _tag: "PeerLinkError",
+            reason: "pairing_rejected",
+            message: expect.stringContaining("not allowed in the active profile"),
+          });
+        }
+        expect(yield* b.auth.listPairingLinks()).toEqual(pairingsBefore);
+        yield* restrictProfileTo(a.settings, box.environmentId);
+        expect(yield* a.pairing.request({ environmentId: box.environmentId }, phone)).toMatchObject(
+          { type: before.type },
+        );
+        yield* restrictProfileTo(a.settings, laptop.environmentId);
+        yield* a.links.unlink(box.environmentId);
+        expect(yield* a.links.list).toHaveLength(0);
+      }),
+    ).pipe(Effect.provide(NodeHttpServer.layerTest)),
 );

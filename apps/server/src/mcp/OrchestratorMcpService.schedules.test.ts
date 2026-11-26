@@ -1,3 +1,4 @@
+import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
@@ -23,6 +24,9 @@ import type { McpInvocationScope } from "./McpInvocationContext.ts";
 import * as Mcp from "./OrchestratorMcpService.ts";
 
 const dependencies = Layer.mergeAll(
+  Layer.succeed(ServerEnvironment.ServerEnvironmentIdentity, {
+    getEnvironmentId: Effect.succeed(EnvironmentId.make("schedule-test")),
+  }),
   NodeCrypto.layer,
   NodeServices.layer,
   Sqlite.layerMemory,

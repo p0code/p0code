@@ -1,3 +1,4 @@
+import { restrictProfileTo } from "./profile.testkit.ts";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import {
   EnvironmentId,
@@ -325,6 +326,54 @@ it.effect("gives up on an answer whose body never arrives", () =>
       expect(yield* Queue.take(a.answered)).toBe(403);
       yield* TestClock.adjust(Duration.seconds(10));
       expect(yield* Fiber.join(page)).toMatchObject({ reason: "rejected", label: "Box" });
+    }),
+  ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+);
+
+it.effect(
+  "refuses excluded thread subscriptions, history and items before contacting the peer",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const b = yield* serveBox;
+        const a = yield* makeLaptop;
+        yield* linkTo(a.links, b, "read-only");
+        yield* restrictProfileTo(a.settings, laptop.environmentId);
+        for (const read of [
+          a.relay.subscribe(input).pipe(Stream.runDrain),
+          a.relay.historyPage({ ...input, cursor: "older" }),
+          a.relay.item({ ...input, itemId: boxItem }),
+        ]) {
+          expect(yield* read.pipe(Effect.flip)).toMatchObject({
+            _tag: "PeerLinkThreadReadError",
+            reason: "rejected",
+            label: null,
+            message: expect.stringContaining("not allowed in the active profile"),
+          });
+        }
+        yield* restrictProfileTo(a.settings, box.environmentId);
+        expect(yield* a.relay.item({ ...input, itemId: boxItem })).toEqual({ item: null });
+      }),
+    ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+);
+
+it.effect("ends an open relay when a profile switch excludes its environment", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const b = yield* serveBox;
+      const a = yield* makeLaptop;
+      yield* linkTo(a.links, b, "read-only");
+      const received = yield* Queue.unbounded<unknown>();
+      const subscription = yield* a.relay.subscribe(input).pipe(
+        Stream.runForEach((item) => Queue.offer(received, item)),
+        Effect.forkScoped,
+      );
+      yield* Queue.take(received);
+      yield* restrictProfileTo(a.settings, laptop.environmentId);
+      expect(yield* Fiber.join(subscription).pipe(Effect.flip)).toMatchObject({
+        reason: "rejected",
+        message: expect.stringContaining("not allowed in the active profile"),
+      });
     }),
   ).pipe(Effect.provide(NodeHttpServer.layerTest)),
 );

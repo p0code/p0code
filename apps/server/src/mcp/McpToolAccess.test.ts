@@ -1,3 +1,4 @@
+import { restrictProfileTo } from "../peer/profile.testkit.ts";
 import { handlers as orchestratorHandlers } from "./toolkits/orchestrator/handlers.ts";
 import { OrchestratorToolkit } from "./toolkits/orchestrator/tools.ts";
 import * as JudgeSettings from "../serverSettings.ts";
@@ -565,4 +566,19 @@ it.effect(
       expect(yield* call("convene_judges", ended)).toBe("parent_not_active");
     }).pipe(Effect.provide(layer));
   },
+);
+
+it.effect("checks explicit local and remote environment targets against the server profile", () =>
+  Effect.gen(function* () {
+    const settings = yield* JudgeSettings.ServerSettingsService;
+    yield* restrictProfileTo(settings, EnvironmentId.make("elsewhere"));
+    for (const environmentId of [here, box])
+      expect(yield* call("reads", fullAccess, { environmentId })).toBe("invalid_request");
+    yield* restrictProfileTo(settings, here);
+    expect(yield* call("reads", fullAccess, { environmentId: here })).toBe("here");
+    yield* restrictProfileTo(settings, box);
+    expect(yield* call("reads", fullAccess, { environmentId: box })).toBe(
+      "reads in environment-box",
+    );
+  }).pipe(Effect.provide(linkedProbeServer.pipe(Layer.provideMerge(JudgeSettings.layerTest())))),
 );

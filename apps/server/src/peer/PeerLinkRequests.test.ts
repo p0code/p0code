@@ -1,3 +1,4 @@
+import { restrictProfileTo } from "./profile.testkit.ts";
 import { NodeHttpServer } from "@effect/platform-node";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -189,6 +190,7 @@ const makeLaptopWith = (
     const here = yield* Layer.build(layerHere);
     const server = Context.get(here, McpServer.McpServer);
     return {
+      settings: Context.get(linking, ServerSettings.ServerSettingsService),
       links: Context.get(linking, PeerLinks.PeerLinks),
       linksSql: Context.get(linking, SqlClient.SqlClient),
       requests: Context.get(here, PeerLinkRequests.PeerLinkRequests),
@@ -1489,4 +1491,44 @@ it.live("a card a newer link ended links nothing when answered after", () =>
         }),
     );
   }),
+);
+
+it.effect.each(["use-existing", "link", "address-only"] as const)(
+  "refuses an excluded machine in a %s answer without consuming its pairing code",
+  (type) =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const b = yield* serveBox;
+        const a = yield* makeLaptop;
+        yield* seedThread(a);
+        if (type === "use-existing") yield* linkTo(a.links, b, "full-access");
+        yield* recordPendingCard(a, "profile");
+        const card = yield* pendingCard(a);
+        const pairing = yield* b.auth.issuePairingCredential({
+          purpose: "peer-link",
+          access: "full-access",
+        });
+        yield* restrictProfileTo(a.settings, laptop.environmentId);
+        yield* a.requests.answer({
+          threadId,
+          turnItemId: card.id,
+          answer:
+            type === "use-existing"
+              ? { type, environmentId: box.environmentId }
+              : {
+                  type: "link",
+                  ...(type === "link" ? { environmentId: box.environmentId } : {}),
+                  urls: [b.url],
+                  access: "full-access",
+                  pairingCode: pairing.credential,
+                },
+        });
+        expect(yield* cardOf(a)).toMatchObject({
+          linkStatus: "failed",
+          failure: expect.stringContaining("not allowed in the active profile"),
+        });
+        // The refused answer never redeemed the credential at the peer.
+        yield* b.auth.consumeMcpApprovalCode(pairing.credential, "full-access", true);
+      }),
+    ).pipe(Effect.provide(NodeHttpServer.layerTest)),
 );

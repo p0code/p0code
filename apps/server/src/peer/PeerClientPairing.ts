@@ -1,3 +1,4 @@
+import { environmentAllowedInActiveProfile, ENVIRONMENT_NOT_IN_PROFILE } from "../activeProfile.ts";
 import {
   type AuthEnvironmentScope,
   type AuthSessionId,
@@ -157,6 +158,7 @@ const makeIssuer = Effect.gen(function* () {
 export const layerIssuer = Layer.effect(PeerClientPairingIssuer, makeIssuer);
 
 const make = Effect.gen(function* () {
+  const profileSettings = yield* ServerSettings.ServerSettingsService;
   const links = yield* PeerLinks.PeerLinks;
   const auth = yield* EnvironmentAuth.EnvironmentAuth;
   const httpClient = yield* HttpClient.HttpClient;
@@ -178,6 +180,12 @@ const make = Effect.gen(function* () {
     sessionId: AuthSessionId,
     payload: (clientLabel: string) => PeerLinkClientPairingRequest,
   ) {
+    if (!(yield* environmentAllowedInActiveProfile(profileSettings, input.environmentId))) {
+      return yield* new PeerLinkError({
+        reason: "pairing_rejected",
+        message: ENVIRONMENT_NOT_IN_PROFILE,
+      });
+    }
     if (!(yield* links.enabled)) {
       return yield* new PeerLinkError({
         reason: "disabled",

@@ -1,3 +1,6 @@
+import { EnvironmentId } from "@t3tools/contracts";
+import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
+import * as ServerSettings from "../serverSettings.ts";
 // @effect-diagnostics-next-line nodeBuiltinImport:off -- Effect's Crypto has no createHmac.
 import * as NodeCrypto from "node:crypto";
 
@@ -32,6 +35,13 @@ import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import * as Scheduler from "../scheduling/Scheduler.ts";
 import * as ScheduledTaskService from "./ScheduledTaskService.ts";
 import { renderWebhookPrompt } from "./webhookTemplate.ts";
+
+const layerScheduleProfile = Layer.mergeAll(
+  ServerSettings.layerTest(),
+  Layer.succeed(ServerEnvironment.ServerEnvironmentIdentity, {
+    getEnvironmentId: Effect.succeed(EnvironmentId.make("environment:test")),
+  }),
+);
 
 const decodeUpsertInput = Schema.decodeUnknownEffect(ScheduledTaskUpsertInput);
 
@@ -262,7 +272,12 @@ const withService = <A, E>(
       return yield* body({ service, launches, sql, secretsByRef });
     }).pipe(
       Effect.provide(
-        Layer.fresh(ScheduledTaskService.layer.pipe(Layer.provide(layerDependencies))),
+        Layer.fresh(
+          ScheduledTaskService.layer.pipe(
+            Layer.provide(layerScheduleProfile),
+            Layer.provide(layerDependencies),
+          ),
+        ),
       ),
     );
   }).pipe(

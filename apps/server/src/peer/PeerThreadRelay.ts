@@ -1,4 +1,7 @@
+import { environmentAllowedInActiveProfile, ENVIRONMENT_NOT_IN_PROFILE } from "../activeProfile.ts";
+import * as ServerSettings from "../serverSettings.ts";
 import {
+  isEnvironmentAllowedInActiveProfile,
   OrchestrationV2GetTurnItemResult,
   OrchestrationV2ThreadHistoryPage,
   OrchestrationV2ThreadStreamItem,
@@ -120,6 +123,7 @@ const fromStatus = (status: number, code: string | undefined, label: string) => 
 };
 
 const make = Effect.gen(function* () {
+  const profileSettings = yield* ServerSettings.ServerSettingsService;
   const links = yield* PeerLinks.PeerLinks;
   const httpClient = yield* HttpClient.HttpClient;
 
@@ -141,6 +145,13 @@ const make = Effect.gen(function* () {
     PeerLinkThreadReadError,
     Scope.Scope
   > {
+    if (!(yield* environmentAllowedInActiveProfile(profileSettings, input.environmentId))) {
+      return yield* new PeerLinkThreadReadError({
+        reason: "rejected",
+        label: null,
+        message: ENVIRONMENT_NOT_IN_PROFILE,
+      });
+    }
     if (!(yield* links.enabled)) {
       return yield* new PeerLinkThreadReadError({
         reason: "disabled",
@@ -231,28 +242,50 @@ const make = Effect.gen(function* () {
 
   const subscribe: PeerThreadRelay["Service"]["subscribe"] = (input) =>
     Stream.unwrap(
-      open(input, PEER_LINK_THREAD_STREAM_ROUTE, {}).pipe(
-        Effect.map(({ label, response }) =>
-          response.stream.pipe(
-            Stream.timeoutOrElse({
-              duration: SILENT_STREAM_TIMEOUT,
-              orElse: () => Stream.fail(unreachable(label)),
-            }),
-            Stream.decodeText,
-            Stream.pipeThroughChannel(Sse.decode()),
-            // An item this version cannot read is skipped, as the owner's own client skips it.
-            // That includes an event type from a newer peer, which cannot be encoded again.
-            Stream.filterMap((event) => {
-              const item = decodeStreamItem(event.data);
-              return Option.isSome(item) && item.value.kind !== "unknown-event"
-                ? Result.succeed(item.value)
-                : Result.failVoid;
-            }),
-            Stream.mapError((error) =>
-              error._tag === "PeerLinkThreadReadError" ? error : unreachable(label, error),
+      profileSettings.subscribeChanges.pipe(
+        Effect.flatMap((changes) =>
+          open(input, PEER_LINK_THREAD_STREAM_ROUTE, {}).pipe(
+            Effect.map(({ label, response }) =>
+              response.stream.pipe(
+                Stream.timeoutOrElse({
+                  duration: SILENT_STREAM_TIMEOUT,
+                  orElse: () => Stream.fail(unreachable(label)),
+                }),
+                Stream.decodeText,
+                Stream.pipeThroughChannel(Sse.decode()),
+                // An item this version cannot read is skipped, as the owner's own client skips it.
+                // That includes an event type from a newer peer, which cannot be encoded again.
+                Stream.filterMap((event) => {
+                  const item = decodeStreamItem(event.data);
+                  return Option.isSome(item) && item.value.kind !== "unknown-event"
+                    ? Result.succeed(item.value)
+                    : Result.failVoid;
+                }),
+                Stream.mapError((error) =>
+                  error._tag === "PeerLinkThreadReadError" ? error : unreachable(label, error),
+                ),
+                Stream.interruptWhen(
+                  changes.pipe(
+                    Stream.filter(
+                      (settings) =>
+                        !isEnvironmentAllowedInActiveProfile(settings, input.environmentId),
+                    ),
+                    Stream.runHead,
+                    Effect.andThen(
+                      Effect.fail(
+                        new PeerLinkThreadReadError({
+                          reason: "rejected",
+                          label: null,
+                          message: ENVIRONMENT_NOT_IN_PROFILE,
+                        }),
+                      ),
+                    ),
+                  ),
+                ),
+                // The peer closed the stream: the client hears it and asks again.
+                Stream.concat(Stream.fail(unreachable(label))),
+              ),
             ),
-            // The peer closed the stream: the client hears it and asks again.
-            Stream.concat(Stream.fail(unreachable(label))),
           ),
         ),
       ),
