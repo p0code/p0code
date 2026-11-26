@@ -1,7 +1,9 @@
 import { assert, describe, it } from "@effect/vitest";
 import {
+  type OrchestrationV2ServerCommand,
   type OrchestrationV2ThreadShell,
   ProjectId,
+  ScheduledTaskError,
   ThreadId,
   ThreadMoveToProjectError,
   type VcsStatusLocalResult,
@@ -13,6 +15,7 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 
 import * as GitWorkflow from "../git/GitWorkflowService.ts";
+import * as Orchestrator from "../orchestration-v2/Orchestrator.ts";
 import * as ProjectService from "./ProjectService.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
 import * as TaskFolders from "../workspace/TaskFolders.ts";
@@ -31,7 +34,7 @@ interface State {
   readonly createWorktreeFails?: boolean;
   readonly taskMoveFails?: boolean;
   readonly thread?: Partial<OrchestrationV2ThreadShell>;
-  readonly commands: Array<{ readonly type: string; readonly [key: string]: unknown }>;
+  readonly commands: OrchestrationV2ServerCommand[];
   readonly taskMoves: ProjectId[];
   readonly createdWorktrees: string[];
   readonly removedWorktrees: Array<{ readonly path: string; readonly force: boolean }>;
@@ -78,10 +81,16 @@ const layerFor = (state: State) =>
             } as never),
           dispatch: (command) =>
             Effect.suspend(() => {
-              state.commands.push(command as never);
+              state.commands.push(command);
               return state.dispatchFails
-                ? Effect.fail(new Error("commit failed"))
-                : Effect.succeed({ sequence: state.commands.length } as never);
+                ? Effect.fail(
+                    new Orchestrator.OrchestratorDispatchError({
+                      commandId: command.commandId,
+                      commandType: command.type,
+                      cause: "commit failed",
+                    }),
+                  )
+                : Effect.succeed({ sequence: state.commands.length, storedEvents: [] });
             }),
         }),
         Layer.mock(ProjectService.ProjectService)({
@@ -107,8 +116,9 @@ const layerFor = (state: State) =>
         Layer.mock(ScheduledTaskService.ScheduledTaskService)({
           moveThreadTasks: ({ projectId }) =>
             Effect.suspend(() => {
-              if (state.taskMoveFails === true)
-                return Effect.fail(new Error("move failed") as never);
+              if (state.taskMoveFails === true) {
+                return Effect.fail(new ScheduledTaskError({ message: "move failed" }));
+              }
               state.taskMoves.push(projectId);
               return Effect.void;
             }),
@@ -135,7 +145,7 @@ const layerFor = (state: State) =>
         }),
         Layer.mock(TaskFolders.TaskFolders)({
           plan: () => Effect.succeed(null),
-          remove: () => Effect.void,
+          remove: () => Effect.succeed({ removed: [], kept: [] }),
         }),
         NodeServices.layer,
         NodeCrypto.layer,
@@ -156,10 +166,17 @@ const move = (input: {
     service.move({ threadId, projectId: targetProjectId, ...input }),
   );
 
-const adoptCommand = (state: State) => {
-  const command = state.commands.find((entry) => entry.type === "thread.project.adopt-folder");
-  assert.isDefined(command);
-  return command!;
+type AdoptFolderCommand = Extract<
+  OrchestrationV2ServerCommand,
+  { readonly type: "thread.project.adopt-folder" }
+>;
+
+const adoptCommand = (state: State): AdoptFolderCommand => {
+  const command = state.commands.find(
+    (entry): entry is AdoptFolderCommand => entry.type === "thread.project.adopt-folder",
+  );
+  if (command === undefined) assert.fail("expected an adopt-folder command");
+  return command;
 };
 
 describe("ThreadProjectMove", () => {
