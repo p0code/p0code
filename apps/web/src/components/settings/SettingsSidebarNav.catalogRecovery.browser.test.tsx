@@ -12,7 +12,7 @@ vi.mock("./useAvailableSettingsSearchItems", () => ({
   useSettingsCatalogUnavailable: () => true,
 }));
 
-it("keeps Plugins and Secrets in the nav, disabled, with the reason", async () => {
+it("keeps Plugins, Deploy and Secrets in the nav, disabled, with the reason", async () => {
   await using _screen = await render(
     <SidebarProvider defaultOpen>
       <SettingsSidebarNav pathname="/settings/general" />
@@ -20,12 +20,12 @@ it("keeps Plugins and Secrets in the nav, disabled, with the reason", async () =
     { router: "/settings/general" },
   );
 
-  for (const name of ["Secrets", "Plugins"]) {
+  for (const name of ["Secrets", "Plugins", "Deploy"]) {
     const row = page.getByRole("button", { name: new RegExp(name) }).first();
     await expect.element(row).toBeVisible();
     await expect.element(row).toBeDisabled();
   }
   const reasons = page.getByText("unavailable: saved connections did not load");
-  expect(reasons.elements()).toHaveLength(2);
+  expect(reasons.elements()).toHaveLength(3);
   await expect.element(reasons.first()).toBeVisible();
 });

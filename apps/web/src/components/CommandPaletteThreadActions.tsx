@@ -16,6 +16,7 @@ import {
   PinIcon,
   PinOffIcon,
   RefreshCwIcon,
+  RocketIcon,
   TimerIcon,
   Trash2Icon,
 } from "lucide-react";
@@ -45,6 +46,7 @@ const ICONS: Record<string, LucideIcon> = {
   pin: PinIcon,
   "pin-off": PinOffIcon,
   "refresh-cw": RefreshCwIcon,
+  rocket: RocketIcon,
   timer: TimerIcon,
   trash: Trash2Icon,
 };

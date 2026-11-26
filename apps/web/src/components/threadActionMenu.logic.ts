@@ -1,5 +1,5 @@
 import type { SnoozePreset } from "@t3tools/client-runtime/state/thread-settled";
-import type { ContextMenuItem } from "@t3tools/contracts";
+import type { ContextMenuItem, EnvironmentId, ProjectId, ThreadId } from "@t3tools/contracts";
 import { msg } from "gt-react";
 
 import { m, type MessageResolver } from "../i18n/messages";
@@ -12,6 +12,7 @@ export type ThreadActionMenuId =
   | "turn-into-project"
   | "move-to-project"
   | "project-settings"
+  | "deploy"
   | "pin"
   | "unpin"
   | "settle"
@@ -131,6 +132,8 @@ export interface ThreadActionMenuState {
   readonly canTurnIntoProject?: boolean;
   /** A No project thread on a server that can move it into an existing project. */
   readonly canMoveToProject?: boolean;
+  /** The thread's server offers plugins, so Settings → Deploy can deploy its branch. */
+  readonly canDeploy?: boolean;
 }
 
 /** Local navigation, read markers, and copying remain available to read-only clients. */
@@ -139,6 +142,8 @@ export function threadActionRequiresOperate(action: ThreadActionMenuId): boolean
     "find",
     "new-thread-on-branch",
     "project-settings",
+    // Opens Settings → Deploy; deploying there checks its own scope.
+    "deploy",
     "mark-unread",
     "share-guest",
     "copy",
@@ -330,6 +335,9 @@ export function buildThreadActionMenuItems(
       ],
     },
     { id: "project-settings", label: resolve(msg("Project settings")), icon: "settings" },
+    ...(state.canDeploy
+      ? [{ id: "deploy" as const, label: resolve(msg("Deploy…")), icon: "rocket" }]
+      : []),
     {
       id: "archive",
       label: resolve(msg("Archive thread")),
@@ -358,4 +366,19 @@ export function buildThreadActionMenuItems(
             }
           : item,
       );
+}
+
+/** Settings → Deploy opened on a thread's project and branch, deploying on the thread's behalf. */
+export function deploySearchForThread(thread: {
+  readonly id: ThreadId;
+  readonly environmentId: EnvironmentId;
+  readonly projectId: ProjectId;
+  readonly branch?: string | null;
+}) {
+  return {
+    environmentId: thread.environmentId,
+    projectId: thread.projectId,
+    threadId: thread.id,
+    ...(thread.branch ? { branch: thread.branch } : {}),
+  };
 }

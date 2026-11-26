@@ -411,6 +411,7 @@ export function applyServerSettingsPatch(
     projectSettingsOverrides: projectSettingsOverridesPatch,
     projectAccountProfileIds: projectAccountProfileIdsPatch,
     threadAccountProfileIds: threadAccountProfileIdsPatch,
+    deployProjects: deployProjectsPatch,
     projectAgentBrowserAccessOverrides: _legacyBrowserAccess,
     projectAutoPullOverrides: _legacyAutoPull,
     projectScriptOverrides: _legacyScripts,
@@ -629,6 +630,9 @@ export function applyServerSettingsPatch(
             projectAccountProfileIdsPatch,
           ),
         }
+      : {}),
+    ...(deployProjectsPatch !== undefined
+      ? { deployProjects: mergeSettingsEntries(current.deployProjects, deployProjectsPatch) }
       : {}),
     ...(threadAccountProfileIdsPatch !== undefined
       ? {

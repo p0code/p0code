@@ -2708,6 +2708,7 @@
   "65e3725b1c46b314": "Nie",
   "4bbe9b821de91d9d": "Thread",
   "f053d7461b8ecce5": "Thread-ID",
+  "39eba74d1788be0a": "Bereitstellen…",
   "70399412ec5a7026": "Thread archivieren",
   "95184480a503090c": "Löschen",
   "042d3a13ea7d3f7b": "Titelerzeugung fehlgeschlagen.",
@@ -8133,6 +8134,141 @@
     " Min. offline. Laufende Agenten werden beim Neustart beendet."
   ],
   "c56b618d212bf018": "Neu starten und zurückgewinnen",
+  "be1eeddb87fc6fe9": "Bereitstellen",
+  "129164189c938942": "Bereitstellungsanbieter",
+  "3a2e919ca921a60c": "Bereitstellungen",
+  "1e80233b9193116f": "In Plugins aus",
+  "58b7b0e79013a091": "Verknüpft",
+  "364cae9e608a63d4": "Sign-in expired",
+  "4ad258969e361b3c": "Fehler",
+  "fa83ec856513632c": "Nicht verknüpft",
+  "8f6976097de6cd25": "Zugriffstoken (optional)",
+  "bd33c4006ff50a0b": "Zugriffstoken für {provider}",
+  "ce63a11bca54e095": "Trennen",
+  "19cb8f9ff8df4979": "Neu verknüpfen",
+  "e176b5f17630f05b": "Verknüpfen",
+  "afdefb17101fac3a": "Bereitstellungsziel für {project}",
+  "8a88e44ae853c80d": "Ziel wählen",
+  "e9755757b8a9fdc9": "Kein Ziel",
+  "efbb8f3d8336378c": "Auf {deployment} zurückgesetzt.",
+  "2a1419da20c2bb27": "In Warteschlange",
+  "d000f2b5e832a45d": "Wird gebaut",
+  "00add3d1a097078a": "Bereit",
+  "d01b83620a105d50": "Fehlgeschlagen",
+  "7318f8b5cbcc0ff0": "Abgebrochen",
+  "5942a61dbfb5214e": "Warte auf Logzeilen…",
+  "b1cb84e4eca5b06b": "Produktion",
+  "bf0f37f53a4e2d62": "Vorschau",
+  "5b84d580f80b3688": "Git-Branch",
+  "457bf48449fb47aa": "Lokaler Build",
+  "15ed472fb3ba4a6d": "Standard-Branch",
+  "f59d5b9846c2a3c6": "Verbinde eine Umgebung mit dieser Version, um daraus bereitzustellen.",
+  "0c5c6d47c9eec1cd": "Keine Bereitstellungsanbieter installiert",
+  "3e68a8b268965f62": [
+    "Bereitstellungsziele wie Vercel, Cloudflare oder deine eigenen Docker-Hosts kommen aus Plugins. Installiere eines unter ",
+    {
+      "t": "Link",
+      "i": 1,
+      "c": "Plugins"
+    },
+    ", schalte es ein und verknüpfe dann hier dein Konto."
+  ],
+  "5486b18239ddf78e": "Füge dieser Umgebung ein Projekt hinzu, um es bereitzustellen.",
+  "7f9c4906e0c768ca": "Hier erscheinen Bereitstellungen, die aus dieser Umgebung gestartet wurden.",
+  "7770f2ba0e443fb7": "Schalte dieses Plugin unter Plugins ein, um ein Konto zu verknüpfen.",
+  "a4f401eedf02e8ef": [
+    "Konto: ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    }
+  ],
+  "6a4c8edee7d78217": "Anmeldung abschließen",
+  "fa320e2be19caa64": [
+    "Wird auf ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " bei ",
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    },
+    " bereitgestellt"
+  ],
+  "42ff68458bdb217c": "Keinem Bereitstellungsziel zugeordnet.",
+  "8279db589cda9dcf": "Bereitstellen",
+  "0834382733f42ced": [
+    "Ein Thread ohne Vollzugriff möchte auf ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " (",
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    },
+    ") bereitstellen."
+  ],
+  "4064fb5fc6c6be17": "Genehmigen und bereitstellen",
+  "7f41545dc72a20ff": "Logs",
+  "a0305b61cfcc9aaa": "Hierauf zurücksetzen",
+  "96f6682c6f165666": [
+    "Logs für ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    }
+  ],
+  "cb4cfd798de4d156": [
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " bereitstellen"
+  ],
+  "5b31e4555d3aa954": [
+    "Auf ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " bei ",
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    },
+    "."
+  ],
+  "e269269163d993f6": "Wähle zuerst unter Einstellungen → Bereitstellen ein Ziel für dieses Projekt.",
+  "1e984aac74698df6": [
+    "Dieser Thread hat keinen Vollzugriff, daher wartet die Bereitstellung auf deine Genehmigung. Sie stellt ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " in ",
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    },
+    " bereit."
+  ],
+  "cc5d2f5ce8ee576e": "Umgebung",
+  "c317fa79a76d4963": "Quelle",
   "c0472e6d94fdfac6": "Backend-Status konnte nicht gelesen werden.",
   "80e9842fba54a764": "Background service",
   "20119adcdeba05d6": "Remote URL (experimental)",
@@ -9312,7 +9448,6 @@
   "179d3c67e76bb669": "Dieser Anmeldelink ist keine Webadresse und wurde daher nicht geöffnet.",
   "d80e10905a0fb8fb": "Die Anmeldeseite konnte nicht geöffnet werden. Kopiere den Link und öffne ihn in deinem Browser.",
   "edaebeea1915f9c1": "Konto",
-  "364cae9e608a63d4": "Sign-in expired",
   "8a1f691337aa0932": "Sign-in expires soon",
   "249cfb7532e0b380": "Anmeldemethode",
   "8e184b3520eac9bc": "Anbieterstandard",
@@ -11758,6 +11893,7 @@
   "75a9da351fa886f6": "Kann sich mit externen Diensten verbinden und Daten vom Server senden.",
   "4196d14ac2afb5aa": "Kann im aktivierten Zustand deklarierte Web-Endpunkte ohne angemeldete Sitzung bereitstellen.",
   "d9bf51418a4eaf8c": "Kann im aktivierten Zustand jedem Agenten-Durchlauf Anweisungen hinzufügen.",
+  "76c518a23f13d801": "Kann deine Projekte auf seinem Dienst bereitstellen, wenn du oder ein genehmigter Thread darum bittet, mit einem Konto, das du unter Einstellungen → Bereitstellen verknüpfst.",
   "1992d1826db3ccc7": "Prüfsumme stimmt nicht überein. Lade erneut herunter oder kontaktiere den Autor. Es wurde nichts aktiviert.",
   "001f66f6550c50af": "Dieses Plugin benötigt eine andere API-Version. Aktualisiere p0code oder wähle eine kompatible Plugin-Version.",
   "650fa9a30ca33c31": "Dieses Plugin ist in p0code enthalten. Aktualisiere die App, um es zu aktualisieren.",

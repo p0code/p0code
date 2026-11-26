@@ -2707,6 +2707,7 @@
   "65e3725b1c46b314": "Nunca",
   "4bbe9b821de91d9d": "Thread",
   "f053d7461b8ecce5": "ID da thread",
+  "39eba74d1788be0a": "Implantar…",
   "70399412ec5a7026": "Arquivar thread",
   "95184480a503090c": "Excluir",
   "042d3a13ea7d3f7b": "Falha ao gerar o título.",
@@ -8133,6 +8134,140 @@
     " min. Os agentes em execução param quando ele reiniciar."
   ],
   "c56b618d212bf018": "Reiniciar e recuperar",
+  "be1eeddb87fc6fe9": "Implantar",
+  "129164189c938942": "Provedores de implantação",
+  "3a2e919ca921a60c": "Implantações",
+  "1e80233b9193116f": "Desativado em Plugins",
+  "58b7b0e79013a091": "Vinculado",
+  "364cae9e608a63d4": "Sign-in expired",
+  "4ad258969e361b3c": "Erro",
+  "fa83ec856513632c": "Não vinculado",
+  "8f6976097de6cd25": "Token de acesso (opcional)",
+  "bd33c4006ff50a0b": "Token de acesso do {provider}",
+  "ce63a11bca54e095": "Desvincular",
+  "19cb8f9ff8df4979": "Vincular novamente",
+  "e176b5f17630f05b": "Vincular",
+  "afdefb17101fac3a": "Destino de implantação de {project}",
+  "8a88e44ae853c80d": "Escolher destino",
+  "e9755757b8a9fdc9": "Sem destino",
+  "efbb8f3d8336378c": "Revertido para {deployment}.",
+  "2a1419da20c2bb27": "Na fila",
+  "d000f2b5e832a45d": "Compilando",
+  "00add3d1a097078a": "Pronto",
+  "d01b83620a105d50": "Falhou",
+  "7318f8b5cbcc0ff0": "Cancelado",
+  "5942a61dbfb5214e": "Aguardando linhas de log…",
+  "b1cb84e4eca5b06b": "Produção",
+  "bf0f37f53a4e2d62": "Pré-visualização",
+  "5b84d580f80b3688": "Branch do Git",
+  "457bf48449fb47aa": "Build local",
+  "15ed472fb3ba4a6d": "Branch padrão",
+  "f59d5b9846c2a3c6": "Conecte um ambiente com esta versão para implantar a partir dele.",
+  "0c5c6d47c9eec1cd": "Nenhum provedor de implantação instalado",
+  "3e68a8b268965f62": [
+    "Destinos de implantação como Vercel, Cloudflare ou seus próprios hosts Docker vêm de plugins. Instale um em ",
+    {
+      "t": "Link",
+      "i": 1,
+      "c": "Plugins"
+    },
+    ", ative-o e vincule sua conta aqui."
+  ],
+  "5486b18239ddf78e": "Adicione um projeto a este ambiente para implantá-lo.",
+  "7f9c4906e0c768ca": "As implantações iniciadas neste ambiente aparecem aqui.",
+  "7770f2ba0e443fb7": "Ative este plugin em Plugins para vincular uma conta.",
+  "a4f401eedf02e8ef": [
+    "Conta: ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    }
+  ],
+  "6a4c8edee7d78217": "Concluir login",
+  "fa320e2be19caa64": [
+    "Implanta em ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " no ",
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    }
+  ],
+  "42ff68458bdb217c": "Não associado a um destino de implantação.",
+  "8279db589cda9dcf": "Implantar",
+  "0834382733f42ced": [
+    "Um thread sem acesso total pediu para implantar em ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " (",
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    },
+    ")."
+  ],
+  "4064fb5fc6c6be17": "Aprovar e implantar",
+  "7f41545dc72a20ff": "Logs",
+  "a0305b61cfcc9aaa": "Reverter para esta",
+  "96f6682c6f165666": [
+    "Logs de ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    }
+  ],
+  "cb4cfd798de4d156": [
+    "Implantar ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    }
+  ],
+  "5b31e4555d3aa954": [
+    "Para ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " no ",
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    },
+    "."
+  ],
+  "e269269163d993f6": "Primeiro escolha um destino de implantação para este projeto em Configurações → Implantar.",
+  "1e984aac74698df6": [
+    "Este thread não tem acesso total, então a implantação aguarda sua aprovação. Ela implantará ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " em ",
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    },
+    "."
+  ],
+  "cc5d2f5ce8ee576e": "Ambiente",
+  "c317fa79a76d4963": "Origem",
   "c0472e6d94fdfac6": "Não foi possível ler o status do backend.",
   "80e9842fba54a764": "Background service",
   "20119adcdeba05d6": "Remote URL (experimental)",
@@ -9312,7 +9447,6 @@
   "179d3c67e76bb669": "Este link de login não é um endereço web, então não foi aberto.",
   "d80e10905a0fb8fb": "Não foi possível abrir a página de login. Copie o link e abra-o no navegador.",
   "edaebeea1915f9c1": "Conta",
-  "364cae9e608a63d4": "Sign-in expired",
   "8a1f691337aa0932": "Sign-in expires soon",
   "249cfb7532e0b380": "Método de login",
   "8e184b3520eac9bc": "Padrão do provedor",
@@ -11755,6 +11889,7 @@
   "75a9da351fa886f6": "Pode se conectar a serviços externos e enviar dados do servidor.",
   "4196d14ac2afb5aa": "Pode expor os endpoints web declarados sem exigir uma sessão autenticada enquanto estiver ativado.",
   "d9bf51418a4eaf8c": "Pode adicionar instruções a cada turno dos agentes enquanto estiver ativado.",
+  "76c518a23f13d801": "Pode implantar seus projetos no serviço dele quando você ou um thread aprovado pedir, usando uma conta que você vincula em Configurações → Implantar.",
   "1992d1826db3ccc7": "A soma de verificação não confere. Baixe novamente ou contate o autor. Nada foi ativado.",
   "001f66f6550c50af": "Este plugin precisa de outra versão da API. Atualize o p0code ou escolha uma versão compatível do plugin.",
   "650fa9a30ca33c31": "Este plugin está incluído no p0code. Atualize o aplicativo para atualizá-lo.",

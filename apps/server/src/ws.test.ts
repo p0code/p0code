@@ -137,6 +137,7 @@ import * as PullRequestSyncReactor from "./orchestration-v2/PullRequestSyncReact
 import * as SelfRelay from "./selfRelay/SelfRelay.ts";
 import * as PublicTunnels from "./tunnels/PublicTunnels.ts";
 import { PluginHost } from "./plugins/PluginHost.ts";
+import { DeployService } from "./deploy/DeployService.ts";
 import * as RemoteOpenTargets from "./environment/RemoteOpenTargets.ts";
 import * as RepositoryIdentityResolver from "./project/RepositoryIdentityResolver.ts";
 import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
@@ -905,6 +906,7 @@ const layerUnusedConfigRpcServices = Layer.mergeAll(
     registerServerPort: () => undefined,
   }),
   Layer.mock(PluginHost)({}),
+  Layer.mock(DeployService)({}),
   Layer.mock(PluginInstaller)({}),
   Layer.mock(DataBackup)({}),
   Layer.mock(RepositoryIdentityResolver.RepositoryIdentityResolver)({}),

@@ -39,6 +39,13 @@ plugins depend only on [`@t3tools/plugin-api`](../../packages/plugin-api), never
   `PluginAgentInstructions` so orchestration layers built before `PluginHost` read live plugin
   state without a layer cycle.
 
+- **Deploy providers are plugins; the host owns the rest.** A plugin built with
+  `defineDeployProvider` declares `deploy:provider` and keeps its account token in its own
+  `PluginContext.storage`; [`DeployService`](../../apps/server/src/deploy/DeployService.ts) owns
+  Settings → Deploy, the project mapping (`deployProjects` setting) and approvals, and never stores,
+  logs or returns a token. Provider calls are not plugin actions, so `plugins.invoke` cannot deploy
+  around the rule that a thread below Full access needs a person's approval.
+
 ## Obsidian shared memory
 
 [`plugins/obsidian-shared-memory`](../../plugins/obsidian-shared-memory) (repo

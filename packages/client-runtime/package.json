@@ -384,6 +384,10 @@
       "types": "./src/state/shell.ts",
       "default": "./src/state/shell.ts"
     },
+    "./state/deploy": {
+      "types": "./src/state/deploy.ts",
+      "default": "./src/state/deploy.ts"
+    },
     "./state/issue-trackers": {
       "types": "./src/state/issueTrackers.ts",
       "default": "./src/state/issueTrackers.ts"

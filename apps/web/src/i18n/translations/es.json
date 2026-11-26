@@ -2707,6 +2707,7 @@
   "65e3725b1c46b314": "Nunca",
   "4bbe9b821de91d9d": "Hilo",
   "f053d7461b8ecce5": "ID del hilo",
+  "39eba74d1788be0a": "Desplegar…",
   "70399412ec5a7026": "Archivar hilo",
   "95184480a503090c": "Eliminar",
   "042d3a13ea7d3f7b": "Falló la generación del título.",
@@ -8133,6 +8134,140 @@
     " min. Los agentes en ejecución se detienen al reiniciarse."
   ],
   "c56b618d212bf018": "Reiniciar y recuperar",
+  "be1eeddb87fc6fe9": "Desplegar",
+  "129164189c938942": "Proveedores de despliegue",
+  "3a2e919ca921a60c": "Despliegues",
+  "1e80233b9193116f": "Desactivado en Plugins",
+  "58b7b0e79013a091": "Vinculado",
+  "364cae9e608a63d4": "Sign-in expired",
+  "4ad258969e361b3c": "Error",
+  "fa83ec856513632c": "No vinculado",
+  "8f6976097de6cd25": "Token de acceso (opcional)",
+  "bd33c4006ff50a0b": "Token de acceso de {provider}",
+  "ce63a11bca54e095": "Desvincular",
+  "19cb8f9ff8df4979": "Volver a vincular",
+  "e176b5f17630f05b": "Vincular",
+  "afdefb17101fac3a": "Destino de despliegue de {project}",
+  "8a88e44ae853c80d": "Elegir destino",
+  "e9755757b8a9fdc9": "Sin destino",
+  "efbb8f3d8336378c": "Revertido a {deployment}.",
+  "2a1419da20c2bb27": "En cola",
+  "d000f2b5e832a45d": "Compilando",
+  "00add3d1a097078a": "Listo",
+  "d01b83620a105d50": "Fallido",
+  "7318f8b5cbcc0ff0": "Cancelado",
+  "5942a61dbfb5214e": "Esperando líneas de registro…",
+  "b1cb84e4eca5b06b": "Producción",
+  "bf0f37f53a4e2d62": "Vista previa",
+  "5b84d580f80b3688": "Rama de Git",
+  "457bf48449fb47aa": "Compilación local",
+  "15ed472fb3ba4a6d": "Rama predeterminada",
+  "f59d5b9846c2a3c6": "Conecta un entorno con esta versión para desplegar desde él.",
+  "0c5c6d47c9eec1cd": "No hay proveedores de despliegue instalados",
+  "3e68a8b268965f62": [
+    "Los destinos de despliegue como Vercel, Cloudflare o tus propios hosts Docker vienen de plugins. Instala uno en ",
+    {
+      "t": "Link",
+      "i": 1,
+      "c": "Plugins"
+    },
+    ", actívalo y vincula tu cuenta aquí."
+  ],
+  "5486b18239ddf78e": "Añade un proyecto a este entorno para desplegarlo.",
+  "7f9c4906e0c768ca": "Aquí aparecen los despliegues iniciados desde este entorno.",
+  "7770f2ba0e443fb7": "Activa este plugin en Plugins para vincular una cuenta.",
+  "a4f401eedf02e8ef": [
+    "Cuenta: ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    }
+  ],
+  "6a4c8edee7d78217": "Terminar de iniciar sesión",
+  "fa320e2be19caa64": [
+    "Se despliega en ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " en ",
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    }
+  ],
+  "42ff68458bdb217c": "No asignado a un destino de despliegue.",
+  "8279db589cda9dcf": "Desplegar",
+  "0834382733f42ced": [
+    "Un hilo sin acceso total pidió desplegar en ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " (",
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    },
+    ")."
+  ],
+  "4064fb5fc6c6be17": "Aprobar y desplegar",
+  "7f41545dc72a20ff": "Registros",
+  "a0305b61cfcc9aaa": "Revertir a esta",
+  "96f6682c6f165666": [
+    "Registros de ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    }
+  ],
+  "cb4cfd798de4d156": [
+    "Desplegar ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    }
+  ],
+  "5b31e4555d3aa954": [
+    "A ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " en ",
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    },
+    "."
+  ],
+  "e269269163d993f6": "Primero elige un destino de despliegue para este proyecto en Ajustes → Desplegar.",
+  "1e984aac74698df6": [
+    "Este hilo no tiene acceso total, así que el despliegue espera tu aprobación. Desplegará ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " en ",
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    },
+    "."
+  ],
+  "cc5d2f5ce8ee576e": "Entorno",
+  "c317fa79a76d4963": "Origen",
   "c0472e6d94fdfac6": "No se pudo leer el estado del backend.",
   "80e9842fba54a764": "Background service",
   "20119adcdeba05d6": "Remote URL (experimental)",
@@ -9310,7 +9445,6 @@
   "179d3c67e76bb669": "Este enlace de inicio de sesión no es una dirección web, así que no se abrió.",
   "d80e10905a0fb8fb": "No se pudo abrir la página de inicio de sesión. Copia el enlace y ábrelo en tu navegador.",
   "edaebeea1915f9c1": "Cuenta",
-  "364cae9e608a63d4": "Sign-in expired",
   "8a1f691337aa0932": "Sign-in expires soon",
   "249cfb7532e0b380": "Método de inicio de sesión",
   "8e184b3520eac9bc": "Predeterminado del proveedor",
@@ -11750,6 +11884,7 @@
   "75a9da351fa886f6": "Puede conectarse a servicios externos y enviar datos desde el servidor.",
   "4196d14ac2afb5aa": "Puede exponer los puntos de acceso web declarados sin exigir una sesión iniciada mientras esté activado.",
   "d9bf51418a4eaf8c": "Puede añadir instrucciones a cada turno de los agentes mientras esté activado.",
+  "76c518a23f13d801": "Puede desplegar tus proyectos en su servicio cuando tú o un hilo aprobado lo pidan, con una cuenta que vinculas en Ajustes → Desplegar.",
   "1992d1826db3ccc7": "La suma de verificación no coincide. Vuelve a descargar o contacta con el autor. No se ha activado nada.",
   "001f66f6550c50af": "Este plugin necesita otra versión de la API. Actualiza p0code o elige una versión compatible del plugin.",
   "650fa9a30ca33c31": "Este plugin viene incluido con p0code. Actualiza la aplicación para actualizarlo.",

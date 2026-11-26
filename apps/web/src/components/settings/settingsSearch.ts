@@ -38,6 +38,7 @@ export type SettingsPath =
   | "/settings/access"
   | "/settings/secrets"
   | "/settings/plugins"
+  | "/settings/deploy"
   | "/settings/maintenance"
   | "/settings/labs"
   | "/settings/about"
@@ -120,6 +121,7 @@ export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
   "/settings/access": msg("Sharing & access"),
   "/settings/secrets": msg("Secrets"),
   "/settings/plugins": msg("Plugins"),
+  "/settings/deploy": msg("Deploy"),
   "/settings/maintenance": msg("Maintenance"),
   "/settings/labs": msg("Labs"),
   "/settings/about": msg("About"),
@@ -169,7 +171,12 @@ const ALL_SETTINGS_NAV_GROUPS: ReadonlyArray<SettingsNavGroup> = [
   },
   {
     heading: msg("Code"),
-    paths: ["/settings/projects", "/settings/source-control", "/settings/worktrees"],
+    paths: [
+      "/settings/projects",
+      "/settings/source-control",
+      "/settings/worktrees",
+      "/settings/deploy",
+    ],
   },
   {
     heading: msg("Connections"),
@@ -190,8 +197,9 @@ const navGroupsWithout = (hidden: ReadonlyArray<SettingsPath>) =>
 const NAV_GROUPS = {
   all: ALL_SETTINGS_NAV_GROUPS,
   withoutSecrets: navGroupsWithout(["/settings/secrets"]),
-  withoutPlugins: navGroupsWithout(["/settings/plugins"]),
-  withoutBoth: navGroupsWithout(["/settings/secrets", "/settings/plugins"]),
+  // Deploy providers are plugins, so Deploy shows wherever Plugins does.
+  withoutPlugins: navGroupsWithout(["/settings/plugins", "/settings/deploy"]),
+  withoutBoth: navGroupsWithout(["/settings/secrets", "/settings/plugins", "/settings/deploy"]),
 };
 
 /** Sidebar groups; Secrets and Plugins show only when some environment's server offers them. */
@@ -217,7 +225,8 @@ export function settingsSectionDisabledReason(
   to: SettingsPath,
   catalogUnavailable: boolean,
 ): string | null {
-  return catalogUnavailable && (to === "/settings/secrets" || to === "/settings/plugins")
+  return catalogUnavailable &&
+    (to === "/settings/secrets" || to === "/settings/plugins" || to === "/settings/deploy")
     ? SETTINGS_CATALOG_UNAVAILABLE_REASON
     : null;
 }
@@ -1595,6 +1604,7 @@ const SETTINGS_CATEGORY_SCOPES: Readonly<Record<SettingsPath, SettingsSearchScop
   "/settings/access": "connections",
   "/settings/secrets": null,
   "/settings/plugins": null,
+  "/settings/deploy": "environment",
   "/settings/scheduled-tasks": null,
   "/settings/maintenance": null,
   "/settings/labs": null,

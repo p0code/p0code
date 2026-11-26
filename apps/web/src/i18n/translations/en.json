@@ -2707,6 +2707,7 @@
   "65e3725b1c46b314": "Never",
   "4bbe9b821de91d9d": "Thread",
   "f053d7461b8ecce5": "Thread ID",
+  "39eba74d1788be0a": "Deploy…",
   "70399412ec5a7026": "Archive thread",
   "95184480a503090c": "Delete",
   "042d3a13ea7d3f7b": "Title generation failed.",
@@ -8142,6 +8143,144 @@
     " min. Running agents stop when it restarts."
   ],
   "c56b618d212bf018": "Restart and reclaim",
+  "be1eeddb87fc6fe9": "Deploy",
+  "129164189c938942": "Deploy providers",
+  "3a2e919ca921a60c": "Deployments",
+  "1e80233b9193116f": "Off in Plugins",
+  "58b7b0e79013a091": "Linked",
+  "364cae9e608a63d4": "Sign-in expired",
+  "4ad258969e361b3c": "Error",
+  "fa83ec856513632c": "Not linked",
+  "8f6976097de6cd25": "Access token (optional)",
+  "bd33c4006ff50a0b": "{provider} access token",
+  "ce63a11bca54e095": "Unlink",
+  "19cb8f9ff8df4979": "Relink",
+  "e176b5f17630f05b": "Link",
+  "afdefb17101fac3a": "Deploy target for {project}",
+  "8a88e44ae853c80d": "Choose target",
+  "e9755757b8a9fdc9": "No target",
+  "efbb8f3d8336378c": "Rolled back to {deployment}.",
+  "2a1419da20c2bb27": "Queued",
+  "d000f2b5e832a45d": "Building",
+  "00add3d1a097078a": "Ready",
+  "d01b83620a105d50": "Failed",
+  "7318f8b5cbcc0ff0": "Canceled",
+  "5942a61dbfb5214e": "Waiting for log lines…",
+  "b1cb84e4eca5b06b": "Production",
+  "bf0f37f53a4e2d62": "Preview",
+  "5b84d580f80b3688": "Git branch",
+  "457bf48449fb47aa": "Local build",
+  "15ed472fb3ba4a6d": "Default branch",
+  "f59d5b9846c2a3c6": "Connect an environment running this version to deploy from it.",
+  "0c5c6d47c9eec1cd": "No deploy providers installed",
+  "3e68a8b268965f62": [
+    "Deploy targets such as Vercel, Cloudflare or your own Docker hosts come from plugins. Install one in ",
+    {
+      "t": "Link",
+      "i": 1,
+      "c": "Plugins"
+    },
+    ", turn it on, then link your account here."
+  ],
+  "5486b18239ddf78e": "Add a project to this environment to deploy it.",
+  "7f9c4906e0c768ca": "Deploys started from this environment appear here.",
+  "7770f2ba0e443fb7": "Turn this plugin on in Plugins to link an account.",
+  "a4f401eedf02e8ef": [
+    "Account: ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    }
+  ],
+  "6a4c8edee7d78217": "Finish signing in",
+  "fa320e2be19caa64": [
+    "Deploys to ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " on",
+    " ",
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    }
+  ],
+  "42ff68458bdb217c": "Not mapped to a deploy target.",
+  "8279db589cda9dcf": "Deploy",
+  "0834382733f42ced": [
+    "A thread without Full access asked to deploy to ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " ",
+    "(",
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    },
+    ")."
+  ],
+  "4064fb5fc6c6be17": "Approve and deploy",
+  "7f41545dc72a20ff": "Logs",
+  "a0305b61cfcc9aaa": "Roll back to this",
+  "96f6682c6f165666": [
+    "Logs for ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    }
+  ],
+  "cb4cfd798de4d156": [
+    "Deploy ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    }
+  ],
+  "5b31e4555d3aa954": [
+    "To ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " on",
+    " ",
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    },
+    "."
+  ],
+  "e269269163d993f6": "Choose a deploy target for this project in Settings → Deploy first.",
+  "1e984aac74698df6": [
+    "This thread does not have Full access, so the deploy waits for your approval. It will deploy ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " to",
+    " ",
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    },
+    "."
+  ],
+  "cc5d2f5ce8ee576e": "Environment",
+  "c317fa79a76d4963": "Source",
   "c0472e6d94fdfac6": "Could not read backend status.",
   "80e9842fba54a764": "Background service",
   "20119adcdeba05d6": "Remote URL (experimental)",
@@ -9321,7 +9460,6 @@
   "179d3c67e76bb669": "This sign-in link is not a web address, so it was not opened.",
   "d80e10905a0fb8fb": "Could not open the sign-in page. Copy the link and open it in your browser.",
   "edaebeea1915f9c1": "Account",
-  "364cae9e608a63d4": "Sign-in expired",
   "8a1f691337aa0932": "Sign-in expires soon",
   "249cfb7532e0b380": "Sign-in method",
   "8e184b3520eac9bc": "Provider default",
@@ -11766,6 +11904,7 @@
   "75a9da351fa886f6": "Can connect to external services and send data from the server.",
   "4196d14ac2afb5aa": "Can expose declared web endpoints without requiring a signed-in session while enabled.",
   "d9bf51418a4eaf8c": "Can add instructions to every agent turn while enabled.",
+  "76c518a23f13d801": "Can deploy your projects to its service when you or an approved thread ask, using an account you link in Settings → Deploy.",
   "1992d1826db3ccc7": "Checksum mismatch. Retry the download or contact the plugin author. Nothing was activated.",
   "001f66f6550c50af": "This plugin needs a different API version. Update p0code or choose a compatible plugin release.",
   "650fa9a30ca33c31": "This plugin is bundled with p0code. Update the app to update it.",

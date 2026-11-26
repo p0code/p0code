@@ -12,6 +12,7 @@ import {
   PluginContext,
   type PluginRouteHandler,
   type PluginServices,
+  type StartedDeployProvider,
   type StartedPlugin,
 } from "@t3tools/plugin-api";
 import * as Cause from "effect/Cause";
@@ -95,8 +96,15 @@ export class PluginHost extends Context.Service<
     readonly route: (path: string, pluginId?: string) => Effect.Effect<PluginRouteHandler | null>;
     /** Instruction blocks from running plugins that declared `agent:instructions`. */
     readonly agentInstructions: Effect.Effect<ReadonlyArray<string>>;
+    /** Every loaded plugin declaring `deploy:provider`, with its provider while it runs. */
+    readonly deployProviders: Effect.Effect<ReadonlyArray<DeployProviderEntry>>;
   }
 >()("p0/plugins/PluginHost") {}
+
+export interface DeployProviderEntry {
+  readonly manifest: PluginManifest;
+  readonly provider: StartedDeployProvider | null;
+}
 
 const START_TIMEOUT = "30 seconds";
 const STOP_TIMEOUT = "15 seconds";
@@ -322,6 +330,15 @@ const make = Effect.gen(function* () {
     return blocks;
   });
 
+  const deployProviders: PluginHost["Service"]["deployProviders"] = Effect.sync(() =>
+    plugins
+      .filter((plugin) => plugin.manifest.capabilities.includes("deploy:provider"))
+      .map((plugin) => ({
+        manifest: plugin.manifest,
+        provider: running.get(plugin.manifest.id)?.started.deployProvider ?? null,
+      })),
+  );
+
   const instructionsSlot = yield* Effect.serviceOption(PluginAgentInstructions);
   if (Option.isSome(instructionsSlot)) {
     yield* instructionsSlot.value.attach(agentInstructions);
@@ -406,6 +423,7 @@ const make = Effect.gen(function* () {
     invoke,
     route,
     agentInstructions,
+    deployProviders,
   });
 });
 

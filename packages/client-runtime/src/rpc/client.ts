@@ -74,6 +74,7 @@ export type EnvironmentSubscriptionRpcTag =
   | typeof WS_METHODS.workflowsSubscribe
   | typeof WS_METHODS.dataRestorePending
   | typeof WS_METHODS.pluginsSubscribe
+  | typeof WS_METHODS.deployLogs
   | typeof WS_METHODS.workflowsCounts
   | typeof WS_METHODS.serverGetStorageCleanupReport
   | typeof WS_METHODS.serverGetDatabaseStorage

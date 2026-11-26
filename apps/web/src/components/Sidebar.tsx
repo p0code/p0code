@@ -291,6 +291,7 @@ import {
   buildThreadActionMenuItems,
   isThreadTriageAction,
   threadActionRequiresOperate,
+  deploySearchForThread,
 } from "./threadActionMenu.logic";
 import { titleRegenerationToast } from "./threadTitleRegenerationToast";
 import { Button } from "./ui/button";
@@ -2844,6 +2845,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                 ),
                 canTurnIntoProject: canTurnThreadIntoProject(threadRef),
                 canMoveToProject: canMoveThreadIntoProject(threadRef),
+                canDeploy:
+                  serverConfigs.get(thread.environmentId)?.environment.capabilities.plugins ===
+                  true,
                 canRename: !fromSearch,
                 supports: {
                   settlement: configLoaded,
@@ -2907,6 +2911,12 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                 environmentId: threadRef.environmentId,
                 projectId: thread.projectId,
               });
+            return;
+          case "deploy":
+            void router.navigate({
+              to: "/settings/deploy",
+              search: deploySearchForThread(thread),
+            });
             return;
           case "new-thread-on-branch": {
             const result = await settlePromise(() =>
