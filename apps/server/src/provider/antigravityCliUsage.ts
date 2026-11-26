@@ -6,6 +6,9 @@ import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
+import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
+import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as ChildProcess from "effect/process/ChildProcess";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
@@ -21,6 +24,14 @@ const WINDOWS = [
   { match: "five hour", id: "5h", kind: "session", label: "5-hour", durationMins: 300 },
   { match: "weekly", id: "weekly", kind: "weekly", label: "Weekly", durationMins: 10_080 },
 ] as const;
+
+const decodeCredential = Schema.decodeUnknownOption(
+  Schema.fromJsonString(
+    Schema.Struct({
+      token: Schema.Struct({ access_token: Schema.NonEmptyString }),
+    }),
+  ),
+);
 
 const PERCENT = /^(\d+(?:\.\d+)?)\s*%?$/u;
 
@@ -100,12 +111,23 @@ export const makeAntigravityCliUsageReader = Effect.fn("makeAntigravityCliUsageR
     readonly cwd: string;
     readonly timeout?: Duration.Input;
     readonly cacheTtlMs?: number;
-  }): Effect.fn.Return<AntigravityCliUsageReader, never, ChildProcessSpawner.ChildProcessSpawner> {
+  }): Effect.fn.Return<
+    AntigravityCliUsageReader,
+    never,
+    ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem | Path.Path
+  > {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const credentialPath = path.join(input.cwd, "antigravity-acp", "antigravity-oauth-token");
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
     const timeout = input.timeout ?? CLI_TIMEOUT;
     const cacheTtlMs = input.cacheTtlMs ?? CACHE_TTL_MS;
     let cached:
-      | { readonly at: number; readonly windows: ReadonlyArray<ServerProviderUsageWindow> }
+      | {
+          readonly credential: string;
+          readonly at: number;
+          readonly windows: ReadonlyArray<ServerProviderUsageWindow>;
+        }
       | undefined;
 
     const run = Effect.gen(function* () {
@@ -113,7 +135,13 @@ export const makeAntigravityCliUsageReader = Effect.fn("makeAntigravityCliUsageR
       const child = yield* spawner.spawn(
         ChildProcess.make(executablePath, ["-p", "/usage"], {
           cwd: input.cwd,
-          env: input.environment,
+          // The CLI ignores force-file-storage without SSH and otherwise reads the shared keyring.
+          env: {
+            ...input.environment,
+            GEMINI_HOME: input.cwd,
+            SSH_CONNECTION: "127.0.0.1 0 127.0.0.1 0",
+            AGY_ACP_FORCE_FILE_STORAGE: "1",
+          },
           extendEnv: false,
           shell: false,
           forceKillAfter: "1 second",
@@ -137,10 +165,26 @@ export const makeAntigravityCliUsageReader = Effect.fn("makeAntigravityCliUsageR
     );
 
     const read = Effect.gen(function* () {
+      const credential = yield* fs
+        .readFileString(credentialPath)
+        .pipe(Effect.orElseSucceed(() => ""));
+      if (Option.isNone(decodeCredential(credential))) {
+        cached = undefined;
+        return [];
+      }
+      if (cached?.credential !== credential) cached = undefined;
       const now = yield* Clock.currentTimeMillis;
       if (cached !== undefined && now - cached.at < cacheTtlMs) return cached.windows;
       const windows = yield* run;
-      if (windows.length > 0) cached = { at: now, windows };
+      // A sign-in changed while the CLI ran: its answer no longer belongs to this profile.
+      const currentCredential = yield* fs
+        .readFileString(credentialPath)
+        .pipe(Effect.orElseSucceed(() => ""));
+      if (currentCredential !== credential) {
+        cached = undefined;
+        return [];
+      }
+      if (windows.length > 0) cached = { credential, at: now, windows };
       return windows;
     });
 

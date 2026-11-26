@@ -1,3 +1,5 @@
+// @effect-diagnostics nodeBuiltinImport:off -- Fingerprints saved credentials without exposing tokens.
+import * as NodeCrypto from "node:crypto";
 import type { AntigravityAuthMethod, ProviderCredentialStatus } from "@t3tools/contracts";
 import * as Clock from "effect/Clock";
 import * as DateTime from "effect/DateTime";
@@ -39,6 +41,7 @@ const ANTIGRAVITY_CLI_TOKEN_FILE = "antigravity-oauth-token";
 export interface AntigravityAccountState {
   /** The Google account's address, when the agent or a previous probe recorded it. */
   readonly email: string | undefined;
+  readonly credentialFingerprint?: string | undefined;
   /** When the saved access token lapses; absent for a refresh-only sign-in. */
   readonly expiresAt: string | undefined;
   readonly credentialStatus: ProviderCredentialStatus;
@@ -124,7 +127,7 @@ export const readAntigravityAccountState: (
   authMethod: AntigravityAuthMethod,
 ) => Effect.Effect<AntigravityAccountState, never, FileSystem.FileSystem | Path.Path> = Effect.fn(
   "readAntigravityAccountState",
-)(function* (profileDirectory: string, authMethod: AntigravityAuthMethod) {
+)(function* (profileDirectory: string, _authMethod: AntigravityAuthMethod) {
   const path = yield* Path.Path;
   const now = yield* Clock.currentTimeMillis;
   const tokens = antigravityTokenPaths(profileDirectory, path);
@@ -135,6 +138,7 @@ export const readAntigravityAccountState: (
 
   let email = Option.isSome(stored) ? stored.value.email?.trim() : undefined;
   let expiresAt: string | undefined;
+  let credential: string | undefined;
   let hasSignIn = false;
   let hasRefreshToken = false;
 
@@ -142,14 +146,16 @@ export const readAntigravityAccountState: (
   if (Option.isSome(acpToken)) {
     hasSignIn = true;
     hasRefreshToken = true;
-  } else if (authMethod === "oauth-personal" || authMethod === "oauth-business") {
+    credential = acpToken.value.refresh_token;
+  } else {
     const cliToken = yield* readDecoded(tokens.cli, decodeCliTokenFile);
     if (Option.isSome(cliToken)) {
       const value = cliToken.value;
+      credential = value.token.refresh_token?.trim() || value.token.access_token?.trim();
       hasSignIn = Boolean(value.token.access_token?.trim() || value.token.refresh_token?.trim());
       hasRefreshToken = Boolean(value.token.refresh_token?.trim());
       expiresAt = value.token.expiry;
-      email = email ?? value.id_token_email?.trim();
+      email = value.id_token_email?.trim() || email;
     }
   }
 
@@ -159,6 +165,9 @@ export const readAntigravityAccountState: (
 
   return {
     email,
+    credentialFingerprint: credential
+      ? NodeCrypto.createHash("sha256").update(`antigravity\0${credential}`).digest("hex")
+      : undefined,
     expiresAt,
     credentialStatus,
     canRenew: hasSignIn,
