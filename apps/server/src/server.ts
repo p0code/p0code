@@ -4,6 +4,8 @@ import { DataRestoreError } from "@t3tools/contracts";
 import { applyApprovedRestore } from "./persistence/dataBackupFiles.ts";
 import * as SelfRelay from "./selfRelay/SelfRelay.ts";
 import * as SelfRelayHttp from "./selfRelay/http.ts";
+import * as PublicTunnels from "./tunnels/PublicTunnels.ts";
+import * as TunnelsRpc from "./tunnels/rpc.ts";
 import * as PluginHost from "./plugins/PluginHost.ts";
 import * as PluginHostBindings from "./plugins/bindings.ts";
 import * as PluginHttp from "./plugins/http.ts";
@@ -829,6 +831,7 @@ const layerRuntimeDependencies = layerRuntimeCoreDependencies.pipe(
   // GitVcsDriver.layer is memoized and some of its build sites live outside this file, so the
   // fetch interval goes in context here, before the first build captures it.
   Layer.provideMerge(VcsAutomaticFetchInterval.layer.pipe(Layer.provide(layerServerSettings))),
+  Layer.provideMerge(PublicTunnels.layer),
   Layer.provide(NetService.layer),
 );
 
@@ -853,6 +856,7 @@ const layerMakeRoutes = Layer.mergeAll(
       Layer.provide(McpOAuthHttp.layer.pipe(Layer.provide(McpOAuth.layer))),
       Layer.provide(PeerClientPairingHttp.layer.pipe(Layer.provide(PeerClientPairing.layerIssuer))),
       Layer.provide(SelfRelayHttp.layer),
+      Layer.provide(TunnelsRpc.layer),
       Layer.provide(OrchestrationHttp.layer),
       Layer.provide(PullRequestHttp.layer),
       Layer.provide(ProjectHttp.layer),
@@ -988,6 +992,8 @@ const layerMakeServer = Layer.unwrap(
         if (typeof address === "string" || !("port" in address)) {
           return;
         }
+        const publicTunnels = yield* PublicTunnels.PublicTunnels;
+        publicTunnels.registerServerPort(address.port);
 
         const launcher = yield* ServiceLauncherClient.ServiceLauncherClient;
         const state = yield* makePersistedServerRuntimeState({

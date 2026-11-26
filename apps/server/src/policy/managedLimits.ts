@@ -96,6 +96,18 @@ export const allowsPreviewTunnel = (policy: PolicyDocument) =>
 
 export const refusePreviewTunnel = (policy: PolicyDocument) => refuse(policy, "port forwarding");
 
+/** Public tunnels require connect, previewTunnel, and publicTunnels to all be allowed. */
+export const allowsPublicTunnels = (policy: PolicyDocument) =>
+  allowsConnect(policy) &&
+  allowsPreviewTunnel(policy) &&
+  policy.document?.limits?.publicTunnels !== false;
+
+export const refusePublicTunnels = (policy: PolicyDocument) => {
+  if (!allowsConnect(policy)) return refuseConnect(policy);
+  if (!allowsPreviewTunnel(policy)) return refuse(policy, "public tunnels (port forwarding)");
+  return refuse(policy, "public tunnels");
+};
+
 // Node throws ENOTDIR, outside the spawner's error mapping, when PATH ends in a file.
 const isMissingCli = (cause: unknown) =>
   (PlatformError.isPlatformError(cause) && cause.reason._tag === "NotFound") ||

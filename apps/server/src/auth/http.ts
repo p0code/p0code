@@ -212,11 +212,19 @@ export const failEnvironmentInternal =
   });
 
 // Plaintext LAN servers still need the cookie; TLS arrives through a proxy that sets X-Forwarded-Proto.
+const isHttpsRequest = (request: HttpServerRequest.HttpServerRequest) =>
+  Option.exists(requestUrl(request), (url) => url.protocol === "https:");
+
+const sessionCookieNameForRequest = (
+  request: HttpServerRequest.HttpServerRequest,
+  cookieName: string,
+) => (isHttpsRequest(request) ? `__Host-${cookieName}` : cookieName);
+
 const sessionCookieOptions = (request: HttpServerRequest.HttpServerRequest) => ({
   httpOnly: true,
   path: "/",
   sameSite: "lax" as const,
-  secure: Option.exists(requestUrl(request), (url) => url.protocol === "https:"),
+  secure: isHttpsRequest(request),
 });
 
 const appendSessionCookie = (
@@ -308,7 +316,7 @@ export const layer = HttpApiBuilder.group(
             ) {
               yield* appendSessionCookie(
                 request,
-                sessions.cookieName,
+                sessionCookieNameForRequest(request, sessions.cookieName),
                 credential.token,
                 result.expiresAt,
               );
@@ -340,7 +348,8 @@ export const layer = HttpApiBuilder.group(
                 ? previousCredential.token
                 : undefined,
             );
-            const cookieName = result.cookieName ?? sessions.cookieName;
+            const cookieName =
+              result.cookieName ?? sessionCookieNameForRequest(request, sessions.cookieName);
             const selectedCookie = yield* Effect.fromResult(
               Cookies.set(Cookies.empty, cookieName, result.sessionToken, {
                 ...sessionCookieOptions(request),
@@ -351,7 +360,7 @@ export const layer = HttpApiBuilder.group(
               ? yield* Effect.fromResult(
                   Cookies.expireCookie(
                     selectedCookie,
-                    sessions.cookieName,
+                    sessionCookieNameForRequest(request, sessions.cookieName),
                     sessionCookieOptions(request),
                   ),
                 ).pipe(Effect.catch(() => failEnvironmentInternal("browser_session_cookie_failed")))

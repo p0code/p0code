@@ -106,6 +106,23 @@ function normalizeRelayUrl(value: string): string {
     throw new SelfRelayError({ operation: "link", reason: "url", cause: null });
   }
 }
+export interface SelfRelayPublicState {
+  readonly linked: boolean;
+  readonly connected: boolean;
+  readonly slug: string | null;
+  readonly relayUrl: string | null;
+  readonly publicHosts: boolean;
+  readonly publicDomain: string | null;
+}
+
+export interface SelfRelayPublicTunnelsHooks {
+  readonly allowName: (name: string) => boolean;
+  readonly activeNames: () => ReadonlyArray<string>;
+  readonly accept: (socket: NodeTls.TLSSocket, metadata: StreamLabel) => void;
+  readonly closeSockets: () => void;
+  readonly onStateChange?: (state: SelfRelayPublicState) => void;
+}
+
 export class SelfRelay extends Context.Service<
   SelfRelay,
   {
@@ -129,6 +146,7 @@ export class SelfRelay extends Context.Service<
       server: NodeHttp.Server,
       forwarded: (socket: NodeTls.TLSSocket, metadata: StreamLabel) => void,
     ) => Effect.Effect<void>;
+    readonly attachPublicTunnels: (hooks: SelfRelayPublicTunnelsHooks) => Effect.Effect<void>;
   }
 >()("p0/selfRelay/SelfRelay") {}
 
@@ -254,6 +272,18 @@ const make = Effect.gen(function* () {
         forwarded: (socket: NodeTls.TLSSocket, metadata: StreamLabel) => void;
       }
     | undefined;
+  let publicTunnels: SelfRelayPublicTunnelsHooks | undefined;
+  const currentPublicState = (): SelfRelayPublicState => ({
+    linked: state !== null,
+    connected,
+    slug: state?.slug ?? null,
+    relayUrl: state?.relayUrl ?? null,
+    publicHosts: client?.relayInfo?.features.includes("public-hosts") ?? false,
+    publicDomain: client?.relayInfo?.publicDomain ?? null,
+  });
+  const notifyPublicTunnels = () => {
+    publicTunnels?.onStateChange?.(currentPublicState());
+  };
   const origin = () =>
     !ManagedLimits.allowsRemoteClients(policy)
       ? null
@@ -265,12 +295,14 @@ const make = Effect.gen(function* () {
     state ? `https://${port}-${state.slug}.${new URL(state.relayUrl).hostname}` : null;
   const stop = () => {
     revokeSockets();
+    publicTunnels?.closeSockets();
     client?.stop();
     certificates?.close();
     client = undefined;
     certificates = undefined;
     connected = false;
     certificate = "unlinked";
+    notifyPublicTunnels();
   };
   const start = () => {
     stop();
@@ -299,13 +331,13 @@ const make = Effect.gen(function* () {
       privateKey: current.privateKey,
       challenges,
       ...(relayCa ? { webSocketOptions: { ca: Buffer.from(relayCa) } } : {}),
-      // Public tunnel names are refused until the public tunnel service exists.
       allowLabel: (label) =>
-        "port" in label &&
-        (state?.ports.some(
-          (entry) => entry.port === label.port && entry.expiresAt > clock.currentTimeMillisUnsafe(),
-        ) ??
-          false),
+        "port" in label
+          ? (state?.ports.some(
+              (entry) =>
+                entry.port === label.port && entry.expiresAt > clock.currentTimeMillisUnsafe(),
+            ) ?? false)
+          : (publicTunnels?.allowName(label.name) ?? false),
       getSecureContext: async (hostname) => {
         try {
           const context = await manager.getSecureContext(hostname);
@@ -338,6 +370,12 @@ const make = Effect.gen(function* () {
             forwardedSockets.delete(socket);
           });
           currentTarget.forwarded(socket, metadata);
+        } else if (metadata.name !== undefined) {
+          if (!publicTunnels?.allowName(metadata.name)) {
+            socket.destroy();
+            return;
+          }
+          publicTunnels.accept(socket, metadata);
         } else currentTarget.server.emit("connection", socket);
       },
     });
@@ -345,6 +383,7 @@ const make = Effect.gen(function* () {
     tunnel.on("connected", () => {
       if (client !== tunnel) return;
       connected = true;
+      notifyPublicTunnels();
       void manager.getSecureContext(current.slug + "." + new URL(current.relayUrl).hostname).then(
         () => {
           if (certificates === manager) {
@@ -358,7 +397,10 @@ const make = Effect.gen(function* () {
       );
     });
     tunnel.on("disconnected", () => {
-      if (client === tunnel) connected = false;
+      if (client === tunnel) {
+        connected = false;
+        notifyPublicTunnels();
+      }
     });
     // Connection errors carry no credentials into logs or status read models.
     tunnel.on("connectionError", () => {});
@@ -450,6 +492,25 @@ const make = Effect.gen(function* () {
         Effect.orElseSucceed(() => null),
       );
     const accountUri = certificates?.accountUri ?? stored?.uri ?? null;
+    const publicState = currentPublicState();
+    const relayHost = state ? new URL(state.relayUrl).hostname : null;
+    const publicHostDomain = publicState.publicDomain ?? relayHost;
+    const caaHosts =
+      state && accountUri && relayHost
+        ? Array.from(
+            new Set([
+              `${state.slug}.${relayHost}`,
+              ...state.ports
+                .filter((port) => port.expiresAt > clock.currentTimeMillisUnsafe())
+                .map((port) => `${port.port}-${state!.slug}.${relayHost}`),
+              ...(publicHostDomain
+                ? (publicTunnels?.activeNames() ?? []).map(
+                    (name) => `${name}-${state!.slug}.${publicHostDomain}`,
+                  )
+                : []),
+            ]),
+          )
+        : [];
     return {
       signupUrl: null,
       slug: state?.slug ?? null,
@@ -460,17 +521,14 @@ const make = Effect.gen(function* () {
       certificate,
       acmeAccountUri: accountUri,
       caaRecords:
-        state && accountUri
-          ? [
-              state.slug,
-              ...state.ports
-                .filter((port) => port.expiresAt > clock.currentTimeMillisUnsafe())
-                .map((port) => `${port.port}-${state!.slug}`),
-            ].map(
-              (label) =>
-                `${label}.${new URL(state!.relayUrl).hostname} CAA 0 issue "letsencrypt.org; accounturi=${accountUri}; validationmethods=http-01"`,
-            )
-          : [],
+        accountUri === null
+          ? []
+          : caaHosts.map(
+              (host) =>
+                `${host} CAA 0 issue "letsencrypt.org; accounturi=${accountUri}; validationmethods=http-01"`,
+            ),
+      publicHosts: publicState.publicHosts,
+      publicDomain: publicState.publicDomain,
       ports:
         state?.ports
           .filter((port) => port.expiresAt > clock.currentTimeMillisUnsafe())
@@ -543,6 +601,12 @@ const make = Effect.gen(function* () {
       Effect.sync(() => {
         target = { server, forwarded };
         start();
+      }),
+    ),
+    attachPublicTunnels: Effect.fn("SelfRelay.attachPublicTunnels")((hooks) =>
+      Effect.sync(() => {
+        publicTunnels = hooks;
+        hooks.onStateChange?.(currentPublicState());
       }),
     ),
     link: Effect.fn("SelfRelay.link")(function* (input) {

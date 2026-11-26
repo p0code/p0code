@@ -5,9 +5,14 @@ import {
   AuthSettingsWriteScope,
   AuthProvidersManageScope,
   AuthRelayConfigureScope,
+  AuthRelayWriteScope,
   type AuthEnvironmentScope,
 } from "./auth.ts";
 import { PluginSettings } from "./plugins.ts";
+import {
+  PublicTunnelExpirySeconds,
+  PUBLIC_TUNNEL_DEFAULT_EXPIRY_SECONDS,
+} from "./publicTunnels.ts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Duration from "effect/Duration";
@@ -437,6 +442,20 @@ export const VoiceTranscriptionDestination = Schema.Union([
   }),
 ]);
 export type VoiceTranscriptionDestination = typeof VoiceTranscriptionDestination.Type;
+
+export const PublicTunnelAgentPublishingMode = Schema.Literals(["ask", "off", "allow-full-access"]);
+export type PublicTunnelAgentPublishingMode = typeof PublicTunnelAgentPublishingMode.Type;
+
+export const PublicTunnelsSettings = Schema.Struct({
+  enabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  agentPublishing: PublicTunnelAgentPublishingMode.pipe(
+    Schema.withDecodingDefault(Effect.succeed("allow-full-access" as const)),
+  ),
+  defaultExpirySeconds: PublicTunnelExpirySeconds.pipe(
+    Schema.withDecodingDefault(Effect.succeed(PUBLIC_TUNNEL_DEFAULT_EXPIRY_SECONDS)),
+  ),
+});
+export type PublicTunnelsSettings = typeof PublicTunnelsSettings.Type;
 
 export const ClientSettingsSchema = Schema.Struct({
   notificationMode: NotificationMode.pipe(
@@ -1506,6 +1525,15 @@ export const ServerSettings = Schema.Struct({
   enableAgentBrowserAccess: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   /** Lets clients reach this machine's loopback ports over `/api/preview/tunnel`. */
   enablePreviewTunnel: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  publicTunnels: PublicTunnelsSettings.pipe(
+    Schema.withDecodingDefault(
+      Effect.succeed({
+        enabled: false,
+        agentPublishing: "allow-full-access" as const,
+        defaultExpirySeconds: PUBLIC_TUNNEL_DEFAULT_EXPIRY_SECONDS,
+      }),
+    ),
+  ),
   cloudSpeechCredentials: CloudSpeechCredentials.pipe(
     Schema.withDecodingDefault(Effect.succeed({ openai: "", xai: "", openrouter: "" })),
   ),
@@ -1999,6 +2027,13 @@ export const ServerSettingsPatch = Schema.Struct({
   requireConnectDeviceApproval: Schema.optionalKey(Schema.Boolean),
   enableAgentBrowserAccess: Schema.optionalKey(Schema.Boolean),
   enablePreviewTunnel: Schema.optionalKey(Schema.Boolean),
+  publicTunnels: Schema.optionalKey(
+    Schema.Struct({
+      enabled: Schema.optionalKey(Schema.Boolean),
+      agentPublishing: Schema.optionalKey(PublicTunnelAgentPublishingMode),
+      defaultExpirySeconds: Schema.optionalKey(PublicTunnelExpirySeconds),
+    }),
+  ),
   plugins: Schema.optionalKey(PluginSettings),
   cloudSpeechCredentials: Schema.optionalKey(
     Schema.Struct({
@@ -2173,10 +2208,27 @@ export function requiredScopesForServerSettingsPatch(
   let changesSettings = false;
   let changesAccess = false;
   let changesPlugins = false;
+  let changesRelayWrite = false;
+  let changesRelayConfigure = false;
   for (const [key, value] of Object.entries(patch)) {
     if (value === undefined) continue;
     if (key === "requireConnectDeviceApproval" || key === "enablePreviewTunnel") {
       changesAccess = true;
+    } else if (key === "publicTunnels") {
+      const publicTunnels = value as NonNullable<ServerSettingsPatch["publicTunnels"]>;
+      // Enabling public exposure or auto-publishing requires relay:configure; disabling needs relay:write.
+      if (publicTunnels.enabled === true || publicTunnels.agentPublishing === "allow-full-access") {
+        changesRelayConfigure = true;
+      } else if (publicTunnels.enabled === false) {
+        changesRelayWrite = true;
+      }
+      if (
+        publicTunnels.agentPublishing === "ask" ||
+        publicTunnels.agentPublishing === "off" ||
+        publicTunnels.defaultExpirySeconds !== undefined
+      ) {
+        changesRelayWrite = true;
+      }
     } else if (key === "plugins") {
       changesPlugins = true;
     } else if (
@@ -2198,11 +2250,17 @@ export function requiredScopesForServerSettingsPatch(
     changesSettings = true;
   }
   return [
-    ...(changesSettings || (!changesProviders && !changesAccess && !changesPlugins)
+    ...(changesSettings ||
+    (!changesProviders &&
+      !changesAccess &&
+      !changesPlugins &&
+      !changesRelayWrite &&
+      !changesRelayConfigure)
       ? [AuthSettingsWriteScope]
       : []),
     // A plugin can open the environment to an outside service: the bar of linking a relay.
-    ...(changesPlugins ? [AuthRelayConfigureScope] : []),
+    ...(changesPlugins || changesRelayConfigure ? [AuthRelayConfigureScope] : []),
+    ...(changesRelayWrite ? [AuthRelayWriteScope] : []),
     ...(changesProviders ? [AuthProvidersManageScope] : []),
     ...(changesAccess ? [AuthAccessWriteScope] : []),
     // Saving a script is choosing a command for the host to run, wherever the patch carries it.

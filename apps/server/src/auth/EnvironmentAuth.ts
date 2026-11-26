@@ -642,7 +642,15 @@ export function selectRequestCredential(
   cookieName: string,
   legacyCookieName: string | undefined,
 ) {
-  const cookieToken = request.cookies[cookieName];
+  // On HTTPS origins (including same-site relay hosts without --public-domain), only accept
+  // __Host- cookies so a sibling tunnel cannot plant a Domain=.<relay-host> session cookie.
+  const isHttps = Option.exists(requestUrl(request), (url) => url.protocol === "https:");
+  const hostCookieToken = isHttps ? request.cookies[`__Host-${cookieName}`] : undefined;
+  if (hostCookieToken) {
+    return { token: hostCookieToken, source: "cookie" } as const;
+  }
+
+  const cookieToken = isHttps ? undefined : request.cookies[cookieName];
   if (cookieToken) {
     return { token: cookieToken, source: "cookie" } as const;
   }
@@ -657,7 +665,7 @@ export function selectRequestCredential(
     return { token: dpopToken, source: "dpop" } as const;
   }
 
-  const legacyToken = legacyCookieName ? request.cookies[legacyCookieName] : undefined;
+  const legacyToken = !isHttps && legacyCookieName ? request.cookies[legacyCookieName] : undefined;
   if (legacyToken !== undefined) {
     return { token: legacyToken, source: "legacy-cookie" } as const;
   }
@@ -675,15 +683,28 @@ function firstHeaderValue(value: string | undefined): string | undefined {
   return first && first.length > 0 ? first : undefined;
 }
 
-// Missing Origin allows same-origin reads and non-browser clients; otherwise require
-// same-origin Sec-Fetch-Site, this server's host (including X-Forwarded-Host), or a trusted app origin.
+// Missing Origin allows same-origin reads and non-browser clients (unless Sec-Fetch-Site shows
+// a cross-origin/same-site state change or upgrade); otherwise require same-origin Sec-Fetch-Site,
+// this server's host (including X-Forwarded-Host), or a trusted app origin.
 function isBrowserOriginAllowed(
   request: HttpServerRequest.HttpServerRequest,
   trustedOrigins: ReadonlySet<string>,
 ): boolean {
   const origin = request.headers.origin;
-  if (origin === undefined) return true;
-  if (request.headers["sec-fetch-site"] === "same-origin") return true;
+  const secFetchSite = request.headers["sec-fetch-site"];
+  if (origin === undefined) {
+    if (
+      secFetchSite !== undefined &&
+      secFetchSite !== "same-origin" &&
+      secFetchSite !== "none" &&
+      (request.headers.upgrade?.toLowerCase() === "websocket" ||
+        !["GET", "HEAD", "OPTIONS"].includes(request.method?.toUpperCase() ?? ""))
+    ) {
+      return false;
+    }
+    return true;
+  }
+  if (secFetchSite === "same-origin") return true;
   if (trustedOrigins.has(origin)) return true;
   let originHost: string;
   try {

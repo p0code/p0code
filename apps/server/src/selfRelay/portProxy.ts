@@ -1,32 +1,41 @@
 // Node stream adapter must preserve HTTP upgrades and TLS socket identity.
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeHttp from "node:http";
-import * as NodeNet from "node:net";
+import type * as NodeNet from "node:net";
 import type * as NodeTls from "node:tls";
 import type { StreamLabel } from "@t3tools/relay-tunnel/mux";
+import {
+  filterSetCookieHeaders,
+  proxyHttpRequest,
+  proxyUpgradeRequest,
+  stripCookiesFromHeader,
+  stripHopByHopHeaders,
+} from "./loopbackProxy.ts";
 
 const COOKIE = "__Host-hhh-port";
-function applicationHeaders(headers: NodeHttp.IncomingHttpHeaders) {
-  const result = { ...headers };
-  if (result.cookie) {
-    const cookie = result.cookie
-      .split(";")
-      .filter((part) => part.trim().split("=", 1)[0] !== COOKIE)
-      .map((part) => part.trim())
-      .join("; ");
-    if (cookie.trim()) result.cookie = cookie;
-    else delete result.cookie;
-  }
+const COOKIE_NAMES = new Set([COOKIE]);
+
+function applicationHeaders(
+  headers: NodeHttp.IncomingHttpHeaders,
+  options?: { readonly keepUpgrade?: boolean },
+): NodeHttp.OutgoingHttpHeaders {
+  const result = stripHopByHopHeaders(headers, options);
+  const cookie = stripCookiesFromHeader(headers.cookie, (name) => COOKIE_NAMES.has(name));
+  if (cookie) result.cookie = cookie;
+  else delete result.cookie;
   return result;
 }
-function responseHeaders(headers: NodeHttp.IncomingHttpHeaders) {
-  const result = { ...headers };
-  if (result["set-cookie"])
-    result["set-cookie"] = result["set-cookie"].filter(
-      (cookie) => cookie.split("=", 1)[0]?.trim() !== COOKIE,
-    );
+
+function responseHeaders(
+  headers: NodeHttp.IncomingHttpHeaders,
+  options?: { readonly keepUpgrade?: boolean },
+): NodeHttp.OutgoingHttpHeaders {
+  const result = stripHopByHopHeaders(headers, options);
+  const filtered = filterSetCookieHeaders(headers["set-cookie"], { dropNames: COOKIE_NAMES });
+  if (filtered !== undefined) result["set-cookie"] = filtered;
   return result;
 }
+
 /** Node HTTP adapter: the application supplies current environment authorization. */
 export function createPortProxy(options: {
   authorize: (port: number, token: string) => Promise<boolean>;
@@ -89,26 +98,14 @@ export function createPortProxy(options: {
           .end();
         return;
       }
-      const upstream = NodeHttp.request(
-        {
-          host: "127.0.0.1",
-          port: auth.port,
-          method: request.method,
-          path: auth.path,
-          headers: { ...applicationHeaders(request.headers), host: `127.0.0.1:${auth.port}` },
-        },
-        (result) => {
-          response.writeHead(result.statusCode ?? 502, responseHeaders(result.headers));
-          result.pipe(response);
-        },
-      );
-      upstream.on("error", () => {
-        if (!response.headersSent) response.writeHead(502);
-        response.end();
+      await proxyHttpRequest({
+        request,
+        response,
+        port: auth.port,
+        path: auth.path,
+        headers: { ...applicationHeaders(request.headers), host: `127.0.0.1:${auth.port}` },
+        transformResponseHeaders: (upstreamHeaders) => responseHeaders(upstreamHeaders),
       });
-      request.on("aborted", () => upstream.destroy());
-      response.on("close", () => upstream.destroy());
-      request.pipe(upstream);
     })().catch(() => {
       if (!response.headersSent) response.writeHead(502);
       response.end();
@@ -121,43 +118,6 @@ export function createPortProxy(options: {
           socket.end("HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n");
           return;
         }
-        const upstream = NodeHttp.request({
-          host: "127.0.0.1",
-          port: auth.port,
-          method: request.method,
-          path: auth.path,
-          headers: { ...applicationHeaders(request.headers), host: `127.0.0.1:${auth.port}` },
-        });
-        upstream.on("upgrade", (result, peer, upstreamHead) => {
-          const headers = responseHeaders(result.headers);
-          if (auth.suppliedToken)
-            headers["set-cookie"] = [...(headers["set-cookie"] ?? []), cookieHeader(auth.token)];
-          socket.write(
-            `HTTP/1.1 101 Switching Protocols\r\n${Object.entries(headers)
-              .flatMap(([key, value]) =>
-                (Array.isArray(value) ? value : value === undefined ? [] : [value]).map(
-                  (item) => `${key}: ${item}`,
-                ),
-              )
-              .join("\r\n")}\r\n\r\n`,
-          );
-          if (upstreamHead.length) socket.write(upstreamHead);
-          if (head.length) peer.write(head);
-          socket.pipe(peer);
-          peer.pipe(socket);
-          peer.on("error", () => socket.destroy());
-          socket.once("close", () => peer.destroy());
-        });
-        upstream.on("response", (result) => {
-          result.resume();
-          socket.end("HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n");
-        });
-        upstream.on("error", () => socket.destroy());
-        socket.on("error", () => upstream.destroy());
-        socket.once("close", () => {
-          clearInterval(timer);
-          upstream.destroy();
-        });
         // Upgraded connections must lose access when their granting session expires or is revoked.
         // @effect-diagnostics-next-line globalTimers:off -- Native upgraded sockets need ongoing grant validation.
         const timer = setInterval(() => {
@@ -169,7 +129,30 @@ export function createPortProxy(options: {
           );
         }, 1000);
         timer.unref();
-        upstream.end();
+        void proxyUpgradeRequest({
+          request,
+          socket,
+          head,
+          port: auth.port,
+          path: auth.path,
+          headers: {
+            ...applicationHeaders(request.headers, { keepUpgrade: true }),
+            host: `127.0.0.1:${auth.port}`,
+          },
+          transformResponseHeaders: (upstreamHeaders) => {
+            const headers = responseHeaders(upstreamHeaders, { keepUpgrade: true });
+            if (auth.suppliedToken) {
+              const existing = Array.isArray(headers["set-cookie"])
+                ? headers["set-cookie"]
+                : typeof headers["set-cookie"] === "string"
+                  ? [headers["set-cookie"]]
+                  : [];
+              headers["set-cookie"] = [...existing, cookieHeader(auth.token)];
+            }
+            return headers;
+          },
+          onClose: () => clearInterval(timer),
+        });
       })
       .catch(() => socket.destroy());
   });
