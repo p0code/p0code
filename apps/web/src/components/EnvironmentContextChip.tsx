@@ -3,6 +3,7 @@ import { type EnvironmentContextRecord, resolveEnvironmentMachineKind } from "@t
 import { useGT } from "gt-react";
 
 import { useEnvironment } from "~/state/environments";
+import { environmentShortLabel } from "./environmentLabel";
 import { ContextChip, ContextChipLabel } from "./ContextChip";
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
@@ -31,12 +32,12 @@ export function EnvironmentContextChip(props: {
             <EnvironmentMachineIcon
               kind={resolveEnvironmentMachineKind(environment?.serverConfig ?? null)}
             />
-            <ContextChipLabel>{label}</ContextChipLabel>
+            <ContextChipLabel>{environmentShortLabel(label)}</ContextChipLabel>
           </ContextChip>
         }
       />
       <TooltipPopup side="top">
-        {environment ? gt("p0code environment") : gt("Machine not in this app")}
+        {label} · {environment ? gt("p0code environment") : gt("Machine not in this app")}
       </TooltipPopup>
     </Tooltip>
   );

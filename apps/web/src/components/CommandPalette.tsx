@@ -210,6 +210,8 @@ import {
   resolveProjectPickerTarget,
   resolveWslProjectSelection,
 } from "../wslPaths";
+import { useEnvironmentSwitcher } from "../hooks/useEnvironmentSwitcher";
+import { buildEnvironmentSwitchActions } from "./EnvironmentSwitcher.logic";
 import { resolveEnvironmentOptionLabel } from "./BranchToolbar.logic";
 import type { ChatComposerHandle } from "./chat/ChatComposer";
 import { canShareWithGuestAtom } from "./chat/guestShareAvailability";
@@ -1362,7 +1364,13 @@ function OpenCommandPaletteDialog(props: {
     if (firstOption) startNewProject(firstOption.environmentId, null);
   };
 
-  const actionItems: Array<CommandPaletteActionItem | CommandPaletteSubmenuItem> = [];
+  const environmentSwitcher = useEnvironmentSwitcher();
+  const actionItems: Array<CommandPaletteActionItem | CommandPaletteSubmenuItem> =
+    buildEnvironmentSwitchActions(
+      environmentSwitcher.items,
+      environmentSwitcher.onEnvironmentChange,
+      messages,
+    );
 
   if (projects.length > 0) {
     const activeProjectTitle =

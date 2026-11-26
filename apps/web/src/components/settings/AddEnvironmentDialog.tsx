@@ -73,6 +73,7 @@ const sshHostSuggestionValue = (target: DesktopDiscoveredSshHost) =>
 
 export function AddEnvironmentDialog({
   open,
+  showTrigger = true,
   prefill = null,
   routeTarget,
   error,
@@ -82,6 +83,7 @@ export function AddEnvironmentDialog({
   onErrorChange,
 }: {
   readonly open: boolean;
+  readonly showTrigger?: boolean;
   /** A machine the user chose elsewhere to pair with; they supply only the pairing code. */
   readonly prefill?: AddEnvironmentPrefill | null;
   readonly routeTarget: EnvironmentPresentation | null;
@@ -604,25 +606,27 @@ export function AddEnvironmentDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <DialogTrigger
-              render={
-                <Button size="xs" variant="ghost-muted" aria-label={gt("Add environment")}>
-                  <PlusIcon className="size-3" />
-                  <span>
-                    <T>Add environment</T>
-                  </span>
-                </Button>
-              }
-            />
-          }
-        />
-        <TooltipPopup side="top">
-          <T>Add environment</T>
-        </TooltipPopup>
-      </Tooltip>
+      {showTrigger ? (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <DialogTrigger
+                render={
+                  <Button size="xs" variant="ghost-muted" aria-label={gt("Add environment")}>
+                    <PlusIcon className="size-3" />
+                    <span>
+                      <T>Add environment</T>
+                    </span>
+                  </Button>
+                }
+              />
+            }
+          />
+          <TooltipPopup side="top">
+            <T>Add environment</T>
+          </TooltipPopup>
+        </Tooltip>
+      ) : null}
       <DialogPopup className="max-h-[80dvh] sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>

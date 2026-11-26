@@ -26,6 +26,7 @@ import {
   SidebarStageBackdrop,
   useEnvironmentStageLabel,
 } from "../SidebarStageBackdrop";
+import { EnvironmentSwitcher } from "../EnvironmentSwitcher";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import {
@@ -85,6 +86,7 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
             </div>
           ) : null}
         </div>
+        <EnvironmentSwitcher />
         {pillLabel ? (
           <div className="ml-1 flex h-7 items-center">
             <Badge data-environment-identification="pill" size="sm" variant="secondary">

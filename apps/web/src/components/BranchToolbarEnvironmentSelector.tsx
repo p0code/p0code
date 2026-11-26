@@ -1,3 +1,4 @@
+import { environmentShortLabel } from "./environmentLabel";
 import { ComposerSelectControl } from "./chat/ComposerControl";
 import { ComposerContextLabel } from "./ComposerContextLabel";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "./ui/tooltip";
@@ -12,14 +13,7 @@ import { T, useGT } from "gt-react";
 import { ADD_TO_MACHINE_LABEL_CLASS, type EnvironmentOption } from "./BranchToolbar.logic";
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { useComposerMenuProps } from "./chat/composerEventScope";
-import {
-  Select,
-  SelectGroup,
-  SelectGroupLabel,
-  SelectItem,
-  SelectPopup,
-  SelectValue,
-} from "./ui/select";
+import { Select, SelectGroup, SelectGroupLabel, SelectItem, SelectPopup } from "./ui/select";
 
 interface BranchToolbarEnvironmentSelectorProps {
   autoEnvironmentLabel?: string | undefined;
@@ -77,7 +71,9 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
           kind={activeEnvironment?.machine ?? "server"}
           className="size-3 shrink-0"
         />
-        <ComposerContextLabel>{activeEnvironment?.label ?? gt("Run on")}</ComposerContextLabel>
+        <ComposerContextLabel>
+          {environmentShortLabel(activeEnvironment?.label ?? gt("Run on"))}
+        </ComposerContextLabel>
       </span>
     );
     return (
@@ -124,7 +120,8 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
             />
           )}
           <ComposerContextLabel>
-            <SelectValue />
+            {autoEnvironmentLabel ??
+              environmentShortLabel(activeEnvironment?.label ?? gt("Run on"))}
           </ComposerContextLabel>
         </TooltipTrigger>
         <TooltipPopup>
