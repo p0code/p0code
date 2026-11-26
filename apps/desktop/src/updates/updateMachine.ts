@@ -11,6 +11,14 @@ function nextStatusAfterDownloadFailure(
   return currentState.availableVersion ? "available" : "error";
 }
 
+function withoutOfferDetails({
+  releaseUrl: _releaseUrl,
+  downloadSize: _downloadSize,
+  ...state
+}: DesktopUpdateState): DesktopUpdateState {
+  return state;
+}
+
 // A mismatch describes only the check that found it.
 function withoutTrackMismatch({
   trackMismatch: _trackMismatch,
@@ -106,7 +114,7 @@ export function reduceDesktopUpdateStateOnUpdateAvailable(
   const isDownloadedVersion = state.downloadedVersion === version;
   const preserveReleaseNotes = isDownloadedVersion && releaseNotes.length === 0;
   return {
-    ...withoutTrackMismatch(state),
+    ...withoutTrackMismatch(withoutOfferDetails(state)),
     status: isDownloadedVersion ? "downloaded" : "available",
     availableVersion: version,
     downloadedVersion: isDownloadedVersion ? version : null,
@@ -138,7 +146,7 @@ export function reduceDesktopUpdateStateOnNoUpdate(
   }
 
   return {
-    ...withoutTrackMismatch(state),
+    ...withoutTrackMismatch(withoutOfferDetails(state)),
     status: "up-to-date",
     availableVersion: null,
     downloadedVersion: null,

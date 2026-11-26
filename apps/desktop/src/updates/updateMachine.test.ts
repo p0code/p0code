@@ -96,6 +96,8 @@ describe("updateMachine", () => {
         enabled: true,
         status: "error",
         availableVersion: "1.1.0",
+        releaseUrl: "https://github.com/p0code/p0code/releases/tag/v1.1.0",
+        downloadSize: 123,
         releaseNotes: [{ version: "1.1.0", items: ["fix: stale update"], totalItems: 1 }],
         omittedReleaseCount: 2,
         message: "old failure",
@@ -107,6 +109,8 @@ describe("updateMachine", () => {
 
     expect(state.status).toBe("up-to-date");
     expect(state.availableVersion).toBeNull();
+    expect(state.releaseUrl).toBeUndefined();
+    expect(state.downloadSize).toBeUndefined();
     expect(state.downloadedVersion).toBeNull();
     expect(state.releaseNotes).toEqual([]);
     expect(state.omittedReleaseCount).toBe(0);
