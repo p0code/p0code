@@ -1,7 +1,8 @@
+import { SharedTooltipTrigger } from "./ui/shared-tooltip";
+import { Tooltip, TooltipTrigger, TooltipPopup } from "./ui/tooltip";
 import { environmentShortLabel } from "./environmentLabel";
 import { ComposerSelectControl } from "./chat/ComposerControl";
 import { ComposerContextLabel } from "./ComposerContextLabel";
-import { Tooltip, TooltipTrigger, TooltipPopup } from "./ui/tooltip";
 import { useAtomValue } from "@effect/atom-react";
 import { shortcutLabelForCommand } from "../keybindings";
 import { primaryServerKeybindingsAtom } from "../state/server";
@@ -77,10 +78,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
       </span>
     );
     return (
-      <Tooltip>
-        <TooltipTrigger render={lockedRow} />
-        <TooltipPopup>{activeEnvironment?.label ?? gt("Run on")}</TooltipPopup>
-      </Tooltip>
+      <SharedTooltipTrigger render={lockedRow} label={activeEnvironment?.label ?? gt("Run on")} />
     );
   }
 

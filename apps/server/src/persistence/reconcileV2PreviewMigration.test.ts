@@ -99,6 +99,8 @@ describe("V2 preview upgrade", () => {
         [117, "WorkflowMailSender"],
         [118, "WorkflowPools"],
         [119, "DropUnusedProviderTurnIndexes"],
+        [120, "PublicTunnels"],
+        [121, "WorkflowRunSubject"],
       ]);
       assert.deepStrictEqual(yield* runMigrations(), []);
       assert.deepStrictEqual(yield* sql`SELECT * FROM orchestration_v2_legacy_imports`, imports);
@@ -241,6 +243,8 @@ describe("V2 preview upgrade", () => {
         [117, "WorkflowMailSender"],
         [118, "WorkflowPools"],
         [119, "DropUnusedProviderTurnIndexes"],
+        [120, "PublicTunnels"],
+        [121, "WorkflowRunSubject"],
       ]);
     }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
   );

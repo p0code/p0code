@@ -81,26 +81,26 @@ mkdir -p ~/.codex_personal
 CODEX_HOME=~/.codex_personal codex login
 ```
 
-Then add a second Codex instance in **Settings > Providers**:
-
 | Instance       | CODEX_HOME path | Shadow home path    |
 | -------------- | --------------- | ------------------- |
-| Codex Work     | `~/.codex`      | Leave empty         |
+| Codex Work     | `~/.codex`      | _(leave empty)_     |
 | Codex Personal | `~/.codex`      | `~/.codex_personal` |
 
 Both instances must use the same **CODEX_HOME path**. p0code prepares the shared
 state in the shadow directory; do not populate it by copying your whole Codex
 home.
 
-The shadow account needs its own `auth.json` file. If Codex uses an OS credential
-store, configure file storage for this setup. See
-[OpenAI's credential storage guide](https://learn.chatgpt.com/docs/auth#credential-storage).
+To switch accounts mid-thread, pick another compatible Codex instance sharing the same **CODEX_HOME path** from the model picker.
 
-Use a completely separate **CODEX_HOME path**, with no shadow home, when you want
-separate Codex sessions and configuration. That instance cannot continue threads
-from the other home.
+## Features and options
 
-## Switch accounts in an existing thread
+- **Image generation**: Supported when your Codex version, model, and account allow it. If disabled in Codex config, add `-c features.image_generation=true` to the instance's **Launch arguments** (applies to new sessions).
+- **Async questions**: Codex can ask a question while continuing to work; answer in the question panel (steers the active turn or starts a new one) or dismiss it without sending.
+- **App access approvals**: Respond to external app access requests directly in chat (one-time, session, or permanent depending on the tool).
+- **MCP OAuth sign-in**: Click **Sign in** on the thread notice, approve in your browser, and paste the final redirect URL into **Finish sign-in** (requires provider management permission).
+- **Daybreak**: Models with cyber access programs show a **Cyber Access** option (`Standard` or `Daybreak`, initialized from `daybreak = true` in `config.toml`).
+- **Usage limits**: Limit stops display the exhausted window, reset time, and (on workspace plans) whether credits or spend limits need adjustment.
+- **Feedback to OpenAI**: Send `/feedback <description>` in an existing Codex thread to upload conversation and Codex logs to OpenAI.
 
 Choose the other account from the thread's model picker. p0code offers compatible
 Codex instances that share the thread's **CODEX_HOME path**. Changing accounts does

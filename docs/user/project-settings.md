@@ -1,75 +1,29 @@
 # Settings and project overrides
 
-On web and desktop, the "Applying settings for …" sentence at the top of Settings pages picks
-the project and environment a change applies to. Pages that only hold device preferences, such as
-Appearance, don't show it. They start at **All projects** and **All environments**
-and stay selected as you move between categories or search for a setting.
+T3 Code separates **device preferences** (saved locally per browser/device, like Appearance and Confirmations) from **server settings** (stored on each environment, like Threads, Worktrees, and Source control).
 
-Preferences saved on this device, such as appearance, confirmations and browser profiles, ignore
-the environment selection. On the Browser page they are read-only while a project is selected,
-though profiles can still be added, renamed and removed. Everything else is stored on a server.
-Choose one environment to edit its settings, or leave **All environments** to edit every connected
-environment at once. Offline environments keep their current values; this is a bulk edit, not a
-synced global default.
+## Scope and inheritance
 
-Choose a project to override settings for it on the selected environments. A layers icon beside
-each server row's title shows where the value comes from: the built-in default, the environment,
-or a project override. Click it to see that chain on every selected environment. An override can
-be reset to inherit again. Settings that cannot be overridden by a project are shown read-only
-while a project is selected.
+Use the **"Applying settings for …"** selector at the top of Settings (web/desktop) or the header filter (mobile) to choose which **environment(s)** and **project** you are editing:
 
-When the selected environments disagree, the control shows **Mixed** in place of a value and the
-layers icon turns amber. Picking a value applies it to every selected environment.
-
-Changing an environment value never touches a project's own override. When projects override the
-setting you are editing, the layers icon counts them and the chain lists each one with its value:
-click a project to jump to it, or **Reset all** to make those projects follow the environment
-again.
-
-Providers and diagnostics are per machine: they show one environment at a time, the primary
-one until you pick another. Every other setting fans out to the selection.
-
-With a project selected, a provider's switch in **Settings → Providers** turns it on or off for
-that project only, in either direction: a provider off on the machine can be used in one project,
-and one on everywhere can be kept out of another. That project's model pickers follow the switch,
-and no new turn there can start on a provider it turned off, including queued messages and
-follow-ups from delegated tasks. A turn already running when the switch flips finishes. A delegated
-task's result still lands in its parent thread, which sees it on its next turn. Reset returns the project to the
-machine's setting. Every other provider setting stays per machine.
-
-On mobile, open **Settings** and use the filter in its header to choose connected environments
-and a project. The filter stays available in server-setting pages. With **All projects** selected,
-the server-setting pages, such as Threads, Source control & issues and Worktrees, edit the selected
-environments' defaults. Choosing a project edits its overrides on the selected
-environments. Use **Use defaults** in a page to remove that page's project overrides.
-Open **Settings → Projects** to rename the project across its selected
-connected checkouts and see where those checkouts live.
-Settings that are environment-wide stay read-only while a project is selected. When selected
-targets disagree, a control shows **Mixed** until you choose one value. Appearance, keyboard,
-and other phone-only settings ignore the filter.
-
-## Projects with several repositories
-
-A project covers every repository inside its folder, and any folder you add under **Settings →
-Projects → Repositories**; see [Projects with several repositories](multi-repo-projects.md).
+- **All environments**: Bulk-edits every currently connected environment (offline environments keep their values). Controls show **Mixed** where environments disagree.
+- **Project scope**: Creates a project override for that setting without changing environment defaults. Settings that cannot be overridden appear read-only.
+- **Inheritance order**: `Project override` → `Environment setting` → `t3.json` in the repo → `Built-in default`. Leave a setting on **Inherit** to defer to the next tier.
+- Click the **layers icon** beside a server setting to inspect its inheritance chain, jump to overriding projects, or **Reset all** back to the environment default.
+- **Per-project providers**: With a project selected in **Settings → Providers**, toggling a provider enables or disables it for that project only (in either direction). Running turns finish; no new turns start on a disabled provider.
 
 ## Pin and archive projects
 
-Pinned projects come first in the project pickers: the project picker on a new thread, the
-new-thread list, the command palette, the sidebar project filter, and mobile. In the boring sidebar, pinned projects get the top
-folders, even with no active threads. Pin or unpin a project from its row in any of those lists,
-or press the thread pin shortcut (`mod+shift+p` by default) on the highlighted row. **Pin
-project** in the command palette and **Settings → Projects** work too. A list keeps its order
-while it is open, so a new pin moves up the next time you open it.
+- **Pin**: Pinned projects sort first in project pickers, the command palette, the sidebar filter, and mobile (`mod+shift+p` on a highlighted row, or **Settings → Projects**).
+- **Archive**: Archive finished projects in **Settings → Projects** (mobile: **Settings → Projects → Organize**). Archived projects leave pickers while keeping their threads, settings, and files; unarchive anytime from Settings.
+- Pinning or archiving a project that exists on multiple machines requires all of those machines to be connected.
 
-Archive a project you are done with in **Settings → Projects**. It leaves the project pickers.
-Its threads, settings, and files stay as they are, and archived projects still show in the
-Settings project list, marked **Archived**. Choose one there and select **Unarchive** to bring it
-back. On mobile, both are in **Settings → Projects → Organize**.
+## Project icons and multi-repo projects
 
-A project on several machines must have every machine connected to pin or archive it.
+- **Icons**: In **Settings → Projects**, set an icon, emoji, monogram, or image (applies across checkouts). Without one, T3 Code generates a two-character monogram (or single CJK character) from the project name.
+- **Multiple repositories**: See [Projects with several repositories](./multi-repo-projects.md).
 
-## Worktree branch names
+## Worktree settings
 
 In **Settings → Worktrees → Worktree branch naming**, choose a static prefix,
 a model-selected semantic prefix such as `feat/` or `fix/`, or custom instructions
@@ -78,20 +32,15 @@ optional, and an empty prefix adds nothing. Invalid characters in a static prefi
 are replaced with hyphens. Custom instructions are appended to
 the naming prompt and can specify issue IDs, namespaces, and casing.
 
-These settings apply to automatically named new worktree branches. Select a project
-to override its environment defaults. Worktree directories keep their original names.
-If generation fails, or a custom name is invalid or already taken, the temporary
-branch name remains.
+- **Branch naming**: Choose a static prefix (default `t3/`), model-selected semantic prefix (`feat/`, `fix/`), or custom instructions. Falls back to the temporary branch name if generation fails or collides.
+- **Submodules** (under Advanced): Defaults to recursive checkout; set to **Top level only** or **Skip** (or `"worktreeSubmodules"` in `t3.json`) for repos with heavy nested submodules.
+- **Sparse checkout**: Set `"worktreeSparsePatternsPath"` in `t3.json` to a repo-relative file of Git sparse-checkout patterns (non-cone syntax; requires Git 2.35+; enables `extensions.worktreeConfig`). Set Submodules to **Skip** if you don't want submodules initialized under excluded paths.
+- **Worktree location** (per machine): Set an absolute path (e.g. `D:\worktrees` or `~/worktrees`) to store new worktrees elsewhere. Existing worktrees stay where they are; cleanup covers both folders.
+- **Fast worktree checkout (macOS beta)**: Enable **Settings → Labs → Fast worktree checkout** (Git 2.42+) to clone new worktrees via APFS copy-on-write from a local cache. Falls back to normal checkout for cross-drive paths, sparse checkouts, or Git LFS/filter repos.
 
-## Scheduled tasks on mobile
+### Storage cleanup
 
-Open **Settings → Scheduled tasks** to create scheduled tasks or manage existing
-ones across your connected environments. Use the settings filter to narrow the
-list by environment or project. Each task runs on the environment you choose,
-using its project, model, and workspace settings. Fixed-time schedules use that
-environment's time zone, which may differ from your phone's. Choose **Once**
-to run a task a single time at a date and time in your own time zone. If the
-environment is offline then, the task runs when it is back.
+Enable automatic cleanup in **Settings → Worktrees → Cleanup** (off by default; runs on startup, on change, and hourly). Projects can set **Automatic worktree cleanup** to **Inherit**, **Off**, or **Custom**.
 
 Under **Destination**, choose where runs go. **New thread each run** keeps every
 run separate. The two one-thread choices start a thread on the first run and post
@@ -293,9 +242,7 @@ Japanese, or Korean character uses only that character, so `健康顾问` become
 
 ## Keep the default branch current
 
-In Source control & issues, enable **Automatically pull** to keep the default-branch checkout up to date
-with its configured upstream. Choose an environment to set the default or a project to override it.
-On mobile, use **Settings → Source control & issues** to change selected environment defaults or project overrides.
+Enable **Settings → Source control & issues → Automatically pull** to fast-forward clean default-branch checkouts from their configured upstream. Skips checkouts with local changes, untracked files, local commits, other branches, or no upstream.
 
 p0code only pulls when it can fast-forward and the checkout has no changed files, untracked files,
 or local commits. It skips checkouts on another branch or without an upstream. If a checkout has

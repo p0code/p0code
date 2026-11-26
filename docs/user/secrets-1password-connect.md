@@ -22,13 +22,9 @@ basics, see [Secrets](./secrets.md).
 5. In **Settings → Secrets**, select **Add provider**. The account is required, but `op` ignores it while
    Connect is configured, so enter any sign-in address such as `my.1password.com`.
 
-Then use references as usual, for example `op://Automation/provider-token/credential`.
+## Verify
 
-## Check that it works
-
-On the server's machine, set `OP_CONNECT_HOST` and `OP_CONNECT_TOKEN` in your shell to the values the
-server uses. Confirm the address is a Connect server, then read a secret with a clean environment so only
-the Connect variables can sign in:
+On the server machine, test with a clean environment:
 
 ```bash
 curl -s "$OP_CONNECT_HOST/health"
@@ -36,8 +32,7 @@ env -i PATH="$PATH" HOME="$(mktemp -d)" OP_CONNECT_HOST="$OP_CONNECT_HOST" OP_CO
   op read --no-newline "op://Automation/provider-token/credential" >/dev/null && echo "Secret read"
 ```
 
-The health response names the 1Password Connect API. Any other page means the address points at something
-else, such as a reverse proxy that answers for every hostname.
+## Notes
 
 This checks the Connect variables in your shell, not the server's own environment. To confirm the server
 can read the secret, use the reference in a setting and then use the feature that needs it. If the server

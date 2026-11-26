@@ -22,19 +22,23 @@ older environment, the wizard asks for the level and
 gives you a code to paste instead. A code works once, for 5 minutes, and
 approves only that level.
 
-For an app that is not listed, choose **Something else…**, add a remote MCP
-server with OAuth in that app, and paste the URL. Apps that require their own
-client ID cannot connect.
+### CLI clients and ChatGPT
 
-## Get the MCP URL
+- **Claude Code**:
+  ```sh
+  claude mcp add --transport http t3 https://<environment-address>/mcp
+  claude mcp login t3   # add --no-browser on headless hosts
+  ```
+- **Codex**:
+  ```sh
+  codex mcp add t3 --url https://<environment-address>/mcp
+  codex mcp login t3    # add --no-browser on headless hosts
+  ```
+- **ChatGPT / other OAuth MCP clients**: Add a custom remote MCP server pointing to `https://<environment-address>/mcp` with **OAuth** authentication (no client ID or secret needed).
 
-In **Settings → Environments**, open a saved environment's menu and choose
-**Copy MCP URL**. The URL is the environment's address followed by `/mcp`, for
-example:
+## Approve access and permissions
 
-```text
-https://<environment-address>/mcp
-```
+The first time an outside agent connects, approve its sign-in page (via your T3 Connect account, an already-authorized browser, or a one-time pairing code from **Settings → Sharing & access** / `t3 auth pairing create`).
 
 When a relay serves the environment, the copied URL is its relay address,
 which agents can reach from anywhere. Otherwise it uses the route this device is
@@ -51,7 +55,7 @@ connected over, so an agent on the same device can reach it.
   the environment from the internet. Use the relay address. A Tailscale
   address only works from your own tailnet.
 
-## Approve a sign-in
+Tools that act as a running T3 thread (`delegate_task`, `create_threads`, `request_secret`, `html_render`, `preview_*`, `device_*`, `t3_worktree_handoff`) only work for agents running **inside** T3 Code.
 
 The first time an agent connects, it opens a sign-in page. When the agent
 reaches the environment through a relay, the page opens on the environment's
@@ -59,10 +63,7 @@ own web app at its public origin, where you approve it without a code.
 Otherwise the page opens on the environment.
 Either page names the agent and where its access goes:
 
-- For an agent on your computer, approval returns to a `localhost` address on
-  the computer that opened the page.
-- For a hosted agent, approval goes to that service, such as `chatgpt.com`.
-  Anyone who runs that service gets the access.
+## Host scripts (`t3 thread`)
 
 Only approve a sign-in you just started. On the environment's own page, enter a
 code from **Use p0code in another app (MCP)**, **Settings → Sharing & access**,
@@ -169,26 +170,5 @@ p0 thread show "$id"
 p0 thread list
 ```
 
-`.` means the project that contains the current folder, or a git worktree of
-its repository; a project id also works. A new thread uses the project's
-default model and permission mode, and runs in the project folder unless you
-pass `--worktree <base-branch>`. Its title is the message's first line, or
-`--title`; add `--generate-title` to have it named from the message, as threads
-started in the app are. `send` never interrupts: a busy thread gets the message
-as its next turn. Pass `-` as the message to read it from stdin.
-
-To choose the model, pass `--provider <instance-id> --model <slug>`. Add
-`--option id=value` for each model option. For reasoning effort, Codex uses
-`--option reasoningEffort=high`, while Claude uses `--option effort=high`.
-Option ids and allowed values depend on the provider and model; use those
-reported by `orchestrator_capabilities`. `true` and `false` set on/off options.
-
-`--wait` prints the agent's reply. It exits 1 when the run fails or stops, and
-2 when the agent waits for an answer you give in the app. Add `--json` for a
-result that always includes the thread id.
-
-## Remove an agent
-
-Approved agents appear under **Settings → Sharing & access** like other clients.
-Revoke one there to cut off its access immediately. A sign-in lasts 30 days;
-after that the agent asks you to approve it again.
+- Pass `--worktree <base-branch>`, `--title` / `--generate-title`, `--provider <id> --model <slug>`, `--option id=value` (e.g. `reasoningEffort=high` for Codex, `effort=high` for Claude), or `-` to read the prompt from stdin.
+- `--wait` prints the reply and exits `1` on failure/stop or `2` when waiting for user input. Add `--json` for structured output including the thread ID.

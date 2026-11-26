@@ -72,20 +72,16 @@ export function LegacyKeychainImportRow({
   const importNow = async () => {
     if (importing) return;
     setImporting(true);
-    try {
-      const result = await run({ environmentId, input: {} });
-      if (result._tag === "Success") {
-        report(result.value);
-        setOpen(false);
-      } else if (!isAtomCommandInterrupted(result)) {
-        toastManager.add({
-          type: "error",
-          title: gt("Could not import old keychain items"),
-          description: String(squashAtomCommandFailure(result)),
-        });
-      }
-    } finally {
-      setImporting(false);
+    const result = await run({ environmentId, input: {} }).finally(() => setImporting(false));
+    if (result._tag === "Success") {
+      report(result.value);
+      setOpen(false);
+    } else if (!isAtomCommandInterrupted(result)) {
+      toastManager.add({
+        type: "error",
+        title: gt("Could not import old keychain items"),
+        description: String(squashAtomCommandFailure(result)),
+      });
     }
   };
 

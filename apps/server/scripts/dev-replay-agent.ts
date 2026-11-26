@@ -6,6 +6,55 @@
  * Each scenario is a "model"; each prompt plays the next recorded turn.
  * Unlike acp-replay-agent.ts, it does not assert the client's frames.
  */
+// @effect-diagnostics nodeBuiltinImport:off globalTimers:off
+/**
+ * A free ACP agent for dev servers. It plays recorded ACP transcripts with simulated
+ * streaming, so the real adapter, orchestration, and UI run without a paid model.
+ * Each scenario is a "model"; each prompt plays the next recorded turn.
+ * Unlike acp-replay-agent.ts, it does not assert the client's frames.
+ */
+// @effect-diagnostics nodeBuiltinImport:off globalTimers:off
+/**
+ * A free ACP agent for dev servers. It plays recorded ACP transcripts with simulated
+ * streaming, so the real adapter, orchestration, and UI run without a paid model.
+ * Each scenario is a "model"; each prompt plays the next recorded turn.
+ * Unlike acp-replay-agent.ts, it does not assert the client's frames.
+ */
+// @effect-diagnostics nodeBuiltinImport:off globalTimers:off
+/**
+ * A free ACP agent for dev servers. It plays recorded ACP transcripts with simulated
+ * streaming, so the real adapter, orchestration, and UI run without a paid model.
+ * Each scenario is a "model"; each prompt plays the next recorded turn.
+ * Unlike acp-replay-agent.ts, it does not assert the client's frames.
+ */
+// @effect-diagnostics nodeBuiltinImport:off globalTimers:off
+/**
+ * A free ACP agent for dev servers. It plays recorded ACP transcripts with simulated
+ * streaming, so the real adapter, orchestration, and UI run without a paid model.
+ * Each scenario is a "model"; each prompt plays the next recorded turn.
+ * Unlike acp-replay-agent.ts, it does not assert the client's frames.
+ */
+// @effect-diagnostics nodeBuiltinImport:off globalTimers:off
+/**
+ * A free ACP agent for dev servers. It plays recorded ACP transcripts with simulated
+ * streaming, so the real adapter, orchestration, and UI run without a paid model.
+ * Each scenario is a "model"; each prompt plays the next recorded turn.
+ * Unlike acp-replay-agent.ts, it does not assert the client's frames.
+ */
+// @effect-diagnostics nodeBuiltinImport:off globalTimers:off
+/**
+ * A free ACP agent for dev servers. It plays recorded ACP transcripts with simulated
+ * streaming, so the real adapter, orchestration, and UI run without a paid model.
+ * Each scenario is a "model"; each prompt plays the next recorded turn.
+ * Unlike acp-replay-agent.ts, it does not assert the client's frames.
+ */
+// @effect-diagnostics nodeBuiltinImport:off globalTimers:off
+/**
+ * A free ACP agent for dev servers. It plays recorded ACP transcripts with simulated
+ * streaming, so the real adapter, orchestration, and UI run without a paid model.
+ * Each scenario is a "model"; each prompt plays the next recorded turn.
+ * Unlike acp-replay-agent.ts, it does not assert the client's frames.
+ */
 import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";
 import * as NodeReadline from "node:readline";
@@ -69,6 +118,9 @@ export const SCENARIOS = [
     name: "Command output",
     file: "./dev-replay/command_output_transcript.ndjson",
   },
+  // scripts/metrics/web/client-metrics.ts: a heavy timeline that seeds fast, and a turn that streams for minutes.
+  { id: "bench-heavy", name: "Heavy turn", file: "./dev-replay/bench_heavy_transcript.ndjson" },
+  { id: "bench-stream", name: "Long stream", file: "./dev-replay/bench_stream_transcript.ndjson" },
 ] as const;
 
 // Session setup and vendor state stay out: they would replace the replay agent's own models.

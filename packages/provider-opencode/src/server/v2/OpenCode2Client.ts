@@ -98,7 +98,7 @@ const decodeImageJob = Schema.decodeUnknownOption(NativeImageJob);
 export interface OpenCode2Api {
   readonly client: OpenCodeClient;
   readonly usageLimits: (
-    directory: string,
+    directory: string | undefined,
   ) => Effect.Effect<
     import("@t3tools/contracts").ServerProviderUsageLimits | undefined,
     never,

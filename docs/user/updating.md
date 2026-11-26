@@ -1,8 +1,6 @@
 # Updating p0code
 
-The app you use and the server running your agents can be on different machines.
-When a server is behind your web or desktop app, the update button at the bottom
-of the sidebar and **Settings → Environments** offer to update it.
+T3 Code clients and servers can run on different machines and must share a compatible orchestration protocol. When a server or provider is behind, the sidebar update button and **Settings → Environments** handle updates.
 
 ## Update the desktop app
 
@@ -19,13 +17,7 @@ installation from the release page.
 
 ## Update everything at once
 
-The update button at the bottom of the sidebar updates every connected machine
-in one step. It updates outdated providers, then servers that are behind, then
-the desktop app you are using. Servers move to the
-version your desktop app is installing, or to your web app's version. A
-background service stays on its current release channel. A remote desktop app
-installs the latest release from its own channel. Hover the button to see what
-it will update.
+Click the **Update** button at the bottom of the sidebar (web or desktop) to update outdated providers, behind servers, and the desktop app in one step.
 
 While it runs, the button widens to show progress. It names a machine that is
 taking longer than usual, and offers **Retry** for a server that failed. Click
@@ -67,15 +59,13 @@ The dialog says why: update a machine on its current track first when its
 release is too old to check, or wait until the target track includes the
 changes. A Mac running the desktop app must switch on that Mac.
 
-Each machine keeps the new track even if its switch did not finish, but it
-moves to that track only through a switch. **Update track** shows how many
-machines still run the other track. **Review** opens the same dialog with fresh
-checks.
+**Settings → Maintenance → Continue threads after restarts** is enabled by default. After an update, crash, or reboot (once T3 Code starts again), supported active threads automatically resume—and threads waiting on subagents or monitors are woken and notified that background work stopped.
 
-## Before you update
+- Threads waiting for your approval/answer/secret—or archived, snoozed, or settled—are not auto-resumed.
+- After 3 consecutive crash recoveries of an unfinished turn, the thread waits for your next message.
+- Updating from V1? Read [Threads from older T3 Code versions](./thread-migration.md).
 
-Server updates restart the connection and can interrupt active agents and
-terminal commands. Saved threads, settings, and project files remain.
+## Update a connected server manually
 
 **Settings → Maintenance → Continue threads after restarts** is on by default.
 It resumes supported active threads after an update, crash, or machine
@@ -206,11 +196,8 @@ status and refresh it again.
 
 ## Mobile updates
 
-To update an environment from your phone, open **Settings → Environments** and
-select it. **Check for updates** finds the latest release on that environment's
-current release channel. Keep the app open while the environment updates and
-reconnects. Hosts that cannot update remotely show instructions for updating on
-the machine instead.
+- Update connected environments and providers from **Settings → Environments** on mobile.
+- Update the mobile app via the App Store or Google Play (background over-the-air updates apply on next app switch and preserve drafts/queued messages).
 
 The same page lets you refresh provider status and update supported providers.
 These controls require a connected environment and permission to operate it.
@@ -220,8 +207,7 @@ there before refreshing to find newer versions. The same setting controls whethe
 p0code downloads model catalog updates, so with it off new models may not appear
 until you enable it and refresh provider status.
 
-Install App Store or Google Play releases as usual. The mobile app can also
-download updates in the background and apply them when you next leave the app.
-It saves drafts and queued messages before restarting. If you keep the app open
-for a long time, it may ask to install immediately; choosing **Later** leaves the
-update queued for the next suitable moment.
+- **Version mismatch**: Update whichever side (app or server) the connection notice names.
+- **Failed update**: Retry once; confirm you updated the host machine (not just the client) and that only one server owns the T3 home directory.
+- **macOS Alpha → Beta**: Open `/Applications/T3 Code (Beta).app` manually and re-pin it to the Dock.
+- **Desktop won't start**: Use the recovery window's **Update** button, install the linked last-working version, or **Copy details** for a bug report.

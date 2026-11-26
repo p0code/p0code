@@ -1,11 +1,13 @@
 import { DataRestoreBanner } from "../components/settings/DataRestoreBanner";
 import { createFileRoute, Outlet, redirect, useLocation } from "@tanstack/react-router";
+import { workspaceAreaProps } from "../lib/workspaceFocus";
+import { useRouter } from "@tanstack/react-router";
+import { useState, type ReactNode } from "react";
 import { T, useGT, useMessages, Var } from "gt-react";
 import { RotateCcwIcon } from "lucide-react";
-import { useState, type ReactNode } from "react";
+
 import { useSettingsRestore } from "../components/settings/SettingsPanels";
 import { Button } from "../components/ui/button";
-import { workspaceAreaProps } from "../lib/workspaceFocus";
 
 import { SettingsWorkspace } from "../components/settings/SettingsWorkspace";
 import { SettingsBreadcrumb } from "../components/settings/SettingsBreadcrumb";
@@ -17,6 +19,7 @@ import { SettingsScopeNotice } from "../components/settings/SettingsScopeNotice"
 import { SETTINGS_DEVICE_ONLY_PATHS } from "../components/settings/SettingsScopeSentence";
 import { SettingsSidebarNav } from "../components/settings/SettingsSidebarNav";
 import { SettingsPageContainer } from "../components/settings/settingsLayout";
+import { useRenderedSettingsPathname } from "../components/settings/useRenderedSettingsPathname";
 import {
   retainSettingsScope,
   validateSettingsRouteSearch,
@@ -51,7 +54,10 @@ function SettingsScopeBoundary({ pathname, children }: { pathname: string; child
   const { environments } = useEnvironments();
   const gt = useGT();
   const m = useMessages();
-  const hash = useLocation({ select: (location) => location.hash });
+  // A pending navigation's hash targets the page still loading, not the one on screen.
+  const hash = useLocation({
+    select: (location) => (location.pathname === pathname ? location.hash : ""),
+  });
   const searchTarget = getSettingsSearchTargetScope(hash);
   const targetAvailability = searchTarget?.requiresThreadAutoSettlement
     ? getThreadAutoSettlementSearchAvailability(environments, scope)
@@ -125,10 +131,11 @@ function SettingsScopeBoundary({ pathname, children }: { pathname: string; child
 function SettingsContentLayout() {
   const gt = useGT();
   const contentArea = workspaceAreaProps("settings", 1, gt("Settings content"));
-  const location = useLocation();
+  const navPathname = useLocation({ select: (location) => location.pathname });
+  const pathname = useRenderedSettingsPathname();
   const { search, environment } = useSettingsScope();
   const contentScopeKey =
-    location.pathname === "/settings/diagnostics" || location.pathname === "/settings/providers"
+    pathname === "/settings/diagnostics" || pathname === "/settings/providers"
       ? environment?.environmentId
       : JSON.stringify(search);
   const [restoreSignal, setRestoreSignal] = useState(0);
@@ -143,11 +150,11 @@ function SettingsContentLayout() {
       }
     >
       <div className="relative flex min-h-0 flex-1">
-        <SettingsSidebarNav pathname={location.pathname} />
+        <SettingsSidebarNav pathname={navPathname} />
         <div {...contentArea} className="flex min-h-0 min-w-0 flex-1 flex-col">
           <DataRestoreBanner />
           <div key={`${contentScopeKey}:${restoreSignal}`} className="min-h-0 flex flex-1 flex-col">
-            <SettingsScopeBoundary pathname={location.pathname}>
+            <SettingsScopeBoundary pathname={pathname}>
               <Outlet />
             </SettingsScopeBoundary>
           </div>
@@ -160,7 +167,8 @@ function SettingsContentLayout() {
 function SettingsRouteLayout() {
   const rawSearch = Route.useSearch();
   const navigate = Route.useNavigate();
-  const pathname = useLocation({ select: (location) => location.pathname });
+  const router = useRouter();
+  const pathname = useRenderedSettingsPathname();
   return (
     <SettingsScopeProvider
       search={rawSearch}
@@ -173,7 +181,9 @@ function SettingsRouteLayout() {
       onChange={(next) => {
         // Send every axis so retain middleware recognizes "all" as an explicit target.
         void navigate({
-          to: pathname,
+          // Read at call time: subscribing would hand every scope consumer a new context value on
+          // each click. A pending navigation's target wins over the page still on screen.
+          to: router.state.location.pathname,
           search: () => ({
             project: next.project,
             machine: next.machine,

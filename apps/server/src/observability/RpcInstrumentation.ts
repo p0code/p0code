@@ -91,6 +91,7 @@ const RPC_AGGREGATES = {
   [WS_METHODS.serverImportAcpRegistrySession]: "server",
   [WS_METHODS.serverDeleteAcpRegistrySession]: "server",
   [WS_METHODS.serverListAcpRegistryProviders]: "server",
+  [WS_METHODS.serverGetProviderRuntimeModeLimits]: "server",
   [WS_METHODS.serverSetAcpRegistryProvider]: "server",
   [WS_METHODS.serverDisableAcpRegistryProvider]: "server",
   [WS_METHODS.serverLogoutAcpRegistry]: "server",
@@ -116,6 +117,7 @@ const RPC_AGGREGATES = {
   [WS_METHODS.workflowsSubscribe]: "workflows",
   [WS_METHODS.workflowsCounts]: "workflows",
   [WS_METHODS.workflowsGet]: "workflows",
+  [WS_METHODS.workflowsAbout]: "workflows",
   [WS_METHODS.workflowsAnswer]: "workflows",
   [WS_METHODS.workflowsResume]: "workflows",
   [WS_METHODS.workflowsCancel]: "workflows",
@@ -305,6 +307,16 @@ const RPC_AGGREGATES = {
   [WS_METHODS.subscribeServerConfig]: "server",
   [WS_METHODS.subscribeServerLifecycle]: "server",
   [WS_METHODS.subscribeAuthAccess]: "auth",
+  [WS_METHODS.tunnelsList]: "tunnels",
+  [WS_METHODS.tunnelsCreate]: "tunnels",
+  [WS_METHODS.tunnelsUpdate]: "tunnels",
+  [WS_METHODS.tunnelsRotate]: "tunnels",
+  [WS_METHODS.tunnelsRemove]: "tunnels",
+  [WS_METHODS.tunnelsStopAll]: "tunnels",
+  [WS_METHODS.tunnelsVisits]: "tunnels",
+  [WS_METHODS.tunnelsLink]: "tunnels",
+  [WS_METHODS.tunnelsDecideRequest]: "tunnels",
+  [WS_METHODS.tunnelsSubscribe]: "tunnels",
 } as const satisfies Readonly<Record<WsRpcMethod, string>>;
 
 const RPC_SPAN_PREFIX = "ws.rpc";

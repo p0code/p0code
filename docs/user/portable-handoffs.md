@@ -8,16 +8,19 @@ answers, the original request, and relevant activity such as command outcomes. S
 keep their full text, order, and user or assistant role, including partial work from failed or
 interrupted turns. Your new request stays separate and is never shortened to make history fit.
 
-Codex receives historical messages directly when its installed version supports that operation.
-Other providers receive the same selection as attributed conversation context. A handoff does not
-copy the outgoing provider's reasoning, tool-call state, or attachments.
+- Short conversations transfer intact.
+- Longer conversations prioritize the original request, recent user/assistant turns (including partial work from interrupted turns), and key activity like command outcomes.
+- Your new prompt is never shortened to make history fit.
+- Codex receives historical messages directly when supported; other providers receive attributed conversation context.
+- Reasoning traces, raw tool-call state, and attachments are not copied.
+- Omitted history is referenced so the agent can retrieve saved messages on demand using T3 Code's thread-reading tool. Still, repeat any critical constraint in your next message if you want to be sure.
 
 The handoff includes references to omitted history. The agent can use p0code's thread-reading tool
 to retrieve saved messages and activity, including the remainder of a long item. For an important
 constraint, you can still repeat it in your next message. A handoff is a budgeted selection, not an
 agent-written summary.
 
-## Context limits
+If the target session doesn't have enough context room, T3 Code automatically starts a fresh provider session with a bounded history selection and sends your request—no manual `/compact` needed. If your request and attachments alone exceed the model's window, shorten the message or choose a larger-context model.
 
 A handoff must leave room for existing provider context, your request and attachments, instructions,
 tools, and subsequent work. If the target conversation has no room for the handoff, p0code starts

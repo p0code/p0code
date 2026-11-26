@@ -1,9 +1,10 @@
+import { Tooltip, TooltipTrigger, TooltipPopup } from "../ui/tooltip";
 import { msg, T, Var } from "gt-react";
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import { TRIAGE_CLI_COMMAND } from "~/hooks/useStartTriage";
 
 import { InlineButton } from "../ui/button";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 
 /**
  * The empty-draft hero for a triage session, in place of "What should we work on?".
@@ -48,31 +49,32 @@ export function TriageDraftHero(props: {
         <span aria-hidden className="text-muted-foreground">
           ·
         </span>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <InlineButton
-                tone="muted"
-                className="pointer-events-auto"
-                onClick={() => copyToClipboard(TRIAGE_CLI_COMMAND, undefined)}
-              />
-            }
-          >
-            {isCopied ? (
-              <T>Copied</T>
-            ) : (
-              <T>
-                or run
-                <code className="ml-1 font-mono text-xs">
-                  <Var>{TRIAGE_CLI_COMMAND}</Var>
-                </code>
-              </T>
-            )}
-          </TooltipTrigger>
-          <TooltipPopup side="bottom">
-            <T>Copy command, for a terminal</T>
-          </TooltipPopup>
-        </Tooltip>
+        <SharedTooltipTrigger
+          render={
+            <InlineButton
+              tone="muted"
+              className="pointer-events-auto"
+              onClick={() => copyToClipboard(TRIAGE_CLI_COMMAND, undefined)}
+            />
+          }
+          label={
+            <>
+              <T>Copy command, for a terminal</T>
+            </>
+          }
+          side="bottom"
+        >
+          {isCopied ? (
+            <T>Copied</T>
+          ) : (
+            <T>
+              or run
+              <code className="ml-1 font-mono text-xs">
+                <Var>{TRIAGE_CLI_COMMAND}</Var>
+              </code>
+            </T>
+          )}
+        </SharedTooltipTrigger>
       </p>
     </div>
   );

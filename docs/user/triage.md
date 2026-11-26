@@ -21,7 +21,7 @@ Code server, so it gives you any restart steps and does not do them itself.
 
 ## In a terminal
 
-If the app does not start, or triage does not work in the app, run:
+If the app won't start or in-app triage fails, run:
 
 ```sh
 npx p0 triage
