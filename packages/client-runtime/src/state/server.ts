@@ -9,6 +9,8 @@ import {
 import {
   type DesktopUpdateChannel,
   type EnvironmentId,
+  type PluginShopEntryInput,
+  type PluginShopListInput,
   type ProviderInstanceId,
   type ServerConfig,
   type ServerConfigStreamEvent,
@@ -1570,9 +1572,30 @@ export function createServerEnvironmentAtoms<R, E>(
       execute: (_input: Record<string, never>) =>
         requestGuarded(WS_METHODS.pluginsInstalledList, {}),
     }),
-    pluginsCatalog: createEnvironmentRpcCommand(runtime, {
-      label: "environment-data:pluginsCatalog",
-      tag: WS_METHODS.pluginsCatalog,
+    pluginsShopList: createEnvironmentQueryAtomFamily(runtime, {
+      label: "environment-data:pluginsShopList",
+      staleTimeMs: 60_000,
+      execute: (input: PluginShopListInput) => requestGuarded(WS_METHODS.pluginsShopList, input),
+    }),
+    pluginsShopEntry: createEnvironmentQueryAtomFamily(runtime, {
+      label: "environment-data:pluginsShopEntry",
+      execute: (input: PluginShopEntryInput) => requestGuarded(WS_METHODS.pluginsShopEntry, input),
+    }),
+    pluginsShopRefresh: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:pluginsShopRefresh",
+      tag: WS_METHODS.pluginsShopRefresh,
+    }),
+    pluginsShopInstall: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:pluginsShopInstall",
+      tag: WS_METHODS.pluginsShopInstall,
+    }),
+    pluginsShopUpdate: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:pluginsShopUpdate",
+      tag: WS_METHODS.pluginsShopUpdate,
+    }),
+    pluginsShopUninstall: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:pluginsShopUninstall",
+      tag: WS_METHODS.pluginsShopUninstall,
     }),
     pluginsInstall: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:pluginsInstall",

@@ -24,7 +24,6 @@ vi.mock("../../state/server", async () => {
     serverEnvironment: Object.fromEntries(
       [
         "pluginsInstalledList",
-        "pluginsCatalog",
         "pluginsInstall",
         "pluginsConsent",
         "pluginsUpdate",
@@ -113,10 +112,6 @@ function reset() {
       ...stage(),
       value: { ...stage().value, record: { ...stage().value.record, stagedVersion: null } },
     })),
-    pluginsCatalog: vi.fn(async () => ({
-      _tag: "Success",
-      value: { plugins: [{ ...manifest, repository: "https://github.com/owner/repo", ref: "v2" }] },
-    })),
   };
 }
 it("stages a URL install, preserves pending consent and activates only after explicit confirmation", async () => {
@@ -159,20 +154,6 @@ it("keeps invalid URLs and checksum failures out of the consent flow", async () 
   await screen.getByRole("textbox", { name: "GitHub URL" }).fill("owner/repo");
   await screen.getByRole("button", { name: "Install", exact: true }).click();
   await expect.element(screen.getByRole("dialog").getByText(/Checksum mismatch/)).toBeVisible();
-  expect(state.commands.pluginsConsent).not.toHaveBeenCalled();
-});
-it("installs a real catalog selection through the installer", async () => {
-  reset();
-  await using screen = await render(
-    <PluginInstaller environmentId={EnvironmentId.make("local")} />,
-  );
-  await screen.getByRole("button", { name: "Add plugin", exact: true }).click();
-  await screen.getByRole("button", { name: "Browse the shop" }).click();
-  await screen.getByRole("button", { name: "Install", exact: true }).click();
-  expect(state.commands.pluginsInstall).toHaveBeenCalledWith({
-    environmentId: "local",
-    input: { source: "fixture" },
-  });
   expect(state.commands.pluginsConsent).not.toHaveBeenCalled();
 });
 it("uploads a local pair to the selected environment without activating it", async () => {

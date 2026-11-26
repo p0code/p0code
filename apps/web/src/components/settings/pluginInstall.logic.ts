@@ -2,9 +2,22 @@ import { msg } from "gt-react";
 
 export function pluginInstallError(error: unknown) {
   const text = error instanceof Error ? error.message : typeof error === "string" ? error : "";
+  if (/shop could not be reached|plugin shop returned a catalog|plugin shop answered/i.test(text))
+    return msg(
+      "The plugin shop is unavailable. Check the server's internet connection, then Refresh. Nothing was installed.",
+    );
+  if (/already up to date/i.test(text)) return msg("This plugin is already up to date.");
+  if (/shop entry/i.test(text))
+    return msg(
+      "The shop entry does not match the manifest it downloads. Nothing was activated; ask the author to refresh the entry.",
+    );
   if (/checksum/i.test(text))
     return msg(
       "Checksum mismatch. Retry the download or contact the plugin author. Nothing was activated.",
+    );
+  if (/No release of this plugin|different plugin API/i.test(text))
+    return msg(
+      "No release of this plugin works with this p0code version. Update p0code or ask the author for a compatible release.",
     );
   if (/api|compatible/i.test(text))
     return msg(

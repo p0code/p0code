@@ -18,75 +18,28 @@ import * as NodePath from "node:path";
 import * as NodeCrypto from "node:crypto";
 import * as NodeModule from "node:module";
 import * as NodeURL from "node:url";
-import { readGithub, readArchive, download, type Bundle } from "./installSources.ts";
+import { readGithub, readArchive, type Bundle } from "./installSources.ts";
 import { ServerConfig } from "../config.ts";
 import { ServerSecretStore } from "../auth/ServerSecretStore.ts";
 import { PluginHost } from "./PluginHost.ts";
 import { isValidPluginId, isValidVersionSegment } from "./installedPaths.ts";
 import { readInstallRecord, writeInstallRecord } from "./installRecords.ts";
 
-const CatalogEntry = Schema.Struct({
-  id: Schema.String,
-  repository: Schema.String,
-  ref: Schema.String,
-  version: Schema.String,
-  capabilities: Schema.Array(PluginCapability),
-  externalServices: Schema.Array(Schema.String),
-  sha256: Schema.optionalKey(Schema.String),
-});
-type CatalogEntry = typeof CatalogEntry.Type;
-
 const decodeManifest = Schema.decodeSync(Schema.fromJsonString(PluginManifest));
-const decodeCatalog = Schema.decodeUnknownSync(
-  Schema.Struct({ schemaVersion: Schema.Literal(1), plugins: Schema.Array(CatalogEntry) }),
-);
-const decodeRelease = Schema.decodeUnknownSync(
-  Schema.Struct({
-    tag_name: Schema.String,
-    assets: Schema.Array(
-      Schema.Struct({ name: Schema.String, browser_download_url: Schema.String }),
-    ),
-  }),
-);
-const decodeCommit = Schema.decodeUnknownSync(Schema.Struct({ sha: Schema.String }));
 
 const sameSet = (a: ReadonlyArray<string>, b: ReadonlyArray<string>) =>
   a.length === b.length && [...a].sort().every((value, index) => value === [...b].sort()[index]);
 
-const responseJson = async (url: string): Promise<unknown> =>
-  JSON.parse(new TextDecoder().decode(await download(url)));
-
-const readRelease = async (entry: CatalogEntry): Promise<Bundle> => {
-  const repository = new URL(entry.repository);
-  if (repository.hostname !== "github.com" || !/^\/[\w.-]+\/[\w.-]+\/?$/.test(repository.pathname))
-    throw new Error("Catalog repository must be a GitHub repository.");
-  const repo = repository.pathname.replace(/\/$/, "");
-  // Resolve tags explicitly; arbitrary branch names never select executable code.
-  if (!/^[a-f0-9]{40}$/i.test(entry.ref))
-    await responseJson(
-      `https://api.github.com/repos${repo}/git/ref/tags/${encodeURIComponent(entry.ref)}`,
-    );
-  const tag = /^[a-f0-9]{40}$/i.test(entry.ref) ? `v${entry.version}` : entry.ref;
-  const release = decodeRelease(
-    await responseJson(
-      `https://api.github.com/repos${repo}/releases/tags/${encodeURIComponent(tag)}`,
-    ),
-  );
-  if (/^[a-f0-9]{40}$/i.test(entry.ref)) {
-    const commit = decodeCommit(
-      await responseJson(
-        `https://api.github.com/repos${repo}/commits/${encodeURIComponent(release.tag_name)}`,
-      ),
-    );
-    if (commit.sha !== entry.ref)
-      throw new Error("Release does not match the catalog's pinned commit.");
-  }
-  return readGithub(`${entry.repository}#${tag}`);
-};
+/** What a shop entry promised before the host downloaded its bundle. */
+export interface BundleExpectation {
+  readonly id?: string;
+  readonly version?: string;
+  readonly capabilities?: ReadonlyArray<PluginCapability>;
+  /** The API version the shop declared; absent means it did not declare one. */
+  readonly apiVersion?: number;
+}
 
 export interface InstallerOptions {
-  readonly catalog?: () => Promise<ReadonlyArray<CatalogEntry>>;
-  readonly release?: (entry: CatalogEntry) => Promise<Bundle>;
   readonly github?: (source: string) => Promise<Bundle>;
   readonly hostPackages?: Readonly<Record<string, string>>;
 }
@@ -194,59 +147,14 @@ export const makeInstaller = Effect.fn("PluginInstaller.make")(function* (
     );
     return { snapshot, installations, stagedManifests };
   });
-  const catalogEntries = () =>
-    options.catalog
-      ? options.catalog()
-      : responseJson("https://p0code.github.io/plugins-shop/index.json").then(
-          (value) => decodeCatalog(value).plugins,
-        );
-  const stage = Effect.fn("PluginInstaller.stage")(function* (
-    source: string,
-    expectedId?: string,
-    upload?: { readonly name: string; readonly data: string },
+  const accept = Effect.fn("PluginInstaller.accept")(function* (
+    bundle: Bundle,
+    origin: PluginInstallRecord["versions"][number]["source"],
+    expected: BundleExpectation = {},
   ) {
     const installedAt = DateTime.formatIso(yield* DateTime.now);
     const snapshot = yield* host.snapshot;
-    return yield* io(expectedId ?? "", async () => {
-      let bundle: Bundle;
-      let catalog: CatalogEntry | undefined;
-      let origin: PluginInstallRecord["versions"][number]["source"];
-      const local = await NodeFSP.stat(source).then(
-        (stat) => stat.isDirectory(),
-        () => false,
-      );
-      if (upload) {
-        bundle = await readArchive(Buffer.from(upload.data, "base64"), upload.name);
-        origin = { kind: "local", path: "" };
-      } else if (
-        !local &&
-        /^(https?:|[\w.-]+\/[\w.-]+(?:@.*)?$)/.test(source) &&
-        !NodePath.isAbsolute(source)
-      ) {
-        bundle = await (options.github ?? readGithub)(source);
-        origin = { kind: "github", url: source };
-      } else if (local) {
-        const dir = NodePath.resolve(source);
-        try {
-          bundle = {
-            manifest: await NodeFSP.readFile(NodePath.join(dir, "manifest.json"), "utf8"),
-            code: await NodeFSP.readFile(NodePath.join(dir, "plugin.mjs")),
-          };
-        } catch {
-          throw new Error("No manifest.json + plugin.mjs bundle. Choose a prebuilt plugin folder.");
-        }
-        origin = { kind: "local", path: dir };
-      } else if (/\.(zip|tgz|tar\.gz)$/.test(source) && NodePath.isAbsolute(source)) {
-        bundle = await readArchive(await NodeFSP.readFile(source), source);
-        origin = { kind: "local", path: source };
-      } else {
-        const entries = await catalogEntries();
-        catalog = entries.find((entry) => entry.id === source);
-        if (!catalog)
-          throw new Error(`No catalog plugin ${source}. Pass a directory or catalog id.`);
-        bundle = await (options.release ?? readRelease)(catalog);
-        origin = { kind: "catalog", id: catalog.id };
-      }
+    return yield* io(expected.id ?? "", async () => {
       let manifest: PluginManifest;
       try {
         manifest = decodeManifest(bundle.manifest);
@@ -256,8 +164,17 @@ export const makeInstaller = Effect.fn("PluginInstaller.make")(function* (
         );
       }
       if (!isValidVersionSegment(manifest.version)) throw new Error("Invalid plugin version.");
-      if (expectedId && manifest.id !== expectedId)
-        throw new Error("Update manifest id does not match the installed plugin.");
+      if (expected.id && manifest.id !== expected.id)
+        throw new Error("The shop entry id does not match the manifest it downloads.");
+      if (expected.version && manifest.version !== expected.version)
+        throw new Error("The shop entry version does not match the manifest it downloads.");
+      if (expected.capabilities && !sameSet(manifest.capabilities, expected.capabilities))
+        throw new Error("The shop entry capabilities do not match the manifest it downloads.");
+      if (
+        expected.apiVersion !== undefined &&
+        (manifest.apiVersion ?? PLUGIN_API_VERSION) !== expected.apiVersion
+      )
+        throw new Error("The shop entry API version does not match the manifest it downloads.");
       if (
         snapshot.plugins.some(
           (plugin) => plugin.manifest.id === manifest.id && plugin.origin === "bundled",
@@ -266,17 +183,7 @@ export const makeInstaller = Effect.fn("PluginInstaller.make")(function* (
         throw new Error("This plugin is built into this version of the server.");
       if (manifest.apiVersion !== undefined && manifest.apiVersion !== PLUGIN_API_VERSION)
         throw new Error("Incompatible plugin API. Update p0code or the plugin.");
-      if (
-        catalog &&
-        (manifest.id !== catalog.id ||
-          manifest.version !== catalog.version ||
-          !sameSet(manifest.capabilities, catalog.capabilities) ||
-          !sameSet(manifest.externalServices, catalog.externalServices))
-      )
-        throw new Error("Catalog is out of date for this plugin.");
       const bundleSha256 = NodeCrypto.createHash("sha256").update(bundle.code).digest("hex");
-      if (catalog?.sha256 && catalog.sha256 !== bundleSha256)
-        throw new Error("Plugin bundle checksum mismatch.");
       const old = await readInstallRecord(stateDir, manifest.id);
       if (old && old.id !== manifest.id) throw new Error("Install record id mismatch.");
       if (old?.versions.some((version) => version.version === manifest.version))
@@ -318,6 +225,60 @@ export const makeInstaller = Effect.fn("PluginInstaller.make")(function* (
       return { record: next, manifest, restartRequired: false };
     });
   });
+  const resolve = (source: string, upload?: { readonly name: string; readonly data: string }) =>
+    io("", async () => {
+      let bundle: Bundle;
+      let origin: PluginInstallRecord["versions"][number]["source"];
+      const local = await NodeFSP.stat(source).then(
+        (stat) => stat.isDirectory(),
+        () => false,
+      );
+      if (upload) {
+        bundle = await readArchive(Buffer.from(upload.data, "base64"), upload.name);
+        origin = { kind: "local", path: "" };
+      } else if (
+        !local &&
+        /^(https?:|[\w.-]+\/[\w.-]+(?:@.*)?$)/.test(source) &&
+        !NodePath.isAbsolute(source)
+      ) {
+        bundle = await (options.github ?? readGithub)(source);
+        origin = { kind: "github", url: source };
+      } else if (local) {
+        const dir = NodePath.resolve(source);
+        try {
+          bundle = {
+            manifest: await NodeFSP.readFile(NodePath.join(dir, "manifest.json"), "utf8"),
+            code: await NodeFSP.readFile(NodePath.join(dir, "plugin.mjs")),
+          };
+        } catch {
+          throw new Error("No manifest.json + plugin.mjs bundle. Choose a prebuilt plugin folder.");
+        }
+        origin = { kind: "local", path: dir };
+      } else if (/\.(zip|tgz|tar\.gz)$/.test(source) && NodePath.isAbsolute(source)) {
+        bundle = await readArchive(await NodeFSP.readFile(source), source);
+        origin = { kind: "local", path: source };
+      } else {
+        throw new Error(
+          "No plugin bundle at this path. Choose a folder, archive, GitHub URL, or shop entry.",
+        );
+      }
+      return { bundle, origin };
+    });
+  const stage = Effect.fn("PluginInstaller.stage")(function* (
+    source: string,
+    expectedId?: string,
+    upload?: { readonly name: string; readonly data: string },
+  ) {
+    const resolved = yield* resolve(source, upload);
+    return yield* accept(resolved.bundle, resolved.origin, expectedId ? { id: expectedId } : {});
+  });
+  const installBundle = Effect.fn("PluginInstaller.installBundle")(function* (input: {
+    readonly bundle: Bundle;
+    readonly origin: PluginInstallRecord["versions"][number]["source"];
+    readonly expected: BundleExpectation;
+  }) {
+    return yield* accept(input.bundle, input.origin, input.expected);
+  });
   const activate = Effect.fn("PluginInstaller.activate")(function* (
     next: PluginInstallRecord,
     manifest: PluginManifest,
@@ -336,11 +297,15 @@ export const makeInstaller = Effect.fn("PluginInstaller.make")(function* (
   });
   return {
     list,
-    catalog: io("", async () => ({ plugins: await catalogEntries() })),
     install: (input: {
       readonly source: string;
       readonly upload?: { readonly name: string; readonly data: string };
     }) => lock.withPermits(1)(stage(input.source, undefined, input.upload)),
+    installBundle: (input: {
+      readonly bundle: Bundle;
+      readonly origin: PluginInstallRecord["versions"][number]["source"];
+      readonly expected: BundleExpectation;
+    }) => lock.withPermits(1)(installBundle(input)),
     update: (input: {
       readonly id: string;
       readonly source?: string;
@@ -350,9 +315,14 @@ export const makeInstaller = Effect.fn("PluginInstaller.make")(function* (
         Effect.gen(function* () {
           const old = yield* io(input.id, () => record(input.id));
           const last = old.versions.at(-1)?.source;
+          if (!input.source && !input.upload && last?.kind === "catalog")
+            return yield* new PluginOperationError({
+              pluginId: input.id,
+              message: "Update this plugin from the Shop tab.",
+            });
           const source =
             input.source ??
-            (last?.kind === "local" ? last.path : last?.kind === "github" ? last.url : last?.id);
+            (last?.kind === "local" ? last.path : last?.kind === "github" ? last.url : undefined);
           if (!source && !input.upload)
             return yield* new PluginOperationError({
               pluginId: input.id,

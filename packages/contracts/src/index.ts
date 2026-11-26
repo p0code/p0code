@@ -85,3 +85,4 @@ export * from "./selfRelay.ts";
 export * from "./publicTunnels.ts";
 export * from "./plugins.ts";
 export * from "./pluginInstallation.ts";
+export * from "./pluginShop.ts";

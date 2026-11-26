@@ -24,7 +24,12 @@ import {
   layer as hostLayer,
 } from "./PluginHost.ts";
 import { InstalledPlugins, layerWith } from "./loader.ts";
-import { makeInstaller, hostPackagePaths, linkHostPackages } from "./installer.ts";
+import {
+  makeInstaller,
+  hostPackagePaths,
+  linkHostPackages,
+  type BundleExpectation,
+} from "./installer.ts";
 import { readGithub } from "./installSources.ts";
 import { readInstallRecord } from "./installRecords.ts";
 
@@ -286,29 +291,41 @@ describe("plugin installer", () => {
       }),
     );
     it.effect(
-      "refuses catalog metadata drift, bundled ids and incompatible manifests before writing code",
+      "refuses shop metadata drift, bundled ids and incompatible manifests before writing code",
       () =>
         Effect.gen(function* () {
           const { stateDir } = yield* ServerConfig;
           const value = manifest("3.0.0", [], "catalog-fixture");
-          const entry = {
-            ...value,
-            repository: "https://github.com/p0code/fixture",
-            ref: "v3.0.0",
-            capabilities: ["network:outbound"] as const,
+          const bundle = {
+            manifest: JSON.stringify(value),
+            code: new TextEncoder().encode(code(value)),
           };
-          const installer = yield* makeInstaller({
-            catalog: async () => [entry],
-            release: async () => ({
-              manifest: JSON.stringify(value),
-              code: new TextEncoder().encode(code(value)),
-            }),
-          });
+          const installer = yield* makeInstaller();
+          const stage = (expected: BundleExpectation) =>
+            installer
+              .installBundle({
+                bundle,
+                origin: { kind: "catalog", id: value.id },
+                expected,
+              })
+              .pipe(Effect.flip);
           assert.include(
-            (yield* installer.install({ source: entry.id }).pipe(Effect.flip)).message,
-            "Catalog is out of date",
+            (yield* stage({
+              id: value.id,
+              version: value.version,
+              capabilities: ["network:outbound"],
+            })).message,
+            "capabilities do not match",
           );
-          assert.isNull(yield* Effect.promise(() => readInstallRecord(stateDir, entry.id)));
+          assert.include(
+            (yield* stage({ id: value.id, version: "9.9.9" })).message,
+            "version does not match",
+          );
+          assert.include(
+            (yield* stage({ id: "another-plugin", version: value.version })).message,
+            "id does not match",
+          );
+          assert.isNull(yield* Effect.promise(() => readInstallRecord(stateDir, value.id)));
           const source = yield* fixture(stateDir, manifest("1.0.0", [], "bundled"));
           assert.include(
             (yield* installer.install({ source }).pipe(Effect.flip)).message,
@@ -403,7 +420,12 @@ describe("plugin installer", () => {
   it("requires administrative scope for every installer RPC", () => {
     for (const method of [
       WS_METHODS.pluginsInstalledList,
-      WS_METHODS.pluginsCatalog,
+      WS_METHODS.pluginsShopList,
+      WS_METHODS.pluginsShopEntry,
+      WS_METHODS.pluginsShopRefresh,
+      WS_METHODS.pluginsShopInstall,
+      WS_METHODS.pluginsShopUpdate,
+      WS_METHODS.pluginsShopUninstall,
       WS_METHODS.pluginsInstall,
       WS_METHODS.pluginsConsent,
       WS_METHODS.pluginsUpdate,

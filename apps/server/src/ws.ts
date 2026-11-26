@@ -1,4 +1,5 @@
 import * as PluginInstaller from "./plugins/installer.ts";
+import * as PluginShopService from "./plugins/shop.ts";
 import { DataBackup } from "./persistence/DataBackup.ts";
 import { PublicOrigin } from "./selfRelay/PublicOrigin.ts";
 import { ServerSettingsError } from "@t3tools/contracts";
@@ -1563,6 +1564,7 @@ export const layerWsRpc = (
       });
       const pluginHost = yield* PluginHost;
       const pluginInstaller = yield* PluginInstaller.PluginInstaller;
+      const pluginShop = yield* PluginShopService.PluginShop;
       const dataBackup = yield* DataBackup;
       const readPublicOrigin = yield* PublicOrigin;
       const relayError = (cause: SelfRelay.SelfRelayError) =>
@@ -2921,7 +2923,12 @@ export const layerWsRpc = (
         [WS_METHODS.dataRestoreCancel]: () => dataBackup.cancel,
         [WS_METHODS.pluginsSetEnabled]: (input) => pluginHost.setEnabled(input),
         [WS_METHODS.pluginsInstalledList]: () => pluginInstaller.list,
-        [WS_METHODS.pluginsCatalog]: () => pluginInstaller.catalog,
+        [WS_METHODS.pluginsShopList]: (input) => pluginShop.list(input),
+        [WS_METHODS.pluginsShopEntry]: (input) => pluginShop.entry(input),
+        [WS_METHODS.pluginsShopRefresh]: () => pluginShop.refresh(),
+        [WS_METHODS.pluginsShopInstall]: (input) => pluginShop.install(input),
+        [WS_METHODS.pluginsShopUpdate]: (input) => pluginShop.update(input),
+        [WS_METHODS.pluginsShopUninstall]: (input) => pluginShop.uninstall(input),
         [WS_METHODS.pluginsInstall]: (input) => pluginInstaller.install(input),
         [WS_METHODS.pluginsConsent]: (input) => pluginInstaller.consent(input),
         [WS_METHODS.pluginsUpdate]: (input) => pluginInstaller.update(input),

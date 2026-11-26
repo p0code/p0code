@@ -34,19 +34,6 @@ export const PluginInstallInput = Schema.Struct({
   source: Schema.String,
   upload: Schema.optionalKey(PluginUpload),
 });
-export const PluginCatalog = Schema.Struct({
-  plugins: Schema.Array(
-    Schema.Struct({
-      id: PluginId,
-      repository: Schema.String,
-      ref: Schema.String,
-      version: Schema.String,
-      capabilities: Schema.Array(PluginCapability),
-      externalServices: Schema.Array(Schema.String),
-      sha256: Schema.optionalKey(Schema.String),
-    }),
-  ),
-});
 export const PluginUpdateInput = Schema.Struct({
   id: PluginId,
   source: Schema.optionalKey(Schema.String),

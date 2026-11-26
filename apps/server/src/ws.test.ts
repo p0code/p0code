@@ -1,4 +1,5 @@
 import { PluginInstaller } from "./plugins/installer.ts";
+import { PluginShop } from "./plugins/shop.ts";
 import { DataBackup } from "./persistence/DataBackup.ts";
 import * as SecretResolver from "@t3tools/secret-provider-core/server/SecretResolver";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
@@ -906,6 +907,7 @@ const layerUnusedConfigRpcServices = Layer.mergeAll(
   }),
   Layer.mock(PluginHost)({}),
   Layer.mock(PluginInstaller)({}),
+  Layer.mock(PluginShop)({ catalogUrl: "https://example.com/index.json" }),
   Layer.mock(DataBackup)({}),
   Layer.mock(RepositoryIdentityResolver.RepositoryIdentityResolver)({}),
   Layer.mock(ResourceTelemetry.ResourceTelemetry)({}),
