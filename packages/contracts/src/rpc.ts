@@ -1,5 +1,6 @@
 import {
   PluginInstallInput,
+  PluginCatalog,
   PluginConsentInput,
   PluginUpdateInput,
   PluginRemoveInput,
@@ -713,6 +714,7 @@ export const WS_METHODS = {
   dataRestoreCancel: "dataRestore.cancel",
   pluginsSubscribe: "plugins.subscribe",
   pluginsInstalledList: "plugins.installedList",
+  pluginsCatalog: "plugins.catalog",
   pluginsInstall: "plugins.install",
   pluginsConsent: "plugins.consent",
   pluginsUpdate: "plugins.update",
@@ -1336,6 +1338,11 @@ const WsDataRestoreCancelRpc = Rpc.make(WS_METHODS.dataRestoreCancel, {
   payload: Schema.Struct({}),
   success: Schema.Void,
   error: Schema.Union([DataRestoreError, EnvironmentAuthorizationError]),
+});
+const WsPluginsCatalogRpc = Rpc.make(WS_METHODS.pluginsCatalog, {
+  payload: Schema.Struct({}),
+  success: PluginCatalog,
+  error: Schema.Union([PluginOperationError, EnvironmentAuthorizationError]),
 });
 const WsPluginsInstalledListRpc = Rpc.make(WS_METHODS.pluginsInstalledList, {
   payload: Schema.Struct({}),
@@ -2767,6 +2774,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsDataRestoreCancelRpc,
   WsPluginsSubscribeRpc,
   WsPluginsInstalledListRpc,
+  WsPluginsCatalogRpc,
   WsPluginsInstallRpc,
   WsPluginsConsentRpc,
   WsPluginsUpdateRpc,

@@ -2862,6 +2862,7 @@ export const layerWsRpc = (
         [WS_METHODS.dataRestoreCancel]: () => dataBackup.cancel,
         [WS_METHODS.pluginsSetEnabled]: (input) => pluginHost.setEnabled(input),
         [WS_METHODS.pluginsInstalledList]: () => pluginInstaller.list,
+        [WS_METHODS.pluginsCatalog]: () => pluginInstaller.catalog,
         [WS_METHODS.pluginsInstall]: (input) => pluginInstaller.install(input),
         [WS_METHODS.pluginsConsent]: (input) => pluginInstaller.consent(input),
         [WS_METHODS.pluginsUpdate]: (input) => pluginInstaller.update(input),

@@ -7,6 +7,7 @@ export const PluginVersion = Schema.String.check(
 export const PluginInstallSource = Schema.Union([
   Schema.Struct({ kind: Schema.Literal("local"), path: Schema.String }),
   Schema.Struct({ kind: Schema.Literal("catalog"), id: PluginId }),
+  Schema.Struct({ kind: Schema.Literal("github"), url: Schema.String }),
 ]);
 export const PluginInstalledVersion = Schema.Struct({
   version: PluginVersion,
@@ -25,10 +26,31 @@ export const PluginInstallRecord = Schema.Struct({
   removedDataAt: Schema.NullOr(Schema.String),
 });
 export type PluginInstallRecord = typeof PluginInstallRecord.Type;
-export const PluginInstallInput = Schema.Struct({ source: Schema.String });
+const PluginUpload = Schema.Struct({
+  name: Schema.String,
+  data: Schema.String.check(Schema.isMaxLength(45 * 1024 * 1024)),
+});
+export const PluginInstallInput = Schema.Struct({
+  source: Schema.String,
+  upload: Schema.optionalKey(PluginUpload),
+});
+export const PluginCatalog = Schema.Struct({
+  plugins: Schema.Array(
+    Schema.Struct({
+      id: PluginId,
+      repository: Schema.String,
+      ref: Schema.String,
+      version: Schema.String,
+      capabilities: Schema.Array(PluginCapability),
+      externalServices: Schema.Array(Schema.String),
+      sha256: Schema.optionalKey(Schema.String),
+    }),
+  ),
+});
 export const PluginUpdateInput = Schema.Struct({
   id: PluginId,
   source: Schema.optionalKey(Schema.String),
+  upload: Schema.optionalKey(PluginUpload),
 });
 export const PluginConsentInput = Schema.Struct({
   id: PluginId,

@@ -10,6 +10,7 @@ import type { ComponentType } from "react";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { desktopLocalBackendId } from "../../connection/desktopLocal";
 import { Switch } from "../ui/switch";
 import { useSettingsScope } from "./SettingsScopeContext";
 import { SettingsPageContainer, SettingsSection } from "./settingsLayout";
@@ -19,6 +20,8 @@ import {
 } from "./ObsidianSharedMemoryPanel";
 import { T3ConnectBridgeDisclosure, T3ConnectBridgePanel } from "./T3ConnectBridgePanel";
 import { pluginCapabilityCopy } from "./pluginCapabilityCopy";
+import { PluginInstaller } from "./PluginInstaller";
+import { pluginInstallError } from "./pluginInstall.logic";
 
 interface PluginPanel {
   /** Shown whether or not the plugin runs, so nobody turns it on unwarned. */
@@ -48,6 +51,7 @@ export function PluginsSettingsPanel() {
         <EnvironmentPlugins
           key={environment.environmentId}
           environmentId={environment.environmentId}
+          nativeTarget={desktopLocalBackendId(environment.entry.target)}
         />
       ) : (
         <SettingsSection title={gt("Plugins")}>
@@ -60,12 +64,28 @@ export function PluginsSettingsPanel() {
   );
 }
 
-function EnvironmentPlugins({ environmentId }: { readonly environmentId: EnvironmentId }) {
+function EnvironmentPlugins({
+  environmentId,
+  nativeTarget,
+}: {
+  readonly environmentId: EnvironmentId;
+  readonly nativeTarget: string | null;
+}) {
   const snapshot = useEnvironmentQuery(serverEnvironment.plugins({ environmentId, input: {} }));
-  if (snapshot.error) return <p role="alert">{snapshot.error}</p>;
-  return snapshot.data?.plugins.map((plugin) => (
-    <PluginSection key={plugin.manifest.id} environmentId={environmentId} plugin={plugin} />
-  ));
+  const m = useMessages();
+  return (
+    <>
+      <PluginInstaller
+        environmentId={environmentId}
+        nativeTarget={nativeTarget}
+        onChange={snapshot.refresh}
+      />
+      {snapshot.error ? <p role="alert">{m(pluginInstallError(snapshot.error))}</p> : null}
+      {snapshot.data?.plugins.map((plugin) => (
+        <PluginSection key={plugin.manifest.id} environmentId={environmentId} plugin={plugin} />
+      ))}
+    </>
+  );
 }
 
 function PluginSection({
@@ -82,7 +102,7 @@ function PluginSection({
   const panel = PLUGIN_PANELS[plugin.manifest.id];
   const status =
     plugin.state === "failed"
-      ? plugin.message
+      ? m(pluginInstallError(plugin.message))
       : plugin.state === "starting"
         ? gt("Starting…")
         : plugin.state === "running"
@@ -104,6 +124,9 @@ function PluginSection({
       }
     >
       <div className="space-y-3 px-3 py-3 text-sm sm:px-4">
+        <p className="font-mono text-xs text-muted-foreground">
+          {plugin.manifest.id} · {plugin.manifest.version}
+        </p>
         {panel?.Disclosure ? <panel.Disclosure /> : <p>{plugin.manifest.description}</p>}
         {plugin.manifest.capabilities.length > 0 ? (
           <ul className="list-disc space-y-1 pl-5 text-muted-foreground">

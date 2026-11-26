@@ -142,6 +142,7 @@ const RPC_AGGREGATES = {
   [WS_METHODS.dataRestoreApprove]: "plugins",
   [WS_METHODS.dataRestoreCancel]: "plugins",
   [WS_METHODS.pluginsInstalledList]: "plugins",
+  [WS_METHODS.pluginsCatalog]: "plugins",
   [WS_METHODS.pluginsInstall]: "plugins",
   [WS_METHODS.pluginsConsent]: "plugins",
   [WS_METHODS.pluginsUpdate]: "plugins",
