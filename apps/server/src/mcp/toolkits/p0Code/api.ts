@@ -16,6 +16,8 @@ export class P0ApiError extends Schema.TaggedError<P0ApiError>()("P0ApiError", {
 export interface P0Method<R> {
   readonly name: string;
   readonly doc: string;
+  /** `write` methods change the environment, so `p0_code` checks the caller may act first. */
+  readonly access: "read" | "write";
   readonly input: Schema.Constraint;
   readonly output: Schema.Constraint;
   /** Decodes the snippet's argument, then runs; the result is plain JSON-able data. */
@@ -42,6 +44,7 @@ export const method = <I extends Schema.Codec<unknown, unknown>, O extends Schem
   definition: {
     readonly name: string;
     readonly doc: string;
+    readonly access?: "read" | "write";
     readonly input: I;
     readonly output: O;
     readonly run: (input: I["Type"]) => Effect.Effect<O["Type"], P0ApiError, R>;
@@ -49,6 +52,7 @@ export const method = <I extends Schema.Codec<unknown, unknown>, O extends Schem
 ): P0Method<R> => ({
   name: definition.name,
   doc: definition.doc,
+  access: definition.access ?? "read",
   input: definition.input,
   output: definition.output,
   run: (raw) =>

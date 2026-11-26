@@ -21,6 +21,7 @@ import * as StorageCleanup from "./storageCleanup.ts";
 import * as PullRequestSyncReactor from "./orchestration-v2/PullRequestSyncReactor.ts";
 import * as PullRequestWatchReactor from "./orchestration-v2/PullRequestWatchReactor.ts";
 import * as DelegatedTaskQuestionReactor from "./orchestration-v2/DelegatedTaskQuestionReactor.ts";
+import * as AgentTunnelDecisions from "./tunnels/AgentTunnelDecisions.ts";
 import * as MilestoneHub from "./milestones/MilestoneHub.ts";
 import * as OrchestrationMilestones from "./milestones/OrchestrationMilestones.ts";
 // Effect wraps this raw Node HTTP server after its startup and write-error guards attach.
@@ -729,6 +730,8 @@ const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
       yield* service.start();
     }),
   ).pipe(Layer.provide(DelegatedTaskQuestionReactor.layer), Layer.provide(ProjectionStoreV2.layer)),
+  // Tells a thread when the user answers its public tunnel request.
+  AgentTunnelDecisions.layer,
   Layer.effectDiscard(
     Effect.gen(function* () {
       yield* (yield* OrchestrationMilestones.OrchestrationMilestones).start();

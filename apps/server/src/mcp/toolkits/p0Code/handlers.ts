@@ -2,8 +2,10 @@ import { OrchestratorMcpFailure } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
+import { assertNotLinked } from "../../linkOrigin.ts";
+import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import * as McpToolAccess from "../../McpToolAccess.ts";
-import { readCaller, unavailable } from "../../threadAccess.ts";
+import { assertLiveCaller, loadCaller, readCaller, unavailable } from "../../threadAccess.ts";
 import { P0ApiError, declarationsFor, findMethod, methodPaths } from "./api.ts";
 import { P0_NAMESPACES, type P0Services } from "./namespaces.ts";
 import { runSandbox, type SandboxError } from "./sandbox.ts";
@@ -13,6 +15,26 @@ const HELP = "help";
 const MAX_FAILURE_LOG_CHARS = 1_000;
 
 const decodeResult = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Unknown));
+
+/**
+ * What `McpToolAccess.actsAsCaller` checks, per call: the tool as a whole only reads, so a
+ * snippet that only reads still works from a read-only client.
+ */
+const assertMayWrite = Effect.gen(function* () {
+  const scope = yield* McpInvocationContext.McpInvocationContext;
+  if (scope.client?.access === "read-only") {
+    return yield* new P0ApiError({
+      detail: "This MCP client was approved for read-only access, so it cannot change anything.",
+    });
+  }
+  const caller = yield* loadCaller();
+  yield* assertLiveCaller(caller);
+  yield* assertNotLinked(caller, "publish from this environment");
+}).pipe(
+  Effect.catchTags({
+    OrchestratorMcpFailure: (error) => Effect.fail(new P0ApiError({ detail: error.message })),
+  }),
+);
 
 const call = (path: string, options: unknown): Effect.Effect<unknown, P0ApiError, P0Services> => {
   if (path === HELP) {
@@ -24,7 +46,9 @@ const call = (path: string, options: unknown): Effect.Effect<unknown, P0ApiError
   const found = findMethod(P0_NAMESPACES, path);
   return found === undefined
     ? Effect.fail(new P0ApiError({ detail: `p0.${path} does not exist. Try p0.help().` }))
-    : found.run(options);
+    : found.access === "write"
+      ? assertMayWrite.pipe(Effect.andThen(found.run(options)))
+      : found.run(options);
 };
 
 const failure = (error: SandboxError) =>

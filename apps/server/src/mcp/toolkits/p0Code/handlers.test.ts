@@ -13,6 +13,8 @@ import * as Stream from "effect/Stream";
 import * as ServerEnvironment from "../../../environment/ServerEnvironment.ts";
 import * as ThreadManagementService from "../../../orchestration-v2/ThreadManagementService.ts";
 import * as ProviderRegistry from "../../../provider/ProviderRegistry.ts";
+import * as ServerSettingsService from "../../../serverSettings.ts";
+import * as PublicTunnels from "../../../tunnels/PublicTunnels.ts";
 import * as ProjectCostService from "../../../usage/ProjectCostService.ts";
 import * as UsageLimitSources from "../../../usage/UsageLimitSources.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
@@ -93,6 +95,14 @@ const layerFor = (scope: Partial<McpInvocationContext.McpInvocationScope> = {}) 
         Layer.mock(ThreadManagementService.ThreadManagementService)({
           getThreadShell: () => Effect.succeed(liveThreadShell(threadId)),
         }),
+        Layer.mock(PublicTunnels.PublicTunnels)({
+          allowName: () => false,
+          activeNames: () => [],
+          accept: () => {},
+          closeSockets: () => {},
+          registerServerPort: () => {},
+        }),
+        ServerSettingsService.ServerSettingsService.layerTest(),
         Layer.mock(ProjectCostService.ProjectCostService)({
           readCostBreakdown: (input) =>
             Effect.succeed({
@@ -150,7 +160,10 @@ it.live("returns the API declarations from p0.help", () =>
   Effect.gen(function* () {
     const result = yield* callTool(`return [await p0.help("cost"), await p0.help("browser")];`);
     expect(result).toEqual({
-      result: [declarationsFor(P0_NAMESPACES, "cost"), "No p0 API matches. Namespaces: usage."],
+      result: [
+        declarationsFor(P0_NAMESPACES, "cost"),
+        "No p0 API matches. Namespaces: usage, tunnels.",
+      ],
     });
   }),
 );
