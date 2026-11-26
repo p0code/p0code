@@ -144,6 +144,35 @@ Read the matching doc before changing code in that area; code review enforces th
 | Wire budgets, server metrics & perf        | [16_performance-regressions.md](docs/internals/16_performance-regressions.md)                                                                                                                     |
 | Repo & package scripts                     | [17_scripts.md](docs/internals/17_scripts.md)                                                                                                                                                     |
 
+## Host monitoring (hw-ubuntu)
+
+The shared model box is **hw-ubuntu (10.99.1.16)**. From remoteTasker4 it is reached through `/tmp/opencode/hwrun.sh`; elsewhere use the user's SSH setup. Never print credentials.
+
+The one health check is `/home/hw/inkling/monitor.sh` (executable). It exits `0` when healthy and `1` on a problem, appending one summary line per run and one line per anomaly to `/home/hw/inkling/monitor.log`, trimmed to 500 lines. It checks:
+
+- `/health` on `127.0.0.1:8080` returns exactly `{"status":"ok"}`.
+- A `llama-server ... --alias` process exists.
+- `RssAnon` ≤ 3200 MB and `VmSwap` ≤ 512 MB.
+- GPU temp ≤ 88 C and `nvidia-smi` reports ≥ 6000 MiB used.
+- Disk `/` ≤ 92%.
+- Ollama on `:11434` answers.
+- No `FAILED to start` lines in `watch.log`.
+
+**It is not read-only.** On a failed check it runs `watch.sh`, which can kill and restart `llama-server` (up to 4 attempts, with a VRAM drain wait). Run it deliberately—never as a disposable probe in a read-only investigation, never in a loop, never twice in a row to "double check".
+
+`watch.sh` is cron-scheduled (`@reboot` and `*/2 * * * *`); `monitor.sh` is not, so `monitor.log` is not a live status feed and a stale log means nobody ran it. For a read-only answer, check `curl -sf -m 6 http://127.0.0.1:8080/health`, `nvidia-smi --query-gpu=memory.used,temperature.gpu --format=csv,noheader`, and `crontab -l`, and say what you checked.
+
+Do not write another health, GPU, process, or disk status script. If the monitor misses a check, extend `monitor.sh` (preferably behind a `--no-heal` flag) and update this section; a second source of truth is worse than a gap.
+
+Fragilities to respect when editing it:
+
+- The `/health` match is exact string equality.
+- `nvidia-smi` parsing assumes a single GPU.
+- `monitor.sh` flags anon at 3200 MB while `watch.sh` recycles at 3000 MB, so the monitor rarely sees a pre-recycle state.
+- Paths are hardcoded: `/home/hw/llama.cpp/build/bin/llama-server` and `/home/hw/models/*`.
+- `run.sh` binds `0.0.0.0:8080` while the uninstalled `inkling.service` binds `127.0.0.1:8080`.
+- `server.log` has no rotation, and the 500-line trim has no lock.
+
 ## Taste
 
 - Complexity belongs at the adapter boundary. Orchestration stays pure, UI stays dumb.
