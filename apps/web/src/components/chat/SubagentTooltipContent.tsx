@@ -29,7 +29,11 @@ import { ThreadHoverCard } from "../ThreadHoverCard";
 import { MiddleTruncate } from "../ui/middle-truncate";
 import { ProviderInstanceIcon } from "./ProviderInstanceIcon";
 import { cn } from "~/lib/utils";
-import { deriveProviderInstanceEntries, shouldShowInstanceBadge } from "../../providerInstances";
+import {
+  deriveProviderInstanceEntries,
+  providerInstanceShortLabel,
+  shouldShowInstanceBadge,
+} from "../../providerInstances";
 
 export function SubagentTooltipContent(props: {
   title: string;
@@ -151,7 +155,9 @@ export function SubagentTooltipContent(props: {
         )}
         <span className="inline-flex min-w-0 items-center gap-1 text-foreground/75">
           <span className="min-w-0 truncate">
-            {showInstanceBadge ? `${modelLabel} · ${entry.displayName}` : modelLabel}
+            {showInstanceBadge
+              ? `${modelLabel} · ${providerInstanceShortLabel(entry.displayName)}`
+              : modelLabel}
           </span>
           {effort || speed?.speedIcon ? (
             <span className="inline-flex shrink-0 items-center gap-1">

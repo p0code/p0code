@@ -29,6 +29,7 @@ import { ProviderInstanceIcon } from "./ProviderInstanceIcon";
 import { ModelEsque, getDisplayModelName, getTriggerDisplayModelName } from "./providerIconUtils";
 import {
   providerInstanceAccountName,
+  providerInstanceShortLabel,
   shouldShowInstanceBadge,
   type ProviderInstanceEntry,
 } from "../../providerInstances";
@@ -195,6 +196,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
       { ...activeEntry, accentColor: undefined, instanceBadge: undefined },
       props.instanceEntries,
     );
+  const shortInstanceLabel = activeEntry ? providerInstanceShortLabel(activeEntry.displayName) : "";
 
   const setIsMenuOpen = (open: boolean) => {
     props.onOpenChange?.(open);
@@ -446,17 +448,17 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
                   size === "xs" && "shadow-none",
                 )}
               />
-              {showInstanceName ? (
+              {showInstanceName && shortInstanceLabel ? (
                 <Tooltip>
                   <TooltipTrigger
                     render={
                       <span
-                        className="max-w-24 shrink truncate text-muted-foreground"
+                        className="min-w-0 max-w-28 shrink-0 truncate text-muted-foreground sm:max-w-32"
                         data-chat-provider-model-picker-instance
                       />
                     }
                   >
-                    {activeEntry.displayName}
+                    {shortInstanceLabel}
                   </TooltipTrigger>
                   <TooltipPopup side="top">{providerInstanceAccountName(activeEntry)}</TooltipPopup>
                 </Tooltip>

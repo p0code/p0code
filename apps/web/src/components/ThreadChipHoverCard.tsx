@@ -1,5 +1,6 @@
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import {
+  providerInstanceShortLabel,
   resolveProviderInstanceBadges,
   resolveProviderInstanceDisplayName,
   shouldShowInstanceBadge,
@@ -93,7 +94,9 @@ export function ThreadChipHoverCard(props: {
             iconClassName="size-3 shrink-0 opacity-60"
           />
           <div className="min-w-0 truncate text-foreground/75">
-            {namesAccount ? `${modelLabel} · ${providerDisplayName}` : modelLabel}
+            {namesAccount
+              ? `${modelLabel} · ${providerInstanceShortLabel(providerDisplayName ?? provider.driver)}`
+              : modelLabel}
           </div>
         </div>
       ) : null}

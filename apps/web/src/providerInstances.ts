@@ -16,12 +16,13 @@ import {
   normalizeProviderAccentColor,
   normalizeProviderInstanceBadge,
   providerInstanceAccountDetail,
+  providerInstanceShortLabel,
   resolveProviderInstanceBadges,
   resolveProviderInstanceDisplayName,
   shouldShowInstanceBadge,
 } from "@t3tools/client-runtime/state/provider-instance-display";
 
-export { normalizeProviderAccentColor, shouldShowInstanceBadge };
+export { normalizeProviderAccentColor, providerInstanceShortLabel, shouldShowInstanceBadge };
 
 /** Placeholder for untargetable drafts. Never persist or dispatch it; disable send until replaced. */
 export const NO_PROVIDER_MODEL_SELECTION: ModelSelection = {
