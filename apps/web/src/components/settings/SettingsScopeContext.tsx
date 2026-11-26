@@ -4,8 +4,10 @@ import { useAtomValue } from "@effect/atom-react";
 import { AsyncResult, Atom } from "effect/reactivity";
 import { useMessages } from "gt-react";
 import { createContext, type ReactNode, useContext } from "react";
+import { withoutHiddenEnvironments } from "@t3tools/shared/accountProfiles";
 
 import { useEnvironments, usePrimaryEnvironmentId } from "../../state/environments";
+import { useProfileHiddenEnvironmentIds } from "../../state/entities";
 import { getProjectFileQueryAtom, optimisticFileAtom } from "../files/projectFilesQueryState";
 import { useSettingsProjectGroups } from "./useSettingsProjectGroups";
 import {
@@ -61,9 +63,21 @@ function useMemberProjectFiles(scope: ReturnType<typeof resolveSettingsScope>) {
   );
 }
 
+/** Environments the settings scope picker offers: those the active profile links. */
+export function profileSettingsScopeEnvironments<
+  A extends { readonly environmentId: EnvironmentId },
+>(
+  environments: ReadonlyArray<A>,
+  hiddenEnvironments: ReadonlySet<EnvironmentId>,
+): ReadonlyArray<A> {
+  return withoutHiddenEnvironments(environments, hiddenEnvironments);
+}
+
 function useResolvedSettingsScope(rawSearch: SettingsScopeSearch, singleEnvironment: boolean) {
   const groups = useSettingsProjectGroups();
-  const { environments: availableEnvironments } = useEnvironments();
+  const { environments } = useEnvironments();
+  const hiddenEnvironments = useProfileHiddenEnvironmentIds();
+  const availableEnvironments = profileSettingsScopeEnvironments(environments, hiddenEnvironments);
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const m = useMessages();
   const search = singleEnvironment

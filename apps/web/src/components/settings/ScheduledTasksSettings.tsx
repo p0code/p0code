@@ -69,6 +69,7 @@ import { requestConfirmDialog } from "../../confirmDialog";
 import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
 import { useNowMinute } from "../../hooks/useNowMinute";
 import {
+  useProfileProjects,
   useProjects,
   useQuietThreadShell,
   useThreadShell,
@@ -1470,7 +1471,7 @@ function ScheduledTaskEditorForm({
     connected ? serverEnvironment.scheduledTasksLive({ environmentId, input: {} }) : null,
     messages,
   );
-  const allProjects = useProjects();
+  const allProjects = useProfileProjects(useProjects());
   const projectsOn = (id: EnvironmentId) =>
     allProjects.filter(
       (project) => project.environmentId === id && matchesScheduledTaskScope(scope, id, project.id),

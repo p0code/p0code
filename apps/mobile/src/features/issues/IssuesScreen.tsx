@@ -37,7 +37,7 @@ import { m, type MessageResolver } from "../../i18n/messages";
 import { NativeScrollView } from "../../native/NativeScrollViewMarker";
 import { useNativeColumnLayoutMetrics } from "../../native/native-layout-metrics";
 import { NativePrimaryColumnContext } from "../../native/v5-workspace-context";
-import { useProjects } from "../../state/entities";
+import { useProfileEnvironments, useProfileProjects } from "../../state/account-profile-projects";
 import { issueEnvironment, useIssueList } from "../../state/issues";
 import { useDebouncedValue } from "../../state/queries";
 import { environmentServerConfigsAtom } from "../../state/server";
@@ -112,9 +112,10 @@ export function IssuesScreen(
   const messages = useMessages();
   const primaryColumn = use(NativePrimaryColumnContext);
   const workspace = useWorkspaceTabs()!;
-  const { environments } = useWorkspaceState();
+  const { environments: workspaceEnvironments } = useWorkspaceState();
+  const environments = useProfileEnvironments(workspaceEnvironments);
   const configs = useAtomValue(environmentServerConfigsAtom);
-  const projects = useProjects();
+  const projects = useProfileProjects();
   const insets = useSafeAreaInsets();
   const contentTopInset = useContentTopInset();
   // UIKit insets the list by its column's safe area, which this context can report as 0.

@@ -9,11 +9,13 @@ import {
 import { refreshUsage, usageSummaryInput } from "@t3tools/client-runtime/state/usage";
 import { resolveUsageAccess } from "@t3tools/client-runtime/state/usage-access";
 import { mergeUsage, type EnvironmentUsage, type MergedUsage } from "@t3tools/shared/usageMerge";
+import { withoutHiddenEnvironmentEntries } from "@t3tools/shared/accountProfiles";
 import { AsyncResult, Atom } from "effect/reactivity";
 import { msg, useMessages } from "gt-react-native";
 import { useCallback, useMemo } from "react";
 
 import { keepMarked } from "../i18n/messages";
+import { profileHiddenEnvironmentIdsAtom } from "./account-profile-projects";
 import { appAtomRegistry } from "./atom-registry";
 import { environmentPresentations } from "./presentation";
 import { serverEnvironment } from "./server";
@@ -33,9 +35,13 @@ const usageByWindowAtom = Atom.family((windowKey: string) =>
   Atom.make((get): readonly EnvironmentUsageStatus[] => {
     const input = JSON.parse(windowKey) as UsageSummaryInput;
     const presentations = get(environmentPresentations.presentationsAtom);
+    const hiddenEnvironments = get(profileHiddenEnvironmentIdsAtom);
 
     const statuses: EnvironmentUsageStatus[] = [];
-    for (const [environmentId, presentation] of presentations) {
+    for (const [environmentId, presentation] of withoutHiddenEnvironmentEntries(
+      presentations,
+      hiddenEnvironments,
+    )) {
       const sessionResult = get(environmentSession.sessionStateAtom(environmentId));
       const access = resolveUsageAccess(
         {
@@ -80,8 +86,12 @@ const usageByWindowAtom = Atom.family((windowKey: string) =>
 );
 
 /** Every environment usage can come from, without asking any of them for usage. */
-const usageEnvironmentsAtom = Atom.make((get): readonly EnvironmentUsageStatus[] =>
-  [...get(environmentPresentations.presentationsAtom)].map(([environmentId, presentation]) => ({
+const usageEnvironmentsAtom = Atom.make((get): readonly EnvironmentUsageStatus[] => {
+  const hiddenEnvironments = get(profileHiddenEnvironmentIdsAtom);
+  return withoutHiddenEnvironmentEntries(
+    get(environmentPresentations.presentationsAtom),
+    hiddenEnvironments,
+  ).map(([environmentId, presentation]) => ({
     environmentId,
     label: presentation.entry.target.label,
     isPending: true,
@@ -89,8 +99,8 @@ const usageEnvironmentsAtom = Atom.make((get): readonly EnvironmentUsageStatus[]
     canReadDiagnostics: false,
     error: null,
     summary: null,
-  })),
-).pipe(Atom.withLabel("mobile-usage:environments"));
+  }));
+}).pipe(Atom.withLabel("mobile-usage:environments"));
 
 export interface UsageView {
   readonly merged: MergedUsage;

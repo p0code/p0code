@@ -31,7 +31,10 @@ import type {
 } from "@t3tools/contracts";
 import type { ThreadCheckpointSummary } from "@t3tools/client-runtime/state/thread-checkpoints";
 import { Atom } from "effect/reactivity";
-import { isThreadInActiveAccountProfile } from "@t3tools/shared/accountProfiles";
+import {
+  isThreadInActiveAccountProfile,
+  withoutHiddenEnvironments,
+} from "@t3tools/shared/accountProfiles";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import {
   environmentProjects,
@@ -120,7 +123,7 @@ export function useProfileEnvironments<T extends { readonly environmentId: Envir
   items: ReadonlyArray<T>,
 ): ReadonlyArray<T> {
   const hidden = useProfileHiddenEnvironmentIds();
-  return hidden.size === 0 ? items : items.filter((item) => !hidden.has(item.environmentId));
+  return withoutHiddenEnvironments(items, hidden);
 }
 
 /** Keys (`environmentId:projectId`) of projects the active account profile hides. */

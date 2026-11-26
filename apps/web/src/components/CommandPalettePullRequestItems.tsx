@@ -11,6 +11,7 @@ import { SquarePenIcon } from "lucide-react";
 import { useState } from "react";
 
 import { useNewThreadHandler } from "~/hooks/useHandleNewThread";
+import { useProfileHiddenEnvironmentIds } from "~/state/entities";
 import { selectActiveRightPanelSurface, useRightPanelStore } from "~/rightPanelStore";
 import { pullRequestEnvironment } from "~/state/pullRequests";
 import { useEnvironmentQuery } from "~/state/query";
@@ -41,6 +42,7 @@ export function useCommandPalettePullRequestStartAgentItem({
   const gt = useGT();
   const resolve = useMessages();
   const [pending, setPending] = useState(false);
+  const hiddenEnvironments = useProfileHiddenEnvironmentIds();
   const surface = useRightPanelStore((state) =>
     selectActiveRightPanelSurface(state.byThreadKey, referenceThreadRef),
   );
@@ -83,8 +85,10 @@ export function useCommandPalettePullRequestStartAgentItem({
           surfaceProject?.repositoryIdentity,
         )
       : null;
+  const hiddenSurface =
+    surfaceEnvironmentId !== null && hiddenEnvironments.has(surfaceEnvironmentId);
   const liveDetail = useEnvironmentQuery(
-    surfaceEnvironmentId && detailReference
+    surfaceEnvironmentId && detailReference && !hiddenSurface
       ? pullRequestEnvironment.detail({
           environmentId: surfaceEnvironmentId,
           input: { ...detailReference, allowStale: false },
@@ -92,7 +96,7 @@ export function useCommandPalettePullRequestStartAgentItem({
       : null,
   ).data;
   const cachedDetail =
-    surfaceEnvironmentId && detailReference && !liveDetail
+    surfaceEnvironmentId && detailReference && !hiddenSurface && !liveDetail
       ? readPullRequestDetailSnapshot(
           typeof window === "undefined" ? undefined : window.localStorage,
           surfaceEnvironmentId,
@@ -114,7 +118,7 @@ export function useCommandPalettePullRequestStartAgentItem({
     cwd: target?.checkoutRoot ?? null,
   });
 
-  if (!prSurface || !openPanelPullRequestUrl || !target) return null;
+  if (!prSurface || !openPanelPullRequestUrl || !target || hiddenSurface) return null;
 
   const parsedProvider = sourceControlClients.findByChangeRequestUrl(openPanelPullRequestUrl);
   const disabledReason = pullRequestStartAgentDisabledReason(

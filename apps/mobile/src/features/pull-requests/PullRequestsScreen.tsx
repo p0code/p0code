@@ -22,7 +22,7 @@ import { EmptyState } from "../../components/ui/EmptyState";
 import { NativePrimaryColumnContext } from "../../native/v5-workspace-context";
 import { useNativeColumnLayoutMetrics } from "../../native/native-layout-metrics";
 import { useWorkspaceState } from "../../state/workspace";
-import { useProjects } from "../../state/entities";
+import { useProfileEnvironments, useProfileProjects } from "../../state/account-profile-projects";
 import { environmentServerConfigsAtom } from "../../state/server";
 import { PullRequestListRow } from "./PullRequestListRow";
 import {
@@ -100,7 +100,8 @@ export function PullRequestsScreen(
   const gt = useGT();
   const primaryColumn = use(NativePrimaryColumnContext);
   const workspace = useWorkspaceTabs()!;
-  const { environments } = useWorkspaceState();
+  const { environments: workspaceEnvironments } = useWorkspaceState();
+  const environments = useProfileEnvironments(workspaceEnvironments);
   const configs = useAtomValue(environmentServerConfigsAtom);
   const insets = useSafeAreaInsets();
   const contentTopInset = useContentTopInset();
@@ -143,7 +144,7 @@ export function PullRequestsScreen(
     };
     selectDetail({ name: "PullRequest", params });
   };
-  const allProjects = useProjects();
+  const allProjects = useProfileProjects();
   const savedControls = listControls.controlsFor(environmentId);
   const controls = useMemo(
     () => withoutScratchProjectScope(savedControls, allProjects),

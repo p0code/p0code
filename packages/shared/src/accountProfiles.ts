@@ -196,6 +196,34 @@ export function profileHiddenEnvironmentIds(
   return hidden;
 }
 
+/** `items` minus those on machines the active account profile leaves out. */
+export function withoutHiddenEnvironments<A extends { readonly environmentId: EnvironmentId }>(
+  items: ReadonlyArray<A>,
+  hidden: ReadonlySet<EnvironmentId>,
+): ReadonlyArray<A> {
+  return hidden.size === 0 ? items : items.filter((item) => !hidden.has(item.environmentId));
+}
+
+/** Environment ids minus machines the active account profile leaves out. */
+export function withoutHiddenEnvironmentIds(
+  environmentIds: Iterable<EnvironmentId>,
+  hidden: ReadonlySet<EnvironmentId>,
+): ReadonlyArray<EnvironmentId> {
+  const visible = [...environmentIds];
+  return hidden.size === 0 ? visible : visible.filter((id) => !hidden.has(id));
+}
+
+/** Entries keyed by environment, minus machines the active account profile leaves out. */
+export function withoutHiddenEnvironmentEntries<A>(
+  entries: Iterable<readonly [EnvironmentId, A]>,
+  hidden: ReadonlySet<EnvironmentId>,
+): ReadonlyArray<readonly [EnvironmentId, A]> {
+  const visible = [...entries];
+  return hidden.size === 0
+    ? visible
+    : visible.filter(([environmentId]) => !hidden.has(environmentId));
+}
+
 /**
  * Links or unlinks one machine. An empty list means every machine, so the first change starts
  * from all `known` machines; unlinking the last one returns to every machine.

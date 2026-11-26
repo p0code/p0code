@@ -2486,6 +2486,8 @@
   "89b5e8f3887812da": "Demande d’invité",
   "62e626804919b294": "Réponse requise",
   "c6196d99000642b4": "Ouvrir le fil",
+  "0b967a442b4391af": "Masqué par ce profil",
+  "b1ac948ad39ac592": "Ce fil se trouve sur une machine exclue par le profil de compte actuel. Changez de profil pour l’ouvrir.",
   "70bdebaa3d291d3b": "Fil indisponible",
   "a351ebbdcf1a3f7a": "Ce fil se trouve dans un environnement auquel cette app n’est pas connectée.",
   "826cb862b4a11fb3": "{label} :",

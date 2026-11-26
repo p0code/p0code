@@ -13,6 +13,7 @@ import { CableIcon, ClipboardCopyIcon, ExternalLinkIcon, SquareIcon } from "luci
 import { writeTextToClipboard } from "../hooks/useCopyToClipboard";
 import { readLocalApi } from "../localApi";
 import { useThreadDiscoveredPorts } from "../portDiscoveryState";
+import { useProfileHiddenEnvironmentIds } from "../state/entities";
 import { useEnvironments } from "../state/environments";
 import {
   canForwardPorts,
@@ -54,10 +55,16 @@ export function useCommandPalettePortForwardItem(input: {
 }): CommandPaletteSubmenuItem | null {
   const gt = useGT();
   const exposeRelay = useAtomCommand(serverEnvironment.relayExposePort);
-  const forwards = usePortForwards();
+  const hiddenEnvironments = useProfileHiddenEnvironmentIds();
+  const forwards = usePortForwards().filter(
+    (forward) => !hiddenEnvironments.has(forward.environmentId),
+  );
   const { environments } = useEnvironments();
   const reachable = environments.filter(
-    (environment) => environment.connection.phase === "connected" && canForwardPorts(environment),
+    (environment) =>
+      environment.connection.phase === "connected" &&
+      !hiddenEnvironments.has(environment.environmentId) &&
+      canForwardPorts(environment),
   );
   const tunnelling = useEnvironmentsWithScope(reachable, AuthTerminalOperateScope);
   const tunnelled = reachable.filter((environment) => tunnelling.has(environment.environmentId));
@@ -78,6 +85,7 @@ export function useCommandPalettePortForwardItem(input: {
   const relaySources = environments.filter(
     (environment) =>
       environment.connection.phase === "connected" &&
+      !hiddenEnvironments.has(environment.environmentId) &&
       environment.serverConfig?.environment.capabilities.selfRelay,
   );
   const relayPermissions = useEnvironmentsWithScope(relaySources, "relay:write");

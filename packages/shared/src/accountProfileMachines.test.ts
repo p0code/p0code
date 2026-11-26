@@ -10,6 +10,9 @@ import {
   newAccountProfile,
   profileHiddenEnvironmentIds,
   setProfileEnvironmentLinked,
+  withoutHiddenEnvironmentEntries,
+  withoutHiddenEnvironmentIds,
+  withoutHiddenEnvironments,
 } from "./accountProfiles.ts";
 
 type ProfileSettings = Pick<ServerSettings, "accountProfiles" | "activeAccountProfileId">;
@@ -86,5 +89,35 @@ describe("profile machine editing", () => {
   it("returns to all machines when the last one is unchecked", () => {
     const one = profile(personalId, [laptop]);
     expect(setProfileEnvironmentLinked(one, known, laptop, false).linkedEnvironmentIds).toEqual([]);
+  });
+});
+
+describe("profile filtering helpers", () => {
+  const hidden = new Set([school]);
+
+  it("keeps the allowed machines and their order for usage, search and pickers", () => {
+    const items = [
+      { environmentId: laptop, value: "usage" },
+      { environmentId: school, value: "usage" },
+      { environmentId: vps, value: "usage" },
+    ];
+    expect(withoutHiddenEnvironments(items, hidden).map((item) => item.environmentId)).toEqual([
+      laptop,
+      vps,
+    ]);
+    expect(withoutHiddenEnvironments(items, new Set())).toBe(items);
+  });
+
+  it("filters environment id lists without touching an empty hidden set", () => {
+    expect(withoutHiddenEnvironmentIds(known, hidden)).toEqual([laptop, vps]);
+    expect(withoutHiddenEnvironmentIds(known, new Set())).toEqual(known);
+  });
+
+  it("filters environment-keyed entries, as usage and searches read them", () => {
+    const entries = known.map((environmentId) => [environmentId, environmentId] as const);
+    expect(
+      withoutHiddenEnvironmentEntries(entries, hidden).map(([environmentId]) => environmentId),
+    ).toEqual([laptop, vps]);
+    expect(withoutHiddenEnvironmentEntries(entries, new Set())).toEqual(entries);
   });
 });

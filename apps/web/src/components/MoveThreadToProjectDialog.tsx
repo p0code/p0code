@@ -18,7 +18,7 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 import { cn } from "~/lib/utils";
 import { m } from "../i18n/messages";
-import { readThreadShell, useProjects } from "../state/entities";
+import { readThreadShell, useProfileProjects, useProjects } from "../state/entities";
 import { buildThreadRouteParams } from "../threadRoutes";
 import { stackedThreadToast, toastManager } from "./ui/toast";
 import { Button } from "./ui/button";
@@ -83,7 +83,7 @@ function isWithin(candidate: string, root: string): boolean {
 
 export function MoveThreadToProjectDialogHost() {
   const request = useRequest((state) => state.request);
-  const projects = useProjects();
+  const projects = useProfileProjects(useProjects());
   const router = useRouter();
   const { moveThreadToProject } = useThreadActions();
   const threadRef = request?.threadRef ?? null;

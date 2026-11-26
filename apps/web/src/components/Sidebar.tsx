@@ -55,6 +55,7 @@ import {
   type ThreadId,
 } from "@t3tools/contracts";
 import { foldSearchQuery, rankMessageMatches } from "@t3tools/shared/paletteSearch";
+import { withoutHiddenEnvironmentIds } from "@t3tools/shared/accountProfiles";
 import * as Option from "effect/Option";
 import { Atom } from "effect/reactivity";
 import * as Schema from "effect/Schema";
@@ -155,6 +156,7 @@ import {
   readThreadShell,
   useAllEnvironmentProjectSnapshotsReady,
   useDelegatedUnderParent,
+  useProfileHiddenEnvironmentIds,
   useProfileProjects,
   useProfileThreads,
   useProjects,
@@ -476,6 +478,7 @@ function useSidebarThreads(input: {
     folderGroups,
     keepEmptyFolders: keepEmpty,
   } = input;
+  const hiddenEnvironments = useProfileHiddenEnvironmentIds();
   const shelfRouteThreadKey = routeRowThreadKey === departingThreadKey ? null : routeRowThreadKey;
   // Folders already separate the work, so boring mode has no Working shelf.
   const workingShelfEnabled =
@@ -542,7 +545,10 @@ function useSidebarThreads(input: {
   } = partition;
   // Older settled threads load in pages; the shelf lists them only as far as they are loaded.
   const olderSettledShelf = useOlderSettledShelf({
-    scopes: olderSettledScopes([...serverConfigs.keys()], scopedProjectKeys),
+    scopes: olderSettledScopes(
+      [...serverConfigs.keys()].filter((environmentId) => !hiddenEnvironments.has(environmentId)),
+      scopedProjectKeys,
+    ),
     expanded: settledShelfExpanded,
     visibleCount: settledVisibleCount,
   });
@@ -1098,7 +1104,11 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const threadSearchInputRef = useRef<HTMLInputElement>(null);
   const [threadSearchQuery, setThreadSearchQuery] = useState("");
   const [searchHighlightKey, setSearchHighlightKey] = useState<string | null>(null);
-  const connectedEnvironmentIds = useConnectedEnvironmentIds();
+  const hiddenEnvironments = useProfileHiddenEnvironmentIds();
+  const connectedEnvironmentIds = withoutHiddenEnvironmentIds(
+    useConnectedEnvironmentIds(),
+    hiddenEnvironments,
+  );
   const queuePendingFileDrop = useSidebarPendingFileDropStore((s) => s.queuePendingFileDrop);
   const clearPendingFileDrop = useSidebarPendingFileDropStore((s) => s.clearPendingFileDrop);
   const [renamingThreadRef, setRenamingThreadRef] = useState<ScopedThreadRef | null>(null);

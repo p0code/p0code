@@ -15,8 +15,10 @@ import { msg } from "gt-react";
 import { useState } from "react";
 
 import { mergeUsage, type EnvironmentUsage, type MergedUsage } from "@t3tools/shared/usageMerge";
+import { withoutHiddenEnvironmentEntries } from "@t3tools/shared/accountProfiles";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { environmentPresentations } from "./presentation";
+import { profileHiddenEnvironmentIdsAtom } from "./projects";
 import { serverEnvironment } from "./server";
 import { environmentSession, readEnvironmentScope } from "./session";
 import { m } from "../i18n/messages";
@@ -35,9 +37,13 @@ const usageByWindowAtom = Atom.family((windowKey: string) =>
   Atom.make((get): readonly EnvironmentUsageStatus[] => {
     const input = JSON.parse(windowKey) as UsageSummaryInput;
     const presentations = get(environmentPresentations.presentationsAtom);
+    const hiddenEnvironments = get(profileHiddenEnvironmentIdsAtom);
 
     const statuses: EnvironmentUsageStatus[] = [];
-    for (const [environmentId, presentation] of presentations) {
+    for (const [environmentId, presentation] of withoutHiddenEnvironmentEntries(
+      presentations,
+      hiddenEnvironments,
+    )) {
       const isConnected = presentation.connection.phase === "connected";
       const sessionResult = get(environmentSession.sessionStateAtom(environmentId));
       const access = resolveUsageAccess({

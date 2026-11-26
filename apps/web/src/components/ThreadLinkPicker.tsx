@@ -3,7 +3,13 @@ import { CheckIcon, MessageSquareIcon } from "lucide-react";
 import { T, useGT } from "gt-react";
 import { useState } from "react";
 
-import { useProjects, useVisibleThreadShells } from "~/state/entities";
+import {
+  useProfileHiddenEnvironmentIds,
+  useProfileProjects,
+  useProfileThreads,
+  useProjects,
+  useVisibleThreadShells,
+} from "~/state/entities";
 import { useThreadSearch } from "~/state/queries";
 
 import { threadLinkMatcher } from "./ThreadLinkPicker.logic";
@@ -24,11 +30,14 @@ export function ThreadLinkPicker({
   onSelect: (threadId: ThreadId) => void;
 }) {
   const gt = useGT();
-  const threads = useVisibleThreadShells();
-  const projects = useProjects();
+  const threads = useProfileThreads(useVisibleThreadShells());
+  const projects = useProfileProjects(useProjects());
+  const hiddenEnvironments = useProfileHiddenEnvironmentIds();
   const [query, setQuery] = useState("");
   // Mounts older settled threads matching the query, which shells may leave out.
-  useThreadSearch([environmentId], query, { titlesOnly: true });
+  useThreadSearch(hiddenEnvironments.has(environmentId) ? [] : [environmentId], query, {
+    titlesOnly: true,
+  });
   const projectNames = new Map(
     projects
       .filter((project) => project.environmentId === environmentId)

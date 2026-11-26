@@ -37,6 +37,7 @@ import { resolveHour12 } from "../../timestampFormat";
 import { appAtomRegistry } from "~/rpc/atomRegistry";
 import { environmentPresentations } from "../../state/presentation";
 import { primaryServerKeybindingsAtom, serverEnvironment } from "../../state/server";
+import { useProfileHiddenEnvironmentIds } from "../../state/entities";
 import { isCommandPaletteOpen } from "../../commandPaletteBus";
 import { isModelPickerOpen } from "../../modelPickerVisibility";
 import { shortcutLabelForCommand } from "../../keybindings";
@@ -235,9 +236,18 @@ export function UsagePage() {
   const refreshingUsage = isRefreshing && !showingLimits;
   const showingKept = shown !== null && shown.window !== window;
   const presentations = useAtomValue(environmentPresentations.presentationsAtom);
-  const presentationsWithProviders = useAtomValue(
+  const allPresentationsWithProviders = useAtomValue(
     environmentPresentations.presentationsWithProvidersAtom,
   );
+  const hiddenEnvironments = useProfileHiddenEnvironmentIds();
+  const presentationsWithProviders =
+    hiddenEnvironments.size === 0
+      ? allPresentationsWithProviders
+      : new Map(
+          [...allPresentationsWithProviders].filter(
+            ([environmentId]) => !hiddenEnvironments.has(environmentId),
+          ),
+        );
   const refreshProviders = useAtomCommand(serverEnvironment.refreshProviders, {
     reportFailure: false,
   });
@@ -268,6 +278,7 @@ export function UsagePage() {
     settlePromise(() =>
       Promise.all(
         Array.from(presentations, ([environmentId, presentation]) => {
+          if (hiddenEnvironments.has(environmentId)) return;
           if (selectedEnvironmentIds !== null && !selectedEnvironmentIds.has(environmentId)) return;
           if (presentation.connection.phase === "connected" && presentation.serverConfig !== null) {
             return refreshUsageLimits(
@@ -346,6 +357,7 @@ export function UsagePage() {
   const connectedLimitsEnvironments = [...presentations]
     .filter(
       ([environmentId, presentation]) =>
+        !hiddenEnvironments.has(environmentId) &&
         presentation.connection.phase === "connected" &&
         presentation.serverConfig !== null &&
         (selectedEnvironmentIds === null || selectedEnvironmentIds.has(environmentId)),
