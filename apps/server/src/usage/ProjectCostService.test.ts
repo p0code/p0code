@@ -1,5 +1,11 @@
 import { assert, describe, it } from "@effect/vitest";
-import { UsageDay, ProjectId, ThreadId, type UsageTokenTotals } from "@t3tools/contracts";
+import {
+  ProjectId,
+  SCRATCH_PROJECT_TITLE,
+  ThreadId,
+  UsageDay,
+  type UsageTokenTotals,
+} from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as TestClock from "effect/testing/TestClock";
@@ -380,6 +386,75 @@ describe("ProjectCostService", () => {
             .readDetails({ ...input, untilDay: UsageDay.make("2028-01-01") })
             .pipe(Effect.flip);
           assert.strictEqual(long.reason, "invalidWindow");
+        }).pipe(Effect.provide(layer)),
+    );
+    it.effect(
+      "keeps scratch chats as separate rows and folds a legacy scratch id into that bucket",
+      () =>
+        Effect.gen(function* () {
+          const sql = yield* SqlClient.SqlClient;
+          const scratch = ProjectId.make("project-scratch");
+          const real = ProjectId.make("project-real");
+          const legacy = ProjectId.make("project:scratch-legacy");
+          const seedProject = (projectId: string, title: string, workspaceRoot: string) => sql`
+            INSERT INTO projection_projects (
+              project_id, title, workspace_root, scripts_json, created_at, updated_at
+            ) VALUES (
+              ${projectId}, ${title}, ${workspaceRoot}, '[]',
+              '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z'
+            )
+          `;
+          yield* seedProject(scratch, SCRATCH_PROJECT_TITLE, "/home/me/.p0code/scratch");
+          yield* seedProject(real, "Website", "/work/website");
+          yield* seedThread("scratch-a", scratch, "model-a", "Draft an email");
+          yield* seedThread("scratch-b", scratch, "model-a", "Plan the weekend");
+          yield* seedThread("legacy-scratch", legacy, "model-a", "Old scratch chat");
+          yield* seedThread("real", real, "model-b", "Ship it");
+          for (const threadId of ["scratch-a", "scratch-b", "legacy-scratch"]) {
+            yield* seedTurn(threadId, usage({ inputTokens: 100 }), "2026-03-01T00:00:00Z");
+          }
+          yield* seedTurn("real", usage({ inputTokens: 100 }), "2026-03-01T00:00:00Z");
+
+          const service = yield* ProjectCostService.ProjectCostService;
+          const details = yield* service.readDetails({ ...input, limit: 50 });
+          assert.deepEqual(
+            details.rows.map((row) => row.threadId),
+            ["legacy-scratch", "real", "scratch-a", "scratch-b"],
+          );
+          const legacyRow = details.rows.find((row) => row.threadId === "legacy-scratch");
+          assert.strictEqual(legacyRow?.project, SCRATCH_PROJECT_TITLE);
+          assert.strictEqual(legacyRow?.projectId, legacy);
+          assert.strictEqual(
+            details.rows.find((row) => row.threadId === "real")?.project,
+            "Website",
+          );
+          assert.strictEqual(details.totalRows, 4);
+          assert.strictEqual(details.totals.records, 4);
+          assert.closeTo(details.totals.costUsd, 300 * 0.001 + 100 * 0.01, 1e-9);
+
+          // The project filter only merges scratch when asked for by name.
+          const scratchOnly = yield* service.readDetails({
+            ...input,
+            limit: 50,
+            project: SCRATCH_PROJECT_TITLE,
+          });
+          assert.deepEqual(
+            scratchOnly.rows.map((row) => row.threadId),
+            ["legacy-scratch", "scratch-a", "scratch-b"],
+          );
+          assert.closeTo(scratchOnly.totals.costUsd, 300 * 0.001, 1e-9);
+
+          // The legacy id stays searchable on its own, so its old rows are never lost.
+          const legacyOnly = yield* service.readDetails({
+            ...input,
+            limit: 50,
+            project: "scratch-legacy",
+          });
+          assert.deepEqual(
+            legacyOnly.rows.map((row) => row.threadId),
+            ["legacy-scratch"],
+          );
+          assert.closeTo(legacyOnly.totals.costUsd, 100 * 0.001, 1e-9);
         }).pipe(Effect.provide(layer)),
     );
   });

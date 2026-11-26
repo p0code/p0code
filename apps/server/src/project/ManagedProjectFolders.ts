@@ -3,6 +3,7 @@ import {
   GitCommandError,
   type GitManagerServiceError,
   ProjectId,
+  SCRATCH_PROJECT_TITLE,
   type ThreadId,
   VcsProcessSpawnError,
 } from "@t3tools/contracts";
@@ -317,7 +318,7 @@ const make = Effect.gen(function* () {
         .bootstrap({
           commandId: CommandId.make(`scratch-project:${id}`),
           projectId: ProjectId.make(id),
-          title: "No project",
+          title: SCRATCH_PROJECT_TITLE,
           workspaceRoot,
         })
         .pipe(

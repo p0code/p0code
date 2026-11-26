@@ -11,6 +11,12 @@ import {
 /** Bump for incompatible UsageSummary changes; skipped unknown array variants need no bump. */
 export const USAGE_CONTRACT_VERSION = 6 as const;
 
+/**
+ * The scratch project's title. Usage details use it for threads whose project is gone, so legacy
+ * scratch ids land in the same bucket instead of showing a raw id.
+ */
+export const SCRATCH_PROJECT_TITLE = "No project";
+
 export const USAGE_MERGE_COMPATIBLE_SINCE = 4 as const;
 
 export const UsageProviderKind = Schema.Literals([
