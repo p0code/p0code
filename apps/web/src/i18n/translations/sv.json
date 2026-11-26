@@ -8996,6 +8996,13 @@
       "t": "a"
     }
   ],
+  "4f190a09f3d545e9": "Ange en absolut mappsökväg, till exempel ~/projects.",
+  "7228e97f2ac44fd1": "Nya projekt hamnar i varje vald miljös egen mapp. Befintliga projekt ligger kvar där de är.",
+  "bf5fef5f07d1d55e": "Nya projekt hamnar på {machine}. Befintliga projekt ligger kvar där de är.",
+  "655b11430eb82712": "Nya projekt hamnar i {path} på {machine}. Befintliga projekt ligger kvar där de är.",
+  "1342340f282d6285": "Återställ platsen för nya projekt till standard",
+  "ccb1f72e9b5b9001": "Plats för nya projekt",
+  "6e3a2768bc5b9702": "Välj mapp…",
   "e7ea609e6fcfa591": "Systemaviseringar när en tråd blir klar, misslyckas eller behöver indata eller godkännande. Gäller den här enheten medan p0code är öppen.",
   "24a0ac9e7e55975c": "Aviseringar kräver en webbläsare som stöds via HTTPS, eller skrivbordsappen. Endast ljud är fortfarande tillgängligt.",
   "6b0b1dd4d399d3c6": "Aviseringar är inte tillgängliga i den här webbläsaren. Endast ljud är fortfarande tillgängligt.",
@@ -11977,6 +11984,7 @@
   "4a172e139167badc": "nya worktrees startar fjärr origin senaste hämtade gren lokal",
   "30aac12099fcaf53": "Lägg till projekt startar i",
   "70bcb8df9015ae2a": "baskatalog mapp bläddra sökväg hem",
+  "cb0baace6102db95": "ny namngiven projektmapp skapa mål rot sökväg välj",
   "061cb86367f49363": "ghq klona mål värd ägare repo rot layout",
   "2bb905a7e7cddff7": "fråga före tråd fästa avsnitt",
   "53390c9ebb75f5d3": "fråga före tråd andra klick inline-åtgärd",

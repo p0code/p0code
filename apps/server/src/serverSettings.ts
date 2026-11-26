@@ -32,6 +32,7 @@ import * as Effect from "effect/Effect";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
@@ -56,6 +57,7 @@ import {
 } from "@t3tools/shared/serverSettings";
 import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
 import * as ManagedPolicy from "./policy/ManagedPolicy.ts";
+import { isInsideDirectory, resolveProjectsRoot } from "./project/projectsRoot.ts";
 import { secretProviderDefinitions } from "./secrets/secretProviderDefinitions.ts";
 import { watchDirectoryReplacements } from "./watchDirectoryReplacements.ts";
 import {
@@ -716,7 +718,7 @@ function foldLegacyProjectSettings(
 }
 
 const make = Effect.gen(function* () {
-  const { settingsPath } = yield* ServerConfig.ServerConfig;
+  const { settingsPath, baseDir, stateDir, secretsDir } = yield* ServerConfig.ServerConfig;
   const fs = yield* FileSystem.FileSystem;
   const pathService = yield* Path.Path;
   const secretStore = yield* ServerSecretStore.ServerSecretStore;
@@ -732,6 +734,55 @@ const make = Effect.gen(function* () {
       managedProviders.applyLimits(managed.applyLocks(settings)),
       managedProviders.isDriverAllowed,
     );
+
+  // A wrong folder must fail here, where the client can show it beside the field.
+  const validateProjectsRoot = (
+    settings: ServerSettings,
+    previous: ServerSettings,
+  ): Effect.Effect<void, ServerSettingsError> => {
+    if (settings.projectsRoot === previous.projectsRoot) return Effect.void;
+    return Effect.gen(function* () {
+      const root = resolveProjectsRoot(
+        settings.projectsRoot,
+        baseDir,
+        pathService,
+        yield* HostProcess.HomeDirectory,
+      );
+      if (root === null) {
+        return yield* new ServerSettingsError({
+          settingsPath,
+          operation: "validate-projects-root",
+          cause: `"${settings.projectsRoot}" is not an absolute folder on this machine. Use a path like ~/projects.`,
+        });
+      }
+      if (pathService.dirname(root) === root) {
+        return yield* new ServerSettingsError({
+          settingsPath,
+          operation: "validate-projects-root",
+          cause: "Choose a folder other than a filesystem root for new projects.",
+        });
+      }
+      for (const forbidden of [stateDir, secretsDir]) {
+        if (isInsideDirectory(forbidden, root, pathService)) {
+          return yield* new ServerSettingsError({
+            settingsPath,
+            operation: "validate-projects-root",
+            cause: `New projects cannot live inside p0code's own folder (${forbidden}).`,
+          });
+        }
+      }
+      yield* fs.makeDirectory(root, { recursive: true }).pipe(
+        Effect.mapError(
+          () =>
+            new ServerSettingsError({
+              settingsPath,
+              operation: "validate-projects-root",
+              cause: `Could not create the new project location "${root}". Check the folder's permissions.`,
+            }),
+        ),
+      );
+    });
+  };
   const writeSemaphore = yield* Semaphore.make(1);
   const cacheKey = "settings" as const;
   const changesPubSub = yield* PubSub.unbounded<ServerSettings>();
@@ -1247,6 +1298,7 @@ const make = Effect.gen(function* () {
             managedBy: managedPolicy?.organization,
           });
         }
+        yield* validateProjectsRoot(vetted.settings, current);
         const vettedProviders = managedProviders.vetWrite(current, vetted.settings);
         if (vettedProviders._tag === "Locked") {
           return yield* new ServerSettingsError({

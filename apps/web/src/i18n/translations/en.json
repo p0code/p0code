@@ -9000,6 +9000,13 @@
       "c": "More info"
     }
   ],
+  "4f190a09f3d545e9": "Enter an absolute folder path, like ~/projects.",
+  "7228e97f2ac44fd1": "New projects go in each selected environment's own folder. Existing projects stay where they are.",
+  "bf5fef5f07d1d55e": "New projects go on {machine}. Existing projects stay where they are.",
+  "655b11430eb82712": "New projects go in {path} on {machine}. Existing projects stay where they are.",
+  "1342340f282d6285": "Reset new project location to default",
+  "ccb1f72e9b5b9001": "New project location",
+  "6e3a2768bc5b9702": "Choose folder…",
   "e7ea609e6fcfa591": "System alerts when a thread finishes, fails, or needs input or approval. Applies to this device while p0code is open.",
   "24a0ac9e7e55975c": "Notifications need a supported browser over HTTPS, or the desktop app. Sound only is still available.",
   "6b0b1dd4d399d3c6": "Notifications are unavailable in this browser. Sound only is still available.",
@@ -11981,6 +11988,7 @@
   "4a172e139167badc": "new worktrees start remote origin latest fetched branch local",
   "30aac12099fcaf53": "Add project starts in",
   "70bcb8df9015ae2a": "base directory folder browser path home",
+  "cb0baace6102db95": "new named project folder create destination root path choose",
   "061cb86367f49363": "ghq clone destination host owner repository root layout",
   "2bb905a7e7cddff7": "ask before thread pinned section",
   "53390c9ebb75f5d3": "ask before thread second click inline action",

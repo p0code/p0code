@@ -63,6 +63,9 @@ const layerRealGit = GitVcsDriver.layer.pipe(Layer.provide(VcsProcess.layer));
 interface HarnessOptions {
   readonly vcsProcess?: Layer.Layer<VcsProcess.VcsProcess>;
   readonly git?: typeof layerRealGit;
+  readonly settings?:
+    | Parameters<typeof ServerSettings.layerTest>[0]
+    | ((baseDir: string) => Parameters<typeof ServerSettings.layerTest>[0]);
   readonly projects?: (
     real: ProjectService.ProjectService["Service"],
   ) => ProjectService.ProjectService["Service"];
@@ -84,7 +87,11 @@ const layer = (baseDir: string, options?: HarnessOptions) =>
     Layer.provideMerge(layerGitWorkflow(options?.vcsProcess)),
     Layer.provideMerge(options?.git ?? layerRealGit),
     Layer.provideMerge(SqlitePersistence.layerMemory),
-    Layer.provideMerge(ServerSettings.layerTest()),
+    Layer.provideMerge(
+      ServerSettings.layerTest(
+        typeof options?.settings === "function" ? options.settings(baseDir) : options?.settings,
+      ),
+    ),
     Layer.provideMerge(ServerConfig.layerTest(baseDir, baseDir)),
     Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
   );
@@ -434,7 +441,7 @@ it.effect("starts a named project as a committed repository, and suffixes a take
         const fileSystem = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
         const root = path.resolve(baseDir, "projects");
-        assert.equal(folders.namedProjectsRoot, root);
+        assert.equal(yield* folders.namedProjectsRoot, root);
         const attributes = path.join(baseDir, "crlf.gitattributes");
         const crlfConfig = path.join(baseDir, "crlf.gitconfig");
         yield* fileSystem.writeFileString(attributes, "* text=auto eol=crlf\n");
@@ -573,7 +580,7 @@ it.effect("keeps a folder that another project owns when the create conflicts", 
         const projects = yield* ProjectService.ProjectService;
         const fileSystem = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
-        const taken = path.join(folders.namedProjectsRoot, "taken");
+        const taken = path.join(yield* folders.namedProjectsRoot, "taken");
         yield* projects.create({
           commandId: CommandId.make("command:owner"),
           projectId: ProjectId.make("project:owner"),
@@ -663,4 +670,74 @@ it.effect("removes the folder when the create is cancelled before the project ex
       },
     );
   }),
+);
+
+const layerQuietGit = Layer.mock(GitVcsDriver.GitVcsDriver)({
+  readConfigValue: () => Effect.succeed(null),
+  execute: () =>
+    Effect.succeed({
+      exitCode: 0,
+      stdout: "",
+      stderr: "",
+      stdoutTruncated: false,
+      stderrTruncated: false,
+    }),
+});
+
+it.effect("creates named projects in an absolute folder from settings", () =>
+  withScratch(
+    ({ baseDir }) =>
+      Effect.gen(function* () {
+        const folders = yield* ManagedProjectFolders.ManagedProjectFolders;
+        const path = yield* Path.Path;
+        const customRoot = path.join(baseDir, "custom-projects");
+        assert.equal(yield* folders.namedProjectsRoot, customRoot);
+        const created = yield* folders.createNamedProject({ name: "Elsewhere" });
+        assert.equal(created.workspaceRoot, path.join(customRoot, "elsewhere"));
+      }),
+    {
+      settings: (baseDir) => ({ projectsRoot: `${baseDir}/custom-projects` }),
+      git: layerQuietGit,
+    },
+  ),
+);
+
+it.effect("expands ~ in the configured project folder", () =>
+  withScratch(
+    ({ baseDir }) =>
+      Effect.gen(function* () {
+        const folders = yield* ManagedProjectFolders.ManagedProjectFolders;
+        const path = yield* Path.Path;
+        const expected = path.join(baseDir, "home-projects");
+        assert.equal(yield* folders.namedProjectsRoot, expected);
+        const created = yield* folders.createNamedProject({ name: "At Home" });
+        assert.equal(created.workspaceRoot, path.join(expected, "at-home"));
+      }).pipe(Effect.provideService(HostProcess.HomeDirectory, baseDir)),
+    { settings: { projectsRoot: "~/home-projects" }, git: layerQuietGit },
+  ),
+);
+
+it.effect("leaves existing projects alone when the configured folder changes", () =>
+  withScratch(
+    ({ baseDir }) =>
+      Effect.gen(function* () {
+        const folders = yield* ManagedProjectFolders.ManagedProjectFolders;
+        const projects = yield* ProjectService.ProjectService;
+        const settings = yield* ServerSettings.ServerSettingsService;
+        const path = yield* Path.Path;
+        const first = yield* folders.createNamedProject({ name: "First" });
+        assert.equal(first.workspaceRoot, path.join(baseDir, "projects", "first"));
+
+        const elsewhere = path.join(baseDir, "elsewhere");
+        yield* settings.updateSettings({ projectsRoot: elsewhere });
+        const second = yield* folders.createNamedProject({ name: "Second" });
+
+        assert.equal(second.workspaceRoot, path.join(elsewhere, "second"));
+        assert.equal(
+          Option.getOrThrow(yield* projects.getById(first.projectId)).workspaceRoot,
+          first.workspaceRoot,
+        );
+      }),
+    { git: layerQuietGit },
+  ),
 );

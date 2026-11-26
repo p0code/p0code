@@ -8991,6 +8991,13 @@
       "t": "a"
     }
   ],
+  "4f190a09f3d545e9": "Gib einen absoluten Ordnerpfad an, z. B. ~/projects.",
+  "7228e97f2ac44fd1": "Neue Projekte landen im eigenen Ordner jeder ausgewählten Umgebung. Bestehende Projekte bleiben, wo sie sind.",
+  "bf5fef5f07d1d55e": "Neue Projekte landen auf {machine}. Bestehende Projekte bleiben, wo sie sind.",
+  "655b11430eb82712": "Neue Projekte landen in {path} auf {machine}. Bestehende Projekte bleiben, wo sie sind.",
+  "1342340f282d6285": "Neuen Projektordner auf Standard zurücksetzen",
+  "ccb1f72e9b5b9001": "Neuer Projektordner",
+  "6e3a2768bc5b9702": "Ordner wählen…",
   "e7ea609e6fcfa591": "Systembenachrichtigungen, wenn ein Thread fertig ist, fehlschlägt oder auf Eingabe oder Genehmigung wartet. Gilt für dieses Gerät, solange p0code geöffnet ist.",
   "24a0ac9e7e55975c": "Benachrichtigungen erfordern einen unterstützten Browser über HTTPS oder die Desktop-App. Nur Ton ist weiterhin verfügbar.",
   "6b0b1dd4d399d3c6": "Benachrichtigungen sind in diesem Browser nicht verfügbar. Nur Ton ist weiterhin verfügbar.",
@@ -11973,6 +11980,7 @@
   "4a172e139167badc": "neue worktrees starten remote origin neuester gefetchter branch lokal",
   "30aac12099fcaf53": "„Projekt hinzufügen“ startet in",
   "70bcb8df9015ae2a": "basisverzeichnis ordner browser pfad home",
+  "cb0baace6102db95": "neuer benannter Projektordner Erstellen Ziel Stammverzeichnis Pfad wählen",
   "061cb86367f49363": "ghq klonen ziel host besitzer repository wurzel layout",
   "2bb905a7e7cddff7": "vorher fragen thread angeheftet bereich",
   "53390c9ebb75f5d3": "vorher fragen thread zweiter klick inline aktion",

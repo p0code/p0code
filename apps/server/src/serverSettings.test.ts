@@ -3362,3 +3362,50 @@ it.effect("publishes edits made before the restored settings watch is registered
     }).pipe(Effect.provide(settingsLayer));
   }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
 );
+
+it.effect("refuses a relative new project folder with a clear message", () =>
+  Effect.gen(function* () {
+    const serverSettings = yield* ServerSettingsModule.ServerSettingsService;
+    const failure = yield* Effect.flip(
+      serverSettings.updateSettings({ projectsRoot: "relative/projects" }),
+    );
+    assert.include(failure.message, "not an absolute folder");
+  }).pipe(
+    Effect.provide(layerServerSettings()),
+    Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
+  ),
+);
+
+it.effect("refuses a new project folder inside the server's own folders", () =>
+  Effect.gen(function* () {
+    const serverConfig = yield* ServerConfig.ServerConfig;
+    const serverSettings = yield* ServerSettingsModule.ServerSettingsService;
+    const path = yield* Path.Path;
+    const failure = yield* Effect.flip(
+      serverSettings.updateSettings({ projectsRoot: path.join(serverConfig.stateDir, "projects") }),
+    );
+    assert.include(failure.message, "p0code's own folder");
+  }).pipe(
+    Effect.provide(layerServerSettings()),
+    Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
+  ),
+);
+
+it.effect("saves a new project folder and clears it back to the default", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const serverSettings = yield* ServerSettingsModule.ServerSettingsService;
+      const customRoot = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-projects-root-" });
+      const saved = yield* serverSettings.updateSettings({ projectsRoot: customRoot });
+      assert.equal(saved.projectsRoot, customRoot);
+      assert.isTrue(yield* fileSystem.exists(customRoot));
+
+      const cleared = yield* serverSettings.updateSettings({ projectsRoot: null });
+      assert.isNull(cleared.projectsRoot);
+    }).pipe(
+      Effect.provide(layerServerSettings()),
+      Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
+    ),
+  ),
+);

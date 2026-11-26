@@ -123,6 +123,7 @@ import { StorageCleanupSections } from "./StorageSettings";
 import { ThreadTitleInstructionsSettings } from "./ThreadTitleInstructionsSettings";
 import { UpdateTrackSwitchDialog } from "./UpdateTrackSwitchDialog";
 import { scopedIdleCompaction } from "./scopedSettings";
+import { NewProjectLocationSetting } from "./NewProjectLocationSetting";
 import {
   SettingResetButton,
   SETTINGS_PICKER_TRIGGER_CLASSNAME,
@@ -2114,6 +2115,7 @@ export function ThreadsSettingsPanel() {
     <SettingsPageContainer>
       <JudgesSettingsSection />
       <SettingsSection id="new-projects" title={gt("New projects")}>
+        <NewProjectLocationSetting />
         <SettingsRow
           serverScoped
           settingKeys={["addProjectBaseDirectory"]}
