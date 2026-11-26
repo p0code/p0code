@@ -16,11 +16,16 @@ function Sheet<Payload>(props: SheetPrimitive.Root.Props<Payload>) {
 
 const SheetPortal = SheetPrimitive.Portal;
 
-function SheetBackdrop({ className, ...props }: SheetPrimitive.Backdrop.Props) {
+function SheetBackdrop({
+  className,
+  layer = "default",
+  ...props
+}: SheetPrimitive.Backdrop.Props & { layer?: "default" | "dialog" }) {
   return (
     <SheetPrimitive.Backdrop
       className={cn(
-        "fixed inset-0 z-(--z-sheet) bg-background/60 backdrop-blur-xs transition-all duration-200 data-ending-style:opacity-0 data-starting-style:opacity-0",
+        "fixed inset-0 bg-background/60 backdrop-blur-xs transition-all duration-200 data-ending-style:opacity-0 data-starting-style:opacity-0",
+        layer === "dialog" ? "z-50" : "z-(--z-sheet)",
         className,
       )}
       data-slot="sheet-backdrop"
@@ -32,16 +37,19 @@ function SheetBackdrop({ className, ...props }: SheetPrimitive.Backdrop.Props) {
 function SheetViewport({
   className,
   side,
+  layer = "default",
   variant = "default",
   ...props
 }: SheetPrimitive.Viewport.Props & {
   side?: "right" | "left" | "top" | "bottom";
+  layer?: "default" | "dialog";
   variant?: "default" | "inset";
 }) {
   return (
     <SheetPrimitive.Viewport
       className={cn(
-        "fixed inset-0 z-(--z-sheet) grid [-webkit-app-region:no-drag]",
+        "fixed inset-0 grid [-webkit-app-region:no-drag]",
+        layer === "dialog" ? "z-50" : "z-(--z-sheet)",
         side === "bottom" && "grid grid-rows-[1fr_auto] pt-12",
         side === "top" && "grid grid-rows-[auto_1fr] pb-12",
         side === "left" && "flex justify-start",
@@ -62,6 +70,7 @@ function SheetPopup({
   keepMounted = false,
   transitionDurationMs,
   side = "right",
+  layer = "default",
   variant = "default",
   style,
   ...props
@@ -69,6 +78,7 @@ function SheetPopup({
   showCloseButton?: boolean;
   keepMounted?: boolean;
   transitionDurationMs?: number;
+  layer?: "default" | "dialog";
   side?: "right" | "left" | "top" | "bottom";
   variant?: "default" | "inset";
 }) {
@@ -82,6 +92,7 @@ function SheetPopup({
   return (
     <SheetPortal keepMounted={keepMounted}>
       <SheetBackdrop
+        layer={layer}
         className={
           instant
             ? "transition-none! data-ending-style:opacity-100! data-starting-style:opacity-100!"
@@ -89,7 +100,7 @@ function SheetPopup({
         }
         style={transitionStyle}
       />
-      <SheetViewport side={side} variant={variant}>
+      <SheetViewport side={side} variant={variant} layer={layer}>
         <SheetPrimitive.Popup
           className={cn(
             "relative flex max-h-full min-h-0 w-full min-w-0 flex-col bg-popover not-dark:bg-clip-padding text-popover-foreground shadow-lg/5 transition-[opacity,translate] duration-200 ease-in-out will-change-transform before:pointer-events-none before:absolute before:inset-0 before:shadow-[0_1px_--theme(--color-black/4%)] data-ending-style:opacity-0 data-starting-style:opacity-0 max-sm:before:hidden dark:before:shadow-[0_-1px_--theme(--color-white/6%)]",

@@ -1,4 +1,8 @@
 import {
+  type UsageDetails,
+  type UsageDetailsInput,
+  type UsageDetailsRow,
+  UsageReadError,
   type ProjectCost,
   type ProjectCostAmount,
   type ProjectCostInput,
@@ -151,6 +155,7 @@ const tokensOf = (totals: UsageTokenTotals): CostTokens => ({
 export class ProjectCostService extends Context.Service<
   ProjectCostService,
   {
+    readonly readDetails: (input: UsageDetailsInput) => Effect.Effect<UsageDetails, UsageReadError>;
     readonly readProjectCost: (
       input: ProjectCostInput,
     ) => Effect.Effect<ProjectCost, ProjectCostReadError>;
@@ -343,7 +348,132 @@ const make = Effect.gen(function* () {
     return breakdown;
   });
 
-  return ProjectCostService.of({ readProjectCost, readCostBreakdown });
+  const readDetails = Effect.fn("ProjectCostService.readDetails")(function* (
+    input: UsageDetailsInput,
+  ) {
+    const since = Date.parse(input.sinceDay + "T00:00:00Z");
+    const until = Date.parse(input.untilDay + "T00:00:00Z");
+    if (
+      !Number.isFinite(since) ||
+      !Number.isFinite(until) ||
+      until < since ||
+      until - since > 366 * 86400000
+    ) {
+      return yield* new UsageReadError({
+        reason: "invalidWindow",
+        detail: "Choose a date range of at most 367 days.",
+      });
+    }
+    const rows = yield* sql<Omit<UsageDetailsRow, "costUsd" | "unpricedRecords">>`
+      SELECT day, threadId, title, projectId, project, provider, account, model,
+        SUM(MAX(0, input - cached - created)) AS uncachedInputTokens,
+        SUM(cached) AS cachedInputTokens, SUM(created) AS cacheCreationTokens,
+        SUM(output) AS outputTokens, SUM(reasoning) AS reasoningTokens, COUNT(*) AS records
+      FROM (
+        SELECT substr(COALESCE(pt.completed_at, pt.started_at), 1, 10) AS day,
+          th.thread_id AS threadId, th.title AS title, th.project_id AS projectId,
+          COALESCE(pr.title, th.project_id) AS project,
+          COALESCE(pth.provider, th.default_provider) AS provider,
+          COALESCE(pth.provider_instance_id, th.provider_instance_id, th.default_provider) AS account,
+          COALESCE(json_extract(pt.payload_json, '$.model'), json_extract(pt.payload_json, '$.turnTokenUsage.models[0]'), json_extract(th.payload_json, '$.modelSelection.model'), 'unknown') AS model,
+          COALESCE(json_extract(pt.payload_json, '$.turnTokenUsage.inputTokens'), 0) AS input,
+          COALESCE(json_extract(pt.payload_json, '$.turnTokenUsage.cachedInputTokens'), 0) AS cached,
+          COALESCE(json_extract(pt.payload_json, '$.turnTokenUsage.cacheCreationTokens'), 0) AS created,
+          COALESCE(json_extract(pt.payload_json, '$.turnTokenUsage.outputTokens'), 0) AS output,
+          COALESCE(json_extract(pt.payload_json, '$.turnTokenUsage.reasoningTokens'), 0) AS reasoning
+        FROM orchestration_v2_projection_provider_turns pt
+        JOIN orchestration_v2_projection_threads th ON th.thread_id = pt.thread_id
+        LEFT JOIN orchestration_v2_projection_provider_threads pth ON pth.provider_thread_id = pt.provider_thread_id
+        LEFT JOIN projection_projects pr ON pr.project_id = th.project_id
+        WHERE json_extract(pt.payload_json, '$.turnTokenUsage.usageStatus') IN ('complete', 'partial')
+          AND COALESCE(json_extract(pt.payload_json, '$.turnTokenUsage.localCommand'), 0) = 0
+          AND substr(COALESCE(pt.completed_at, pt.started_at), 1, 10) BETWEEN ${input.sinceDay} AND ${input.untilDay}
+          AND (${input.threadId ?? null} IS NULL OR th.thread_id = ${input.threadId ?? null})
+      )
+      WHERE instr(lower(project), lower(${input.project ?? ""})) > 0
+        AND (instr(lower(provider), lower(${input.provider ?? ""})) > 0 OR instr(lower(account), lower(${input.provider ?? ""})) > 0)
+        AND instr(lower(model), lower(${input.model ?? ""})) > 0
+        AND input + output + cached + created > 0
+      GROUP BY day, threadId, projectId, provider, account, model
+    `.pipe(
+      Effect.mapError(
+        (cause) =>
+          new UsageReadError({
+            reason: "scanFailed",
+            detail: "Recorded usage could not be read.",
+            cause,
+          }),
+      ),
+    );
+    const costs = yield* usage.priceModelTotals(
+      rows.map((row) => ({ model: row.model, totals: row })),
+    );
+    const priced = rows.map((row, i) => ({
+      ...row,
+      costUsd: costs[i] ?? 0,
+      unpricedRecords: costs[i] == null ? row.records : 0,
+    }));
+    const totals: UsageDetails["totals"] = priced.reduce(
+      (sum, row) => ({
+        uncachedInputTokens: sum.uncachedInputTokens + row.uncachedInputTokens,
+        cachedInputTokens: sum.cachedInputTokens + row.cachedInputTokens,
+        cacheCreationTokens: sum.cacheCreationTokens + row.cacheCreationTokens,
+        outputTokens: sum.outputTokens + row.outputTokens,
+        reasoningTokens: sum.reasoningTokens + row.reasoningTokens,
+        records: sum.records + row.records,
+        costUsd: sum.costUsd + row.costUsd,
+        unpricedRecords: sum.unpricedRecords + row.unpricedRecords,
+      }),
+      {
+        uncachedInputTokens: 0,
+        cachedInputTokens: 0,
+        cacheCreationTokens: 0,
+        outputTokens: 0,
+        reasoningTokens: 0,
+        records: 0,
+        costUsd: 0,
+        unpricedRecords: 0,
+      },
+    );
+    const keys = {
+      day: "day",
+      title: "title",
+      project: "project",
+      provider: "provider",
+      model: "model",
+      input: "uncachedInputTokens",
+      output: "outputTokens",
+      cacheRead: "cachedInputTokens",
+      cacheWrite: "cacheCreationTokens",
+      reasoning: "reasoningTokens",
+      records: "records",
+      cost: "costUsd",
+    } as const;
+    const key = keys[input.sort];
+    priced.sort((a, b) => {
+      const av = a[key];
+      const bv = b[key];
+      const primary =
+        typeof av === "number" && typeof bv === "number"
+          ? av - bv
+          : String(av).localeCompare(String(bv));
+      return (
+        (input.descending ? -primary : primary) ||
+        a.day.localeCompare(b.day) ||
+        a.threadId.localeCompare(b.threadId) ||
+        a.provider.localeCompare(b.provider) ||
+        a.account.localeCompare(b.account) ||
+        a.model.localeCompare(b.model)
+      );
+    });
+    return {
+      rows: priced.slice(input.offset, input.offset + Math.min(input.limit, 100)),
+      totalRows: priced.length,
+      totals,
+    };
+  });
+
+  return ProjectCostService.of({ readProjectCost, readCostBreakdown, readDetails });
 });
 
 export const layer = Layer.effect(ProjectCostService, make);

@@ -1813,6 +1813,12 @@ export function createServerEnvironmentAtoms<R, E>(
       },
     }),
     // Mounted only while a usage popover or details card is open; the server also caches for a few seconds.
+    usageDetails: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:server:usage-details",
+      tag: WS_METHODS.serverGetUsageDetails,
+      staleTimeMs: 5_000,
+      idleTtlMs: 0,
+    }),
     projectCost: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:server:project-cost",
       tag: WS_METHODS.serverGetProjectCost,

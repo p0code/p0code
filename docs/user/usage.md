@@ -23,7 +23,7 @@ the totals for Codex or Claude Code 2.0.63 and newer, because those runs save no
 The server keeps scanned usage history for 92 days by default. Claude Code deletes its own
 transcripts after 30 days, so for older Claude usage this history is the only record left. To keep
 it longer, set `usageHistoryRetentionDays` in `<T3 home>/userdata/settings.json` to a number of days
-such as `365`, or to `"unlimited"`. Usage views still show at most 90 days. Lowering the value
+such as `365`, or to `"unlimited"`. Cost and Tokens views still show at most 90 days. Lowering the value
 prunes older history on the next refresh, and raising it again does not bring pruned history back.
 While `settings.json` cannot be read, nothing is pruned.
 
@@ -63,6 +63,20 @@ saved totals first, then updates them when Cursor's API responds.
 
 If recent work is missing or a new model shows no cost, refresh to rescan session history and
 update model pricing.
+
+## Inspect individual chats
+
+On web and desktop, choose **Details** in Usage to inspect recorded chat usage by UTC day,
+thread, account, and model. Filter by project, provider or account, model, and an inclusive date
+range of up to a year. Text filters match part of a name, ignoring case. Sort by a column;
+filtered totals cover every matching row, including rows on other pages. Each environment has
+its own table and totals.
+
+Select a row or **Details** beside its title to inspect the thread across all models and accounts
+for those dates. Select the thread title to open the conversation. These are list-price estimates
+from recorded turn counts, with the original model IDs; provider history outside p0code chats
+remains in the overview. Unknown prices are excluded from costs and marked as unpriced.
+Reasoning tokens are part of output tokens, so do not add them again.
 
 ## Set custom model prices
 

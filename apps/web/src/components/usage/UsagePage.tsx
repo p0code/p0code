@@ -11,7 +11,7 @@ import {
   type UsageSummaryInput,
 } from "@t3tools/contracts";
 import { CircleAlertIcon, ChevronDownIcon, InfoIcon, SlidersHorizontalIcon } from "lucide-react";
-import { T, useGT, useLocale, useMessages, Var } from "gt-react";
+import { msg, T, useGT, useLocale, useMessages, Var } from "gt-react";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { settlePromise } from "@t3tools/client-runtime/state/runtime";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
@@ -82,6 +82,7 @@ import { UsageLimitsSection } from "./UsageLimits";
 import { UsagePriceOverrides } from "./UsagePriceOverrides";
 import { UsageProviderChart } from "./UsageProviderChart";
 import { SpeedPremium, UsageModelDialog } from "./UsageModelDialog";
+import { UsageDetails } from "./UsageDetails";
 import { UsageShareBar } from "./UsageShareBar";
 import {
   costTypeSegments,
@@ -108,8 +109,13 @@ import {
   type UsagePagePreferences,
 } from "./usagePagePreferences";
 
+const VIEW_OPTIONS = [
+  ...METRIC_OPTIONS,
+  { value: "details", label: msg("Details"), command: undefined },
+] as const;
+
 function isUsageMetric(value: string | null | undefined): value is UsageMetric {
-  return METRIC_OPTIONS.some((option) => option.value === value);
+  return VIEW_OPTIONS.some((option) => option.value === value);
 }
 
 function isUsageWindowDays(value: number): value is UsagePagePreferences["windowDays"] {
@@ -183,11 +189,13 @@ export function UsagePage() {
   const locale = useLocale();
   const m = useMessages();
   const shortcutTitle = (
-    option: (typeof METRIC_OPTIONS)[number] | (typeof WINDOW_OPTIONS)[number],
+    option: (typeof VIEW_OPTIONS)[number] | (typeof WINDOW_OPTIONS)[number],
   ) => {
-    const shortcut = shortcutLabelForCommand(keybindings, option.command, {
-      context: { usagePageOpen: true },
-    });
+    const shortcut = option.command
+      ? shortcutLabelForCommand(keybindings, option.command, {
+          context: { usagePageOpen: true },
+        })
+      : undefined;
     return shortcut
       ? gt("{label} ({shortcut})", { label: m(option.label), shortcut })
       : m(option.label);
@@ -202,6 +210,7 @@ export function UsagePage() {
   }));
   const metric = preferences.metric;
   const showingLimits = metric === "limits";
+  const showDetails = metric === "details";
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [limitsNow, setLimitsNow] = useState(() => Date.now());
   const refreshingRef = useRef(false);
@@ -290,7 +299,7 @@ export function UsagePage() {
       modalActionsRef.current?.close();
       return;
     }
-    const metricOption = METRIC_OPTIONS.find((option) => option.command === command);
+    const metricOption = VIEW_OPTIONS.find((option) => option.command === command);
     const periodOption = WINDOW_OPTIONS.find((option) => option.command === command);
     if (!metricOption && !periodOption) return;
 
@@ -376,7 +385,7 @@ export function UsagePage() {
           end: formatDayShort(shownWindow.untilDay, locale),
         });
   const windowOptionLabel = WINDOW_OPTIONS.find((option) => option.days === windowDays)?.label;
-  const metricOptionLabel = METRIC_OPTIONS.find((option) => option.value === metric)?.label;
+  const metricOptionLabel = VIEW_OPTIONS.find((option) => option.value === metric)?.label;
   const topbarContent = (
     <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 py-2 @4xl/usage-header:flex">
       <WorkspaceBreadcrumb ariaLabel={gt("Usage breadcrumb")} className="min-w-0">
@@ -400,13 +409,15 @@ export function UsagePage() {
             onOpenModelPrices={() => setPriceDialog({})}
           />
         </WorkspaceBreadcrumbItem>
-        <WorkspaceBreadcrumbSeparator />
-        <WorkspaceBreadcrumbItem current className="min-w-10">
-          <UsageProviderFilter
-            hiddenProviders={hiddenProviders}
-            onChange={(next) => updatePreferences({ hiddenProviders: next })}
-          />
-        </WorkspaceBreadcrumbItem>
+        {showDetails ? null : <WorkspaceBreadcrumbSeparator />}
+        {showDetails ? null : (
+          <WorkspaceBreadcrumbItem current className="min-w-10">
+            <UsageProviderFilter
+              hiddenProviders={hiddenProviders}
+              onChange={(next) => updatePreferences({ hiddenProviders: next })}
+            />
+          </WorkspaceBreadcrumbItem>
+        )}
       </WorkspaceBreadcrumb>
       {!showingLimits ? (
         <span className="hidden min-w-0 truncate text-xs text-muted-foreground @7xl/usage-header:block">
@@ -442,22 +453,24 @@ export function UsagePage() {
             if (isUsageMetric(value)) selectMetric(value);
           }}
         >
-          {METRIC_OPTIONS.map((option) => (
+          {VIEW_OPTIONS.map((option) => (
             <Toggle key={option.value} value={option.value} title={shortcutTitle(option)}>
               {m(option.label)}
             </Toggle>
           ))}
         </ToggleGroup>
-        <Button
-          onClick={refreshWindow}
-          aria-label={showingLimits ? gt("Refresh limits") : gt("Refresh usage")}
-          aria-busy={isRefreshing}
-          disabled={isRefreshing || (!showingLimits && !canReadDiagnostics)}
-          size="icon-sm"
-          variant="ghost"
-        >
-          <RefreshIcon size="sm" refreshing={isRefreshing} />
-        </Button>
+        {showDetails ? null : (
+          <Button
+            onClick={refreshWindow}
+            aria-label={showingLimits ? gt("Refresh limits") : gt("Refresh usage")}
+            aria-busy={isRefreshing}
+            disabled={isRefreshing || (!showingLimits && !canReadDiagnostics)}
+            size="icon-sm"
+            variant="ghost"
+          >
+            <RefreshIcon size="sm" refreshing={isRefreshing} />
+          </Button>
+        )}
       </div>
       <div className="ms-auto flex shrink-0 items-center justify-end gap-1 @4xl/usage-header:hidden">
         {showingLimits ? null : (
@@ -498,23 +511,25 @@ export function UsagePage() {
             <SelectValue>{metricOptionLabel && m(metricOptionLabel)}</SelectValue>
           </SelectTrigger>
           <SelectPopup align="end" alignItemWithTrigger={false}>
-            {METRIC_OPTIONS.map((option) => (
+            {VIEW_OPTIONS.map((option) => (
               <SelectItem key={option.value} value={option.value} title={shortcutTitle(option)}>
                 {m(option.label)}
               </SelectItem>
             ))}
           </SelectPopup>
         </Select>
-        <Button
-          onClick={refreshWindow}
-          aria-label={showingLimits ? gt("Refresh limits") : gt("Refresh usage")}
-          aria-busy={isRefreshing}
-          disabled={isRefreshing || (!showingLimits && !canReadDiagnostics)}
-          size="icon-sm"
-          variant="ghost"
-        >
-          <RefreshIcon size="sm" refreshing={isRefreshing} />
-        </Button>
+        {showDetails ? null : (
+          <Button
+            onClick={refreshWindow}
+            aria-label={showingLimits ? gt("Refresh limits") : gt("Refresh usage")}
+            aria-busy={isRefreshing}
+            disabled={isRefreshing || (!showingLimits && !canReadDiagnostics)}
+            size="icon-sm"
+            variant="ghost"
+          >
+            <RefreshIcon size="sm" refreshing={isRefreshing} />
+          </Button>
+        )}
       </div>
     </div>
   );
@@ -539,6 +554,12 @@ export function UsagePage() {
                     ? gt("Select an environment to see limits.")
                     : gt("Select an environment to see usage.")}
               </p>
+            ) : showDetails ? (
+              <UsageDetails
+                key={`${window.sinceDay}:${window.untilDay}`}
+                environments={selectedEnvironments}
+                window={window}
+              />
             ) : showingLimits ? (
               <UsageLimitsSection
                 selectedEnvironmentIds={selectedEnvironmentIds}

@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import type { UsageSource } from "@t3tools/contracts";
 
 import {
+  formatCount,
+  formatUsd,
   formatDateTimeShort,
   formatHourShort,
   formatTokens,
@@ -197,5 +199,23 @@ describe("token formatting", () => {
     expect(formatTokens(999_999)).toBe("1M");
     expect(formatTokens(999_999_999)).toBe("1B");
     expect(formatTokens(-999_999)).toBe("-1M");
+  });
+});
+
+describe("usage detail number formatting", () => {
+  it("uses the overview currency rounding and compact token units", () => {
+    expect(formatUsd(0)).toBe("$0.00");
+    expect(formatUsd(1.555)).toBe("$1.56");
+    expect(formatUsd(1234.5, "de")).toBe(
+      new Intl.NumberFormat("de", {
+        style: "currency",
+        currency: "USD",
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(1234.5),
+    );
+    expect(formatCount(1234, "en")).toBe("1,234");
+    expect(formatTokens(999999)).toBe("1M");
+    expect(formatTokens(0)).toBe("0");
   });
 });

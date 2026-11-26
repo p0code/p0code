@@ -458,6 +458,8 @@ import {
   ProviderConsumeResetCreditResult,
 } from "./providerUsageLimits.ts";
 import {
+  UsageDetails,
+  UsageDetailsInput,
   ProjectCost,
   ProjectCostInput,
   ProjectCostReadError,
@@ -696,6 +698,7 @@ export const WS_METHODS = {
   serverReportClientActivity: "server.reportClientActivity",
   serverGetUsageSummary: "server.getUsageSummary",
   serverRefreshUsageRates: "server.refreshUsageRates",
+  serverGetUsageDetails: "server.getUsageDetails",
   serverGetProjectCost: "server.getProjectCost",
 
   workflowsSubscribe: "workflows.subscribe",
@@ -1304,6 +1307,12 @@ const WsServerPrepareTriageRpc = Rpc.make(WS_METHODS.serverPrepareTriage, {
 const WsServerGetUsageSummaryRpc = Rpc.make(WS_METHODS.serverGetUsageSummary, {
   payload: UsageSummaryInput,
   success: UsageSummary,
+  error: Schema.Union([EnvironmentAuthorizationError, UsageReadError]),
+});
+
+const WsServerGetUsageDetailsRpc = Rpc.make(WS_METHODS.serverGetUsageDetails, {
+  payload: UsageDetailsInput,
+  success: UsageDetails,
   error: Schema.Union([EnvironmentAuthorizationError, UsageReadError]),
 });
 
@@ -2815,6 +2824,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerListUserModelProvidersRpc,
   WsServerPrepareTriageRpc,
   WsServerGetUsageSummaryRpc,
+  WsServerGetUsageDetailsRpc,
   WsServerGetProjectCostRpc,
   WsServerRefreshUsageRatesRpc,
   WsServerSignalProcessRpc,
