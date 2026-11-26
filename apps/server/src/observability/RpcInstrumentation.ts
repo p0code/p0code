@@ -172,6 +172,7 @@ const RPC_AGGREGATES = {
   [WS_METHODS.deployOverview]: "deploy",
   [WS_METHODS.deployLink]: "deploy",
   [WS_METHODS.deployUnlink]: "deploy",
+  [WS_METHODS.deployUpdateAccount]: "deploy",
   [WS_METHODS.deployListProjects]: "deploy",
   [WS_METHODS.deployMapProject]: "deploy",
   [WS_METHODS.deployStart]: "deploy",

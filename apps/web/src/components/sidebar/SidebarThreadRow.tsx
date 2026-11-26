@@ -145,6 +145,7 @@ import { observeVisibleAnimation } from "~/lib/visibleAnimation";
 import { useThreadHasUnsentDraft } from "../../composerDraftStore";
 import { ThreadDetailsIssueRows } from "../chat/ThreadDetailsIssueRows";
 import { IssueGlyph, issueStatePresentation } from "../issue/issuePresentation";
+import { SidebarThreadDeployChip, useSidebarThreadDeploySummary } from "./SidebarDeployIndicators";
 import { useThreadIntentPrefetch } from "./useThreadIntentPrefetch";
 
 // The fields thread rows show. Provider status pushes refresh `checkedAt`,
@@ -1229,6 +1230,14 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
       />
     </ThreadLinkBadge>
   ) : null;
+  const deploySummary = useSidebarThreadDeploySummary(
+    thread.environmentId,
+    thread.projectId,
+    thread.id,
+  );
+  const deployBadge = deploySummary ? (
+    <SidebarThreadDeployChip environmentId={thread.environmentId} summary={deploySummary} />
+  ) : null;
   const terminalStatusIcon = (
     <ThreadTerminalStatusButton
       threadRef={threadRef}
@@ -1298,6 +1307,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     props.environmentLabel === null &&
     prBadge === null &&
     issueBadge === null &&
+    deployBadge === null &&
     diff === null &&
     runningTerminalIds.length === 0;
   const metaLine = metaLineEmpty ? null : (
@@ -1317,6 +1327,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
       {terminalStatusIcon}
       {prBadge}
       {issueBadge}
+      {deployBadge}
       {diff ? (
         <span className="shrink-0 font-mono">
           <span className="text-diff-addition-foreground">+{formatDiffCount(diff.insertions)}</span>{" "}
@@ -1410,6 +1421,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
             {pinIndicator}
             {multiline ? null : terminalStatusIcon}
             {multiline ? null : issueBadge}
+            {multiline ? null : deployBadge}
             {isRegeneratingTitle ? (
               <span role="status" className="sr-only">
                 <T>Regenerating title</T>

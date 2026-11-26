@@ -12,9 +12,9 @@ const notYet = new PluginError({ message: "Deploying to your own server is not a
 export const ownServerDeployProvider: StartedDeployProvider = {
   descriptor: { id: "p0deploy", label: "Own server (p0deploy)", icon: "server" },
   link: () => Effect.fail(notYet),
-  unlink: Effect.fail(notYet),
-  status: Effect.succeed({ state: "unlinked", accountLabel: null, message: null }),
-  listProjects: Effect.succeed([]),
+  unlink: () => Effect.fail(notYet),
+  status: () => Effect.succeed({ state: "unlinked", accountLabel: null, message: null }),
+  listProjects: () => Effect.succeed([]),
   deploy: () => Effect.fail(notYet),
   deploymentStatus: () => Effect.fail(notYet),
   logs: () => Stream.fail(notYet),

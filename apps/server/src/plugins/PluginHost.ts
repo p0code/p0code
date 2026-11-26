@@ -227,21 +227,21 @@ const make = Effect.gen(function* () {
     yield* updateInfo(id, { enabled: false, state: "disabled", message: null });
   });
 
-  const reconcile = (settings: PluginSettings) =>
-    lock.withPermits(1)(
-      Effect.forEach(
-        plugins,
-        (plugin) => {
-          const wanted = isEnabled(settings, plugin.manifest.id);
-          const isRunning = running.has(plugin.manifest.id);
-          const failed = infos.get(plugin.manifest.id)?.state === "failed";
-          if (wanted && !isRunning && !failed) return start(plugin);
-          if (!wanted && (isRunning || failed)) return stop(plugin);
-          return Effect.void;
-        },
-        { discard: true },
-      ),
+  const reconcileUnlocked = (settings: PluginSettings) =>
+    Effect.forEach(
+      plugins,
+      (plugin) => {
+        const wanted = isEnabled(settings, plugin.manifest.id);
+        const isRunning = running.has(plugin.manifest.id);
+        const failed = infos.get(plugin.manifest.id)?.state === "failed";
+        if (wanted && !isRunning && !failed) return start(plugin);
+        if (!wanted && (isRunning || failed)) return stop(plugin);
+        return Effect.void;
+      },
+      { discard: true },
     );
+
+  const reconcile = (settings: PluginSettings) => lock.withPermits(1)(reconcileUnlocked(settings));
 
   const pluginById = (pluginId: string) => {
     const plugin = plugins.find((candidate) => candidate.manifest.id === pluginId);
@@ -377,17 +377,19 @@ const make = Effect.gen(function* () {
       ),
     ),
   );
-  // Re-read on every change: an emitted snapshot can predate a write this host just made.
-  yield* settingsService.streamChanges.pipe(
-    Stream.runForEach(() =>
-      settingsService.getSettings.pipe(
-        Effect.flatMap((settings) => reconcile(settings.plugins)),
-        Effect.ignore,
-      ),
+  // Re-read under the lock: a forked startup reconcile or emitted snapshot can predate a write.
+  const reconcileCurrent = lock.withPermits(1)(
+    settingsService.getSettings.pipe(
+      Effect.map((settings) => settings.plugins),
+      Effect.orElseSucceed((): PluginSettings => ({})),
+      Effect.flatMap(reconcileUnlocked),
     ),
+  );
+  yield* settingsService.streamChanges.pipe(
+    Stream.runForEach(() => reconcileCurrent.pipe(Effect.ignore)),
     Effect.forkScoped,
   );
-  yield* reconcile(initial).pipe(Effect.forkScoped);
+  yield* reconcileCurrent.pipe(Effect.forkScoped);
 
   return PluginHost.of({
     changes: SubscriptionRef.changes(snapshotRef),
