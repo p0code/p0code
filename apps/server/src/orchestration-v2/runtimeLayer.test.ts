@@ -13338,6 +13338,89 @@ it.layer(layerSharedApplicationDataPlaneTest)("snooze projection", (it) => {
   );
 });
 
+it.layer(layerSharedApplicationDataPlaneTest)("thread project move", (it) => {
+  it.effect("keeps messages, attachments and lineage when the workspace changes", () =>
+    Effect.gen(function* () {
+      const projects = yield* ProjectService.ProjectService;
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const projectId = ProjectId.make("runtime-layer-move-project");
+      const threadId = ThreadId.make("runtime-layer-move-thread");
+      const messageId = MessageId.make("runtime-layer-move-message");
+      const attachment = {
+        type: "image" as const,
+        id: "move-attachment",
+        name: "before.png",
+        mimeType: "image/png",
+        sizeBytes: 12,
+      };
+
+      yield* projects.create({
+        commandId: CommandId.make("runtime-layer-move-project-create"),
+        projectId,
+        title: "Move target",
+        workspaceRoot: "/tmp/runtime-layer-move-project",
+      });
+      yield* orchestrator.dispatch({
+        type: "thread.create",
+        createdBy: "user",
+        creationSource: "web",
+        commandId: CommandId.make("runtime-layer-move-thread-create"),
+        threadId,
+        projectId: ProjectId.make("runtime-layer-move-scratch"),
+        title: "Scratch work",
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        branch: "t3/old",
+        worktreePath: "/tmp/runtime-layer-move-scratch/notes",
+      });
+      yield* orchestrator.dispatch({
+        type: "message.dispatch",
+        createdBy: "user",
+        creationSource: "web",
+        commandId: CommandId.make("runtime-layer-move-message-create"),
+        threadId,
+        messageId,
+        text: "Keep this history.",
+        attachments: [attachment],
+        modelSelection,
+        dispatchMode: { type: "defer_start" },
+      });
+      const queued = yield* orchestrator.getThreadProjection(threadId);
+      const queuedRun = queued.runs[0];
+      assert.isDefined(queuedRun);
+      yield* orchestrator.dispatch({
+        type: "run.interrupt",
+        commandId: CommandId.make("runtime-layer-move-interrupt"),
+        threadId,
+        runId: queuedRun!.id,
+        reason: "test cleanup",
+      });
+      const before = yield* orchestrator.getThreadProjection(threadId);
+
+      yield* orchestrator.dispatch({
+        type: "thread.project.adopt-folder",
+        commandId: CommandId.make("runtime-layer-move-adopt"),
+        threadId,
+        projectId,
+        worktreePath: null,
+        branch: null,
+      });
+      const after = yield* orchestrator.getThreadProjection(threadId);
+
+      assert.equal(after.thread.id, before.thread.id);
+      assert.equal(after.thread.projectId, projectId);
+      assert.isNull(after.thread.worktreePath);
+      assert.isNull(after.thread.branch);
+      assert.deepEqual(after.thread.lineage, before.thread.lineage);
+      assert.equal(after.thread.modelSelection.instanceId, before.thread.modelSelection.instanceId);
+      assert.equal(after.messages.length, before.messages.length);
+      assert.deepEqual(after.messages[0]?.attachments, [attachment]);
+      assert.equal(after.messages[0]?.text, "Keep this history.");
+    }),
+  );
+});
+
 it.layer(layerSharedApplicationDataPlaneTest)("visited projection", (it) => {
   it.effect("carries the visited watermark through the V2 shell projection", () =>
     Effect.gen(function* () {

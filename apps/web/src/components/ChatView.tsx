@@ -243,6 +243,8 @@ import {
 import { useComposerHandleContext } from "../composerHandleContext";
 import { useDelayedStatus } from "../hooks/useDelayedStatus";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
+import { canMoveThreadIntoProject } from "../hooks/useThreadActions";
+import { openMoveThreadToProjectDialog } from "./MoveThreadToProjectDialog";
 import { useIncrementalTimelineEntries } from "../hooks/useIncrementalTimelineEntries";
 import { useNowMinute } from "../hooks/useNowMinute";
 import { useOpenPanelPullRequestUrl } from "../hooks/useOpenPanelPullRequestUrl";
@@ -3840,6 +3842,14 @@ export default function ChatView(props: ChatViewProps) {
                           draftId={draftId}
                           activeProjectRef={activeProjectRef}
                           activeProjectTitle={activeProject?.title ?? null}
+                          onMoveToProject={
+                            activeProject?.isScratch === true &&
+                            activeThreadRef !== null &&
+                            !isLocalDraftThread &&
+                            canMoveThreadIntoProject(activeThreadRef)
+                              ? () => openMoveThreadToProjectDialog(activeThreadRef)
+                              : undefined
+                          }
                         />
                       </div>
                     </div>

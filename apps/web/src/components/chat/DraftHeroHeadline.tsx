@@ -4,7 +4,7 @@ import { resolveEnvironmentMachineKind, type ScopedProjectRef } from "@t3tools/c
 import { scopedProjectKey, scopeProjectRef } from "@t3tools/client-runtime/environment";
 import { isScratchProject } from "@t3tools/client-runtime/state/projects";
 import { T, useGT, Var } from "gt-react";
-import { FolderPlusIcon } from "lucide-react";
+import { FolderInputIcon, FolderPlusIcon } from "lucide-react";
 import { useAtomValue } from "@effect/atom-react";
 import { useRef, useState } from "react";
 
@@ -60,12 +60,15 @@ interface DraftHeroHeadlineProps {
   readonly draftId: DraftId | null;
   readonly activeProjectRef: ScopedProjectRef | null;
   readonly activeProjectTitle: string | null;
+  /** A No project thread with an empty timeline that can join a project. */
+  readonly onMoveToProject?: (() => void) | undefined;
 }
 
 export function DraftHeroHeadline({
   draftId,
   activeProjectRef,
   activeProjectTitle,
+  onMoveToProject,
 }: DraftHeroHeadlineProps) {
   const gt = useGT();
   const projects = useProjects();
@@ -384,6 +387,16 @@ export function DraftHeroHeadline({
         <p className="mt-2 flex h-6 w-full items-center justify-center text-sm">
           {isScratchDraft ? projectSelector : orStartWithoutProject}
         </p>
+      )}
+      {onMoveToProject === undefined ? null : (
+        <button
+          type="button"
+          onClick={onMoveToProject}
+          className="mt-1 inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+        >
+          <FolderInputIcon className="size-3.5" />
+          <T>Move to project…</T>
+        </button>
       )}
     </div>
   );

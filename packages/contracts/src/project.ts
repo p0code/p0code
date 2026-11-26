@@ -591,6 +591,42 @@ export const ProjectCreateFromThreadResult = Schema.Struct({
 });
 export type ProjectCreateFromThreadResult = typeof ProjectCreateFromThreadResult.Type;
 
+/** Where a thread works after it joins a project. */
+export const ThreadMoveWorkspace = Schema.Literals(["keep", "project-root", "new-worktree"]);
+export type ThreadMoveWorkspace = typeof ThreadMoveWorkspace.Type;
+
+export const ThreadMoveToProjectInput = Schema.Struct({
+  threadId: ThreadId,
+  projectId: ProjectId,
+  /** Defaults to `project-root`: the thread joins the project's own checkout. */
+  workspace: Schema.optional(ThreadMoveWorkspace),
+  /** Choosing `keep` accepts a folder outside the project's root. */
+  acceptOutOfTree: Schema.optional(Schema.Boolean),
+});
+export type ThreadMoveToProjectInput = typeof ThreadMoveToProjectInput.Type;
+
+export const ThreadMoveToProjectResult = Schema.Struct({
+  projectId: ProjectId,
+  workspace: ThreadMoveWorkspace,
+  worktreePath: Schema.NullOr(TrimmedNonEmptyString),
+  branch: Schema.NullOr(TrimmedNonEmptyString),
+});
+export type ThreadMoveToProjectResult = typeof ThreadMoveToProjectResult.Type;
+
+export class ThreadMoveToProjectError extends Schema.TaggedError<ThreadMoveToProjectError>()(
+  "ThreadMoveToProjectError",
+  {
+    threadId: ThreadId,
+    projectId: ProjectId,
+    reason: TrimmedNonEmptyString,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {
+  override get message(): string {
+    return this.reason;
+  }
+}
+
 export class ProjectWriteFileError extends Schema.TaggedError<ProjectWriteFileError>()(
   "ProjectWriteFileError",
   {

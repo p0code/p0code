@@ -2099,6 +2099,51 @@
     "."
   ],
   "d71a78d5a0b8045d": "Få hjälp",
+  "73d9e876321196c0": "Det gick inte att flytta tråden",
+  "b5ff56c423bb517c": "Tråden flyttades",
+  "6b35c88472cde70a": "Git-repositorium",
+  "95be4cac9ca707c4": "Inte ett Git-repositorium",
+  "f3368d7b172c8cd2": "Behåll nuvarande mapp",
+  "bd6411ffbe7eb068": "Den här mappen ligger utanför projektet. Tråden fortsätter arbeta där.",
+  "32fd0595b10f90a6": "Använd projektmappen",
+  "c906c30ccbf8cb11": "Skapa en ny worktree",
+  "a3c785cebebb120b": "En ny utcheckning på en ny gren från det här projektet.",
+  "7fb81f6c93b1cd2d": "Kräver ett projekt med ett Git-repositorium.",
+  "928b077c2e1a7563": "Flytta till projekt",
+  "6b9565b4a76a8b31": "Välj projektet som den här tråden ska tillhöra.",
+  "473e6e2207250222": "Lägg till ett annat projekt först.",
+  "c53709d8945dcedb": "Var ska den arbeta?",
+  "cf391191cca339f9": "Behålls",
+  "1f34fe7590628e3a": "Dess meddelanden, bilagor, utkast, modellval, länkar, schema och förälder-barn-trådar.",
+  "9458e2ae2b00a553": [
+    "Projektet blir ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    ". Tråden fortsätter arbeta i sin nuvarande mapp."
+  ],
+  "9776ef8a6004abe4": [
+    "Projektet blir ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    ", och flyttas till en ny worktree."
+  ],
+  "fc9f046956631ea0": [
+    "Projektet blir ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    ", och arbetar i projektets mapp."
+  ],
+  "8fe9fce5c6d47b60": "Flyttar…",
+  "dbdefddd97dbdbac": "Flytta tråd",
   "b9e49ec03efc8383": "Ingen aktiv tråd",
   "fc7b51a6f2a86236": "Välj en tråd att fortsätta i",
   "7543807a82fa9ccd": "Välj en befintlig tråd eller skapa en ny för att komma igång.",
@@ -2665,6 +2710,7 @@
   "3364346f40934e88": "Visa alla projekt",
   "666f3ac177c116b6": "Filtrera efter {project}",
   "1385e2d8bd696370": "Gör om till projekt",
+  "5965b96c7e7ec5f9": "Flytta till projekt…",
   "fcf482cda9bf739f": "Beteende för automatisk markering som klar",
   "39eb35d54cacd314": "Följ inställningarna",
   "65e3725b1c46b314": "Aldrig",
@@ -3461,6 +3507,7 @@
     " för att starta"
   ],
   "99c183d2407cd36d": "Lägg till ett projekt för att starta",
+  "37a767042792de9f": "Flytta till projekt…",
   "06b6bb85f2e34802": "Vad ska vi bygga i {project}?",
   "5a405f15d9985bd6": "Vad ska vi bygga?",
   "613f8257a433cec4": "Media",
@@ -9162,7 +9209,6 @@
   "cd2acbace965052d": "En eller två bokstäver eller siffror.",
   "fc10b8da35c8560e": "Eller klistra in valfri emoji",
   "4051af9bdf152942": "Spara ikon",
-  "6b35c88472cde70a": "Git-repo",
   "3dfe25dfe70c88e9": "Mapp",
   "2eef8f0c67ab3cdd": "Saknas",
   "3e9aef0d35e449a1": "Det gick inte att lägga till mappen",
@@ -9737,7 +9783,6 @@
   "cf2974e9fbb75853": "To",
   "aa92b88e3adcf48a": "Fr",
   "43fe8ba8a74537d9": "Lö",
-  "c906c30ccbf8cb11": "Skapa en ny worktree",
   "8f10acca82ed4772": "Använd projektets utcheckning",
   "f74095e733bcbac1": "Använd en specifik utcheckning",
   "987167a51fcdd1e7": "Inte ansluten: {environments}",
@@ -11151,8 +11196,8 @@
   "88d561facf243588": "URL till webbappen",
   "66e9ad0e3e79eb39": "Inofficiell. Låter T3 Code-appar inloggade med ditt T3-konto nå den här miljön och skickar pushnotiser till mobilappen från butiken. Inte end-to-end-krypterad: Cloudflare avslutar TLS för tunneln, och T3:s relä ser dina enheter, anslutningsmetadata och trådrubriker i notiser.",
   "6fa695d3a822bb9e": "Logga in på T3 Connect",
-  "0873c92c97f73f56": "Koppla från",
   "23a899df3d776ed6": "Länka",
+  "0873c92c97f73f56": "Koppla från",
   "554126d3acde6871": "Pushnotiser",
   "2e487089c231536b": "Tjänst",
   "f11927f7e42b8f1d": "Öppna T3 Code på webben",

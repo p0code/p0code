@@ -2099,6 +2099,51 @@
     "."
   ],
   "d71a78d5a0b8045d": "Obter ajuda",
+  "73d9e876321196c0": "Não foi possível mover a conversa",
+  "b5ff56c423bb517c": "Conversa movida",
+  "6b35c88472cde70a": "Repositório Git",
+  "95be4cac9ca707c4": "Não é um repositório Git",
+  "f3368d7b172c8cd2": "Manter a pasta atual",
+  "bd6411ffbe7eb068": "Esta pasta está fora do projeto. A conversa continua trabalhando nela.",
+  "32fd0595b10f90a6": "Usar a pasta do projeto",
+  "c906c30ccbf8cb11": "Criar uma nova worktree",
+  "a3c785cebebb120b": "Um checkout novo em uma branch nova, a partir deste projeto.",
+  "7fb81f6c93b1cd2d": "Precisa de um projeto com um repositório Git.",
+  "928b077c2e1a7563": "Mover para um projeto",
+  "6b9565b4a76a8b31": "Escolha o projeto ao qual esta conversa deve pertencer.",
+  "473e6e2207250222": "Adicione outro projeto primeiro.",
+  "c53709d8945dcedb": "Onde ela deve trabalhar?",
+  "cf391191cca339f9": "Mantém",
+  "1f34fe7590628e3a": "Suas mensagens, anexos, rascunhos, escolha de modelo, links, agendamento e conversas pai-filho.",
+  "9458e2ae2b00a553": [
+    "O projeto passa a ser ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    ". A conversa continua trabalhando na pasta atual."
+  ],
+  "9776ef8a6004abe4": [
+    "O projeto passa a ser ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    ", e passa para uma nova worktree."
+  ],
+  "fc9f046956631ea0": [
+    "O projeto passa a ser ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    ", e trabalha na pasta do projeto."
+  ],
+  "8fe9fce5c6d47b60": "Movendo…",
+  "dbdefddd97dbdbac": "Mover conversa",
   "b9e49ec03efc8383": "Nenhuma thread ativa",
   "fc7b51a6f2a86236": "Escolha uma thread para continuar",
   "7543807a82fa9ccd": "Selecione uma thread existente ou crie uma nova para começar.",
@@ -2665,6 +2710,7 @@
   "3364346f40934e88": "Mostrar todos os projetos",
   "666f3ac177c116b6": "Filtrar por {project}",
   "1385e2d8bd696370": "Transformar em projeto",
+  "5965b96c7e7ec5f9": "Mover para um projeto…",
   "fcf482cda9bf739f": "Comportamento da conclusão automática",
   "39eb35d54cacd314": "Seguir as configurações",
   "65e3725b1c46b314": "Nunca",
@@ -3461,6 +3507,7 @@
     " para começar"
   ],
   "99c183d2407cd36d": "Adicione um projeto para começar",
+  "37a767042792de9f": "Mover para um projeto…",
   "06b6bb85f2e34802": "O que vamos construir em {project}?",
   "5a405f15d9985bd6": "O que vamos construir?",
   "613f8257a433cec4": "Mídia",
@@ -9156,7 +9203,6 @@
   "cd2acbace965052d": "Uma ou duas letras ou números.",
   "fc10b8da35c8560e": "Ou cole qualquer emoji",
   "4051af9bdf152942": "Salvar ícone",
-  "6b35c88472cde70a": "Repositório Git",
   "3dfe25dfe70c88e9": "Pasta",
   "2eef8f0c67ab3cdd": "Ausente",
   "3e9aef0d35e449a1": "Falha ao adicionar a pasta",
@@ -9730,7 +9776,6 @@
   "cf2974e9fbb75853": "Qi",
   "aa92b88e3adcf48a": "Sx",
   "43fe8ba8a74537d9": "Sá",
-  "c906c30ccbf8cb11": "Criar um novo worktree",
   "8f10acca82ed4772": "Usar o checkout do projeto",
   "f74095e733bcbac1": "Usar um checkout específico",
   "987167a51fcdd1e7": "Não conectado: {environments}",
@@ -9866,7 +9911,7 @@
   "f225597751185044": "Executa um prompt automaticamente em um intervalo, em um horário fixo, uma vez em uma data definida ou quando um webhook é chamado.",
   "fa1c2d60bf41ddc8": "Reconecte este ambiente antes de salvar.",
   "28cb9f31f17a303f": "Esta tarefa agendada não existe mais.",
-  "5a3f881a6bc1c4ff": "Criar um novo worktree",
+  "5a3f881a6bc1c4ff": "Criar uma nova worktree",
   "3b91d2c532294f88": "Usar o checkout do projeto",
   "08dfe6dcf5ae8c40": "Usar um checkout específico",
   "038b86fd8ba9a6aa": "Esta tarefa usa um intervalo legado abaixo de um minuto. Salvar o atualiza para pelo menos um minuto.",
@@ -11144,8 +11189,8 @@
   "88d561facf243588": "URL do app hospedado",
   "66e9ad0e3e79eb39": "Não oficial. Permite que apps do T3 Code conectados à sua conta T3 alcancem este ambiente e envia notificações push para o app móvel da loja. Sem criptografia de ponta a ponta: a Cloudflare encerra o TLS do túnel, e o relay da T3 vê seus dispositivos, os metadados de conexão e os títulos das threads nas notificações.",
   "6fa695d3a822bb9e": "Entrar no T3 Connect",
-  "0873c92c97f73f56": "Desvincular",
   "23a899df3d776ed6": "Vincular",
+  "0873c92c97f73f56": "Desvincular",
   "554126d3acde6871": "Notificações push",
   "2e487089c231536b": "Serviço",
   "f11927f7e42b8f1d": "Abrir o T3 Code web",

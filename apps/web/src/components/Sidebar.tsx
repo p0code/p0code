@@ -123,6 +123,7 @@ import { useShownThreadRouteTarget } from "../hooks/useShownThreadRouteTarget";
 import { useSidebarProjectGroups } from "../hooks/useSidebarProjectGroups";
 import { useStableCallback } from "../hooks/useStableCallback";
 import {
+  canMoveThreadIntoProject,
   canTurnThreadIntoProject,
   useAcknowledgeThreadWoke,
   useThreadActions,
@@ -197,6 +198,7 @@ import type { SidebarThreadSummary } from "../types";
 import { resolveProjectExpanded, useUiStateStore } from "../uiStateStore";
 import { canShareWithGuestAtom } from "./chat/guestShareAvailability";
 import { openGuestShareDialog } from "./chat/guestShareDialogState";
+import { openMoveThreadToProjectDialog } from "./MoveThreadToProjectDialog";
 import { ProjectRowActions } from "./ProjectComboboxRow";
 import { ProjectEnvironmentBadge } from "./ProjectEnvironmentBadge";
 import { ProjectFavicon } from "./ProjectFavicon";
@@ -2831,6 +2833,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                   canShareWithGuestAtom(threadRef.environmentId),
                 ),
                 canTurnIntoProject: canTurnThreadIntoProject(threadRef),
+                canMoveToProject: canMoveThreadIntoProject(threadRef),
                 canRename: !fromSearch,
                 supports: {
                   settlement: configLoaded,
@@ -2951,6 +2954,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             }
             return;
           }
+          case "move-to-project":
+            openMoveThreadToProjectDialog(threadRef);
+            return;
           case "auto-settle:enabled":
           case "auto-settle:disabled": {
             const result = await setThreadAutoSettle(
