@@ -24,23 +24,62 @@ Open TCP ports **80 and 443** directly to the relay process. Do not put an HTTP 
 CDN in front of it: anything that terminates the environment hostnames' TLS breaks the encryption
 guarantee, and HTTP-01 needs public port 80 even when you use a custom ACME directory.
 
-## Run with Docker
+## Docker (GHCR)
 
-From `apps/relay`:
+The relay image is published to `ghcr.io/p0code/p0code-relay` for `linux/amd64` and
+`linux/arm64`. Installing needs no checkout: two files, one command.
 
 ```sh
-RELAY_HOST=relay.example.com RELAY_ACME_EMAIL=you@example.com docker compose up -d --build
+mkdir relay && cd relay
+curl -fsSLO https://raw.githubusercontent.com/p0code/p0code/main/docs/relay/docker-compose.yml
+curl -fsSLO https://raw.githubusercontent.com/p0code/p0code/main/docs/relay/.env.example
+mv .env.example .env   # set RELAY_HOST (required) and RELAY_ACME_EMAIL
+docker compose up -d
 docker compose exec relay node apps/relay/src/cli.ts user add alice
+```
+
+The admin commands work the same in the container — `enroll`, `ls`, `revoke`, `block`:
+
+```sh
 docker compose exec relay node apps/relay/src/cli.ts enroll
 docker compose exec relay node apps/relay/src/cli.ts ls
 docker compose exec relay node apps/relay/src/cli.ts revoke abcdef
 docker compose exec relay node apps/relay/src/cli.ts block docs-abcdef
 ```
 
-The image keeps its SQLite state and ACME certificates in the `relay-data` volume
-(`RELAY_STATE=/data/state.sqlite` and `RELAY_CERT_DIR=/data/certs` are preset in the Dockerfile).
-Preserve the volume across restarts. Compose environment variables must also be set when running
-`docker compose exec`.
+If you would rather not use compose, the same image with `docker run`:
+
+```sh
+docker run -d --name relay --restart unless-stopped \
+  -p 80:80 -p 443:443 -v relay-data:/data \
+  -e RELAY_HOST=relay.example.com -e RELAY_ACME_EMAIL=you@example.com \
+  ghcr.io/p0code/p0code-relay:latest
+docker exec relay node apps/relay/src/cli.ts user add alice
+```
+
+What to know about this install:
+
+- **State.** The `relay-data` volume holds the SQLite state and the ACME certificates
+  (`RELAY_STATE=/data/state.sqlite`, `RELAY_CERT_DIR=/data/certs`). Back it up before upgrades;
+  it is the only copy of the accounts, enrollments and issued certificates. The standalone compose
+  file names the project, so the volume is `p0code-relay_relay-data` wherever you run it.
+- **One `serve` per state file.** A second server on the same volume fails; do not run two
+  replicas against it. Admin commands may run alongside the server.
+- **Tags.** `latest` moves with every push to `main`; releases add `vX.Y.Z` and every build adds
+  `sha-<short>`. Set `RELAY_VERSION=vX.Y.Z` in `.env` for a reproducible install.
+- **Private package.** Anonymous pulls require the GHCR package to be public. Until then,
+  `docker login ghcr.io` with a token that can read packages.
+
+To run from a checkout and build the image yourself, use the contributor overlay:
+
+```sh
+cd apps/relay
+RELAY_HOST=relay.example.com RELAY_ACME_EMAIL=you@example.com \
+  docker compose -f docker-compose.yml -f compose.build.yml up -d --build
+```
+
+Compose reads its variables at `docker compose up` and again at each `docker compose exec`, so keep
+the `.env` (or exports) around.
 
 ## Run with Node
 
@@ -230,7 +269,8 @@ Environment variables on the environment side:
 - **`A public domain needs public hosts enabled`** — pass `--public-hosts` with `--public-domain`.
 - **SQLite busy or a second `serve` fails** — run only one `serve` per state file.
 - **Docker** — compose reads its variables at `docker compose up` and again at each
-  `docker compose exec`; keep the `relay-data` volume.
+  `docker compose exec`; keep the `relay-data` volume. `docker compose pull` answering denied or
+  unauthorized means the GHCR package is not public yet or you are not logged in.
 
 ## Desktop passkeys
 

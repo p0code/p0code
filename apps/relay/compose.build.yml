@@ -1,0 +1,11 @@
+# Contributor overlay: build the image locally instead of pulling it.
+#
+#   docker compose -f docker-compose.yml -f compose.build.yml up -d --build
+#
+# The base file still supplies ports, environment and the data volume.
+services:
+  relay:
+    build:
+      context: ../..
+      dockerfile: apps/relay/Dockerfile
+    image: p0code-relay:dev
