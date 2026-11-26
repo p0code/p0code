@@ -32,10 +32,14 @@ cleanup() {
 }
 trap 'cleanup "\${1:-}"' EXIT
 fingerprint() {
-  rm -f "$work/cert0"
-  codesign --display --extract-certificates="$work/cert" "$1"
-  test -s "$work/cert0"
-  shasum -a 256 "$work/cert0" | cut -d ' ' -f 1
+  rm -f "$work"/cert[0-9]*
+  codesign --display --extract-certificates="$work/cert" "$1" >&2 || return 1
+  test -s "$work/cert0" || return 1
+  local digest
+  digest=$(shasum -a 256 "$work/cert0" | cut -d ' ' -f 1) || return 1
+  rm -f "$work"/cert[0-9]*
+  [ -n "$digest" ] || return 1
+  printf '%s\\n' "$digest"
 }
 if [ "\${1:-}" = prepare ]; then
   [ -w "$app" ] && [ -w "$(dirname "$app")" ] || { echo 'Install location is not writable. Move the app to a writable Applications folder.'; exit 1; }
@@ -52,7 +56,7 @@ if [ "\${1:-}" = prepare ]; then
   codesign --verify --deep --strict "$source"
   current=$(fingerprint "$app")
   incoming=$(fingerprint "$source")
-  [ "$current" = "$incoming" ] || { echo 'Update signing certificate does not match the current app.'; exit 1; }
+  [ -n "$current" ] && [ "$current" = "$incoming" ] || { echo 'Update signing certificate does not match the current app.'; exit 1; }
   currentId=$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$app/Contents/Info.plist")
   incomingId=$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$source/Contents/Info.plist")
   [ "$currentId" = "$incomingId" ] || exit 1
@@ -68,7 +72,9 @@ elif [ "\${1:-}" = install ]; then
   done
   if kill -0 ${options.pid} 2>/dev/null; then echo 'App did not quit; update cancelled.'; exit 1; fi
   codesign --verify --deep --strict "$stage"
-  [ "$(fingerprint "$app")" = "$(fingerprint "$stage")" ] || exit 1
+  current=$(fingerprint "$app")
+  staged=$(fingerprint "$stage")
+  [ -n "$current" ] && [ "$current" = "$staged" ] || exit 1
   replacement="$(dirname "$app")/.p0code-update-$$.app"
   ditto "$stage" "$replacement"
   codesign --verify --deep --strict "$replacement"
