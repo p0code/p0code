@@ -46,6 +46,7 @@ import { ScheduledTaskService } from "../scheduledTasks/ScheduledTaskService.ts"
 import { SecretRequests } from "../secrets/SecretRequests.ts";
 
 import { ServerSettingsService } from "../serverSettings.ts";
+import { PublicTunnels } from "../tunnels/PublicTunnels.ts";
 import { SourceControlRepositoryService } from "../sourceControl/SourceControlRepositoryService.ts";
 import { ProjectCostService } from "../usage/ProjectCostService.ts";
 import { UsageLimitSources } from "../usage/UsageLimitSources.ts";
@@ -95,6 +96,13 @@ const toolHandlerServices = Layer.mergeAll(
   Layer.mock(ServerEnvironment)({}),
   Layer.mock(ServerSecretStore)({}),
   Layer.mock(ServerSettingsService)({}),
+  Layer.mock(PublicTunnels)({
+    allowName: () => false,
+    activeNames: () => [],
+    accept: () => {},
+    closeSockets: () => {},
+    registerServerPort: () => {},
+  }),
   Layer.mock(SourceControlRepositoryService)({}),
   Layer.mock(ThreadIssueService)({}),
   Layer.mock(ThreadLaunchService)({}),

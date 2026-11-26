@@ -249,6 +249,14 @@ export class PublicTunnels extends Context.Service<
       input: PublicTunnelDecideRequestInput,
       approverSessionId: AuthSessionId,
     ) => Effect.Effect<PublicTunnel, PublicTunnelOperationError>;
+    /** An agent's path, resolved as `create` will, and whether it names a file or a folder. */
+    readonly resolveAgentPath: (
+      path: string,
+      scope: { readonly projectId: ProjectId; readonly workingDir: string | null },
+    ) => Effect.Effect<
+      { readonly kind: "file" | "folder"; readonly path: string },
+      PublicTunnelOperationError
+    >;
     readonly linkState: Effect.Effect<PublicTunnelLinkState>;
     readonly changes: Stream.Stream<PublicTunnelStreamEvent>;
     readonly allowName: (name: string) => boolean;
@@ -263,7 +271,15 @@ export interface PublicTunnelCreateOptions {
   readonly caller: PublicTunnelCreatedBy;
   readonly requireApproval?: boolean;
   readonly scopeProjectId?: ProjectId | null;
+  /**
+   * Agent callers: the thread's worktree. Relative file/folder paths resolve against it (or the
+   * project's workspace root without one), and it counts as part of the project's scope.
+   */
+  readonly workingDir?: string | null;
 }
+
+/** An agent's request nobody answers in this long is denied, so it never lingers as pending. */
+const PUBLIC_TUNNEL_REQUEST_TIMEOUT_MS = 15 * 60 * 1000;
 
 const make = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
@@ -342,7 +358,10 @@ const make = Effect.gen(function* () {
     readonly rid: string | null;
     readonly status: string;
   }): string | null => {
-    if (row.status !== "live" && row.status !== "paused") return null;
+    // A pending request carries the URL it would get, so the person approving sees the hostname.
+    if (row.status !== "live" && row.status !== "paused" && row.status !== "pending_approval") {
+      return null;
+    }
     if (!policyAllowed || !relayState.linked || !relayState.slug) return null;
     const domain = resolvePublicBaseDomain();
     if (!domain) return null;
@@ -530,6 +549,16 @@ const make = Effect.gen(function* () {
     row: PublicTunnelRow,
   ) {
     const currentNow = nowMs();
+    if (
+      row.status === "pending_approval" &&
+      row.created_at <= currentNow - PUBLIC_TUNNEL_REQUEST_TIMEOUT_MS
+    ) {
+      yield* sql`
+        UPDATE public_tunnels SET status = 'denied'
+        WHERE id = ${row.id} AND status = 'pending_approval'
+      `;
+      return { ...row, status: "denied" };
+    }
     if (row.status === "live" && row.expires_at !== null && row.expires_at <= currentNow) {
       yield* sql`
         UPDATE public_tunnels SET status = 'expired'
@@ -544,6 +573,24 @@ const make = Effect.gen(function* () {
 
   const expireDueRows = Effect.fn("PublicTunnels.expireDueRows")(function* () {
     const currentNow = nowMs();
+    const timedOut = yield* sql<PublicTunnelRow>`
+      SELECT * FROM public_tunnels
+      WHERE status = 'pending_approval' AND created_at <= ${currentNow - PUBLIC_TUNNEL_REQUEST_TIMEOUT_MS}
+    `;
+    if (timedOut.length > 0) {
+      yield* sql`
+        UPDATE public_tunnels SET status = 'denied'
+        WHERE status = 'pending_approval'
+          AND created_at <= ${currentNow - PUBLIC_TUNNEL_REQUEST_TIMEOUT_MS}
+      `;
+      for (const row of timedOut) {
+        yield* PubSub.publish(changesPubSub, {
+          version: 1,
+          type: "upserted",
+          tunnel: rowToTunnel({ ...row, status: "denied" }),
+        });
+      }
+    }
     const expired = yield* sql<PublicTunnelRow>`
       SELECT * FROM public_tunnels
       WHERE status = 'live' AND expires_at IS NOT NULL AND expires_at <= ${currentNow}
@@ -685,6 +732,7 @@ const make = Effect.gen(function* () {
   const validateAgentProjectScope = Effect.fn("PublicTunnels.validateAgentProjectScope")(function* (
     projectId: ProjectId | null,
     target: PublicTunnelTarget,
+    workingDir: string | null,
   ) {
     if (!projectId) {
       return yield* fail(
@@ -705,12 +753,13 @@ const make = Effect.gen(function* () {
       return yield* fail("scope_refused", "Unknown project for agent-published tunnel.");
     }
     if (target.kind === "port") {
-      return;
+      return target;
     }
     const project = projectOpt.value;
     const allowedRootsRaw = [
       project.workspaceRoot,
       ...project.trackedFolders.map((folder) => folder.path),
+      ...(workingDir ? [workingDir] : []),
     ];
     const allowedRoots = yield* Effect.tryPromise({
       try: () =>
@@ -729,7 +778,7 @@ const make = Effect.gen(function* () {
       catch: () => fail("internal", "Could not resolve project workspace roots."),
     });
 
-    const resolvedTarget = NodePath.resolve(target.path);
+    const resolvedTarget = NodePath.resolve(workingDir ?? project.workspaceRoot, target.path);
     const realTarget = yield* Effect.tryPromise({
       try: () => NodeFSP.realpath(resolvedTarget),
       catch: () => fail("invalid_input", "Target path does not exist."),
@@ -746,6 +795,29 @@ const make = Effect.gen(function* () {
         "Agent-published files and folders must stay within the project workspace.",
       );
     }
+    return { ...target, path: resolvedTarget };
+  });
+
+  const resolveAgentPath = Effect.fn("PublicTunnels.resolveAgentPath")(function* (
+    path: string,
+    scope: { readonly projectId: ProjectId; readonly workingDir: string | null },
+  ) {
+    let base = scope.workingDir;
+    if (base === null && Option.isSome(maybeProjectStore)) {
+      const project = yield* maybeProjectStore.value
+        .get(scope.projectId)
+        .pipe(Effect.mapError(() => fail("internal", "Could not inspect project scope.")));
+      if (Option.isSome(project)) base = project.value.workspaceRoot;
+    }
+    if (base === null) {
+      return yield* fail("scope_refused", "Unknown project for agent-published tunnel.");
+    }
+    const resolved = NodePath.resolve(base, path);
+    const stat = yield* Effect.tryPromise({
+      try: () => NodeFSP.stat(resolved),
+      catch: () => fail("invalid_input", `Target path does not exist: ${path}`),
+    });
+    return { kind: stat.isDirectory() ? ("folder" as const) : ("file" as const), path: resolved };
   });
 
   const validateTargetAndPin = Effect.fn("PublicTunnels.validateTargetAndPin")(function* (
@@ -895,11 +967,16 @@ const make = Effect.gen(function* () {
               : (input.projectId ?? null);
           const threadId = caller.kind === "agent" ? caller.threadId : null;
 
-          if (caller.kind === "agent") {
-            yield* validateAgentProjectScope(projectId, input.target);
-          }
+          const target =
+            caller.kind === "agent"
+              ? yield* validateAgentProjectScope(
+                  projectId,
+                  input.target,
+                  options?.workingDir ?? null,
+                )
+              : input.target;
 
-          const { normalizedTarget, identity } = yield* validateTargetAndPin(input.target);
+          const { normalizedTarget, identity } = yield* validateTargetAndPin(target);
 
           const routing = input.routing ?? "path";
           const access = input.access ?? "public";
@@ -1396,8 +1473,9 @@ const make = Effect.gen(function* () {
           const rows = yield* sql<PublicTunnelRow>`
             SELECT * FROM public_tunnels WHERE id = ${input.id}
           `;
-          const raw = rows[0];
-          if (!raw) return yield* fail("not_found", `Tunnel ${input.id} not found.`);
+          const found = rows[0];
+          if (!found) return yield* fail("not_found", `Tunnel ${input.id} not found.`);
+          const raw = yield* expireRowIfDue(found);
           if (raw.status !== "pending_approval") {
             return yield* fail("invalid_input", "Tunnel request is not pending approval.");
           }
@@ -1426,7 +1504,9 @@ const make = Effect.gen(function* () {
 
           yield* requireReadyToPublish();
           const currentNow = nowMs();
-          let nextExpiresAt = raw.expires_at;
+          // The requested lifetime starts when the request is approved, not when it was asked.
+          let nextExpiresAt =
+            raw.expires_at === null ? null : currentNow + (raw.expires_at - raw.created_at);
           if (input.expiresAt !== undefined) {
             if (
               createdBy.kind === "agent" &&
@@ -1512,13 +1592,15 @@ const make = Effect.gen(function* () {
 
   const changes: Stream.Stream<PublicTunnelStreamEvent> = Stream.unwrap(
     Effect.gen(function* () {
+      // Subscribe before reading the snapshot, so no change between the two is lost.
+      const subscription = yield* PubSub.subscribe(changesPubSub);
       const initial = yield* list();
       const snapshot: PublicTunnelStreamEvent = {
         version: 1,
         type: "snapshot",
         tunnels: initial.tunnels,
       };
-      return Stream.concat(Stream.succeed(snapshot), Stream.fromPubSub(changesPubSub));
+      return Stream.concat(Stream.succeed(snapshot), Stream.fromSubscription(subscription));
     }).pipe(Effect.orDie),
   );
 
@@ -1533,6 +1615,7 @@ const make = Effect.gen(function* () {
     visits,
     link,
     decideRequest,
+    resolveAgentPath,
     linkState: Effect.sync(computeLinkState),
     changes,
     allowName,
