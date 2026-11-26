@@ -59,7 +59,7 @@ describe("GitHub release updates", () => {
       checksum: "a".repeat(64),
     });
     expect(script).toContain('hdiutil attach "$dmg" -readonly -nobrowse');
-    expect(script).toContain("--extract-certificates");
+    expect(script).toContain('--extract-certificates="$work/cert"');
     expect(script).toContain("kill -0 123");
     expect(script).toContain('mv "$backup" "$app"');
     expect(script.indexOf('codesign --verify --deep --strict "$replacement"')).toBeLessThan(

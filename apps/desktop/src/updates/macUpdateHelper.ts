@@ -33,7 +33,7 @@ cleanup() {
 trap 'cleanup "\${1:-}"' EXIT
 fingerprint() {
   rm -f "$work/cert0"
-  codesign --display --extract-certificates "$work/cert" "$1"
+  codesign --display --extract-certificates="$work/cert" "$1"
   test -s "$work/cert0"
   shasum -a 256 "$work/cert0" | cut -d ' ' -f 1
 }
