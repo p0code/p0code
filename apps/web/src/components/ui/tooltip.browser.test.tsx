@@ -2,6 +2,7 @@ import { expect, it, vi } from "vite-plus/test";
 import { page, userEvent } from "vite-plus/test/browser";
 
 import "~/index.css";
+import { ThreadHoverCardPopup } from "../ThreadHoverCard";
 import { render } from "../../../test/render";
 import {
   Combobox,
@@ -198,4 +199,60 @@ it("closes the shared tooltip when its open trigger is removed", async () => {
   // A refresh drops the reaction under the pointer; a removed trigger fires no pointerleave.
   await screen.rerender(tree(false));
   await expect.element(page.getByText("Ada reacted")).not.toBeInTheDocument();
+});
+
+it("dismisses a shared preview on navigation", async () => {
+  await using screen = await render(
+    <>
+      <TimelineAction shared />
+      <button type="button">Next action</button>
+    </>,
+    { router: "/environment/thread" },
+  );
+  const trigger = screen.getByRole("button", { name: "Timeline action" });
+  await userEvent.hover(trigger);
+  await expect.element(page.getByText("Description")).toBeVisible();
+  await screen.router!.navigate({ href: "/pull-requests" });
+  await expect.element(page.getByText("Description")).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "Next action" }));
+  await expect.element(screen.getByRole("button", { name: "Next action" })).toHaveFocus();
+});
+
+it("dismisses a thread card on pointer exit, Escape, scroll and trigger removal", async () => {
+  const tree = (show: boolean) => (
+    <div data-testid="list" className="h-32 overflow-y-auto">
+      {show ? (
+        <Tooltip dismissOnScroll>
+          <TooltipTrigger>Thread</TooltipTrigger>
+          <ThreadHoverCardPopup>Thread details</ThreadHoverCardPopup>
+        </Tooltip>
+      ) : null}
+      <button type="button">Next</button>
+      <div className="h-96" />
+    </div>
+  );
+  await using screen = await render(tree(true));
+  const trigger = screen.getByRole("button", { name: "Thread" });
+  const popup = page.getByText("Thread details");
+  await userEvent.hover(trigger);
+  await expect.element(popup).toBeVisible();
+  await userEvent.hover(popup);
+  await expect.element(popup).toBeVisible();
+  await userEvent.hover(screen.getByRole("button", { name: "Next" }));
+  await expect.element(popup).not.toBeInTheDocument();
+  await userEvent.keyboard("{Tab}");
+  await expect.element(trigger).toHaveFocus();
+  await expect.element(popup).toBeVisible();
+  await userEvent.keyboard("{Escape}");
+  await expect.element(popup).not.toBeInTheDocument();
+  await expect.element(trigger).toHaveFocus();
+  await userEvent.hover(trigger);
+  await expect.element(popup).toBeVisible();
+  screen.getByTestId("list").element().scrollTop = 1;
+  await expect.element(popup).not.toBeInTheDocument();
+  await userEvent.unhover(trigger);
+  await userEvent.hover(trigger);
+  await expect.element(popup).toBeVisible();
+  await screen.rerender(tree(false));
+  await expect.element(popup).not.toBeInTheDocument();
 });

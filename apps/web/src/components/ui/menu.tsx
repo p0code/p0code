@@ -1,3 +1,5 @@
+import { useRef } from "react";
+import { useNavigationDismiss } from "~/hooks/useNavigationDismiss";
 import { Menu as MenuPrimitive } from "@base-ui/react/menu";
 import { CheckIcon, ChevronRightIcon, SearchIcon } from "lucide-react";
 import type * as React from "react";
@@ -8,7 +10,12 @@ import { renderClosingPositioner } from "./closing-positioner";
 import { Input, type InputProps } from "./input";
 import { Spinner } from "./spinner";
 
-const Menu = MenuPrimitive.Root;
+function Menu<Payload>(props: MenuPrimitive.Root.Props<Payload>) {
+  const localActionsRef = useRef<MenuPrimitive.Root.Actions | null>(null);
+  const actionsRef = props.actionsRef ?? localActionsRef;
+  useNavigationDismiss(() => actionsRef.current?.close());
+  return <MenuPrimitive.Root {...props} actionsRef={actionsRef} />;
+}
 
 function MenuTrigger({ className, children, ...props }: MenuPrimitive.Trigger.Props) {
   return (

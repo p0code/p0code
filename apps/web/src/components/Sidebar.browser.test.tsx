@@ -574,3 +574,41 @@ describe("sidebar settled pagination", () => {
     expect(screen.container.querySelectorAll("[data-thread-item]")).toHaveLength(loadedRows);
   });
 });
+
+it("closes the sidebar thread preview when navigating to Pull requests", async () => {
+  using stack = new DisposableStack();
+  const style = document.createElement("style");
+  style.textContent = appCss;
+  document.head.append(style);
+  stack.defer(() => style.remove());
+  const activeProject = project("active");
+  const thread = threadShell(activeProject.id, 0);
+  const threadRef = { environmentId: activeProject.environmentId, threadId: thread.id };
+  vi.mocked(useProjects).mockReturnValue([activeProject]);
+  vi.mocked(useQuietThreadShells).mockReturnValue([thread]);
+  vi.mocked(useThreadRouteTarget).mockReturnValue({ kind: "server", threadRef });
+  vi.mocked(useHandleNewThread).mockReturnValue({
+    activeDraftThread: null,
+    activeThread: thread,
+    defaultProjectRef: { environmentId: activeProject.environmentId, projectId: activeProject.id },
+    defaultProjectFallbackReady: true,
+    handleNewThread: vi.fn().mockResolvedValue(null),
+    routeDraftId: null,
+    routeThreadRef: threadRef,
+  });
+  await using screen = await render(
+    <SidebarProvider>
+      <Sidebar routeReveal={{ observedKey: null, pendingKey: null }} />
+    </SidebarProvider>,
+    { router: "/local/thread-0" },
+  );
+  await userEvent.hover(screen.getByText("Thread 0", { exact: true }).first());
+  await vi.waitFor(() =>
+    expect(document.querySelector('[data-slot="tooltip-popup"]')?.textContent).toContain(
+      "Thread 0",
+    ),
+  );
+  await screen.router!.navigate({ href: "/pull-requests" });
+  await vi.waitFor(() => expect(document.querySelector('[data-slot="tooltip-popup"]')).toBeNull());
+  await expect.element(screen.getByText("Thread 0", { exact: true }).first()).toBeVisible();
+});

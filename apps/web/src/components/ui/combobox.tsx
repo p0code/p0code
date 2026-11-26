@@ -2,6 +2,8 @@ import { Combobox as ComboboxPrimitive } from "@base-ui/react/combobox";
 import { ChevronsUpDownIcon, SearchIcon, XIcon } from "lucide-react";
 import * as React from "react";
 
+import { useNavigationDismiss } from "~/hooks/useNavigationDismiss";
+
 import { cn } from "~/lib/utils";
 import { Input } from "~/components/ui/input";
 import { ScrollArea } from "~/components/ui/scroll-area";
@@ -17,11 +19,14 @@ const ComboboxContext = React.createContext<{
 function Combobox<Value, Multiple extends boolean | undefined = false>(
   props: ComboboxPrimitive.Root.Props<Value, Multiple>,
 ) {
+  const localActionsRef = React.useRef<ComboboxPrimitive.Root.Actions | null>(null);
+  const actionsRef = props.actionsRef ?? localActionsRef;
+  useNavigationDismiss(() => actionsRef.current?.close());
   const chipsRef = React.useRef<Element | null>(null);
   const value = { chipsRef, multiple: !!props.multiple };
   return (
     <ComboboxContext value={value}>
-      <ComboboxPrimitive.Root {...props} />
+      <ComboboxPrimitive.Root {...props} actionsRef={actionsRef} />
     </ComboboxContext>
   );
 }

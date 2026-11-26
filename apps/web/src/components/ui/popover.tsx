@@ -1,3 +1,5 @@
+import { useRef } from "react";
+import { useNavigationDismiss } from "~/hooks/useNavigationDismiss";
 import { Popover as PopoverPrimitive } from "@base-ui/react/popover";
 
 import { cn } from "~/lib/utils";
@@ -6,7 +8,12 @@ import { renderClosingPositioner } from "./closing-positioner";
 
 const PopoverCreateHandle = PopoverPrimitive.createHandle;
 
-const Popover = PopoverPrimitive.Root;
+function Popover<Payload>(props: PopoverPrimitive.Root.Props<Payload>) {
+  const localActionsRef = useRef<PopoverPrimitive.Root.Actions | null>(null);
+  const actionsRef = props.actionsRef ?? localActionsRef;
+  useNavigationDismiss(() => actionsRef.current?.close());
+  return <PopoverPrimitive.Root {...props} actionsRef={actionsRef} />;
+}
 
 function PopoverTrigger({ className, children, ...props }: PopoverPrimitive.Trigger.Props) {
   return (
