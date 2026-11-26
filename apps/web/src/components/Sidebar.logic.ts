@@ -1267,16 +1267,18 @@ export function resolveThreadStatusPill(input: {
     };
   }
 
+  const working = {
+    label: msg("Working"),
+    colorClass: "text-sky-600 dark:text-sky-300/80",
+    dotClass: "bg-sky-500 dark:bg-sky-300/80",
+    pulse: true,
+  };
+
   if (
     (thread.runtime?.status === "running" && thread.blockedOnThreadWait !== true) ||
     thread.runtime?.status === "waiting"
   ) {
-    return {
-      label: msg("Working"),
-      colorClass: "text-sky-600 dark:text-sky-300/80",
-      dotClass: "bg-sky-500 dark:bg-sky-300/80",
-      pulse: true,
-    };
+    return working;
   }
 
   if (
@@ -1310,7 +1312,8 @@ export function resolveThreadStatusPill(input: {
     };
   }
 
-  if (backgroundWorkHoldsCompletion(thread.pendingBackgroundTasks ?? [])) return waiting;
+  // Background work is work: the thread is not waiting for anything, it is still running.
+  if (backgroundWorkHoldsCompletion(thread.pendingBackgroundTasks ?? [])) return working;
 
   const hasPlanReadyPrompt =
     !thread.hasPendingUserInput &&
