@@ -1,0 +1,27 @@
+# Standalone install file for the self-hosted relay. Fetch this and .env.example
+# into an empty directory; nothing else from the repository is needed.
+# Setup and backup notes: docs/operations/02_relay-setup.md#docker-ghcr
+#
+# Stable project name so the data volume keeps the same name in any directory.
+name: p0code-relay
+
+services:
+  relay:
+    image: ${RELAY_IMAGE:-ghcr.io/p0code/p0code-relay}:${RELAY_VERSION:-latest}
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      RELAY_HOST: ${RELAY_HOST:?Set RELAY_HOST}
+      RELAY_ACME_EMAIL: ${RELAY_ACME_EMAIL:-}
+      RELAY_PUBLIC_HOSTS: ${RELAY_PUBLIC_HOSTS:-}
+      RELAY_PUBLIC_DOMAIN: ${RELAY_PUBLIC_DOMAIN:-}
+      RELAY_ALLOW_SIGNUP: ${RELAY_ALLOW_SIGNUP:-}
+      # BYO certificate and key, as paths inside the volume. Leave both unset for ACME.
+      RELAY_CERT: ${RELAY_CERT:-}
+      RELAY_KEY: ${RELAY_KEY:-}
+    volumes:
+      - relay-data:/data
+volumes:
+  relay-data:

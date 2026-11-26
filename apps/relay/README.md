@@ -21,14 +21,18 @@ node apps/relay/src/cli.ts block docs-abcdef
 
 `user add` prompts twice for a hidden password (12 characters minimum); `P0_RELAY_USER_PASSWORD` supplies it for automation. `enroll` prints a one-time token valid for one hour. Pass it privately to the environment. These admin commands access the same SQLite file as `serve`; use `--state` consistently. The relay observes revocations from another process within one second and closes live tunnels. Passwords are stored as salted scrypt hashes and tokens are SHA-256 hashed at rest; the database contains public keys, never environment private keys.
 
-For Docker, from `apps/relay`:
+Docker, from `apps/relay`. The default path pulls the image from GHCR and needs no checkout beyond
+the compose file; `compose.build.yml` builds it from source instead.
 
 ```sh
-RELAY_HOST=relay.example.com RELAY_ACME_EMAIL=you@example.com docker compose up -d --build
+RELAY_HOST=relay.example.com RELAY_ACME_EMAIL=you@example.com docker compose up -d
 docker compose exec relay node apps/relay/src/cli.ts user add alice
 docker compose exec relay node apps/relay/src/cli.ts enroll
 docker compose exec relay node apps/relay/src/cli.ts ls
 docker compose exec relay node apps/relay/src/cli.ts revoke abcdef
+
+# or build locally
+docker compose -f docker-compose.yml -f compose.build.yml up -d --build
 ```
 
 Compose environment variables must also be set when running `docker compose exec`.
