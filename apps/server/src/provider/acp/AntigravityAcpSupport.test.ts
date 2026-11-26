@@ -60,33 +60,28 @@ function makeModelRuntime(
 
 describe("Antigravity release gates", () => {
   it.each([
-    { version: "1.5.0", ownName: false, advertisedAppend: false },
-    { version: "1.5.1", ownName: true, advertisedAppend: false },
-    { version: "1.5.7", ownName: true, advertisedAppend: true },
-    { version: undefined, ownName: false, advertisedAppend: false },
-    { version: "unknown", ownName: false, advertisedAppend: false },
-  ])(
-    "$version: advertised system append $advertisedAppend, own client name $ownName",
-    ({ version, ownName, advertisedAppend }) => {
-      const initialize = {
-        protocolVersion: 1,
-        ...(advertisedAppend
-          ? { agentCapabilities: { _meta: { antigravity: { systemPrompt: { append: true } } } } }
-          : {}),
-        ...(version === undefined
-          ? {}
-          : { agentInfo: { name: "Antigravity ACP Server", version } }),
-      };
-      // Helpers send no append.
-      expect(antigravitySessionMeta(initialize)).toBeUndefined();
-      expect(antigravitySessionMeta(initialize, "<pull_request_linking/>")).toEqual(
-        advertisedAppend
-          ? { antigravity: { systemPrompt: { append: "<pull_request_linking/>" } } }
-          : undefined,
-      );
-      expect(antigravityClientInfo(version).name).toBe(ownName ? "t3-code" : "zed");
-    },
-  );
+    { version: "1.5.0", advertisedAppend: false },
+    { version: "1.5.1", advertisedAppend: false },
+    { version: "1.5.7", advertisedAppend: true },
+    { version: undefined, advertisedAppend: false },
+    { version: "unknown", advertisedAppend: false },
+  ])("$version: advertised system append $advertisedAppend", ({ version, advertisedAppend }) => {
+    const initialize = {
+      protocolVersion: 1,
+      ...(advertisedAppend
+        ? { agentCapabilities: { _meta: { antigravity: { systemPrompt: { append: true } } } } }
+        : {}),
+      ...(version === undefined ? {} : { agentInfo: { name: "Antigravity ACP Server", version } }),
+    };
+    // Helpers send no append.
+    expect(antigravitySessionMeta(initialize)).toBeUndefined();
+    expect(antigravitySessionMeta(initialize, "<pull_request_linking/>")).toEqual(
+      advertisedAppend
+        ? { antigravity: { systemPrompt: { append: "<pull_request_linking/>" } } }
+        : undefined,
+    );
+    expect(antigravityClientInfo().name).toBe("t3-code");
+  });
 });
 
 describe("Antigravity Auto", () => {
