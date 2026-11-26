@@ -42,12 +42,12 @@ import {
   DeployDeploymentInput,
   DeployDomain,
   DeployError,
-  DeployLinkResult,
+  DeployAccountInput,
   DeployLinkRpcInput,
+  DeployLinkRpcResult,
   DeployLogsInput,
   DeployMapProjectInput,
   DeployOverview,
-  DeployPluginInput,
   DeployProjectInput,
   DeployProjectRollbackInput,
   DeployProviderProject,
@@ -56,6 +56,7 @@ import {
   DeploySetEnvInput,
   DeployStartInput,
   DeployStartResult,
+  DeployUpdateAccountInput,
   DeploymentStatus,
 } from "./deploy.ts";
 import {
@@ -804,6 +805,7 @@ export const WS_METHODS = {
   deployOverview: "deploy.overview",
   deployLink: "deploy.link",
   deployUnlink: "deploy.unlink",
+  deployUpdateAccount: "deploy.updateAccount",
   deployListProjects: "deploy.listProjects",
   deployMapProject: "deploy.mapProject",
   deployStart: "deploy.start",
@@ -1587,19 +1589,29 @@ const WsDeployOverviewRpc = Rpc.make(WS_METHODS.deployOverview, {
   success: DeployOverview,
   error: DeployRpcError,
 });
-/** The token goes to the provider plugin's own storage; the host never keeps or returns it. */
+/**
+ * Links a new account (or relinks one). The token goes to the provider plugin's own storage,
+ * keyed by the account id; the host never keeps or returns it.
+ */
 const WsDeployLinkRpc = Rpc.make(WS_METHODS.deployLink, {
   payload: DeployLinkRpcInput,
-  success: DeployLinkResult,
+  success: DeployLinkRpcResult,
   error: DeployRpcError,
 });
+/** Forgets one account: its credential, its record and the mappings that used it. */
 const WsDeployUnlinkRpc = Rpc.make(WS_METHODS.deployUnlink, {
-  payload: DeployPluginInput,
+  payload: DeployAccountInput,
+  success: Schema.Void,
+  error: DeployRpcError,
+});
+/** Renames an account or changes which account profiles it shows in. */
+const WsDeployUpdateAccountRpc = Rpc.make(WS_METHODS.deployUpdateAccount, {
+  payload: DeployUpdateAccountInput,
   success: Schema.Void,
   error: DeployRpcError,
 });
 const WsDeployListProjectsRpc = Rpc.make(WS_METHODS.deployListProjects, {
-  payload: DeployPluginInput,
+  payload: DeployAccountInput,
   success: Schema.Array(DeployProviderProject),
   error: DeployRpcError,
 });
@@ -3058,6 +3070,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsDeployOverviewRpc,
   WsDeployLinkRpc,
   WsDeployUnlinkRpc,
+  WsDeployUpdateAccountRpc,
   WsDeployListProjectsRpc,
   WsDeployMapProjectRpc,
   WsDeployStartRpc,

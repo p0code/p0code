@@ -1,14 +1,18 @@
 import {
+  DeployAccountRef,
+  DeployDeploymentRequest,
   DeployDomain,
   DeployLinkInput,
   DeployLinkResult,
+  DeployLogsRequest,
   DeployProviderDeployInput,
   DeployProviderProject,
+  DeployProviderSetEnvInput,
   DeployProviderStatus,
   DeployResult,
   DeployRollbackInput,
+  DeployTargetRequest,
   DeploymentStatus,
-  DeployEnvVars,
 } from "@t3tools/contracts";
 import type {
   DataSnapshotManifest,
@@ -270,46 +274,60 @@ function instanceStarter<Actions extends PluginActionSchemas>(
 // ── Deploy providers ───────────────────────────────────────────────────────────────────────────
 
 export type {
+  DeployAccountRef,
+  DeployDeploymentRequest,
   DeployDomain,
+  DeployEnvTarget,
   DeployEnvVars,
   DeployLinkInput,
   DeployLinkResult,
+  DeployLogsRequest,
   DeployProviderDeployInput,
   DeployProviderProject,
+  DeployProviderSetEnvInput,
   DeployProviderStatus,
   DeployResult,
   DeployRollbackInput,
+  DeployTarget,
+  DeployTargetKind,
+  DeployTargetRequest,
+  DeployWarning,
   DeploymentStatus,
 } from "@t3tools/contracts";
 
 /**
- * What a deploy provider plugin implements. Keep account credentials in `PluginContext.storage`
- * and make API calls with the lent `HttpClient` (declare `network:outbound`); the host never
- * stores, reads, or returns a provider token. Messages in `PluginError` are shown to people, so
- * never put a token in one.
+ * What a deploy provider plugin implements. One provider can have several linked accounts: every
+ * call names its `account`, and the plugin keeps each account's credential in
+ * `PluginContext.storage` keyed by `account.accountId`. Make API calls with the lent `HttpClient`
+ * (declare `network:outbound`); the host never stores, reads, or returns a provider token.
+ * Messages in `PluginError` are shown to people, so never put a token in one.
  */
 export interface DeployProvider {
   /**
-   * Validates and stores `token` when one is given; otherwise starts or completes the provider's
-   * own sign-in, answering `pending` with a URL to open until it completes.
+   * Validates and stores `token` for `account` when one is given; otherwise starts or completes
+   * the provider's own sign-in, answering `pending` with a URL to open until it completes.
    */
   readonly link: (input: DeployLinkInput) => Effect.Effect<DeployLinkResult, PluginError>;
-  /** Forgets the stored credential. */
-  readonly unlink: Effect.Effect<void, PluginError>;
-  readonly status: Effect.Effect<DeployProviderStatus, PluginError>;
-  readonly listProjects: Effect.Effect<ReadonlyArray<DeployProviderProject>, PluginError>;
+  /** Forgets this account's stored credential. */
+  readonly unlink: (account: DeployAccountRef) => Effect.Effect<void, PluginError>;
+  /** Non-fatal problems (a missing optional scope) go in `warnings`, not in `message`. */
+  readonly status: (account: DeployAccountRef) => Effect.Effect<DeployProviderStatus, PluginError>;
+  readonly listProjects: (
+    account: DeployAccountRef,
+  ) => Effect.Effect<ReadonlyArray<DeployProviderProject>, PluginError>;
+  /** `source.projectRoot` and `source.directory` are absolute paths the host already checked. */
   readonly deploy: (input: DeployProviderDeployInput) => Effect.Effect<DeployResult, PluginError>;
-  readonly deploymentStatus: (deploymentId: string) => Effect.Effect<DeploymentStatus, PluginError>;
+  readonly deploymentStatus: (
+    input: DeployDeploymentRequest,
+  ) => Effect.Effect<DeploymentStatus, PluginError>;
   /** Log lines; with `follow`, the stream stays open until the deployment finishes. */
-  readonly logs: (
-    deploymentId: string,
-    options: { readonly follow?: boolean },
-  ) => Stream.Stream<string, PluginError>;
+  readonly logs: (input: DeployLogsRequest) => Stream.Stream<string, PluginError>;
   readonly rollback: (input: DeployRollbackInput) => Effect.Effect<DeployResult, PluginError>;
   readonly listDomains: (
-    projectId: string,
+    input: DeployTargetRequest,
   ) => Effect.Effect<ReadonlyArray<DeployDomain>, PluginError>;
-  readonly setEnv: (projectId: string, vars: DeployEnvVars) => Effect.Effect<void, PluginError>;
+  /** Sets `vars` and deletes `remove` in one environment, as secrets when `secret`. */
+  readonly setEnv: (input: DeployProviderSetEnvInput) => Effect.Effect<void, PluginError>;
 }
 
 export interface DeployProviderDescriptor {
@@ -335,9 +353,12 @@ const checked = <A>(schema: Schema.Codec<A, unknown>, what: string) => {
   return <E, R>(effect: Effect.Effect<unknown, E, R>) =>
     effect.pipe(Effect.flatMap((value) => decode(value).pipe(Effect.mapError(invalid(what)))));
 };
-const input = <A>(schema: Schema.Codec<A, unknown>) => {
+/** Decodes a host-built input before the plugin sees it, then runs `call` on it. */
+const input = <I>(schema: Schema.Codec<I, unknown>) => {
   const decode = Schema.decodeUnknownEffect(schema);
-  return (value: unknown) => decode(value).pipe(Effect.mapError(invalidInput));
+  return <A, E, R>(call: (value: I) => Effect.Effect<A, E, R>) =>
+    (value: unknown) =>
+      decode(value).pipe(Effect.mapError(invalidInput), Effect.flatMap(call));
 };
 
 const checkLink = checked(DeployLinkResult, "link result");
@@ -347,9 +368,13 @@ const checkResult = checked(DeployResult, "deploy result");
 const checkDeployment = checked(DeploymentStatus, "deployment status");
 const checkDomains = checked(Schema.Array(DeployDomain), "domain list");
 const linkInput = input(DeployLinkInput);
+const accountInput = input(DeployAccountRef);
 const deployInput = input(DeployProviderDeployInput);
+const deploymentInput = input(DeployDeploymentRequest);
+const targetInput = input(DeployTargetRequest);
 const rollbackInput = input(DeployRollbackInput);
-const envInput = input(DeployEnvVars);
+const envInput = input(DeployProviderSetEnvInput);
+const decodeLogsInput = Schema.decodeUnknownEffect(DeployLogsRequest);
 
 /** Wraps a provider so a plugin cannot hand the host data outside the contract. */
 const checkProvider = (
@@ -357,26 +382,34 @@ const checkProvider = (
   provider: DeployProvider,
 ): StartedDeployProvider => ({
   descriptor,
-  link: (value) => linkInput(value).pipe(Effect.flatMap(provider.link), checkLink),
-  unlink: provider.unlink,
-  status: checkStatus(provider.status),
-  listProjects: checkProjects(provider.listProjects),
-  deploy: (value) => deployInput(value).pipe(Effect.flatMap(provider.deploy), checkResult),
-  deploymentStatus: (id) => checkDeployment(provider.deploymentStatus(id)),
-  logs: (id, options) =>
-    provider
-      .logs(id, options)
-      .pipe(
-        Stream.mapEffect((line) =>
-          typeof line === "string"
-            ? Effect.succeed(line)
-            : Effect.fail(new PluginError({ message: "The deploy provider sent a non-text log." })),
+  link: (value) => checkLink(linkInput(provider.link)(value)),
+  unlink: accountInput(provider.unlink),
+  status: (account) => checkStatus(accountInput(provider.status)(account)),
+  listProjects: (account) => checkProjects(accountInput(provider.listProjects)(account)),
+  deploy: (value) => checkResult(deployInput(provider.deploy)(value)),
+  deploymentStatus: (value) => checkDeployment(deploymentInput(provider.deploymentStatus)(value)),
+  logs: (value) =>
+    Stream.unwrap(
+      decodeLogsInput(value).pipe(
+        Effect.mapError(invalidInput),
+        Effect.map((decoded) =>
+          provider
+            .logs(decoded)
+            .pipe(
+              Stream.mapEffect((line) =>
+                typeof line === "string"
+                  ? Effect.succeed(line)
+                  : Effect.fail(
+                      new PluginError({ message: "The deploy provider sent a non-text log." }),
+                    ),
+              ),
+            ),
         ),
       ),
-  rollback: (value) => rollbackInput(value).pipe(Effect.flatMap(provider.rollback), checkResult),
-  listDomains: (projectId) => checkDomains(provider.listDomains(projectId)),
-  setEnv: (projectId, vars) =>
-    envInput(vars).pipe(Effect.flatMap((decoded) => provider.setEnv(projectId, decoded))),
+    ),
+  rollback: (value) => checkResult(rollbackInput(provider.rollback)(value)),
+  listDomains: (value) => checkDomains(targetInput(provider.listDomains)(value)),
+  setEnv: envInput(provider.setEnv),
 });
 
 /**

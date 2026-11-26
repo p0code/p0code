@@ -136,6 +136,7 @@ import Migration0117 from "./Migrations/117_WorkflowMailSender.ts";
 import Migration0118 from "./Migrations/118_WorkflowPools.ts";
 import Migration0119 from "./Migrations/119_DropUnusedProviderTurnIndexes.ts";
 import Migration0120 from "./Migrations/120_PublicTunnels.ts";
+import Migration0122 from "./Migrations/122_DeployHost.ts";
 
 import Migration0121 from "./Migrations/121_WorkflowRunSubject.ts";
 
@@ -263,6 +264,7 @@ const migrationsById = {
   119: Migration0119,
   120: Migration0120,
   121: Migration0121,
+  122: Migration0122,
 } as const;
 
 type KnownMigration = (typeof migrationsById)[keyof typeof migrationsById];

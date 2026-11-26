@@ -213,6 +213,7 @@ const make = Effect.gen(function* () {
   const stop = Effect.fn("PluginHost.stop")(function* (plugin: Plugin) {
     const id = plugin.manifest.id;
     const current = running.get(id);
+    console.log("DEBUG STOP", id, new Error().stack?.split("\n").slice(1,12).join("\n"));
     running.delete(id);
     if (current !== undefined) {
       yield* Scope.close(current.scope, Exit.void).pipe(
@@ -236,7 +237,7 @@ const make = Effect.gen(function* () {
           const isRunning = running.has(plugin.manifest.id);
           const failed = infos.get(plugin.manifest.id)?.state === "failed";
           if (wanted && !isRunning && !failed) return start(plugin);
-          if (!wanted && (isRunning || failed)) return stop(plugin);
+          if (!wanted && (isRunning || failed)) { console.log("DEBUG RECONCILE-STOP", JSON.stringify(settings)); return stop(plugin); }
           return Effect.void;
         },
         { discard: true },
@@ -381,12 +382,14 @@ const make = Effect.gen(function* () {
   yield* settingsService.streamChanges.pipe(
     Stream.runForEach(() =>
       settingsService.getSettings.pipe(
+        Effect.tap((settings) => Effect.sync(() => console.log("DEBUG STREAM", JSON.stringify(settings.plugins), settings.activeAccountProfileId))),
         Effect.flatMap((settings) => reconcile(settings.plugins)),
         Effect.ignore,
       ),
     ),
     Effect.forkScoped,
   );
+  console.log("DEBUG HOST MAKE", JSON.stringify(initial));
   yield* reconcile(initial).pipe(Effect.forkScoped);
 
   return PluginHost.of({

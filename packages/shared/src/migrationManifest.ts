@@ -129,6 +129,7 @@ export const migrationManifest: Array<readonly [number, string]> = [
   [119, "DropUnusedProviderTurnIndexes"],
   [120, "PublicTunnels"],
   [121, "WorkflowRunSubject"],
+  [122, "DeployHost"],
 ];
 
 export const FIRST_V2_MIGRATION_ID = 55;

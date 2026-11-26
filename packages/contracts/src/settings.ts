@@ -9,7 +9,6 @@ import {
   type AuthEnvironmentScope,
 } from "./auth.ts";
 import { PluginSettings } from "./plugins.ts";
-import { DeployProjectMapping } from "./deploy.ts";
 import {
   PublicTunnelExpirySeconds,
   PUBLIC_TUNNEL_DEFAULT_EXPIRY_SECONDS,
@@ -1616,10 +1615,6 @@ export const ServerSettings = Schema.Struct({
   projectSettingsFolded: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   /** Bundled plugins stay off until someone with relay:configure turns them on. */
   plugins: PluginSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
-  /** Which deploy provider project each local project deploys to. Holds no credentials. */
-  deployProjects: Schema.Record(ProjectId, DeployProjectMapping).pipe(
-    Schema.withDecodingDefault(Effect.succeed({})),
-  ),
 
   enableAgentDeviceAccess: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   /** Enabling the Device panel must not grant providers device control. */
@@ -2066,8 +2061,6 @@ export const ServerSettingsPatch = Schema.Struct({
     }),
   ),
   plugins: Schema.optionalKey(PluginSettings),
-  /** Merges per project; null removes the mapping. */
-  deployProjects: Schema.optionalKey(Schema.Record(ProjectId, Schema.NullOr(DeployProjectMapping))),
   cloudSpeechCredentials: Schema.optionalKey(
     Schema.Struct({
       openai: Schema.optionalKey(SettingsSecretValue),

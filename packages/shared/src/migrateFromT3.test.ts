@@ -19,7 +19,7 @@ import {
   migrateFromT3,
   shouldOfferT3Import,
 } from "./migrateFromT3.ts";
-import { migrationManifest } from "./migrationManifest.ts";
+import { BUILD_MIGRATION_HEAD, migrationManifest } from "./migrationManifest.ts";
 
 const roots: Array<string> = [];
 afterEach(() => {
@@ -466,7 +466,7 @@ describe("migrateFromT3", () => {
 
   it("refuses a source with migrations newer than this build, leaving the destination untouched", async () => {
     const fixture = makeFixture();
-    seedMigrations(fixture.database, [...migrationManifest, [120, "NewerT3Migration"]]);
+    seedMigrations(fixture.database, [...migrationManifest, [BUILD_MIGRATION_HEAD + 1, "NewerT3Migration"]]);
     fixture.database.close();
 
     write(NodePath.join(fixture.to, "userdata", "settings.json"), '{"mine":true}');
