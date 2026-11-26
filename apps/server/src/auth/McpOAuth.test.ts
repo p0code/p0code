@@ -746,6 +746,54 @@ it.live("grants only the scopes the MCP client asked for, never wider than the a
   ),
 );
 
+it.live("a peer link gets the level its link code names, though it asks for no scope", () =>
+  withRoutes((handler, auth) =>
+    Effect.gen(function* () {
+      const peer = yield* handler(
+        at("/oauth/mcp/register", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: encodeJson({
+            client_name: "Studio",
+            software_id: MCP_PEER_LINK_SOFTWARE_ID,
+            redirect_uris: [REDIRECT],
+          }),
+        }),
+      ).pipe(Effect.flatMap(json<{ client_id: string }>));
+      // A link never names an OAuth scope: the level is the linking user's choice.
+      const { scope: _omitted, ...params } = authorizeParams(peer.client_id);
+      for (const access of AuthMcpClientAccess.literals) {
+        const code = yield* auth.issuePairingCredential({ access, purpose: "peer-link" });
+        const approved = yield* decide(handler, params, {
+          _tag: "pairing-code",
+          access,
+          code: code.credential,
+        });
+        expect(approved.status, access).toBe(200);
+        const token = yield* handler(
+          at(
+            "/oauth/mcp/token",
+            form({
+              grant_type: "authorization_code",
+              code: new URL(approved.redirectTo!).searchParams.get("code")!,
+              redirect_uri: params.redirect_uri!,
+              client_id: peer.client_id,
+              code_verifier: verifier,
+            }),
+          ),
+        ).pipe(Effect.flatMap(json<{ access_token: string }>));
+        const signedIn = yield* auth.authenticateMcpClient(
+          HttpServerRequest.fromWeb(
+            at("/mcp", { headers: { authorization: `Bearer ${token.access_token}` } }),
+          ),
+        );
+        expect(signedIn.peerLink, access).toBe(true);
+        expect(signedIn.access, access).toBe(access);
+      }
+    }),
+  ),
+);
+
 it.live("refuses a malformed or unsupported MCP scope before showing consent", () =>
   withRoutes((handler) =>
     Effect.gen(function* () {

@@ -569,8 +569,10 @@ const make = Effect.gen(function* () {
           () => consume("read-only"),
         ),
       );
-      const granted = intersectScopes(requested, mcpClientScopes(consumed));
-      access = accessForScopes(granted, consumed);
+      // Peer links carry the access authorized by their pairing code, not an OAuth scope request.
+      access = input.authorization.client.peerLink
+        ? consumed
+        : accessForScopes(intersectScopes(requested, mcpClientScopes(consumed)), consumed);
     } else {
       const session = yield* approvingSession(input.request, input.authorization);
       if (
