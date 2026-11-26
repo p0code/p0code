@@ -37,7 +37,7 @@ The app here is not the one that ships from the store, so nothing mobile runs on
 push or a pull request: every mobile workflow is `workflow_dispatch` only, and the
 macOS mobile native lint in CI runs only when CI is dispatched.
 
-- **Android APK mirror:** dispatch `.github/workflows/mobile-android-apk.yml` to check Google Play Alpha and mirror a new Play-signed universal APK to an `android-beta-<build-number>` prerelease (`GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`). Nightlies attach the latest internal-testing APK when available.
+- **Store binaries:** this fork keeps the development and preview mobile tooling (preview builds, OTA updates and native client installs) but does not publish builds to the App Store, TestFlight or Google Play.
 
 ## Windows payload topology and update validation
 
