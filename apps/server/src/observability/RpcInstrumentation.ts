@@ -307,16 +307,6 @@ const RPC_AGGREGATES = {
   [WS_METHODS.subscribeServerConfig]: "server",
   [WS_METHODS.subscribeServerLifecycle]: "server",
   [WS_METHODS.subscribeAuthAccess]: "auth",
-  [WS_METHODS.tunnelsList]: "tunnels",
-  [WS_METHODS.tunnelsCreate]: "tunnels",
-  [WS_METHODS.tunnelsUpdate]: "tunnels",
-  [WS_METHODS.tunnelsRotate]: "tunnels",
-  [WS_METHODS.tunnelsRemove]: "tunnels",
-  [WS_METHODS.tunnelsStopAll]: "tunnels",
-  [WS_METHODS.tunnelsVisits]: "tunnels",
-  [WS_METHODS.tunnelsLink]: "tunnels",
-  [WS_METHODS.tunnelsDecideRequest]: "tunnels",
-  [WS_METHODS.tunnelsSubscribe]: "tunnels",
 } as const satisfies Readonly<Record<WsRpcMethod, string>>;
 
 const RPC_SPAN_PREFIX = "ws.rpc";
