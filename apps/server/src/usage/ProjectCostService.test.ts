@@ -1,5 +1,5 @@
 import { assert, describe, it } from "@effect/vitest";
-import { ProjectId, ThreadId, type UsageTokenTotals } from "@t3tools/contracts";
+import { UsageDay, ProjectId, ThreadId, type UsageTokenTotals } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as TestClock from "effect/testing/TestClock";
@@ -59,6 +59,7 @@ const seedTurn = (
   threadId: string,
   turn: Record<string, unknown>,
   completedAt: string | null = null,
+  providerThreadId = `pt-${threadId}`,
 ) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
@@ -68,7 +69,7 @@ const seedTurn = (
         provider_turn_id, thread_id, provider_thread_id, node_id, ordinal, status, completed_at,
         payload_json
       ) VALUES (
-        ${`turn-${ordinal}`}, ${threadId}, ${`pt-${threadId}`}, 'node', ${ordinal}, 'completed',
+        ${`turn-${ordinal}`}, ${threadId}, ${providerThreadId}, 'node', ${ordinal}, 'completed',
         ${completedAt}, ${JSON.stringify(turn)}
       )
     `;
@@ -271,6 +272,115 @@ describe("ProjectCostService", () => {
         assert.isNull(result.byModel.find(({ model }) => model === "mystery")?.costUsd);
         assert.strictEqual(result.total.input, 150);
       }).pipe(Effect.provide(layer)),
+    );
+  });
+  describe("readDetails", () => {
+    const input = {
+      sinceDay: UsageDay.make("2026-03-01"),
+      untilDay: UsageDay.make("2026-03-31"),
+      offset: 0,
+      limit: 1,
+      sort: "day" as const,
+      descending: false,
+    };
+    it.effect(
+      "groups days, accounts and models, filters before totals, and pages deterministically",
+      () =>
+        Effect.gen(function* () {
+          yield* seedThread("thread-1", PROJECT, "model-a", "Refactor");
+          yield* seedThread("thread-2", OTHER_PROJECT, "model-b", "Other");
+          const sql = yield* SqlClient.SqlClient;
+          yield* sql`INSERT INTO orchestration_v2_projection_provider_threads (provider_thread_id, thread_id, provider, provider_instance_id, status, updated_at, payload_json) VALUES ('pt-thread-1', 'thread-1', 'claude', 'work-account', 'active', '2026-03-01T00:00:00Z', '{}')`;
+          yield* seedTurn(
+            "thread-1",
+            usage({
+              inputTokens: 1000,
+              cachedInputTokens: 400,
+              cacheCreationTokens: 100,
+              outputTokens: 50,
+              reasoningTokens: 20,
+            }),
+            "2026-03-01T23:59:00Z",
+          );
+          yield* seedTurn(
+            "thread-1",
+            usage({ inputTokens: 10, outputTokens: 5 }),
+            "2026-03-01T23:59:30Z",
+          );
+          yield* seedTurn(
+            "thread-1",
+            { model: "model-b", ...usage({ inputTokens: 100, outputTokens: 20 }) },
+            "2026-03-02T00:00:00Z",
+          );
+          yield* seedTurn("thread-2", usage({ inputTokens: 10 }), "2026-03-02T00:00:00Z");
+          yield* seedTurn(
+            "thread-1",
+            usage({ inputTokens: 9999, localCommand: true }),
+            "2026-03-02T00:00:00Z",
+          );
+          yield* seedTurn("thread-1", { status: "completed" }, "2026-03-02T00:00:00Z");
+          const service = yield* ProjectCostService.ProjectCostService;
+          yield* sql`INSERT INTO orchestration_v2_projection_provider_threads (provider_thread_id, thread_id, provider, provider_instance_id, status, updated_at, payload_json) VALUES ('other-account-thread', 'thread-1', 'claude', 'zzz-account', 'active', '2026-03-01T00:00:00Z', '{}')`;
+          yield* seedTurn(
+            "thread-1",
+            usage({ inputTokens: 10 }),
+            "2026-03-01T23:59:45Z",
+            "other-account-thread",
+          );
+          yield* seedTurn("thread-1", usage({ inputTokens: 10 }), "2026-03-03T00:00:00Z");
+          const first = yield* service.readDetails(input);
+          assert.strictEqual(first.totalRows, 5);
+          assert.strictEqual(first.rows.length, 1);
+          assert.strictEqual(first.rows[0]?.records, 2);
+          assert.strictEqual(first.rows[0]?.uncachedInputTokens, 510);
+          assert.strictEqual(first.rows[0]?.reasoningTokens, 20);
+          assert.strictEqual(first.rows[0]?.account, "work-account");
+          assert.closeTo(first.totals.costUsd, 1.065 + 1.2 + 0.1 + 0.02, 1e-9);
+          assert.strictEqual(first.totals.records, 6);
+          const second = yield* service.readDetails({ ...input, offset: 1 });
+          assert.notDeepEqual(second.rows, first.rows);
+          assert.deepEqual(second.totals, first.totals);
+          const filtered = yield* service.readDetails({
+            ...input,
+            project: "PROJECT-1",
+            provider: "WORK",
+            model: "MODEL-B",
+            threadId: THREAD_1,
+            sinceDay: UsageDay.make("2026-03-02"),
+            untilDay: UsageDay.make("2026-03-02"),
+          });
+          assert.strictEqual(filtered.totalRows, 1);
+          assert.closeTo(filtered.totals.costUsd, 1.2, 1e-9);
+          const byCost = yield* service.readDetails({ ...input, sort: "cost", descending: true });
+          assert.strictEqual(byCost.rows[0]?.model, "model-b");
+        }).pipe(Effect.provide(layer)),
+    );
+    it.effect(
+      "reports unknown prices, empty filters and exhausted pages without losing totals",
+      () =>
+        Effect.gen(function* () {
+          yield* seedThread("thread-1", PROJECT, "mystery");
+          yield* seedTurn("thread-1", usage({ inputTokens: 100 }), "2026-03-01T00:00:00Z");
+          const service = yield* ProjectCostService.ProjectCostService;
+          const unknown = yield* service.readDetails(input);
+          assert.strictEqual(unknown.totals.unpricedRecords, 1);
+          assert.strictEqual(unknown.totals.costUsd, 0);
+          const empty = yield* service.readDetails({ ...input, provider: "missing" });
+          assert.deepEqual(empty.rows, []);
+          assert.strictEqual(empty.totalRows, 0);
+          assert.strictEqual(empty.totals.records, 0);
+          const end = yield* service.readDetails({ ...input, offset: 100 });
+          assert.deepEqual(end.rows, []);
+          assert.deepEqual(end.totals, unknown.totals);
+          const reversed = yield* service
+            .readDetails({ ...input, untilDay: UsageDay.make("2026-02-01") })
+            .pipe(Effect.flip);
+          assert.strictEqual(reversed.reason, "invalidWindow");
+          const long = yield* service
+            .readDetails({ ...input, untilDay: UsageDay.make("2028-01-01") })
+            .pipe(Effect.flip);
+          assert.strictEqual(long.reason, "invalidWindow");
+        }).pipe(Effect.provide(layer)),
     );
   });
 });

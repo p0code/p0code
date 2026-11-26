@@ -213,3 +213,55 @@ export class ProjectCostReadError extends Schema.TaggedError<ProjectCostReadErro
     return "Failed to read the project's cost.";
   }
 }
+
+export const UsageDetailsSort = Schema.Literals([
+  "day",
+  "title",
+  "project",
+  "provider",
+  "model",
+  "input",
+  "output",
+  "cacheRead",
+  "cacheWrite",
+  "reasoning",
+  "records",
+  "cost",
+]);
+export const UsageDetailsInput = Schema.Struct({
+  sinceDay: UsageDay,
+  untilDay: UsageDay,
+  project: Schema.optional(Schema.String),
+  provider: Schema.optional(Schema.String),
+  model: Schema.optional(Schema.String),
+  threadId: Schema.optional(ThreadId),
+  offset: NonNegativeInt,
+  limit: NonNegativeInt.check(Schema.isBetween({ minimum: 1, maximum: 100 })),
+  sort: UsageDetailsSort,
+  descending: Schema.Boolean,
+});
+export type UsageDetailsInput = typeof UsageDetailsInput.Type;
+export const UsageDetailsTotals = Schema.Struct({
+  ...UsageTokenTotals.fields,
+  records: NonNegativeInt,
+  costUsd: Schema.Number,
+  unpricedRecords: NonNegativeInt,
+});
+export const UsageDetailsRow = Schema.Struct({
+  ...UsageDetailsTotals.fields,
+  day: UsageDay,
+  threadId: ThreadId,
+  title: Schema.String,
+  projectId: ProjectId,
+  project: Schema.String,
+  provider: Schema.String,
+  account: Schema.String,
+  model: Schema.String,
+});
+export type UsageDetailsRow = typeof UsageDetailsRow.Type;
+export const UsageDetails = Schema.Struct({
+  rows: Schema.Array(UsageDetailsRow),
+  totalRows: NonNegativeInt,
+  totals: UsageDetailsTotals,
+});
+export type UsageDetails = typeof UsageDetails.Type;
