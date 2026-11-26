@@ -258,7 +258,14 @@ it.effect(
             type: "project.created",
             commandId: CommandId.make("cmd-proj-1"),
             eventId: EventId.make("evt-proj-1"),
-            timestamp: nowIso,
+            // ProjectStore consumes committed events, including their aggregate envelope.
+            sequence: 1,
+            aggregateKind: "project",
+            aggregateId: projectId,
+            occurredAt: nowIso,
+            causationEventId: null,
+            correlationId: null,
+            metadata: {},
             payload: {
               projectId,
               title: "Demo Project",
@@ -401,7 +408,14 @@ it.effect(
             type: "project.created",
             commandId: CommandId.make("cmd-proj-agent"),
             eventId: EventId.make("evt-proj-agent"),
-            timestamp: nowIso,
+            // ProjectStore consumes committed events, including their aggregate envelope.
+            sequence: 1,
+            aggregateKind: "project",
+            aggregateId: projectId,
+            occurredAt: nowIso,
+            causationEventId: null,
+            correlationId: null,
+            metadata: {},
             payload: {
               projectId,
               title: "Agent Project",
@@ -742,7 +756,6 @@ it.effect(
 
       const seededDb = Layer.provideMerge(seedDb, dbLayer);
       const infraLayer = Layer.mergeAll(
-        seededDb,
         ManagedPolicy.layerTest({
           schemaVersion: 1,
           organization: "Acme",
@@ -753,7 +766,10 @@ it.effect(
           publicTunnels: { enabled: true },
         }),
         makeFakeSelfRelayLayer(relayRef),
-      ).pipe(Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodePlatformCrypto.layer)));
+      ).pipe(
+        Layer.provideMerge(seededDb),
+        Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodePlatformCrypto.layer)),
+      );
 
       const baseDeps = Layer.mergeAll(
         infraLayer,

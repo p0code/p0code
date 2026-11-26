@@ -31,8 +31,6 @@ import { m } from "../../i18n/messages";
 import { workspaceHasColumns } from "../layout/workspace/workspace-selection-store";
 import { leaveSettingsPage } from "../settings/settings-navigation";
 
-import { hasCloudPublicConfig } from "../cloud/publicConfig";
-import { CloudEnvironmentRows } from "./CloudEnvironmentRows";
 import {
   autoConnectReport,
   devAutoConnectAttemptAtom,

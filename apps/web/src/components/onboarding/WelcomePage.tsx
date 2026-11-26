@@ -112,7 +112,7 @@ import { QRCodeSvg } from "../ui/qr-code";
 import { ScrollArea } from "../ui/scroll-area";
 import { SidebarInset } from "../ui/sidebar";
 import { toastManager } from "../ui/toast";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
 
 import { SharedTooltipTrigger } from "../ui/shared-tooltip";

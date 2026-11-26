@@ -5,7 +5,7 @@ import { m, type MessageResolver } from "../i18n/messages";
 import { ThreadContextDragGhost } from "./chat/ThreadContextDragGhost";
 import { threadPullRequestLinkMode } from "@t3tools/client-runtime/thread-pull-request-compatibility";
 import { visibleThreadPullRequests } from "@t3tools/shared/threadPullRequests";
-import { decodeMsg } from "gt-react";
+
 import { useConveneJudges } from "../hooks/useConveneJudges";
 
 import { useAtomValue } from "@effect/atom-react";
@@ -310,14 +310,13 @@ import {
 } from "./promptLinks/copyPromptLink";
 import { openLinkPullRequestDialog } from "./pullRequest/LinkPullRequestDialog";
 import { ProjectContentSearchDialog } from "./search/ProjectContentSearchDialog";
-import { SETTINGS_SECTION_LABELS, settingsForThisPlatform } from "./settings/settingsSearch";
-import { useAvailableSettingsSearchItems } from "./settings/useAvailableSettingsSearchItems";
+
 import { suggestAppAccessForRemote } from "./sourceControlAppAccessToast";
 import { Button } from "./ui/button";
 import { Checkbox } from "./ui/checkbox";
 import { CommandDialog, CommandDialogPopup, CommandFooterAction } from "./ui/command";
 import { stackedThreadToast, toastManager } from "./ui/toast";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
+
 import { useWorkflowEnvironmentIds } from "./workflows/useWorkflowEnvironmentIds";
 
 const EMPTY_BROWSE_ENTRIES: FilesystemBrowseResult["entries"] = [];

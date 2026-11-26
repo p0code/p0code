@@ -79,7 +79,6 @@ import {
 } from "./webhookDedupe.ts";
 import { describeFailedWebhookFilter, findFailedWebhookFilter } from "./webhookFilter.ts";
 import { constantTimeEquals, verifyWebhookSignature } from "./webhookVerification.ts";
-import { withLocalTracing } from "@t3tools/shared/relayTracing";
 import { routineSpan } from "@t3tools/shared/observability";
 
 export const WEBHOOK_ROUTE_PREFIX = "/api/hooks";

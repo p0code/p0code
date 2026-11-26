@@ -80,7 +80,9 @@ const projects: Project[] = [
 vi.mock(import("../../state/environments"), async (original) => ({
   ...(await original()),
   useEnvironments: () => ({
+    // The catalog reports loading failures separately from network state.
     isReady: true,
+    catalogError: null,
     networkStatus: "online" as const,
     environments,
     presentationById: new Map(),

@@ -34,9 +34,7 @@ import { resolveNewThreadEnvMode, resolveProjectSettings } from "@t3tools/shared
 import { resolveNewThreadModelSelection } from "@t3tools/shared/usageLimits";
 
 import * as Schema from "effect/Schema";
-import { flushSync } from "react-dom";
 
-import { type DraftSessionState } from "../composerDraftStore";
 import { routeDraftToAccountProfile } from "../lib/accountProfileDraft";
 import {
   draftModelSelectionApplies,

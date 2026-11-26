@@ -45,7 +45,8 @@ import * as ServerSettings from "../serverSettings.ts";
 import WorkflowRunTagsMigration from "../persistence/Migrations/115_WorkflowRunTags.ts";
 import WorkflowMailSenderMigration from "../persistence/Migrations/117_WorkflowMailSender.ts";
 import WorkflowPoolsMigration from "../persistence/Migrations/118_WorkflowPools.ts";
-import WorkflowRunSubjectMigration from "../persistence/Migrations/119_WorkflowRunSubject.ts";
+// The p0 tunnel migrations occupy 119–120; workflow subjects follow at 121.
+import WorkflowRunSubjectMigration from "../persistence/Migrations/121_WorkflowRunSubject.ts";
 import * as WorkflowEngine from "./WorkflowEngine.ts";
 import {
   Issue,

@@ -853,7 +853,6 @@ const layerRuntimeDependencies = layerRuntimeCoreDependencies.pipe(
   Layer.provideMerge(layerResourceDiagnostics),
   Layer.provideMerge(TraceDiagnostics.layer),
   Layer.provideMerge(TriageService.layer.pipe(Layer.provide(GitVcsDriver.layer))),
-  // Layers memoize by reference, so this is the same policy the settings layer reads.
 
   Layer.provideMerge(ExternalLauncher.layer),
   Layer.provideMerge(RemoteOpenTargets.layer),
@@ -862,7 +861,13 @@ const layerRuntimeDependencies = layerRuntimeCoreDependencies.pipe(
   // GitVcsDriver.layer is memoized and some of its build sites live outside this file, so the
   // fetch interval goes in context here, before the first build captures it.
   Layer.provideMerge(VcsAutomaticFetchInterval.layer.pipe(Layer.provide(layerServerSettings))),
-  Layer.provideMerge(PublicTunnels.layer),
+  Layer.provideMerge(
+    PublicTunnels.layer.pipe(
+      Layer.provide(layerServerSettings),
+      Layer.provide(ManagedPolicy.layer),
+      Layer.provide(ServerSecretStore.layer),
+    ),
+  ),
   Layer.provide(NetService.layer),
 );
 

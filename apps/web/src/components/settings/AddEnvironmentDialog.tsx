@@ -57,10 +57,6 @@ import { Input } from "../ui/input";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 
-import { environmentCatalog } from "~/connection/catalog";
-
-import { useRelayEnvironmentDiscovery } from "~/state/environments";
-
 import {
   formatDesktopSshConnectionError,
   parseManualDesktopSshTarget,

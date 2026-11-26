@@ -146,13 +146,11 @@ import { useNativeWorkspaceColumnsSupported } from "../../native/NativeWorkspace
 import type { ComposerTextPaste } from "../../native/T3ComposerEditor.types";
 import { useDeviceType, useNativeColumnLayoutMetrics } from "../../native/native-layout-metrics";
 import { appAtomRegistry } from "../../state/atom-registry";
-import { deviceEnvironment } from "../../state/device";
 
 import { useChildThreadInputs, useThreadReportedModelSelection } from "../../state/entities";
 import { orchestrationEnvironment } from "../../state/orchestration";
 import { mobilePreferencesAtom } from "../../state/preferences";
-import { useThreadServerBrowserTabs } from "../../state/preview";
-import { useEnvironmentQuery } from "../../state/query";
+
 import type { QueuedRunEdit } from "../../state/queued-run-edit";
 import { useEnvironmentScopeDenied } from "../../state/session";
 import {
@@ -173,7 +171,6 @@ import {
   setFreshSessionPending,
 } from "../../state/use-composer-drafts";
 
-import { threadDevicePreviews } from "../devices/threadDevicePreviews";
 import {
   useWorkspaceContentWidth,
   useWorkspaceSettledContentWidth,

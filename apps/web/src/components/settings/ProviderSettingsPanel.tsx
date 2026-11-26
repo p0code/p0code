@@ -95,7 +95,7 @@ import {
 import { ScrollArea } from "../ui/scroll-area";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+
 import { AccountProfilesSettings } from "./AccountProfilesSettings";
 
 import { AddProviderInstanceDialog } from "./AddProviderInstanceDialog";

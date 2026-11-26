@@ -1,21 +1,6 @@
 #!/usr/bin/env node
-// Measures a checkout's server process (CPU, wakeups, memory, time to the API) against a fake
-// Anthropic API and the real `claude` CLI. See docs/internals/16_performance-regressions.md.
-
-// Measures a checkout's server process (CPU, wakeups, memory, time to the API) against a fake
-// Anthropic API and the real `claude` CLI. See docs/internals/16_performance-regressions.md.
-// Measures a checkout's server process (CPU, wakeups, memory, time to the API) against a fake
-// Anthropic API and the real `claude` CLI. See docs/internals/16_performance-regressions.md.
-// Measures a checkout's server process (CPU, wakeups, memory, time to the API) against a fake
-// Anthropic API and the real `claude` CLI. See docs/internals/16_performance-regressions.md.
-// Measures a checkout's server process (CPU, wakeups, memory, time to the API) against a fake
-// Anthropic API and the real `claude` CLI. See docs/internals/16_performance-regressions.md.
-// Measures a checkout's server process (CPU, wakeups, memory, time to the API) against a fake
-// Anthropic API and the real `claude` CLI. See docs/internals/16_performance-regressions.md.
-// Measures a checkout's server process (CPU, wakeups, memory, time to the API) against a fake
-// Anthropic API and the real `claude` CLI. See docs/internals/16_performance-regressions.md.
-// Measures a checkout's server process (CPU, wakeups, memory, time to the API) against a fake
-// Anthropic API and the real `claude` CLI. See docs/internals/16_performance-regressions.md.
+// Measures server performance against a fake Anthropic API and the real Claude CLI.
+// See docs/internals/16_performance-regressions.md.
 import * as NodeHttpClient from "@effect/platform-node/NodeHttpClient";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";

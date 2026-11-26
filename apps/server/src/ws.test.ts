@@ -896,7 +896,14 @@ const layerUnusedConfigRpcServices = Layer.mergeAll(
   Layer.mock(IssueTrackerConnections.IssueTrackerConnections)({}),
   Layer.mock(PullRequestSyncReactor.PullRequestSyncReactor)({}),
   Layer.mock(SelfRelay.SelfRelay)({}),
-  Layer.mock(PublicTunnels.PublicTunnels)({}),
+  // Tunnel transport hooks are synchronous and must be supplied alongside Effect mocks.
+  Layer.mock(PublicTunnels.PublicTunnels)({
+    allowName: () => false,
+    activeNames: () => [],
+    accept: () => undefined,
+    closeSockets: () => undefined,
+    registerServerPort: () => undefined,
+  }),
   Layer.mock(PluginHost)({}),
   Layer.mock(PluginInstaller)({}),
   Layer.mock(DataBackup)({}),

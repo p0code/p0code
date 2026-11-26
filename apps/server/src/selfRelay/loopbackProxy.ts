@@ -63,7 +63,7 @@ export function stripHopByHopHeaders(
     if (value === undefined) continue;
     const lower = key.toLowerCase();
     if (options?.keepUpgrade && (lower === "connection" || lower === "upgrade")) {
-      result[lower] = value;
+      result[lower] = Array.isArray(value) ? value.join(", ") : value;
       continue;
     }
     if (HOP_BY_HOP_HEADERS.has(lower) || connectionTokens.has(lower)) {

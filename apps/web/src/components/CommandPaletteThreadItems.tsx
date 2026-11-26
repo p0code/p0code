@@ -125,7 +125,6 @@ function useThreadActionItems(input: {
   const { activeThread, runThread } = input;
   const messages = useMessages();
   const gt = useGT();
-  const navigate = useNavigate();
   const threads = useProfileThreads(useVisibleThreadShells());
   const delegatedUnderParent = useDelegatedUnderParent();
   const { environments } = useEnvironments();
