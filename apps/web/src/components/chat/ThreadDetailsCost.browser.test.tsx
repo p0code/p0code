@@ -6,10 +6,13 @@ import "~/index.css";
 
 import { render } from "../../../test/render";
 
-vi.mock("~/state/server", async () => {
+vi.mock("~/state/server", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("~/state/server")>();
   const { AsyncResult, Atom } = await import("effect/reactivity");
   return {
+    ...actual,
     serverEnvironment: {
+      ...actual.serverEnvironment,
       projectCost: () =>
         Atom.make(
           AsyncResult.success({
