@@ -53,6 +53,8 @@ it.effect("names a Google account from the CLI's saved sign-in and stores the em
     });
 
     const state = yield* readAntigravityAccountState(profile, "oauth-personal");
+    expect(yield* readAntigravityAccountState(profile, "gemini-api-key")).toEqual(state);
+    expect(state.credentialFingerprint).toMatch(/^[a-f0-9]{64}$/);
     expect(state).toMatchObject({
       email: "paid@example.com",
       credentialStatus: "valid",

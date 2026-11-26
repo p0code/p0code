@@ -50,6 +50,11 @@ const writeFakeCli = Effect.fn("AntigravityCliUsageTest.writeFakeCli")(function*
   const executable = path.join(directory, "antigravity");
   yield* fs.writeFileString(executable, `#!/bin/sh\n${body}\n`);
   yield* fs.chmod(executable, 0o755);
+  yield* fs.makeDirectory(path.join(directory, "antigravity-acp"));
+  yield* fs.writeFileString(
+    path.join(directory, "antigravity-acp", "antigravity-oauth-token"),
+    JSON.stringify({ token: { access_token: "fixture-token" } }),
+  );
   return { directory, executable };
 });
 
@@ -172,6 +177,50 @@ describe.skipIf(HostProcess.Platform.defaultValue() === "win32")(
         yield* reader.read;
         expect((yield* fs.readFileString(counter)).trim().split("\n")).toHaveLength(3);
       }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+    );
+
+    it.effect(
+      "never borrows a default profile and invalidates cached usage when its credential changes",
+      () =>
+        Effect.gen(function* () {
+          const fs = yield* FileSystem.FileSystem;
+          const path = yield* Path.Path;
+          const { directory, executable } = yield* writeFakeCli(
+            [
+              'test -n "$SSH_CONNECTION" || exit 1',
+              'test "$AGY_ACP_FORCE_FILE_STORAGE" = "1" || exit 1',
+              'cat "$GEMINI_HOME/answer"',
+            ].join("\n"),
+          );
+          const credentialPath = path.join(directory, "antigravity-acp", "antigravity-oauth-token");
+          const token = yield* fs.readFileString(credentialPath);
+          yield* fs.remove(credentialPath);
+          yield* fs.writeFileString(path.join(directory, "answer"), usageOutput);
+          const reader = yield* makeAntigravityCliUsageReader({
+            resolveExecutable: Effect.die("must not start without its credential"),
+            environment: process.env,
+            cwd: directory,
+          });
+          expect(yield* reader.read).toEqual([]);
+          const signedIn = yield* makeAntigravityCliUsageReader({
+            resolveExecutable: Effect.succeed(executable),
+            environment: process.env,
+            cwd: directory,
+          });
+          yield* fs.writeFileString(credentialPath, token);
+          expect(yield* signedIn.read).toEqual(expectedWindows);
+          yield* fs.writeFileString(
+            credentialPath,
+            JSON.stringify({ token: { access_token: "another-account" } }),
+          );
+          yield* fs.writeFileString(
+            path.join(directory, "answer"),
+            "Gemini Models\tWeekly Limit Remaining\t50%\t1970-01-01T00:00:00Z",
+          );
+          expect((yield* signedIn.read)[0]?.usedPercent).toBe(50);
+          yield* fs.remove(credentialPath);
+          expect(yield* signedIn.read).toEqual([]);
+        }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
     );
 
     it.live("reports no windows without crashing on a non-zero exit", () =>

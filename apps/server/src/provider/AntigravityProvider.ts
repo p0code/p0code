@@ -43,7 +43,6 @@ import {
 import {
   makeUnavailableUsageLimits,
   makeUsageLimits,
-  resolveUsageLimitsAfterProbe,
 } from "@t3tools/provider-core/server/usageLimits";
 import { antigravityThinkingConfig } from "./acp/AntigravityAcpSupport.ts";
 import type { AntigravityAccountState } from "./AntigravityAccount.ts";
@@ -288,19 +287,31 @@ export const makeAntigravityProvider = Effect.fn("makeAntigravityProvider")(func
   const usageRead = yield* FiberHandle.make();
   const republish = yield* Deferred.make<Effect.Effect<ServerProvider>>();
   const scope = yield* Effect.scope;
-  // No windows means no answer, never a fresh allowance; keep whatever was published before.
-  const usageLimitsOf = (windows: ReadonlyArray<ServerProviderUsageWindow>) =>
-    Effect.map(DateTime.now, (now) => {
-      const checkedAt = DateTime.formatIso(now);
-      return windows.length === 0
-        ? makeUnavailableUsageLimits({
-            checkedAt,
-            reason: "probeFailed",
-            message:
-              "Antigravity's CLI did not report any quota. Refresh provider status to retry.",
-          })
-        : makeUsageLimits({ checkedAt, windows });
-    });
+  const usageLimitsOf = Effect.fn("AntigravityProvider.usageLimitsOf")(function* (
+    windows: ReadonlyArray<ServerProviderUsageWindow>,
+  ) {
+    const checkedAt = DateTime.formatIso(yield* DateTime.now);
+    const account = options.readAccount ? yield* options.readAccount : undefined;
+    const authenticated =
+      account?.hasSignIn ||
+      (yield* SubscriptionRef.get(metadata)).draft.auth.status === "authenticated";
+    return windows.length === 0
+      ? makeUnavailableUsageLimits({
+          checkedAt,
+          reason: authenticated ? "unsupported" : "probeFailed",
+          message: authenticated
+            ? "Antigravity limits are unavailable for this sign-in method."
+            : account !== undefined
+              ? "Sign in with Google to see Antigravity limits."
+              : "Antigravity's CLI did not report any quota. Refresh provider status to retry.",
+        })
+      : {
+          ...makeUsageLimits({ checkedAt, windows }),
+          ...(account?.credentialFingerprint
+            ? { credentialFingerprint: account.credentialFingerprint }
+            : {}),
+        };
+  });
   const refreshUsage = Effect.fn("AntigravityProvider.refreshUsage")(function* () {
     if (!options.probeUsage || (yield* PublishingUsage)) return;
     yield* FiberHandle.run(
@@ -312,10 +323,7 @@ export const makeAntigravityProvider = Effect.fn("makeAntigravityProvider")(func
             ...state,
             draft: {
               ...state.draft,
-              usageLimits: resolveUsageLimitsAfterProbe({
-                published: state.draft.usageLimits,
-                probed,
-              }),
+              usageLimits: probed,
             },
           })),
         ),

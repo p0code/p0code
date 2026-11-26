@@ -581,45 +581,86 @@ it.layer(layerTest)("Antigravity provider snapshots", (it) => {
     }),
   );
 
-  it.effect("retains a successful CLI read on failure, and clears limits on sign-out", () =>
-    Effect.gen(function* () {
-      const windows = parseAntigravityCliUsage(cliUsageOutput);
-      const usage = yield* Ref.make<ReadonlyArray<ServerProviderUsageWindow>>(windows);
-      const cleared = yield* Ref.make(0);
-      const harness = yield* makeHarness({
-        probeUsage: Ref.get(usage),
-        clearUsage: Ref.update(cleared, (count) => count + 1),
-      });
-      const published = yield* harness.nextPublish(
-        (snapshot) => snapshot.usageLimits !== undefined,
-      );
-      yield* harness.initialize;
-      const limits = (yield* published)?.usageLimits;
-      expect(limits?.windows.map((window) => window.id)).toEqual([
-        "3p-5h",
-        "3p-weekly",
-        "gemini-weekly",
-      ]);
-      // The second health check is the one the failed background read triggers.
-      const checks = yield* Ref.make(0);
-      const failedReadApplied = yield* Deferred.make<void>();
-      yield* Ref.set(
-        harness.probe,
-        Ref.updateAndGet(checks, (count) => count + 1).pipe(
-          Effect.tap((count) =>
-            count === 2 ? Deferred.succeed(failedReadApplied, undefined) : Effect.void,
+  it.effect(
+    "distinguishes authenticated Google accounts without limits from signed-out profiles",
+    () =>
+      Effect.gen(function* () {
+        for (const hasSignIn of [true, false]) {
+          const harness = yield* makeHarness({
+            auth: { type: "oauth-business", label: "Google account" },
+            readAccount: Effect.succeed({
+              email: hasSignIn ? "paid@example.com" : undefined,
+              expiresAt: undefined,
+              credentialStatus: "unknown",
+              canRenew: hasSignIn,
+              hasSignIn,
+            }),
+            probeUsage: Effect.succeed([]),
+          });
+          const published = yield* harness.nextPublish(
+            (snapshot) => snapshot.usageLimits !== undefined,
+          );
+          yield* harness.initialize;
+          const snapshot = yield* published;
+          expect(snapshot?.usageLimits?.windows).toEqual([]);
+          expect(snapshot?.usageLimits?.unavailable?.message).toBe(
+            hasSignIn
+              ? "Antigravity limits are unavailable for this sign-in method."
+              : "Sign in with Google to see Antigravity limits.",
+          );
+          if (hasSignIn)
+            expect(snapshot?.auth).toMatchObject({
+              status: "authenticated",
+              email: "paid@example.com",
+            });
+        }
+      }),
+  );
+
+  it.effect(
+    "removes a successful CLI read when the profile becomes unreadable, and clears limits on sign-out",
+    () =>
+      Effect.gen(function* () {
+        const windows = parseAntigravityCliUsage(cliUsageOutput);
+        const usage = yield* Ref.make<ReadonlyArray<ServerProviderUsageWindow>>(windows);
+        const cleared = yield* Ref.make(0);
+        const harness = yield* makeHarness({
+          probeUsage: Ref.get(usage),
+          clearUsage: Ref.update(cleared, (count) => count + 1),
+        });
+        const published = yield* harness.nextPublish(
+          (snapshot) => snapshot.usageLimits !== undefined,
+        );
+        yield* harness.initialize;
+        const limits = (yield* published)?.usageLimits;
+        expect(limits?.windows.map((window) => window.id)).toEqual([
+          "3p-5h",
+          "3p-weekly",
+          "gemini-weekly",
+        ]);
+        // The second health check is the one the failed background read triggers.
+        const checks = yield* Ref.make(0);
+        const failedReadApplied = yield* Deferred.make<void>();
+        yield* Ref.set(
+          harness.probe,
+          Ref.updateAndGet(checks, (count) => count + 1).pipe(
+            Effect.tap((count) =>
+              count === 2 ? Deferred.succeed(failedReadApplied, undefined) : Effect.void,
+            ),
+            Effect.as(initializeResult),
           ),
-          Effect.as(initializeResult),
-        ),
-      );
-      yield* Ref.set(usage, []);
-      yield* harness.provider.snapshot.refresh;
-      yield* Deferred.await(failedReadApplied);
-      expect((yield* harness.provider.snapshot.getSnapshot).usageLimits).toEqual(limits);
-      yield* harness.provider.onSignedOut;
-      expect((yield* harness.provider.snapshot.getSnapshot).usageLimits).toBeUndefined();
-      expect(yield* Ref.get(cleared)).toBe(1);
-    }),
+        );
+        yield* Ref.set(usage, []);
+        yield* harness.provider.snapshot.refresh;
+        yield* Deferred.await(failedReadApplied);
+        expect((yield* harness.provider.snapshot.getSnapshot).usageLimits).toMatchObject({
+          windows: [],
+          unavailable: { reason: "probeFailed" },
+        });
+        yield* harness.provider.onSignedOut;
+        expect((yield* harness.provider.snapshot.getSnapshot).usageLimits).toBeUndefined();
+        expect(yield* Ref.get(cleared)).toBe(1);
+      }),
   );
 
   it.effect("a CLI read finishing after sign-out cannot restore account limits", () =>

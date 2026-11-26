@@ -1891,6 +1891,48 @@ describe("Antigravity window attribution", () => {
     limits: { checkedAt, windows },
   });
 
+  it.each(["email", "fingerprint"] as const)(
+    "merges two instances of the same %s despite percent jitter, keeping different accounts separate",
+    (identity) => {
+      const instances = ["trial", "trial-copy", "paid"].map((id, index) =>
+        provider({
+          driver: antigravity,
+          instanceId: ProviderInstanceId.make(id),
+          displayName: id,
+          auth: {
+            status: "authenticated",
+            ...(identity === "email"
+              ? { email: index < 2 ? "trial@example.com" : "paid@example.com" }
+              : {}),
+          },
+          usageLimits: {
+            checkedAt,
+            windows: [{ ...rollingWindow, usedPercent: 40 + index * 0.1 }],
+            ...(identity === "fingerprint"
+              ? { credentialFingerprint: index < 2 ? "trial-fingerprint" : "paid-fingerprint" }
+              : {}),
+          },
+        }),
+      );
+      const accounts = collectLimitAccounts(
+        new Map([
+          [
+            EnvironmentId.make("local"),
+            { entry: { target: { label: "Local" } }, serverConfig: { providers: instances } },
+          ],
+        ]),
+      );
+      expect(accounts).toHaveLength(2);
+      const [pool] = collectLimitPools(accounts, now);
+      expect(pool?.windows[0]?.members).toHaveLength(2);
+      if (identity === "email")
+        expect(accounts.map((account) => account.email)).toEqual([
+          "trial@example.com",
+          "paid@example.com",
+        ]);
+    },
+  );
+
   it("renders one rolling and one weekly row, not one row per model", () => {
     const [pool] = collectLimitPools(
       [
