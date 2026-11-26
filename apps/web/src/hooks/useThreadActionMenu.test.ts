@@ -35,10 +35,16 @@ function recordEffect(action: string) {
 }
 
 vi.mock("../components/CustomSnoozeDialog", () => ({ requestCustomSnooze: vi.fn() }));
-vi.mock("react", () => ({
-  useCallback: (callback: unknown) => callback,
-  useMemo: (factory: () => unknown) => factory(),
-}));
+// Keep the real module so components pulled in by the menu can create contexts;
+// only the hooks this test exercises need a plain, non-rendering implementation.
+vi.mock(import("react"), async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    useCallback: <T>(callback: T) => callback,
+    useMemo: <T>(factory: () => T) => factory(),
+  };
+});
 vi.mock("@tanstack/react-router", () => ({
   useRouter: () => ({ navigate: async () => recordEffect("project-settings") }),
 }));
@@ -121,6 +127,7 @@ vi.mock("./useSettings", () => ({
 }));
 vi.mock("./useThreadActions", () => ({
   canTurnThreadIntoProject: () => false,
+  canMoveThreadIntoProject: () => false,
   useThreadActions: () =>
     Object.fromEntries(
       [
@@ -189,8 +196,9 @@ describe("thread menu permissions", () => {
     createMenu({ onFind }).openMenu(position);
     await state.completed.promise;
     const items = state.show.mock.calls[1]![0];
-    expect(items[0]).toMatchObject({ id: "find", label: "Find in thread" });
-    expect(items[0]?.disabled).not.toBe(true);
+    const find = items.find((item) => item.id === "find");
+    expect(find).toMatchObject({ id: "find", label: "Find in thread" });
+    expect(find?.disabled).not.toBe(true);
     expect(state.effects).toEqual(["find"]);
     expect(onFind).toHaveBeenCalledExactlyOnceWith(target);
   });
