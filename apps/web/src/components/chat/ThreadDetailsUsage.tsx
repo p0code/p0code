@@ -61,6 +61,11 @@ export interface ThreadDetailsCostTarget {
   readonly environmentId: EnvironmentId;
   readonly projectId: ProjectId;
   readonly threadId: ThreadId;
+  /**
+   * No project (scratch) threads, including legacy scratch ids whose project row is gone. Their
+   * project figure would total every scratch chat, so the details show only this thread.
+   */
+  readonly isScratch: boolean;
 }
 
 export interface ThreadDetailsUsageInput {
@@ -242,8 +247,16 @@ export function ThreadDetailsCost({
       compact={compact}
     >
       <div className="grid grid-cols-[auto_minmax(3rem,1fr)_auto] gap-x-3 text-xs">
-        <CostRow label={gt("This project")} amount={cost?.project ?? null} strong />
-        {cost?.thread ? <CostRow label={gt("This thread")} amount={cost.thread} /> : null}
+        {target.isScratch ? null : (
+          <CostRow label={gt("This project")} amount={cost?.project ?? null} strong />
+        )}
+        {target.isScratch || cost?.thread ? (
+          <CostRow
+            label={gt("This thread")}
+            amount={cost?.thread ?? null}
+            strong={target.isScratch}
+          />
+        ) : null}
       </div>
     </ThreadDetailsSection>
   );

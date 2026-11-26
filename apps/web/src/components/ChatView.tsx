@@ -1603,6 +1603,10 @@ export default function ChatView(props: ChatViewProps) {
           environmentId: activeThread.environmentId,
           projectId: activeThread.projectId,
           threadId: activeThread.id,
+          // A project row that is still missing after bootstrap is a legacy scratch thread.
+          isScratch:
+            activeProjectIsScratch ||
+            (activeProject === null && activeEnvironmentBootstrapComplete),
         }
       : null;
   const pendingBackgroundTasks = deriveThreadPendingBackgroundTasks(serverProjection);

@@ -7,6 +7,7 @@ import {
   type ProjectCostAmount,
   type ProjectCostInput,
   ProjectCostReadError,
+  SCRATCH_PROJECT_TITLE,
   type UsageTokenTotals,
 } from "@t3tools/contracts";
 import * as Clock from "effect/Clock";
@@ -348,6 +349,9 @@ const make = Effect.gen(function* () {
     return breakdown;
   });
 
+  // Rows stay per thread, so scratch chats are never one synthetic project. A legacy scratch
+  // project id with no project row takes the same "No project" label as the live scratch
+  // project, which keeps its spend listed and findable when the project filter asks for it.
   const readDetails = Effect.fn("ProjectCostService.readDetails")(function* (
     input: UsageDetailsInput,
   ) {
@@ -372,7 +376,8 @@ const make = Effect.gen(function* () {
       FROM (
         SELECT substr(COALESCE(pt.completed_at, pt.started_at), 1, 10) AS day,
           th.thread_id AS threadId, th.title AS title, th.project_id AS projectId,
-          COALESCE(pr.title, th.project_id) AS project,
+          COALESCE(pr.title, ${SCRATCH_PROJECT_TITLE}) AS project,
+          CASE WHEN pr.project_id IS NULL THEN 1 ELSE 0 END AS legacyScratch,
           COALESCE(pth.provider, th.default_provider) AS provider,
           COALESCE(pth.provider_instance_id, th.provider_instance_id, th.default_provider) AS account,
           COALESCE(json_extract(pt.payload_json, '$.model'), json_extract(pt.payload_json, '$.turnTokenUsage.models[0]'), json_extract(th.payload_json, '$.modelSelection.model'), 'unknown') AS model,
@@ -390,7 +395,8 @@ const make = Effect.gen(function* () {
           AND substr(COALESCE(pt.completed_at, pt.started_at), 1, 10) BETWEEN ${input.sinceDay} AND ${input.untilDay}
           AND (${input.threadId ?? null} IS NULL OR th.thread_id = ${input.threadId ?? null})
       )
-      WHERE instr(lower(project), lower(${input.project ?? ""})) > 0
+      WHERE (instr(lower(project), lower(${input.project ?? ""})) > 0
+        OR (legacyScratch = 1 AND instr(lower(projectId), lower(${input.project ?? ""})) > 0))
         AND (instr(lower(provider), lower(${input.provider ?? ""})) > 0 OR instr(lower(account), lower(${input.provider ?? ""})) > 0)
         AND instr(lower(model), lower(${input.model ?? ""})) > 0
         AND input + output + cached + created > 0
