@@ -8182,20 +8182,32 @@
   "c56b618d212bf018": "Restart and reclaim",
   "be1eeddb87fc6fe9": "Deploy",
   "129164189c938942": "Deploy providers",
+  "3813b894c79465cc": "Showing accounts in profile {profile} and untagged accounts.",
   "3a2e919ca921a60c": "Deployments",
   "1e80233b9193116f": "Off in Plugins",
   "58b7b0e79013a091": "Linked",
   "364cae9e608a63d4": "Sign-in expired",
   "4ad258969e361b3c": "Error",
   "fa83ec856513632c": "Not linked",
+  "cb08f24f16c20636": "{provider} account name",
+  "d15c8b6978f84bb0": "Team ID (optional)",
+  "3dd856f39c7357c1": "{provider} team ID",
   "8f6976097de6cd25": "Access token (optional)",
   "bd33c4006ff50a0b": "{provider} access token",
-  "ce63a11bca54e095": "Unlink",
-  "19cb8f9ff8df4979": "Relink",
+  "c470de965e25e06c": "Add account",
   "e176b5f17630f05b": "Link",
+  "d12f3de27e2c3e33": "{account} access token",
+  "19cb8f9ff8df4979": "Relink",
+  "ce63a11bca54e095": "Unlink",
+  "8551834f1c340cdd": "Pages",
+  "2a1b75440047d80f": "Worker",
+  "7c7b27a74ff7278e": "Project",
   "afdefb17101fac3a": "Deploy target for {project}",
   "8a88e44ae853c80d": "Choose target",
   "e9755757b8a9fdc9": "No target",
+  "e944ce52b43a8a6c": "Default environment for {project}",
+  "b1cb84e4eca5b06b": "Production",
+  "bf0f37f53a4e2d62": "Preview",
   "efbb8f3d8336378c": "Rolled back to {deployment}.",
   "2a1419da20c2bb27": "Queued",
   "d000f2b5e832a45d": "Building",
@@ -8203,11 +8215,11 @@
   "d01b83620a105d50": "Failed",
   "7318f8b5cbcc0ff0": "Canceled",
   "5942a61dbfb5214e": "Waiting for log lines…",
-  "b1cb84e4eca5b06b": "Production",
-  "bf0f37f53a4e2d62": "Preview",
   "5b84d580f80b3688": "Git branch",
   "457bf48449fb47aa": "Local build",
   "15ed472fb3ba4a6d": "Default branch",
+  "0deabb397a585f0c": "Project root",
+  "8c74857ecf98c255": "Development",
   "f59d5b9846c2a3c6": "Connect an environment running this version to deploy from it.",
   "0c5c6d47c9eec1cd": "No deploy providers installed",
   "3e68a8b268965f62": [
@@ -8222,6 +8234,9 @@
   "5486b18239ddf78e": "Add a project to this environment to deploy it.",
   "7f9c4906e0c768ca": "Deploys started from this environment appear here.",
   "7770f2ba0e443fb7": "Turn this plugin on in Plugins to link an account.",
+  "583bcfdd538ebd2d": "Link one or more accounts to deploy with this provider.",
+  "7245b7d43b25b231": "Add another named account for a different team or profile.",
+  "6a4c8edee7d78217": "Finish signing in",
   "a4f401eedf02e8ef": [
     "Account: ",
     {
@@ -8230,36 +8245,63 @@
       "v": "v"
     }
   ],
-  "6a4c8edee7d78217": "Finish signing in",
-  "fa320e2be19caa64": [
+  "8ada67f73f632595": [
+    "Team: ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    }
+  ],
+  "0ff72af5fbb1cafa": "All profiles",
+  "0433e5db08bed6e4": [
     "Deploys to ",
     {
       "i": 1,
       "k": "_gt_value_1",
       "v": "v"
     },
-    " on",
-    " ",
+    " (",
     {
       "i": 2,
       "k": "_gt_value_2",
       "v": "v"
+    },
+    ") via",
+    " ",
+    {
+      "i": 3,
+      "k": "_gt_value_3",
+      "v": "v"
+    },
+    " on ",
+    {
+      "i": 4,
+      "k": "_gt_value_4",
+      "v": "v"
     }
   ],
   "42ff68458bdb217c": "Not mapped to a deploy target.",
+  "88de3ba4187a7749": "Env vars",
   "8279db589cda9dcf": "Deploy",
-  "0834382733f42ced": [
+  "5c4bd5451af801f3": [
     "A thread without Full access asked to deploy to ",
     {
       "i": 1,
       "k": "_gt_value_1",
       "v": "v"
     },
+    " via",
     " ",
-    "(",
     {
       "i": 2,
       "k": "_gt_value_2",
+      "v": "v"
+    },
+    " (",
+    {
+      "i": 3,
+      "k": "_gt_value_3",
       "v": "v"
     },
     ")."
@@ -8283,18 +8325,24 @@
       "v": "v"
     }
   ],
-  "5b31e4555d3aa954": [
+  "3af37890f04d0b44": [
     "To ",
     {
       "i": 1,
       "k": "_gt_value_1",
       "v": "v"
     },
-    " on",
-    " ",
+    " via ",
     {
       "i": 2,
       "k": "_gt_value_2",
+      "v": "v"
+    },
+    " on",
+    " ",
+    {
+      "i": 3,
+      "k": "_gt_value_3",
       "v": "v"
     },
     "."
@@ -8318,6 +8366,36 @@
   ],
   "cc5d2f5ce8ee576e": "Environment",
   "c317fa79a76d4963": "Source",
+  "de770505be25f1ff": "Folder",
+  "0cf4a3a1f32e799c": "Allow folder outside this project",
+  "0d8211b2f3552d93": [
+    "Environment variables for ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    }
+  ],
+  "f7f4685e5a7cf22d": [
+    "Sets or removes variables on ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " via",
+    " ",
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    },
+    "."
+  ],
+  "ae497ef10f297982": "Set variables (KEY=value, one per line)",
+  "c9187cb6781c55a2": "Store as secrets",
+  "dd10bcccf50cb719": "Remove variable names (optional)",
+  "ded1117a241100bb": "Save variables",
   "c0472e6d94fdfac6": "Could not read backend status.",
   "80e9842fba54a764": "Background service",
   "20119adcdeba05d6": "Remote URL (experimental)",
@@ -11403,7 +11481,6 @@
   "fe4208562792c313": "Delete old rotated logs",
   "8debac9c8e9cff47": "Delete inactive rotated log files after this many days. Current logs are kept.",
   "80d58a3fd4e4212a": "Project",
-  "de770505be25f1ff": "Folder",
   "ada7b9a4d96959d2": "Thread",
   "ceab58aa6cb191f3": [
     {
@@ -12345,6 +12422,8 @@
   "2a50e229df85d553": "Go forward",
   "8e9626aa27cb188a": "Issues",
   "9d2fc1003e82feb1": "Usage",
+  "1c0928f04336f524": "Deployment on {provider} ({account}): {state}, {host}",
+  "fda9a41f46928c89": "Deployment on {provider} ({account}): {state}",
   "20283eb1dd6119f9": "{count, plural, one {{count} attachment} other {{count} attachments}}",
   "ffedb03b620f97a9": "Unsent draft",
   "90a349d827d1dcf5": "Discard draft",

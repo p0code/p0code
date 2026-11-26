@@ -8178,20 +8178,32 @@
   "c56b618d212bf018": "Starta om och återta",
   "be1eeddb87fc6fe9": "Driftsätt",
   "129164189c938942": "Driftsättningsleverantörer",
+  "3813b894c79465cc": "Visar konton i profilen {profile} samt otaggade konton.",
   "3a2e919ca921a60c": "Driftsättningar",
   "1e80233b9193116f": "Av i Plugins",
   "58b7b0e79013a091": "Länkad",
   "364cae9e608a63d4": "Sign-in expired",
   "4ad258969e361b3c": "Fel",
   "fa83ec856513632c": "Inte länkad",
+  "cb08f24f16c20636": "Kontonamn för {provider}",
+  "d15c8b6978f84bb0": "Team-ID (valfritt)",
+  "3dd856f39c7357c1": "Team-ID för {provider}",
   "8f6976097de6cd25": "Åtkomsttoken (valfritt)",
   "bd33c4006ff50a0b": "Åtkomsttoken för {provider}",
-  "ce63a11bca54e095": "Koppla från",
-  "19cb8f9ff8df4979": "Länka igen",
+  "c470de965e25e06c": "Lägg till konto",
   "e176b5f17630f05b": "Länka",
+  "d12f3de27e2c3e33": "Åtkomsttoken för {account}",
+  "19cb8f9ff8df4979": "Länka igen",
+  "ce63a11bca54e095": "Koppla från",
+  "8551834f1c340cdd": "Pages",
+  "2a1b75440047d80f": "Worker",
+  "7c7b27a74ff7278e": "Projekt",
   "afdefb17101fac3a": "Driftsättningsmål för {project}",
   "8a88e44ae853c80d": "Välj mål",
   "e9755757b8a9fdc9": "Inget mål",
+  "e944ce52b43a8a6c": "Standardmiljö för {project}",
+  "b1cb84e4eca5b06b": "Produktion",
+  "bf0f37f53a4e2d62": "Förhandsvisning",
   "efbb8f3d8336378c": "Återställd till {deployment}.",
   "2a1419da20c2bb27": "I kö",
   "d000f2b5e832a45d": "Bygger",
@@ -8199,11 +8211,11 @@
   "d01b83620a105d50": "Misslyckades",
   "7318f8b5cbcc0ff0": "Avbruten",
   "5942a61dbfb5214e": "Väntar på loggrader…",
-  "b1cb84e4eca5b06b": "Produktion",
-  "bf0f37f53a4e2d62": "Förhandsvisning",
   "5b84d580f80b3688": "Git-gren",
   "457bf48449fb47aa": "Lokalt bygge",
   "15ed472fb3ba4a6d": "Standardgren",
+  "0deabb397a585f0c": "Projektrot",
+  "8c74857ecf98c255": "Utveckling",
   "f59d5b9846c2a3c6": "Anslut en miljö som kör den här versionen för att driftsätta från den.",
   "0c5c6d47c9eec1cd": "Inga driftsättningsleverantörer installerade",
   "3e68a8b268965f62": [
@@ -8218,6 +8230,9 @@
   "5486b18239ddf78e": "Lägg till ett projekt i den här miljön för att driftsätta det.",
   "7f9c4906e0c768ca": "Driftsättningar som startats från den här miljön visas här.",
   "7770f2ba0e443fb7": "Slå på det här pluginet under Plugins för att länka ett konto.",
+  "583bcfdd538ebd2d": "Koppla ett eller flera konton för att driftsätta med den här leverantören.",
+  "7245b7d43b25b231": "Lägg till ett namngivet konto för ett annat team eller en annan profil.",
+  "6a4c8edee7d78217": "Slutför inloggningen",
   "a4f401eedf02e8ef": [
     "Konto: ",
     {
@@ -8226,25 +8241,17 @@
       "v": "v"
     }
   ],
-  "6a4c8edee7d78217": "Slutför inloggningen",
-  "fa320e2be19caa64": [
-    "Driftsätts till ",
+  "8ada67f73f632595": [
+    "Team: ",
     {
       "i": 1,
       "k": "_gt_value_1",
       "v": "v"
-    },
-    " på ",
-    {
-      "i": 2,
-      "k": "_gt_value_2",
-      "v": "v"
     }
   ],
-  "42ff68458bdb217c": "Inte kopplad till ett driftsättningsmål.",
-  "8279db589cda9dcf": "Driftsätt",
-  "0834382733f42ced": [
-    "En tråd utan full åtkomst bad om att driftsätta till ",
+  "0ff72af5fbb1cafa": "Alla profiler",
+  "0433e5db08bed6e4": [
+    "Driftsätter till ",
     {
       "i": 1,
       "k": "_gt_value_1",
@@ -8254,6 +8261,41 @@
     {
       "i": 2,
       "k": "_gt_value_2",
+      "v": "v"
+    },
+    ") via ",
+    {
+      "i": 3,
+      "k": "_gt_value_3",
+      "v": "v"
+    },
+    " på ",
+    {
+      "i": 4,
+      "k": "_gt_value_4",
+      "v": "v"
+    }
+  ],
+  "42ff68458bdb217c": "Inte kopplad till ett driftsättningsmål.",
+  "88de3ba4187a7749": "Miljövariabler",
+  "8279db589cda9dcf": "Driftsätt",
+  "5c4bd5451af801f3": [
+    "En tråd utan full åtkomst begärde driftsättning till ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " via ",
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    },
+    " (",
+    {
+      "i": 3,
+      "k": "_gt_value_3",
       "v": "v"
     },
     ")."
@@ -8277,17 +8319,23 @@
       "v": "v"
     }
   ],
-  "5b31e4555d3aa954": [
+  "3af37890f04d0b44": [
     "Till ",
     {
       "i": 1,
       "k": "_gt_value_1",
       "v": "v"
     },
-    " på ",
+    " via ",
     {
       "i": 2,
       "k": "_gt_value_2",
+      "v": "v"
+    },
+    " på ",
+    {
+      "i": 3,
+      "k": "_gt_value_3",
       "v": "v"
     },
     "."
@@ -8310,6 +8358,35 @@
   ],
   "cc5d2f5ce8ee576e": "Miljö",
   "c317fa79a76d4963": "Källa",
+  "de770505be25f1ff": "Mapp",
+  "0cf4a3a1f32e799c": "Tillåt mapp utanför detta projekt",
+  "0d8211b2f3552d93": [
+    "Miljövariabler för ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    }
+  ],
+  "f7f4685e5a7cf22d": [
+    "Anger eller tar bort variabler på ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " via ",
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    },
+    "."
+  ],
+  "ae497ef10f297982": "Ange variabler (KEY=värde, en per rad)",
+  "c9187cb6781c55a2": "Lagra som hemligheter",
+  "dd10bcccf50cb719": "Variabelnamn att ta bort (valfritt)",
+  "ded1117a241100bb": "Spara variabler",
   "c0472e6d94fdfac6": "Kunde inte läsa backend-status.",
   "80e9842fba54a764": "Background service",
   "20119adcdeba05d6": "Remote URL (experimental)",
@@ -11395,7 +11472,6 @@
   "fe4208562792c313": "Ta bort gamla roterade loggar",
   "8debac9c8e9cff47": "Ta bort inaktiva roterade loggfiler efter så här många dagar. Aktuella loggar behålls.",
   "80d58a3fd4e4212a": "Projekt",
-  "de770505be25f1ff": "Mapp",
   "ada7b9a4d96959d2": "Tråd",
   "ceab58aa6cb191f3": [
     {
@@ -12337,6 +12413,8 @@
   "2a50e229df85d553": "Gå framåt",
   "8e9626aa27cb188a": "Ärenden",
   "9d2fc1003e82feb1": "Användning",
+  "1c0928f04336f524": "Driftsättning på {provider} ({account}): {state}, {host}",
+  "fda9a41f46928c89": "Driftsättning på {provider} ({account}): {state}",
   "20283eb1dd6119f9": "{count, plural, one {{count} bilaga} other {{count} bilagor}}",
   "ffedb03b620f97a9": "Ej skickat utkast",
   "90a349d827d1dcf5": "Kasta utkast",

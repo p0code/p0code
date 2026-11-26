@@ -8174,20 +8174,32 @@
   "c56b618d212bf018": "Redémarrer et récupérer",
   "be1eeddb87fc6fe9": "Déployer",
   "129164189c938942": "Fournisseurs de déploiement",
+  "3813b894c79465cc": "Comptes affichés pour le profil {profile} et comptes non associés.",
   "3a2e919ca921a60c": "Déploiements",
   "1e80233b9193116f": "Désactivé dans Plugins",
   "58b7b0e79013a091": "Associé",
   "364cae9e608a63d4": "Sign-in expired",
   "4ad258969e361b3c": "Erreur",
   "fa83ec856513632c": "Non associé",
+  "cb08f24f16c20636": "Nom du compte {provider}",
+  "d15c8b6978f84bb0": "ID d'équipe (facultatif)",
+  "3dd856f39c7357c1": "ID d'équipe {provider}",
   "8f6976097de6cd25": "Jeton d’accès (facultatif)",
   "bd33c4006ff50a0b": "Jeton d’accès {provider}",
-  "ce63a11bca54e095": "Dissocier",
-  "19cb8f9ff8df4979": "Réassocier",
+  "c470de965e25e06c": "Ajouter un compte",
   "e176b5f17630f05b": "Associer",
+  "d12f3de27e2c3e33": "Jeton d'accès {account}",
+  "19cb8f9ff8df4979": "Réassocier",
+  "ce63a11bca54e095": "Dissocier",
+  "8551834f1c340cdd": "Pages",
+  "2a1b75440047d80f": "Worker",
+  "7c7b27a74ff7278e": "Projet",
   "afdefb17101fac3a": "Cible de déploiement pour {project}",
   "8a88e44ae853c80d": "Choisir une cible",
   "e9755757b8a9fdc9": "Aucune cible",
+  "e944ce52b43a8a6c": "Environnement par défaut pour {project}",
+  "b1cb84e4eca5b06b": "Production",
+  "bf0f37f53a4e2d62": "Aperçu",
   "efbb8f3d8336378c": "Restauré vers {deployment}.",
   "2a1419da20c2bb27": "En file d’attente",
   "d000f2b5e832a45d": "Compilation",
@@ -8195,11 +8207,11 @@
   "d01b83620a105d50": "Échec",
   "7318f8b5cbcc0ff0": "Annulé",
   "5942a61dbfb5214e": "En attente des lignes de journal…",
-  "b1cb84e4eca5b06b": "Production",
-  "bf0f37f53a4e2d62": "Aperçu",
   "5b84d580f80b3688": "Branche Git",
   "457bf48449fb47aa": "Build local",
   "15ed472fb3ba4a6d": "Branche par défaut",
+  "0deabb397a585f0c": "Racine du projet",
+  "8c74857ecf98c255": "Développement",
   "f59d5b9846c2a3c6": "Connectez un environnement exécutant cette version pour déployer depuis celui-ci.",
   "0c5c6d47c9eec1cd": "Aucun fournisseur de déploiement installé",
   "3e68a8b268965f62": [
@@ -8214,6 +8226,9 @@
   "5486b18239ddf78e": "Ajoutez un projet à cet environnement pour le déployer.",
   "7f9c4906e0c768ca": "Les déploiements lancés depuis cet environnement apparaissent ici.",
   "7770f2ba0e443fb7": "Activez ce plugin dans Plugins pour associer un compte.",
+  "583bcfdd538ebd2d": "Associez un ou plusieurs comptes pour déployer avec ce fournisseur.",
+  "7245b7d43b25b231": "Ajoutez un autre compte nommé pour une autre équipe ou un autre profil.",
+  "6a4c8edee7d78217": "Terminer la connexion",
   "a4f401eedf02e8ef": [
     "Compte : ",
     {
@@ -8222,25 +8237,17 @@
       "v": "v"
     }
   ],
-  "6a4c8edee7d78217": "Terminer la connexion",
-  "fa320e2be19caa64": [
-    "Se déploie sur ",
+  "8ada67f73f632595": [
+    "Équipe : ",
     {
       "i": 1,
       "k": "_gt_value_1",
       "v": "v"
-    },
-    " chez ",
-    {
-      "i": 2,
-      "k": "_gt_value_2",
-      "v": "v"
     }
   ],
-  "42ff68458bdb217c": "Non associé à une cible de déploiement.",
-  "8279db589cda9dcf": "Déployer",
-  "0834382733f42ced": [
-    "Un fil sans accès complet a demandé à déployer sur ",
+  "0ff72af5fbb1cafa": "Tous les profils",
+  "0433e5db08bed6e4": [
+    "Déploie vers ",
     {
       "i": 1,
       "k": "_gt_value_1",
@@ -8250,6 +8257,41 @@
     {
       "i": 2,
       "k": "_gt_value_2",
+      "v": "v"
+    },
+    ") via ",
+    {
+      "i": 3,
+      "k": "_gt_value_3",
+      "v": "v"
+    },
+    " sur ",
+    {
+      "i": 4,
+      "k": "_gt_value_4",
+      "v": "v"
+    }
+  ],
+  "42ff68458bdb217c": "Non associé à une cible de déploiement.",
+  "88de3ba4187a7749": "Variables d'env.",
+  "8279db589cda9dcf": "Déployer",
+  "5c4bd5451af801f3": [
+    "Un fil sans accès complet a demandé de déployer vers ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " via ",
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    },
+    " (",
+    {
+      "i": 3,
+      "k": "_gt_value_3",
       "v": "v"
     },
     ")."
@@ -8273,17 +8315,23 @@
       "v": "v"
     }
   ],
-  "5b31e4555d3aa954": [
+  "3af37890f04d0b44": [
     "Vers ",
     {
       "i": 1,
       "k": "_gt_value_1",
       "v": "v"
     },
-    " chez ",
+    " via ",
     {
       "i": 2,
       "k": "_gt_value_2",
+      "v": "v"
+    },
+    " sur ",
+    {
+      "i": 3,
+      "k": "_gt_value_3",
       "v": "v"
     },
     "."
@@ -8306,6 +8354,35 @@
   ],
   "cc5d2f5ce8ee576e": "Environnement",
   "c317fa79a76d4963": "Source",
+  "de770505be25f1ff": "Dossier",
+  "0cf4a3a1f32e799c": "Autoriser un dossier hors de ce projet",
+  "0d8211b2f3552d93": [
+    "Variables d'environnement pour ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    }
+  ],
+  "f7f4685e5a7cf22d": [
+    "Définit ou supprime des variables sur ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " via ",
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    },
+    "."
+  ],
+  "ae497ef10f297982": "Définir les variables (CLÉ=valeur, une par ligne)",
+  "c9187cb6781c55a2": "Stocker comme secrets",
+  "dd10bcccf50cb719": "Noms de variables à supprimer (facultatif)",
+  "ded1117a241100bb": "Enregistrer les variables",
   "c0472e6d94fdfac6": "Impossible de lire l'état du backend.",
   "80e9842fba54a764": "Background service",
   "20119adcdeba05d6": "Remote URL (experimental)",
@@ -11388,7 +11465,6 @@
   "fe4208562792c313": "Supprimer les anciens journaux archivés",
   "8debac9c8e9cff47": "Supprime les fichiers journaux archivés inactifs après ce nombre de jours. Les journaux actuels sont conservés.",
   "80d58a3fd4e4212a": "Projet",
-  "de770505be25f1ff": "Dossier",
   "ada7b9a4d96959d2": "Fil",
   "ceab58aa6cb191f3": [
     {
@@ -12330,6 +12406,8 @@
   "2a50e229df85d553": "Avancer",
   "8e9626aa27cb188a": "Tickets",
   "9d2fc1003e82feb1": "Utilisation",
+  "1c0928f04336f524": "Déploiement sur {provider} ({account}) : {state}, {host}",
+  "fda9a41f46928c89": "Déploiement sur {provider} ({account}) : {state}",
   "20283eb1dd6119f9": "{count, plural, one {{count} pièce jointe} other {{count} pièces jointes}}",
   "ffedb03b620f97a9": "Brouillon non envoyé",
   "90a349d827d1dcf5": "Abandonner le brouillon",
