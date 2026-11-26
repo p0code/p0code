@@ -25,6 +25,7 @@ import {
 } from "./PluginHost.ts";
 import { InstalledPlugins, layerWith } from "./loader.ts";
 import { makeInstaller, hostPackagePaths, linkHostPackages } from "./installer.ts";
+import { readGithub } from "./installSources.ts";
 import { readInstallRecord } from "./installRecords.ts";
 
 const manifest = (
@@ -142,6 +143,46 @@ const testLayer = hostLayer.pipe(
 
 describe("plugin installer", () => {
   it.layer(testLayer)((it) => {
+    it.effect("stages GitHub downloads without importing executable code before consent", () =>
+      Effect.gen(function* () {
+        const value = manifest("1.0.0", ["network:outbound"], "github-fixture");
+        const installer = yield* makeInstaller({
+          github: (source) =>
+            readGithub(source, async (url) => {
+              if (url.startsWith("https://api.github.com/"))
+                return new TextEncoder().encode(
+                  JSON.stringify({
+                    assets: [
+                      {
+                        name: "plugin.mjs",
+                        browser_download_url:
+                          "https://github.com/owner/repo/releases/download/v1/plugin.mjs",
+                      },
+                      {
+                        name: "manifest.json",
+                        browser_download_url:
+                          "https://github.com/owner/repo/releases/download/v1/manifest.json",
+                      },
+                    ],
+                  }),
+                );
+              return new TextEncoder().encode(
+                url.endsWith("manifest.json")
+                  ? JSON.stringify(value)
+                  : "throw new Error('must never execute before consent');",
+              );
+            }),
+        });
+        const staged = yield* installer.install({ source: "owner/repo@v1" });
+        assert.equal(staged.record.activeVersion, null);
+        assert.equal(staged.record.stagedVersion, "1.0.0");
+        assert.equal(staged.record.versions[0]?.source.kind, "github");
+        assert.equal(
+          (yield* installer.list).stagedManifests.some((item) => item.id === value.id),
+          true,
+        );
+      }),
+    );
     it.effect("installs, consents, invokes, updates, rolls back and retains or purges data", () =>
       Effect.gen(function* () {
         const { stateDir } = yield* ServerConfig;
@@ -254,7 +295,7 @@ describe("plugin installer", () => {
             ...value,
             repository: "https://github.com/p0code/fixture",
             ref: "v3.0.0",
-            capabilities: ["network:outbound"],
+            capabilities: ["network:outbound"] as const,
           };
           const installer = yield* makeInstaller({
             catalog: async () => [entry],
@@ -362,6 +403,7 @@ describe("plugin installer", () => {
   it("requires administrative scope for every installer RPC", () => {
     for (const method of [
       WS_METHODS.pluginsInstalledList,
+      WS_METHODS.pluginsCatalog,
       WS_METHODS.pluginsInstall,
       WS_METHODS.pluginsConsent,
       WS_METHODS.pluginsUpdate,

@@ -25,11 +25,13 @@ vi.mock("./SettingsScopeContext", () => ({
   useSettingsScope: () => ({
     environment: {
       environmentId: "local",
+      entry: { target: { _tag: "BearerConnectionTarget", connectionId: "local:local" } },
       connection: { phase: "connected" },
       serverConfig: { environment: { capabilities: { plugins: true } } },
     },
   }),
 }));
+vi.mock("./PluginInstaller", () => ({ PluginInstaller: () => null }));
 vi.mock("./BackupPanel", () => ({ BackupDisclosure: () => null, BackupPanel: () => null }));
 vi.mock("./ObsidianSharedMemoryPanel", () => ({
   ObsidianSharedMemoryDisclosure: () => null,

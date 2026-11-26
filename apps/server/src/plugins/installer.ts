@@ -2,13 +2,12 @@ import { importInstalledBundle } from "./bundle.ts";
 // @effect-diagnostics nodeBuiltinImport:off -- Installer publishes immutable bundle directories and host package symlinks.
 import {
   PluginInstallRecord,
+  PluginCapability,
   PluginManifest,
   PluginOperationError,
-  type PluginCapability,
 } from "@t3tools/contracts";
 import { PLUGIN_API_VERSION } from "@t3tools/plugin-api";
 import * as DateTime from "effect/DateTime";
-import { FetchHttpClient, HttpClient } from "effect/http";
 import * as Context from "effect/Context";
 import * as Layer from "effect/Layer";
 import * as Effect from "effect/Effect";
@@ -19,7 +18,7 @@ import * as NodePath from "node:path";
 import * as NodeCrypto from "node:crypto";
 import * as NodeModule from "node:module";
 import * as NodeURL from "node:url";
-import * as Yauzl from "yauzl";
+import { readGithub, readArchive, download, type Bundle } from "./installSources.ts";
 import { ServerConfig } from "../config.ts";
 import { ServerSecretStore } from "../auth/ServerSecretStore.ts";
 import { PluginHost } from "./PluginHost.ts";
@@ -31,7 +30,7 @@ const CatalogEntry = Schema.Struct({
   repository: Schema.String,
   ref: Schema.String,
   version: Schema.String,
-  capabilities: Schema.Array(Schema.String),
+  capabilities: Schema.Array(PluginCapability),
   externalServices: Schema.Array(Schema.String),
   sha256: Schema.optionalKey(Schema.String),
 });
@@ -51,30 +50,9 @@ const decodeRelease = Schema.decodeUnknownSync(
 );
 const decodeCommit = Schema.decodeUnknownSync(Schema.Struct({ sha: Schema.String }));
 
-interface Bundle {
-  readonly manifest: string;
-  readonly code: Uint8Array;
-}
 const sameSet = (a: ReadonlyArray<string>, b: ReadonlyArray<string>) =>
   a.length === b.length && [...a].sort().every((value, index) => value === [...b].sort()[index]);
 
-const download = (url: string) =>
-  Effect.runPromise(
-    HttpClient.get(url).pipe(
-      Effect.flatMap(
-        Effect.fn("PluginInstaller.download")(function* (response) {
-          if (response.status < 200 || response.status >= 300)
-            return yield* new PluginOperationError({
-              pluginId: "",
-              message: `Download failed (${response.status}): ${url}`,
-            });
-          return yield* response.arrayBuffer;
-        }),
-      ),
-      Effect.provide(FetchHttpClient.layer),
-      Effect.scoped,
-    ),
-  );
 const responseJson = async (url: string): Promise<unknown> =>
   JSON.parse(new TextDecoder().decode(await download(url)));
 
@@ -103,66 +81,13 @@ const readRelease = async (entry: CatalogEntry): Promise<Bundle> => {
     if (commit.sha !== entry.ref)
       throw new Error("Release does not match the catalog's pinned commit.");
   }
-  const assets = release.assets.filter((asset) => asset.name.endsWith(".zip"));
-  if (assets.length !== 1)
-    throw new Error("The release must provide exactly one prebuilt plugin .zip asset.");
-  const bytes = Buffer.from(await download(assets[0]!.browser_download_url));
-  if (bytes.length > 32 * 1024 * 1024) throw new Error("Plugin archive exceeds 32 MiB.");
-  return new Promise((resolve, reject) => {
-    Yauzl.fromBuffer(bytes, { lazyEntries: true }, (error, zip) => {
-      if (error || !zip) {
-        reject(error ?? new Error("Invalid archive."));
-        return;
-      }
-      const files = new Map<string, Buffer>();
-      const fail = (cause: unknown) => {
-        zip.close();
-        reject(cause);
-      };
-      zip.on("error", fail);
-      zip.on("entry", (member: Yauzl.Entry) => {
-        if (!/^(dist\/)?(manifest\.json|plugin\.mjs)$/.test(member.fileName)) {
-          zip.readEntry();
-          return;
-        }
-        if (member.uncompressedSize > 32 * 1024 * 1024) {
-          fail(new Error("Plugin member exceeds 32 MiB."));
-          return;
-        }
-        const name = NodePath.basename(member.fileName);
-        if (files.has(name)) {
-          fail(new Error("Duplicate bundle member."));
-          return;
-        }
-        zip.openReadStream(member, (cause, stream) => {
-          if (cause || !stream) {
-            fail(cause);
-            return;
-          }
-          const chunks: Buffer[] = [];
-          stream.on("error", fail);
-          stream.on("data", (chunk: Buffer) => chunks.push(chunk));
-          stream.on("end", () => {
-            files.set(name, Buffer.concat(chunks));
-            zip.readEntry();
-          });
-        });
-      });
-      zip.on("end", () => {
-        const manifest = files.get("manifest.json");
-        const code = files.get("plugin.mjs");
-        if (!manifest || !code)
-          reject(new Error("Release has no manifest.json + plugin.mjs bundle."));
-        else resolve({ manifest: manifest.toString("utf8"), code });
-      });
-      zip.readEntry();
-    });
-  });
+  return readGithub(`${entry.repository}#${tag}`);
 };
 
 export interface InstallerOptions {
   readonly catalog?: () => Promise<ReadonlyArray<CatalogEntry>>;
   readonly release?: (entry: CatalogEntry) => Promise<Bundle>;
+  readonly github?: (source: string) => Promise<Bundle>;
   readonly hostPackages?: Readonly<Record<string, string>>;
 }
 
@@ -269,7 +194,17 @@ export const makeInstaller = Effect.fn("PluginInstaller.make")(function* (
     );
     return { snapshot, installations, stagedManifests };
   });
-  const stage = Effect.fn("PluginInstaller.stage")(function* (source: string, expectedId?: string) {
+  const catalogEntries = () =>
+    options.catalog
+      ? options.catalog()
+      : responseJson("https://p0code.github.io/plugins-shop/index.json").then(
+          (value) => decodeCatalog(value).plugins,
+        );
+  const stage = Effect.fn("PluginInstaller.stage")(function* (
+    source: string,
+    expectedId?: string,
+    upload?: { readonly name: string; readonly data: string },
+  ) {
     const installedAt = DateTime.formatIso(yield* DateTime.now);
     const snapshot = yield* host.snapshot;
     return yield* io(expectedId ?? "", async () => {
@@ -280,25 +215,46 @@ export const makeInstaller = Effect.fn("PluginInstaller.make")(function* (
         (stat) => stat.isDirectory(),
         () => false,
       );
-      if (local) {
+      if (upload) {
+        bundle = await readArchive(Buffer.from(upload.data, "base64"), upload.name);
+        origin = { kind: "local", path: "" };
+      } else if (
+        !local &&
+        /^(https?:|[\w.-]+\/[\w.-]+(?:@.*)?$)/.test(source) &&
+        !NodePath.isAbsolute(source)
+      ) {
+        bundle = await (options.github ?? readGithub)(source);
+        origin = { kind: "github", url: source };
+      } else if (local) {
         const dir = NodePath.resolve(source);
-        bundle = {
-          manifest: await NodeFSP.readFile(NodePath.join(dir, "manifest.json"), "utf8"),
-          code: await NodeFSP.readFile(NodePath.join(dir, "plugin.mjs")),
-        };
+        try {
+          bundle = {
+            manifest: await NodeFSP.readFile(NodePath.join(dir, "manifest.json"), "utf8"),
+            code: await NodeFSP.readFile(NodePath.join(dir, "plugin.mjs")),
+          };
+        } catch {
+          throw new Error("No manifest.json + plugin.mjs bundle. Choose a prebuilt plugin folder.");
+        }
         origin = { kind: "local", path: dir };
+      } else if (/\.(zip|tgz|tar\.gz)$/.test(source) && NodePath.isAbsolute(source)) {
+        bundle = await readArchive(await NodeFSP.readFile(source), source);
+        origin = { kind: "local", path: source };
       } else {
-        const entries = options.catalog
-          ? await options.catalog()
-          : decodeCatalog(await responseJson("https://p0code.github.io/plugins-shop/index.json"))
-              .plugins;
+        const entries = await catalogEntries();
         catalog = entries.find((entry) => entry.id === source);
         if (!catalog)
           throw new Error(`No catalog plugin ${source}. Pass a directory or catalog id.`);
         bundle = await (options.release ?? readRelease)(catalog);
         origin = { kind: "catalog", id: catalog.id };
       }
-      const manifest = decodeManifest(bundle.manifest);
+      let manifest: PluginManifest;
+      try {
+        manifest = decodeManifest(bundle.manifest);
+      } catch {
+        throw new Error(
+          "No valid manifest.json. Choose a prebuilt plugin bundle with a compatible manifest.",
+        );
+      }
       if (!isValidVersionSegment(manifest.version)) throw new Error("Invalid plugin version.");
       if (expectedId && manifest.id !== expectedId)
         throw new Error("Update manifest id does not match the installed plugin.");
@@ -380,19 +336,29 @@ export const makeInstaller = Effect.fn("PluginInstaller.make")(function* (
   });
   return {
     list,
-    install: (input: { readonly source: string }) => lock.withPermits(1)(stage(input.source)),
-    update: (input: { readonly id: string; readonly source?: string }) =>
+    catalog: io("", async () => ({ plugins: await catalogEntries() })),
+    install: (input: {
+      readonly source: string;
+      readonly upload?: { readonly name: string; readonly data: string };
+    }) => lock.withPermits(1)(stage(input.source, undefined, input.upload)),
+    update: (input: {
+      readonly id: string;
+      readonly source?: string;
+      readonly upload?: { readonly name: string; readonly data: string };
+    }) =>
       lock.withPermits(1)(
         Effect.gen(function* () {
           const old = yield* io(input.id, () => record(input.id));
           const last = old.versions.at(-1)?.source;
-          const source = input.source ?? (last?.kind === "local" ? last.path : last?.id);
-          if (!source)
+          const source =
+            input.source ??
+            (last?.kind === "local" ? last.path : last?.kind === "github" ? last.url : last?.id);
+          if (!source && !input.upload)
             return yield* new PluginOperationError({
               pluginId: input.id,
               message: "Provide an update source.",
             });
-          return yield* stage(source, input.id);
+          return yield* stage(source ?? "", input.id, input.upload);
         }),
       ),
     consent: (input: {

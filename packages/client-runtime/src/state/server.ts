@@ -1565,6 +1565,35 @@ export function createServerEnvironmentAtoms<R, E>(
       label: "environment-data:restore:cancel",
       tag: WS_METHODS.dataRestoreCancel,
     }),
+    pluginsInstalledList: createEnvironmentQueryAtomFamily(runtime, {
+      label: "environment-data:pluginsInstalledList",
+      execute: (_input: Record<string, never>) =>
+        requestGuarded(WS_METHODS.pluginsInstalledList, {}),
+    }),
+    pluginsCatalog: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:pluginsCatalog",
+      tag: WS_METHODS.pluginsCatalog,
+    }),
+    pluginsInstall: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:pluginsInstall",
+      tag: WS_METHODS.pluginsInstall,
+    }),
+    pluginsConsent: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:pluginsConsent",
+      tag: WS_METHODS.pluginsConsent,
+    }),
+    pluginsUpdate: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:pluginsUpdate",
+      tag: WS_METHODS.pluginsUpdate,
+    }),
+    pluginsRemove: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:pluginsRemove",
+      tag: WS_METHODS.pluginsRemove,
+    }),
+    pluginsRollback: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:pluginsRollback",
+      tag: WS_METHODS.pluginsRollback,
+    }),
     pluginsSetEnabled: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:plugins:set-enabled",
       tag: WS_METHODS.pluginsSetEnabled,

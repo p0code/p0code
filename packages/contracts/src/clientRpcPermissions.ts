@@ -30,6 +30,7 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
   [WS_METHODS.dataRestoreApprove]: AuthRelayConfigureScope,
   [WS_METHODS.dataRestoreCancel]: AuthRelayConfigureScope,
   [WS_METHODS.pluginsInstalledList]: AuthRelayConfigureScope,
+  [WS_METHODS.pluginsCatalog]: AuthRelayConfigureScope,
   [WS_METHODS.pluginsInstall]: AuthRelayConfigureScope,
   [WS_METHODS.pluginsConsent]: AuthRelayConfigureScope,
   [WS_METHODS.pluginsUpdate]: AuthRelayConfigureScope,
