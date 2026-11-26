@@ -199,8 +199,13 @@ function quoteBrowserArgument(value: string): string {
   return `'${value.replaceAll("'", `'"'"'`)}'`;
 }
 
+type AntigravityEnvironmentProfile = Pick<
+  AntigravityProfile,
+  "platform" | "geminiHome" | "tempDirectory" | "caBundlePath" | "browserCommand"
+>;
+
 function antigravityEnvironment(
-  profile: AntigravityProfile,
+  profile: AntigravityEnvironmentProfile,
   baseEnv: NodeJS.ProcessEnv,
   auth: AntigravityAuthConfig,
   runtimeTempDirectory?: string,
@@ -391,6 +396,56 @@ const copyAntigravityUserConfigFiles = Effect.fn("copyAntigravityUserConfigFiles
   },
 );
 
+/** Bundled Python may look for certificates at paths absent on this distribution. */
+const findAntigravityCaBundle = Effect.fnUntraced(function* (
+  platform: NodeJS.Platform,
+  baseEnv: NodeJS.ProcessEnv,
+) {
+  if (platform !== "linux") return undefined;
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  for (const candidate of [
+    baseEnv.NIX_SSL_CERT_FILE,
+    "/etc/ssl/certs/ca-bundle.crt",
+    "/etc/ssl/certs/ca-certificates.crt",
+    "/etc/pki/tls/certs/ca-bundle.crt",
+    "/etc/ssl/cert.pem",
+  ]) {
+    // Relative paths would resolve differently when the agent runs in the project directory.
+    if (
+      candidate &&
+      path.isAbsolute(candidate) &&
+      (yield* fs.exists(candidate).pipe(Effect.orElseSucceed(() => false)))
+    ) {
+      return candidate;
+    }
+  }
+  return undefined;
+});
+
+/** The provider's own environment, for one-off CLI reads such as `/usage` that must share its sign-in. */
+export const antigravityCliEnvironment = Effect.fn("antigravityCliEnvironment")(function* (input: {
+  readonly profileDirectory: string;
+  readonly platform: NodeJS.Platform;
+  readonly baseEnv: NodeJS.ProcessEnv;
+  readonly auth: AntigravityAuthConfig;
+  readonly tempDirectory: string;
+}) {
+  const caBundlePath = yield* findAntigravityCaBundle(input.platform, input.baseEnv);
+  return antigravityEnvironment(
+    {
+      platform: input.platform,
+      geminiHome: input.profileDirectory,
+      tempDirectory: input.tempDirectory,
+      // `/usage` must never open a browser; a missing sign-in is answered on stdout.
+      browserCommand: "",
+      ...(caBundlePath === undefined ? {} : { caBundlePath }),
+    },
+    input.baseEnv,
+    input.auth,
+  );
+});
+
 export const prepareAntigravityProfile = Effect.fn("prepareAntigravityProfile")(function* (input: {
   readonly profileDirectory: string;
   readonly baseEnv?: NodeJS.ProcessEnv;
@@ -442,27 +497,7 @@ export const prepareAntigravityProfile = Effect.fn("prepareAntigravityProfile")(
   const geminiHome = path.resolve(input.profileDirectory);
   const acpDirectory = path.join(geminiHome, "antigravity-acp");
   const tempDirectory = input.tempDirectory ?? path.join(acpDirectory, "tmp");
-  let caBundlePath: string | undefined;
-  if (platform === "linux") {
-    // Bundled Python may look for certificates at paths absent on this distribution.
-    // Relative paths would resolve differently when the agent runs in the project directory.
-    for (const candidate of [
-      (input.baseEnv ?? process.env).NIX_SSL_CERT_FILE,
-      "/etc/ssl/certs/ca-bundle.crt",
-      "/etc/ssl/certs/ca-certificates.crt",
-      "/etc/pki/tls/certs/ca-bundle.crt",
-      "/etc/ssl/cert.pem",
-    ]) {
-      if (
-        candidate &&
-        path.isAbsolute(candidate) &&
-        (yield* fs.exists(candidate).pipe(Effect.orElseSucceed(() => false)))
-      ) {
-        caBundlePath = candidate;
-        break;
-      }
-    }
-  }
+  const caBundlePath = yield* findAntigravityCaBundle(platform, input.baseEnv ?? process.env);
   const profile: AntigravityProfile = {
     platform,
     geminiHome,

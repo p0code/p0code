@@ -47,6 +47,7 @@ import {
   antigravityAuthConfigIssue,
   antigravityAuthLabel,
   antigravityAuthUsesBrowser,
+  antigravityCliEnvironment,
   buildAntigravityAcpSpawnInput,
   isAntigravitySignInRequiredError,
   prepareAntigravityProfile,
@@ -75,6 +76,7 @@ import {
 import { makeAcpNativeLoggerFactory } from "@t3tools/provider-acp/server/nativeLogging";
 import { ProviderDriverError } from "../Errors.ts";
 import { makeAntigravityProvider } from "../AntigravityProvider.ts";
+import { makeAntigravityCliUsageReader } from "../antigravityCliUsage.ts";
 import * as ProviderEventLoggers from "@t3tools/provider-core/server/ProviderEventLoggers";
 import * as ModelCatalog from "@t3tools/provider-core/server/ModelCatalog";
 import {
@@ -165,8 +167,9 @@ export const AntigravityDriver: ProviderDriver<
     };
     const authConfigIssue = antigravityAuthConfigIssue(auth);
     const processEnvironment = yield* mergeProviderInstanceEnvironment(environment);
+    const platform = yield* HostProcess.Platform;
     const userHome = resolveAntigravityUserHome(
-      yield* HostProcess.Platform,
+      platform,
       processEnvironment,
       yield* HostProcess.HomeDirectory,
     );
@@ -589,10 +592,26 @@ export const AntigravityDriver: ProviderDriver<
       Effect.provideService(FileSystem.FileSystem, fileSystem),
       Effect.provideService(Path.Path, path),
     );
+    const cliUsage = yield* makeAntigravityCliUsageReader({
+      resolveExecutable: installation
+        .resolve(settings.binaryPath, processEnvironment)
+        .pipe(Effect.map((executable) => executable.executablePath)),
+      environment: yield* antigravityCliEnvironment({
+        profileDirectory,
+        platform,
+        baseEnv: processEnvironment,
+        auth,
+        tempDirectory: directories.runtimeTemp,
+      }),
+      cwd: profileDirectory,
+    });
+    // Google's quota endpoints are gone, so the CLI's `/usage` prompt is the only source.
     const provider = yield* makeAntigravityProvider(settings, {
       environment: processEnvironment,
       stampIdentity: classifyModels,
       probe,
+      probeUsage: cliUsage.read,
+      clearUsage: cliUsage.clear,
       auth: { type: auth.authMethod, label: antigravityAuthLabel(auth.authMethod) },
       readAccount,
       forgetAccount,

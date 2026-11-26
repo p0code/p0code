@@ -8,6 +8,7 @@ import {
   ProviderInstanceId,
   ProviderSetupError,
   type RuntimeMode,
+  type ServerProviderUsageWindow,
 } from "@t3tools/contracts";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -31,6 +32,7 @@ import {
   buildAntigravityModelsFromSession,
   makeAntigravityProvider,
 } from "./AntigravityProvider.ts";
+import { parseAntigravityCliUsage } from "./antigravityCliUsage.ts";
 import type { AntigravityAccountState } from "./AntigravityAccount.ts";
 import { mergeProviderSnapshot } from "./ProviderRegistry.ts";
 
@@ -115,6 +117,13 @@ const expectedCommands = [
   { name: "logout", description: "Sign out of Google" },
 ];
 
+// The exact output of `antigravity -p "/usage"`, the only source of remaining quota.
+const cliUsageOutput = [
+  "Gemini Models\tWeekly Limit Remaining\t96%\t2026-12-03T14:49:44Z",
+  "Claude and GPT models\tWeekly Limit Remaining\t100%\t1970-01-01T00:00:00Z",
+  "Claude and GPT models\tFive Hour Limit Remaining\t25%\t2026-12-01T09:30:00Z",
+].join("\n");
+
 const makeLayerTest = (runBackgroundWork: boolean) =>
   ProviderHostLive.layer.pipe(
     Layer.provideMerge(
@@ -139,6 +148,8 @@ const makeHarness = Effect.fn("makeAntigravityProviderHarness")(function* (
     readonly auth?: { readonly type: string; readonly label: string };
     readonly enabled?: boolean;
     readonly safe?: boolean;
+    readonly probeUsage?: Effect.Effect<ReadonlyArray<ServerProviderUsageWindow>>;
+    readonly clearUsage?: Effect.Effect<void>;
     readonly rememberedRuntimeModes?: ReadonlyArray<RuntimeMode>;
     readonly readAccount?: Effect.Effect<AntigravityAccountState>;
     readonly forgetAccount?: Effect.Effect<void>;
@@ -157,6 +168,8 @@ const makeHarness = Effect.fn("makeAntigravityProviderHarness")(function* (
     {
       stampIdentity: (snapshot) => Effect.succeed({ ...snapshot, instanceId, driver }),
       ...(options.auth ? { auth: options.auth } : {}),
+      ...(options.probeUsage ? { probeUsage: options.probeUsage } : {}),
+      ...(options.clearUsage ? { clearUsage: options.clearUsage } : {}),
       ...(options.rememberedRuntimeModes
         ? { rememberedRuntimeModes: options.rememberedRuntimeModes }
         : {}),
@@ -502,6 +515,160 @@ it.layer(layerTest)("Antigravity provider snapshots", (it) => {
         expectedCommands,
       );
       expect(yield* Ref.get(harness.probeCalls)).toBe(1);
+    }),
+  );
+
+  it.effect("publishes the CLI's /usage rows as the account's limits", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeHarness({
+        probeUsage: Effect.succeed(parseAntigravityCliUsage(cliUsageOutput)),
+      });
+      const published = yield* harness.nextPublish(
+        (snapshot) => snapshot.usageLimits !== undefined,
+      );
+      yield* harness.initialize;
+      const limits = (yield* published)?.usageLimits;
+      expect(limits?.unavailable).toBeUndefined();
+      expect(
+        limits?.windows.map(({ id, kind, label, usedPercent, resetsAt, windowDurationMins }) => ({
+          id,
+          kind,
+          label,
+          usedPercent,
+          resetsAt,
+          windowDurationMins,
+        })),
+      ).toEqual([
+        {
+          id: "3p-5h",
+          kind: "session",
+          label: "Claude and GPT · 5-hour",
+          usedPercent: 75,
+          resetsAt: "2026-12-01T09:30:00.000Z",
+          windowDurationMins: 300,
+        },
+        {
+          id: "3p-weekly",
+          kind: "weekly",
+          label: "Claude and GPT · Weekly",
+          usedPercent: 0,
+          resetsAt: undefined,
+          windowDurationMins: 10_080,
+        },
+        {
+          id: "gemini-weekly",
+          kind: "weekly",
+          label: "Gemini · Weekly",
+          usedPercent: 4,
+          resetsAt: "2026-12-03T14:49:44.000Z",
+          windowDurationMins: 10_080,
+        },
+      ]);
+    }),
+  );
+
+  it.effect("reports an empty CLI read as unavailable instead of a fresh allowance", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeHarness({ probeUsage: Effect.succeed([]) });
+      const published = yield* harness.nextPublish(
+        (snapshot) => snapshot.usageLimits !== undefined,
+      );
+      yield* harness.initialize;
+      expect((yield* published)?.usageLimits).toMatchObject({
+        windows: [],
+        unavailable: { reason: "probeFailed" },
+      });
+    }),
+  );
+
+  it.effect("retains a successful CLI read on failure, and clears limits on sign-out", () =>
+    Effect.gen(function* () {
+      const windows = parseAntigravityCliUsage(cliUsageOutput);
+      const usage = yield* Ref.make<ReadonlyArray<ServerProviderUsageWindow>>(windows);
+      const cleared = yield* Ref.make(0);
+      const harness = yield* makeHarness({
+        probeUsage: Ref.get(usage),
+        clearUsage: Ref.update(cleared, (count) => count + 1),
+      });
+      const published = yield* harness.nextPublish(
+        (snapshot) => snapshot.usageLimits !== undefined,
+      );
+      yield* harness.initialize;
+      const limits = (yield* published)?.usageLimits;
+      expect(limits?.windows.map((window) => window.id)).toEqual([
+        "3p-5h",
+        "3p-weekly",
+        "gemini-weekly",
+      ]);
+      // The second health check is the one the failed background read triggers.
+      const checks = yield* Ref.make(0);
+      const failedReadApplied = yield* Deferred.make<void>();
+      yield* Ref.set(
+        harness.probe,
+        Ref.updateAndGet(checks, (count) => count + 1).pipe(
+          Effect.tap((count) =>
+            count === 2 ? Deferred.succeed(failedReadApplied, undefined) : Effect.void,
+          ),
+          Effect.as(initializeResult),
+        ),
+      );
+      yield* Ref.set(usage, []);
+      yield* harness.provider.snapshot.refresh;
+      yield* Deferred.await(failedReadApplied);
+      expect((yield* harness.provider.snapshot.getSnapshot).usageLimits).toEqual(limits);
+      yield* harness.provider.onSignedOut;
+      expect((yield* harness.provider.snapshot.getSnapshot).usageLimits).toBeUndefined();
+      expect(yield* Ref.get(cleared)).toBe(1);
+    }),
+  );
+
+  it.effect("a CLI read finishing after sign-out cannot restore account limits", () =>
+    Effect.gen(function* () {
+      const readStarted = yield* Deferred.make<void>();
+      const readResult = yield* Deferred.make<ReadonlyArray<ServerProviderUsageWindow>>();
+      const usage = yield* Ref.make<Effect.Effect<ReadonlyArray<ServerProviderUsageWindow>>>(
+        Effect.succeed([]),
+      );
+      const harness = yield* makeHarness({ probeUsage: Ref.get(usage).pipe(Effect.flatten) });
+      yield* harness.initialize;
+      yield* Ref.set(harness.probe, Effect.succeed(initializeResult));
+      yield* Ref.set(
+        usage,
+        Deferred.succeed(readStarted, undefined).pipe(Effect.andThen(Deferred.await(readResult))),
+      );
+      const refresh = yield* harness.provider.snapshot.refresh.pipe(Effect.forkChild);
+      yield* Deferred.await(readStarted);
+      yield* harness.provider.onSignedOut;
+      yield* Deferred.succeed(readResult, parseAntigravityCliUsage(cliUsageOutput));
+      yield* Fiber.join(refresh);
+      expect((yield* harness.provider.snapshot.getSnapshot).usageLimits).toBeUndefined();
+    }),
+  );
+
+  it.effect("reports ready and starts sessions while one shared CLI read is pending", () =>
+    Effect.gen(function* () {
+      const reads = yield* Ref.make(0);
+      const readStarted = yield* Deferred.make<void>();
+      const readResult = yield* Deferred.make<ReadonlyArray<ServerProviderUsageWindow>>();
+      const harness = yield* makeHarness({
+        probeUsage: Ref.update(reads, (count) => count + 1).pipe(
+          Effect.andThen(Deferred.succeed(readStarted, undefined)),
+          Effect.andThen(Deferred.await(readResult)),
+        ),
+      });
+      const published = yield* harness.nextPublish(
+        (snapshot) => snapshot.usageLimits !== undefined,
+      );
+      yield* harness.initialize;
+      yield* Deferred.await(readStarted);
+      yield* harness.provider.onSessionStarted(started, "/workspace");
+      yield* harness.provider.onSessionStarted(started, "/other");
+      const ready = yield* harness.provider.snapshot.getSnapshot;
+      expect(ready).toMatchObject({ status: "ready", auth: { status: "authenticated" } });
+      expect(ready.usageLimits).toBeUndefined();
+      expect(yield* Ref.get(reads)).toBe(1);
+      yield* Deferred.succeed(readResult, parseAntigravityCliUsage(cliUsageOutput));
+      expect((yield* published)?.usageLimits?.windows).toHaveLength(3);
     }),
   );
 
