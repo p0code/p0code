@@ -360,7 +360,7 @@ describe("connectLinkedEnvironment", () => {
 });
 
 describe("isLinkedThreadWorking", () => {
-  it("counts completion-holding background work as working unless the latest run failed", () => {
+  it("counts live background work as working unless the latest run failed", () => {
     const completedRun = {
       id: RunId.make("run-bg"),
       threadId: v2Projection.thread.id,
@@ -411,7 +411,7 @@ describe("isLinkedThreadWorking", () => {
 
     expect(
       isLinkedThreadWorking(withTasks("completed", [{ taskId: "dev", kind: "command" }])),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       isLinkedThreadWorking(
         withTasks("completed", [{ taskId: "build", kind: "command", awaited: true }]),

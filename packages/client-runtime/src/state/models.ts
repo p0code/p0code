@@ -252,8 +252,12 @@ function terminalRunStatus(status: OrchestrationV2RunStatus): boolean {
 // server suppresses the roster while an interruptible activity run exists, so a
 // remaining roster is stronger than checkpoint-oriented waiting.
 function shellRuntime(thread: OrchestrationV2ThreadShell): ThreadRuntimeSummary | null {
-  const pendingBackgroundWork = backgroundWorkHoldsCompletion(thread.pendingBackgroundTasks ?? []);
-  const parkAtIdle = pendingBackgroundWork && thread.status !== "failed";
+  const pendingBackgroundTasks = thread.pendingBackgroundTasks ?? [];
+  // Any pending background task means the thread is still doing something; awaits only decide
+  // whether completion is held, not whether the process is alive.
+  const pendingBackgroundWork = pendingBackgroundTasks.length > 0;
+  const parkAtIdle =
+    backgroundWorkHoldsCompletion(pendingBackgroundTasks) && thread.status !== "failed";
   if (thread.latestRunId === null && !parkAtIdle) {
     return null;
   }

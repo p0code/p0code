@@ -496,16 +496,15 @@ export function deriveThreadStructureRuntime(
   const liveActivityRun = latestMatchingRun(projection, (run) =>
     ACTIVITY_RUN_STATUSES.has(run.status),
   );
-  const backgroundWorkHoldsRun = backgroundWorkHoldsCompletion(
-    derivePendingBackgroundWork({
-      latestRun: latestRunProjection,
-      providerThreads: projection.providerThreads,
-      turnItems: projection.turnItems,
-      activeProviderThreadId: projection.thread.activeProviderThreadId,
-      runs: projection.runs,
-      pullRequests: projection.thread.pullRequests,
-    }),
-  );
+  const pendingBackgroundTasks = derivePendingBackgroundWork({
+    latestRun: latestRunProjection,
+    providerThreads: projection.providerThreads,
+    turnItems: projection.turnItems,
+    activeProviderThreadId: projection.thread.activeProviderThreadId,
+    runs: projection.runs,
+    pullRequests: projection.thread.pullRequests,
+  });
+  const backgroundWorkHoldsRun = backgroundWorkHoldsCompletion(pendingBackgroundTasks);
   // A pull request watch can hold a thread that never ran.
   if (latestRun === null && !backgroundWorkHoldsRun) return null;
   const activeRunId =
@@ -523,7 +522,7 @@ export function deriveThreadStructureRuntime(
       liveActivityRun === null
         ? null
         : DateTime.formatIso(orchestrationV2RunWorkStartedAt(liveActivityRun)),
-    pendingBackgroundWork: backgroundWorkHoldsRun,
+    pendingBackgroundWork: pendingBackgroundTasks.length > 0,
     providerInstanceId: projection.thread.providerInstanceId,
     providerName: providerSession?.driver ?? null,
     ...threadErrorSummary(failureItem?.failure ?? null, sessionError),

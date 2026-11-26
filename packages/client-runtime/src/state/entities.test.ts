@@ -183,9 +183,9 @@ describe("V2 client presentation", () => {
     {
       label: "unmarked command (dev server)",
       tasks: [{ taskId: "dev", kind: "command" }],
-      expected: false,
+      expected: true,
     },
-    { label: "unmarked monitor", tasks: [{ taskId: "mon", kind: "monitor" }], expected: false },
+    { label: "unmarked monitor", tasks: [{ taskId: "mon", kind: "monitor" }], expected: true },
     {
       label: "awaited command",
       tasks: [{ taskId: "cmd", kind: "command", awaited: true }],
@@ -463,7 +463,7 @@ describe("V2 client presentation", () => {
     ).toMatchObject({ status: "waiting", activeRunId: null });
 
     for (const [turnItems, status, pendingBackgroundWork] of [
-      [[commandItem], "completed", false],
+      [[commandItem], "completed", true],
       [[backgroundItem], "idle", true],
       [[commandItem, backgroundItem], "idle", true],
     ] as const) {
