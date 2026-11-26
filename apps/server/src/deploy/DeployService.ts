@@ -1,9 +1,7 @@
 /**
- * Settings → Deploy. Providers are `deploy:provider` plugins; each can have several linked
- * accounts, whose credentials the plugin keeps in its own storage keyed by the account id the host
- * hands it, so nothing here holds, logs or returns one. Accounts belong to account profiles: one
- * outside the active profile is hidden from every list and refused for every call. Threads below
- * Full access need an approval. Not wired yet (p0deploy): the own-server provider in `./ownServer.ts`.
+ * Settings → Deploy host service. Providers are `deploy:provider` plugins storing credentials per
+ * `accountId`; accounts are profile-scoped and refused when out of profile, and non-full-access
+ * threads require approval. Own-server (`./ownServer.ts`) is not wired yet.
  */
 import {
   type AccountProfileId,
@@ -145,7 +143,8 @@ const make = Effect.gen(function* () {
   /** The account, if it exists and the active profile shows it. */
   const requireAccount = Effect.fn("DeployService.requireAccount")(function* (accountId: string) {
     const account = yield* store.getAccount(accountId);
-    if (account === null) return yield* fail("unknown-account", "This deploy account is not linked.");
+    if (account === null)
+      return yield* fail("unknown-account", "This deploy account is not linked.");
     if (!isDeployAccountInProfile(account, yield* activeProfile)) {
       return yield* fail(
         "not-in-profile",
@@ -327,9 +326,7 @@ const make = Effect.gen(function* () {
         accounts,
         mappings,
         deployments: (yield* store.listRecords).filter((record) => shown.has(record.accountId)),
-        approvals: (yield* store.listApprovals).filter((approval) =>
-          shown.has(approval.accountId),
-        ),
+        approvals: (yield* store.listApprovals).filter((approval) => shown.has(approval.accountId)),
       };
     }),
     link: Effect.fn("DeployService.link")(function* (input) {
@@ -341,9 +338,19 @@ const make = Effect.gen(function* () {
         if (account.pluginId !== input.pluginId) {
           return yield* fail("unknown-account", "This account belongs to another provider.");
         }
-        if (input.teamId !== undefined && input.teamId !== account.teamId) {
-          yield* store.updateAccount(account.id, { teamId: input.teamId });
-          account = { ...account, teamId: input.teamId };
+        if (
+          (input.label !== undefined && input.label !== account.label) ||
+          (input.teamId !== undefined && input.teamId !== account.teamId)
+        ) {
+          yield* store.updateAccount(account.id, {
+            ...(input.label === undefined ? {} : { label: input.label }),
+            ...(input.teamId === undefined ? {} : { teamId: input.teamId }),
+          });
+          account = {
+            ...account,
+            ...(input.label === undefined ? {} : { label: input.label }),
+            ...(input.teamId === undefined ? {} : { teamId: input.teamId }),
+          };
         }
       } else {
         const activeProfileId = yield* activeProfile;
@@ -441,7 +448,12 @@ const make = Effect.gen(function* () {
       const status = yield* provider
         .deploymentStatus({ account: ref, deploymentId: input.deploymentId })
         .pipe(Effect.mapError(providerFailed()));
-      yield* store.updateRecord(input.accountId, input.deploymentId, status.state, status.url ?? null);
+      yield* store.updateRecord(
+        input.accountId,
+        input.deploymentId,
+        status.state,
+        status.url ?? null,
+      );
       return status;
     }),
     logs: (input) =>
@@ -515,7 +527,9 @@ export const layerWorkspace = Layer.effect(
       ),
       projectRoot: Effect.fn("DeployWorkspace.projectRoot")((projectId) =>
         projects.getById(projectId).pipe(
-          Effect.map(Option.match({ onNone: () => null, onSome: (project) => project.workspaceRoot })),
+          Effect.map(
+            Option.match({ onNone: () => null, onSome: (project) => project.workspaceRoot }),
+          ),
           Effect.orElseSucceed(() => null),
         ),
       ),

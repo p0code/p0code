@@ -296,11 +296,9 @@ export type {
 } from "@t3tools/contracts";
 
 /**
- * What a deploy provider plugin implements. One provider can have several linked accounts: every
- * call names its `account`, and the plugin keeps each account's credential in
- * `PluginContext.storage` keyed by `account.accountId`. Make API calls with the lent `HttpClient`
- * (declare `network:outbound`); the host never stores, reads, or returns a provider token.
- * Messages in `PluginError` are shown to people, so never put a token in one.
+ * Contract for a `deploy:provider` plugin. Every call names `account`; store credentials in
+ * `PluginContext.storage` keyed by `account.accountId` and call APIs via `HttpClient`
+ * (`network:outbound`). Never put a token in a `PluginError` message.
  */
 export interface DeployProvider {
   /**

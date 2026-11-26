@@ -39,12 +39,31 @@ describe("deploy contracts", () => {
         },
         environment: "production",
       }),
-    ).toMatchObject({ account, target: { kind: "worker" }, source: { directory: "/work/acme/apps/api" } });
+    ).toMatchObject({
+      account,
+      target: { kind: "worker" },
+      source: { directory: "/work/acme/apps/api" },
+    });
     for (const wrong of [
-      { account, target: { kind: "worker", id: "api" }, source: { kind: "ftp" }, environment: "preview" },
-      { account, target: { kind: "lambda", id: "api" }, source: { kind: "git" }, environment: "preview" },
+      {
+        account,
+        target: { kind: "worker", id: "api" },
+        source: { kind: "ftp" },
+        environment: "preview",
+      },
+      {
+        account,
+        target: { kind: "lambda", id: "api" },
+        source: { kind: "git" },
+        environment: "preview",
+      },
       { target: { kind: "pages", id: "web" }, source: { kind: "git" }, environment: "preview" },
-      { account, target: { kind: "pages", id: "web" }, source: { kind: "git" }, environment: "staging" },
+      {
+        account,
+        target: { kind: "pages", id: "web" },
+        source: { kind: "git" },
+        environment: "staging",
+      },
     ]) {
       expect(() => decode(DeployProviderDeployInput)(wrong)).toThrow();
     }
@@ -79,9 +98,7 @@ describe("deploy contracts", () => {
       directory: "apps/web",
     });
     expect(mapping.targetKind).toBe("pages");
-    expect(() =>
-      decode(DeployProjectMapping)({ ...mapping, targetKind: "prj" }),
-    ).toThrow();
+    expect(() => decode(DeployProjectMapping)({ ...mapping, targetKind: "prj" })).toThrow();
     expect(
       decode(DeployProviderSetEnvInput)({
         account,
@@ -105,9 +122,7 @@ describe("deploy contracts", () => {
   });
 
   it("requires a deploy to name its account, and decodes an approval request", () => {
-    expect(() =>
-      decode(DeployStartInput)({ projectId: "project-1", sourceKind: "git" }),
-    ).toThrow();
+    expect(() => decode(DeployStartInput)({ projectId: "project-1", sourceKind: "git" })).toThrow();
     expect(
       decode(DeployStartInput)({
         projectId: "project-1",
@@ -173,7 +188,10 @@ describe("deploy contracts", () => {
     expect(decode(PluginCapability)("deploy:provider")).toBe("deploy:provider");
     // A settings file written by deploy-core still decodes; the old field is ignored.
     expect(
-      Object.hasOwn(decode(ServerSettings)({ deployProjects: { "project-1": {} } }), "deployProjects"),
+      Object.hasOwn(
+        decode(ServerSettings)({ deployProjects: { "project-1": {} } }),
+        "deployProjects",
+      ),
     ).toBe(false);
   });
 
