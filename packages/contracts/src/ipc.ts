@@ -285,6 +285,8 @@ export interface DesktopUpdateState {
   hostArch: DesktopRuntimeArch;
   appArch: DesktopRuntimeArch;
   runningUnderArm64Translation: boolean;
+  releaseUrl?: string;
+  downloadSize?: number;
   availableVersion: string | null;
   downloadedVersion: string | null;
   releaseNotes: ReadonlyArray<DesktopUpdateReleaseNote>;
@@ -332,6 +334,8 @@ export const DesktopUpdateStateSchema = Schema.Struct({
   hostArch: DesktopRuntimeArchSchema,
   appArch: DesktopRuntimeArchSchema,
   runningUnderArm64Translation: Schema.Boolean,
+  releaseUrl: Schema.optionalKey(Schema.String),
+  downloadSize: Schema.optionalKey(Schema.Number),
   availableVersion: Schema.NullOr(Schema.String),
   downloadedVersion: Schema.NullOr(Schema.String),
   releaseNotes: Schema.Array(DesktopUpdateReleaseNoteSchema),

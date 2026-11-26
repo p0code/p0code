@@ -270,7 +270,7 @@ describe("DesktopUpdates", () => {
     ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
   });
 
-  it.effect("checks shortly after startup and then every four hours", () => {
+  it.effect("checks shortly after startup and then every day", () => {
     const harness = makeHarness();
 
     return Effect.scoped(
@@ -284,7 +284,8 @@ describe("DesktopUpdates", () => {
         yield* TestClock.adjust("3 hours");
         assert.equal(harness.checkCount(), 1);
 
-        yield* TestClock.adjust("1 hour");
+        yield* TestClock.adjust("21 hours");
+        yield* TestClock.adjust("15 seconds");
         assert.equal(harness.checkCount(), 2);
       }),
     ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
@@ -433,7 +434,7 @@ describe("DesktopUpdates", () => {
         assert.notInclude(Object.values(loggedAnnotation).map(String).join(" "), "secret");
         assert.equal(
           state.message,
-          "Electron updater failed to check for updates on channel default.",
+          `${updaterError.message} ${DesktopUpdates.describeUpdateErrorCause(cause)}`,
         );
         assert.notInclude(state.message ?? "", "secret");
       }),

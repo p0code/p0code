@@ -43,6 +43,7 @@ import {
   normalizeDesktopUpdateReleaseNotes,
   releaseNotesOfOfferedVersion,
 } from "./releaseNotes.ts";
+import { shouldCheckInBackground } from "./githubRelease.ts";
 import { desktopUpdateChannelOf } from "@t3tools/shared/cliRelease";
 import { compareSemverVersions } from "@t3tools/shared/semver";
 import {
@@ -63,7 +64,7 @@ import {
 const CHANNEL_CHANGE_RETRY_DELAY = Duration.seconds(1);
 const CHANNEL_CHANGE_RETRIES = 30;
 const AUTO_UPDATE_STARTUP_DELAY = "15 seconds";
-const AUTO_UPDATE_POLL_INTERVAL = "4 hours";
+const AUTO_UPDATE_POLL_INTERVAL = "24 hours";
 const UPDATE_CHECK_WAIT = Duration.seconds(90);
 
 type UpdateAction = "check" | "download" | "install" | "install-recovery" | "channel";
@@ -82,6 +83,8 @@ const UpdateInfo = Schema.Struct({
   releaseName: Schema.optional(Schema.NullOr(Schema.String)),
   releaseDate: Schema.optional(Schema.String),
   downloadedFile: Schema.optional(Schema.String),
+  releaseUrl: Schema.optional(Schema.String),
+  downloadSize: Schema.optional(Schema.Number),
 });
 
 const DownloadProgressInfo = Schema.Struct({
@@ -608,6 +611,18 @@ export const make = Effect.gen(function* () {
     if (!(yield* Ref.get(updaterConfiguredRef))) return false;
 
     const state = yield* Ref.get(updateStateRef);
+    if (reason === "startup" || reason === "poll") {
+      const path = environment.path.join(environment.stateDir, "update-last-check");
+      const last = yield* fileSystem.readFileString(path).pipe(
+        Effect.map(Number),
+        Effect.orElseSucceed(() => null),
+      );
+      const now = DateTime.toEpochMillis(yield* DateTime.now);
+      if (!shouldCheckInBackground(last, now)) return false;
+      yield* fileSystem
+        .makeDirectory(environment.stateDir, { recursive: true })
+        .pipe(Effect.andThen(fileSystem.writeFileString(path, String(now))), Effect.ignore);
+    }
     // A configured updater is disabled only by a channel the managed policy blocks.
     if (state.status === "disabled") return false;
     if (state.status === "downloading") {
@@ -635,7 +650,11 @@ export const make = Effect.gen(function* () {
           )(function* (error) {
             const failedAt = yield* currentIsoTimestamp;
             yield* updateState((current) =>
-              reduceDesktopUpdateStateOnCheckFailure(current, error.message, failedAt),
+              reduceDesktopUpdateStateOnCheckFailure(
+                current,
+                `${error.message} ${describeUpdateErrorCause(error.cause)}`,
+                failedAt,
+              ),
             );
             yield* logUpdaterError(error.message, {
               errorTag: error._tag,
@@ -966,7 +985,9 @@ export const make = Effect.gen(function* () {
           Effect.catchTags({
             ElectronUpdaterQuitAndInstallError: Effect.fn("desktop.updates.handleInstallFailure")(
               function* (error) {
-                yield* recoverFailedInstall(error.message);
+                yield* recoverFailedInstall(
+                  `${error.message} ${describeUpdateErrorCause(error.cause)}`,
+                );
                 yield* logUpdaterError(error.message, {
                   errorTag: error._tag,
                   cause: describeUpdateErrorCause(error.cause),
@@ -1106,6 +1127,7 @@ export const make = Effect.gen(function* () {
     yield* Effect.sleep(AUTO_UPDATE_POLL_INTERVAL).pipe(
       Effect.andThen(checkForUpdates("poll")),
       Effect.forever,
+      Effect.delay(AUTO_UPDATE_STARTUP_DELAY),
       Effect.catchCause((cause) => {
         if (Cause.hasInterruptsOnly(cause)) {
           return Effect.void;
@@ -1138,8 +1160,8 @@ export const make = Effect.gen(function* () {
             yield* Ref.set(lastLoggedDownloadMilestoneRef, -1);
             return;
           }
-          if (isOffered(state) && state.availableVersion === info.version) return;
 
+          if (isOffered(state) && state.availableVersion === info.version) return;
           const checkedAt = yield* currentIsoTimestamp;
           const { releaseNotes, omittedReleaseCount } = normalizeDesktopUpdateReleaseNotes(
             releaseNotesOfOfferedVersion(info),
@@ -1147,15 +1169,17 @@ export const make = Effect.gen(function* () {
             state.channel,
             info.releaseDate,
           );
-          yield* setState(
-            reduceDesktopUpdateStateOnUpdateAvailable(
+          yield* setState({
+            ...reduceDesktopUpdateStateOnUpdateAvailable(
               state,
               info.version,
               checkedAt,
               releaseNotes,
               omittedReleaseCount,
             ),
-          );
+            ...(info.releaseUrl ? { releaseUrl: info.releaseUrl } : {}),
+            ...(info.downloadSize ? { downloadSize: info.downloadSize } : {}),
+          });
           yield* Ref.set(lastLoggedDownloadMilestoneRef, -1);
           yield* logUpdaterInfo("update available", {
             version: info.version,
@@ -1178,13 +1202,20 @@ export const make = Effect.gen(function* () {
     );
   });
 
-  const handleUpdateNotAvailable = Effect.gen(function* () {
+  const handleUpdateNotAvailable = Effect.fn("desktop.updates.handleUpdateNotAvailable")(function* (
+    raw?: unknown,
+  ) {
     const checkedAt = yield* currentIsoTimestamp;
     const state = yield* Ref.get(updateStateRef);
-    yield* setState(yield* noOfferState(state, checkedAt));
+    const next = yield* noOfferState(state, checkedAt);
+    const message =
+      typeof raw === "object" && raw !== null && "message" in raw && typeof raw.message === "string"
+        ? raw.message
+        : null;
+    yield* setState(next.status === "up-to-date" && message ? { ...next, message } : next);
     yield* Ref.set(lastLoggedDownloadMilestoneRef, -1);
     yield* logUpdaterInfo("no updates available");
-  }).pipe(Effect.withSpan("desktop.updates.handleUpdateNotAvailable"));
+  });
 
   const handleUpdaterError = Effect.fn("desktop.updates.handleUpdaterError")(function* (
     cause: unknown,
@@ -1198,7 +1229,7 @@ export const make = Effect.gen(function* () {
       cause,
     });
     if (Option.isSome(activeAction) && activeAction.value === "install") {
-      yield* recoverFailedInstall(error.message);
+      yield* recoverFailedInstall(`${error.message} ${describeUpdateErrorCause(error.cause)}`);
       yield* logUpdaterError(error.message, {
         errorTag: error._tag,
         cause: describeUpdateErrorCause(error.cause),
@@ -1350,6 +1381,15 @@ export const make = Effect.gen(function* () {
         } as ElectronUpdater.ElectronUpdaterFeedUrl);
       }
 
+      if (
+        !mockUpdates &&
+        policy.feedUrl === undefined &&
+        Option.isSome(appUpdateYmlConfig) &&
+        appUpdateYmlConfig.value.provider === "github"
+      ) {
+        const { owner, repo } = appUpdateYmlConfig.value;
+        if (owner && repo) yield* electronUpdater.setFeedURL({ provider: "github", owner, repo });
+      }
       const settings = yield* desktopSettings.get;
       const disabledReason = yield* resolveDisabledReason;
       // A blocked nightly channel still lets the user switch back to stable, so it stays updatable.
@@ -1388,8 +1428,8 @@ export const make = Effect.gen(function* () {
       yield* electronUpdater.on("update-available", (info: unknown) => {
         runEffect(handleUpdateAvailable(info));
       });
-      yield* electronUpdater.on("update-not-available", () => {
-        runEffect(handleUpdateNotAvailable);
+      yield* electronUpdater.on("update-not-available", (info: unknown) => {
+        runEffect(handleUpdateNotAvailable(info));
       });
       yield* electronUpdater.on("error", (error: unknown) => {
         runEffect(handleUpdaterError(error));

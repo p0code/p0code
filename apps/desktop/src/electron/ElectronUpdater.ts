@@ -5,6 +5,16 @@ import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 
 import { AppImageUpdater, autoUpdater } from "electron-updater";
+import * as Electron from "electron";
+import { MacGitHubUpdater } from "../updates/MacGitHubUpdater.ts";
+
+// `app` exists only in the Electron main process; reading it anywhere else throws under module mocks.
+const macUpdater =
+  // oxlint-disable-next-line t3code/no-global-process-runtime -- This native adapter selects the running Electron platform before an Effect runtime exists.
+  process.platform === "darwin" && process.versions.electron && Electron.app.isPackaged
+    ? new MacGitHubUpdater("p0code/p0code")
+    : null;
+let useMacUpdater = macUpdater !== null;
 
 type AutoUpdater = typeof autoUpdater;
 type SpawnLog = (cmd: string, args?: Array<string>, ...rest: Array<unknown>) => Promise<boolean>;
@@ -104,7 +114,22 @@ export class ElectronUpdater extends Context.Service<
 export const make = ElectronUpdater.of({
   setFeedURL: Effect.fn("ElectronUpdater.setFeedURL")(function (options) {
     return Effect.suspend(() => {
-      autoUpdater.setFeedURL(options);
+      if (
+        typeof options !== "string" &&
+        "provider" in options &&
+        options.provider === "github" &&
+        "owner" in options &&
+        "repo" in options &&
+        typeof options.owner === "string" &&
+        typeof options.repo === "string" &&
+        macUpdater
+      ) {
+        macUpdater.setRepository(options.owner, options.repo);
+        useMacUpdater = true;
+      } else {
+        useMacUpdater = false;
+        autoUpdater.setFeedURL(options);
+      }
       return Effect.void;
     });
   }),
@@ -123,6 +148,7 @@ export const make = ElectronUpdater.of({
   setChannel: Effect.fn("ElectronUpdater.setChannel")(function (channel) {
     return Effect.suspend(() => {
       autoUpdater.channel = channel;
+      if (macUpdater) macUpdater.channel = channel;
       return Effect.void;
     });
   }),
@@ -136,6 +162,7 @@ export const make = ElectronUpdater.of({
   setAllowDowngrade: Effect.fn("ElectronUpdater.setAllowDowngrade")(function (value) {
     return Effect.suspend(() => {
       autoUpdater.allowDowngrade = value;
+      if (macUpdater) macUpdater.allowDowngrade = value;
       return Effect.void;
     });
   }),
@@ -156,14 +183,20 @@ export const make = ElectronUpdater.of({
   checkForUpdates: Effect.suspend(() => {
     const channel = autoUpdater.channel;
     return Effect.tryPromise({
-      try: () => autoUpdater.checkForUpdates(),
+      try: async () => {
+        if (useMacUpdater) await macUpdater!.checkForUpdates();
+        else await autoUpdater.checkForUpdates();
+      },
       catch: (cause) => new ElectronUpdaterCheckForUpdatesError({ channel, cause }),
     }).pipe(Effect.asVoid);
   }),
   downloadUpdate: Effect.suspend(() => {
     const channel = autoUpdater.channel;
     return Effect.tryPromise({
-      try: () => autoUpdater.downloadUpdate(),
+      try: async () => {
+        if (useMacUpdater) await macUpdater!.downloadUpdate();
+        else await autoUpdater.downloadUpdate();
+      },
       catch: (cause) => new ElectronUpdaterDownloadUpdateError({ channel, cause }),
     }).pipe(Effect.asVoid);
   }),
@@ -174,8 +207,11 @@ export const make = ElectronUpdater.of({
     return Effect.suspend(() => {
       const channel = autoUpdater.channel;
       if (autoUpdater instanceof AppImageUpdater) relaunchWithoutInheritedDescriptors(autoUpdater);
-      return Effect.try({
-        try: () => autoUpdater.quitAndInstall(isSilent, isForceRunAfter),
+      return Effect.tryPromise({
+        try: async () => {
+          if (useMacUpdater) await macUpdater!.quitAndInstall();
+          else autoUpdater.quitAndInstall(isSilent, isForceRunAfter);
+        },
         catch: (cause) =>
           new ElectronUpdaterQuitAndInstallError({
             channel,
@@ -187,7 +223,7 @@ export const make = ElectronUpdater.of({
     });
   }),
   on: Effect.fn("ElectronUpdater.on")(function (eventName, listener) {
-    const eventTarget = autoUpdater as unknown as {
+    const eventTarget = (useMacUpdater ? macUpdater! : autoUpdater) as unknown as {
       on: (eventName: string, listener: (...args: Array<unknown>) => void) => void;
       removeListener: (eventName: string, listener: (...args: Array<unknown>) => void) => void;
     };
