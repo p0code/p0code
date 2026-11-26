@@ -1,3 +1,5 @@
+import { environmentAllowedInActiveProfile, ENVIRONMENT_NOT_IN_PROFILE } from "../activeProfile.ts";
+import * as ServerSettings from "../serverSettings.ts";
 import {
   CommandId,
   type EnvironmentId,
@@ -153,6 +155,7 @@ const isFinal = (error: OrchestratorMcpFailure) =>
   error.code === "run_not_found";
 
 const make = Effect.gen(function* () {
+  const profileSettings = yield* ServerSettings.ServerSettingsService;
   const followRetry = yield* FollowRetrySchedule;
   const forwarding = yield* PeerForwarding.PeerForwarding;
   const links = yield* PeerLinks.PeerLinks;
@@ -288,6 +291,12 @@ const make = Effect.gen(function* () {
       }
       const parentNodeId = parentRun.rootNodeId;
       const { target } = input;
+      if (!(yield* environmentAllowedInActiveProfile(profileSettings, target.environmentId))) {
+        return yield* new OrchestratorMcpFailure({
+          code: "invalid_request",
+          message: ENVIRONMENT_NOT_IN_PROFILE,
+        });
+      }
       // A worktree there would branch from a commit this checkout has and the
       // other may not, so a remote task runs in that project's checkout.
       if (input.isolation === "worktree") {

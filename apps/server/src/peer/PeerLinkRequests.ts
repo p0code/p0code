@@ -1,3 +1,5 @@
+import { environmentAllowedInActiveProfile, ENVIRONMENT_NOT_IN_PROFILE } from "../activeProfile.ts";
+import * as ServerSettings from "../serverSettings.ts";
 /**
  * Links an agent asks the user to make. The user picks the machine and access in a card, and
  * their client answers with its addresses and a pairing code that goes straight to
@@ -82,6 +84,7 @@ export class PeerLinkRequests extends Context.Service<
 >()("p0/peer/PeerLinkRequests") {}
 
 const make = Effect.gen(function* () {
+  const profileSettings = yield* ServerSettings.ServerSettingsService;
   const threadManagement = yield* ThreadManagementService.ThreadManagementService;
   const peerLinks = yield* PeerLinks.PeerLinks;
   const random = yield* SecureRandom.SecureRandom;
@@ -185,6 +188,15 @@ const make = Effect.gen(function* () {
 
   const request: PeerLinkRequests["Service"]["request"] = Effect.fn("PeerLinkRequests.request")(
     function* (scope, input) {
+      if (
+        input.environmentId !== undefined &&
+        !(yield* environmentAllowedInActiveProfile(profileSettings, input.environmentId))
+      ) {
+        return yield* new OrchestratorMcpFailure({
+          code: "invalid_request",
+          message: ENVIRONMENT_NOT_IN_PROFILE,
+        });
+      }
       // The card is shown in, and answered from, the caller's own thread.
       const threadScope = yield* McpInvocationContext.requireThreadScope(
         scope,
@@ -305,7 +317,17 @@ const make = Effect.gen(function* () {
       case "decline":
         return Effect.succeed({ linkStatus: "declined" });
       case "use-existing":
-        return usableLink(answer.environmentId).pipe(
+        return environmentAllowedInActiveProfile(profileSettings, answer.environmentId).pipe(
+          Effect.flatMap((allowed) =>
+            allowed
+              ? usableLink(answer.environmentId)
+              : Effect.fail(
+                  new PeerLinkError({
+                    reason: "pairing_rejected",
+                    message: ENVIRONMENT_NOT_IN_PROFILE,
+                  }),
+                ),
+          ),
           Effect.flatMap(
             Option.match({
               onNone: () =>

@@ -1,3 +1,9 @@
+import { restrictProfileTo } from "../peer/profile.testkit.ts";
+import * as Context from "effect/Context";
+import { ProjectId, ThreadId } from "@t3tools/contracts";
+import { EnvironmentId } from "@t3tools/contracts";
+import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
+import * as ServerSettings from "../serverSettings.ts";
 import * as Scheduler from "../scheduling/Scheduler.ts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { expect, it } from "@effect/vitest";
@@ -24,6 +30,13 @@ import * as ManagedProjectFolders from "../project/ManagedProjectFolders.ts";
 import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import * as ScheduledTaskService from "./ScheduledTaskService.ts";
 import * as ManagedPolicy from "../policy/ManagedPolicy.ts";
+
+const layerScheduleProfile = Layer.mergeAll(
+  ServerSettings.layerTest(),
+  Layer.succeed(ServerEnvironment.ServerEnvironmentIdentity, {
+    getEnvironmentId: Effect.succeed(EnvironmentId.make("environment:test")),
+  }),
+);
 
 const decodeUpsertInput = Schema.decodeUnknownEffect(ScheduledTaskUpsertInput);
 
@@ -65,7 +78,14 @@ it.effect("rejects a stale form save after deletion while preserving explicit-id
       expect((yield* service.list()).tasks).toEqual([]);
 
       expect((yield* service.upsert(input)).task.id).toBe(created.task.id);
-    }).pipe(Effect.provide(ScheduledTaskService.layer.pipe(Layer.provide(layerDependencies))));
+    }).pipe(
+      Effect.provide(
+        ScheduledTaskService.layer.pipe(
+          Layer.provide(layerScheduleProfile),
+          Layer.provide(layerDependencies),
+        ),
+      ),
+    );
   }).pipe(Effect.provide(SqlitePersistence.layerMemory)),
 );
 
@@ -125,7 +145,14 @@ it.effect("preserves a due run when a save only pads the scheduled hour", () =>
       expect(rescheduled.task.nextRunAt).toBe(
         DateTime.formatIso(DateTime.toUtc(DateTime.add(dueAt, { minutes: 30 }))),
       );
-    }).pipe(Effect.provide(ScheduledTaskService.layer.pipe(Layer.provide(layerDependencies))));
+    }).pipe(
+      Effect.provide(
+        ScheduledTaskService.layer.pipe(
+          Layer.provide(layerScheduleProfile),
+          Layer.provide(layerDependencies),
+        ),
+      ),
+    );
   }).pipe(Effect.provide(SqlitePersistence.layerMemory)),
 );
 
@@ -177,7 +204,14 @@ it.effect("keeps the task list order when a toggle or edit rewrites updated_at",
       const edit = { ...input(older.task.id), requireExisting: true, title: "Edited" };
       yield* service.upsert(yield* decodeUpsertInput({ ...edit, enabled: false }));
       expect(yield* listedIds).toEqual(order);
-    }).pipe(Effect.provide(ScheduledTaskService.layer.pipe(Layer.provide(layerDependencies))));
+    }).pipe(
+      Effect.provide(
+        ScheduledTaskService.layer.pipe(
+          Layer.provide(layerScheduleProfile),
+          Layer.provide(layerDependencies),
+        ),
+      ),
+    );
   }).pipe(Effect.provide(SqlitePersistence.layerMemory)),
 );
 
@@ -372,7 +406,14 @@ it.effect("keeps one queued occurrence of a recurring task while its bound threa
       yield* TestClock.adjust("61 seconds");
       yield* Effect.flatten(Ref.get(runDueWork));
       expect(yield* queuedOccurrencesOf(once.id)).toBe(2);
-    }).pipe(Effect.provide(ScheduledTaskService.layer.pipe(Layer.provide(layerDependencies))));
+    }).pipe(
+      Effect.provide(
+        ScheduledTaskService.layer.pipe(
+          Layer.provide(layerScheduleProfile),
+          Layer.provide(layerDependencies),
+        ),
+      ),
+    );
   }).pipe(Effect.provide(SqlitePersistence.layerMemory)),
 );
 
@@ -434,7 +475,14 @@ it.effect(
         yield* TestClock.adjust("6 seconds");
         yield* TestClock.adjust("60 seconds");
         expect(yield* Deferred.await(launched)).toBe(created.task.title);
-      }).pipe(Effect.provide(ScheduledTaskService.layer.pipe(Layer.provide(layerDependencies))));
+      }).pipe(
+        Effect.provide(
+          ScheduledTaskService.layer.pipe(
+            Layer.provide(layerScheduleProfile),
+            Layer.provide(layerDependencies),
+          ),
+        ),
+      );
     }).pipe(Effect.provide(SqlitePersistence.layerMemory)),
 );
 
@@ -466,7 +514,12 @@ it.effect("a fixed-time slot missed while the server was off shows on the task",
     );
     const withServer = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
       effect.pipe(
-        Effect.provide(ScheduledTaskService.layer.pipe(Layer.provide(layerDependencies))),
+        Effect.provide(
+          ScheduledTaskService.layer.pipe(
+            Layer.provide(layerScheduleProfile),
+            Layer.provide(layerDependencies),
+          ),
+        ),
       );
 
     const taskId = yield* withServer(
@@ -548,7 +601,12 @@ it.effect(
       );
       const withServer = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
         effect.pipe(
-          Effect.provide(ScheduledTaskService.layer.pipe(Layer.provide(layerDependencies))),
+          Effect.provide(
+            ScheduledTaskService.layer.pipe(
+              Layer.provide(layerScheduleProfile),
+              Layer.provide(layerDependencies),
+            ),
+          ),
         );
       const upsert = (
         title: string,
@@ -600,4 +658,69 @@ it.effect(
       });
       expect(morning?.nextRunAt).toBe(DateTime.formatIso(DateTime.toUtc(at(8, 0, 2))));
     }).pipe(Effect.provide(SqlitePersistence.layerMemory)),
+);
+
+it.effect.each([false, true])("schedules only run on allowed environments (bound=%s)", (bound) =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const settingsContext = yield* Layer.build(ServerSettings.layerTest());
+      const settings = Context.get(settingsContext, ServerSettings.ServerSettingsService);
+      const dispatched = yield* Ref.make(0);
+      const projectId = ProjectId.make("project:profile");
+      const threadId = ThreadId.make("thread:profile");
+      const localId = EnvironmentId.make("environment:test");
+      const layerDependencies = Layer.mergeAll(
+        Layer.succeedContext(settingsContext),
+        Layer.succeed(ServerEnvironment.ServerEnvironmentIdentity, {
+          getEnvironmentId: Effect.succeed(localId),
+        }),
+        NodeCrypto.layer,
+        Scheduler.layer,
+        ManagedPolicy.layerTest(),
+        Layer.mock(ThreadLaunchService.ThreadLaunchService)({
+          launch: () => Ref.update(dispatched, (n) => n + 1).pipe(Effect.as({ threadId } as never)),
+        }),
+        Layer.mock(ThreadManagementService.ThreadManagementService)({
+          getThreadShell: () =>
+            Effect.succeed({ projectId, archivedAt: null, deletedAt: null } as never),
+          sendToThread: () => Ref.update(dispatched, (n) => n + 1).pipe(Effect.as({} as never)),
+        }),
+        Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({
+          namedProjectsRoot: "/projects",
+          isScratchProject: () => Effect.succeed(false),
+        }),
+        Layer.mock(SecretRequests.SecretRequests)({}),
+      );
+      const serviceContext = yield* ScheduledTaskService.layer.pipe(
+        Layer.provide(layerDependencies),
+        Layer.build,
+      );
+      const service = Context.get(serviceContext, ScheduledTaskService.ScheduledTaskService);
+      const input = yield* decodeUpsertInput({
+        title: "Profile schedule",
+        prompt: "Run",
+        enabled: true,
+        schedule: { type: "interval", everyMs: 60_000 },
+        projectId,
+        ...(bound ? { threadId } : { threadMode: "new_thread" }),
+        workspaceStrategy: { type: "root" },
+        modelSelection: { instanceId: "codex", model: "gpt-5.4" },
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        creationSource: "server",
+      });
+      const { task } = yield* service.upsert(input);
+      yield* restrictProfileTo(settings, EnvironmentId.make("elsewhere"));
+      const refused = yield* service.runNow({ id: task.id });
+      expect(refused.task).toMatchObject({
+        lastRunStatus: "failed",
+        lastRunError: expect.stringContaining("not allowed in the active profile"),
+      });
+      expect(yield* Ref.get(dispatched)).toBe(0);
+      yield* restrictProfileTo(settings, localId);
+      const allowed = yield* service.runNow({ id: task.id });
+      expect(allowed.task.lastRunStatus).toBe("succeeded");
+      expect(yield* Ref.get(dispatched)).toBe(1);
+    }),
+  ).pipe(Effect.provide(SqlitePersistence.layerMemory)),
 );

@@ -1,3 +1,5 @@
+import { environmentAllowedInActiveProfile, ENVIRONMENT_NOT_IN_PROFILE } from "../activeProfile.ts";
+import * as ServerSettings from "../serverSettings.ts";
 import {
   type EnvironmentId,
   OrchestratorMcpFailure,
@@ -113,6 +115,7 @@ export const readNewestOrRetry = Effect.fn("PeerForwarding.readNewestOrRetry")(f
 });
 
 const make = Effect.gen(function* () {
+  const profileSettings = yield* ServerSettings.ServerSettingsService;
   const peers = yield* PeerMcpClient.PeerMcpClient;
   const links = yield* PeerLinks.PeerLinks;
   const crypto = yield* Digest.Digest;
@@ -173,6 +176,12 @@ const make = Effect.gen(function* () {
     environmentId: EnvironmentId,
     params: unknown,
   ) {
+    if (!(yield* environmentAllowedInActiveProfile(profileSettings, environmentId))) {
+      return yield* new OrchestratorMcpFailure({
+        code: "invalid_request",
+        message: ENVIRONMENT_NOT_IN_PROFILE,
+      });
+    }
     const { caller, limits } = yield* forwardingCaller(scope);
     const encoded = (yield* Schema.encodeUnknownEffect(parameters as Schema.Encoder<unknown>)(
       params,
@@ -309,9 +318,12 @@ const make = Effect.gen(function* () {
       yield* forwardingCaller(scope);
       yield* requireEnabled;
       const listed = yield* links.list.pipe(Effect.mapError(linkStorageFailure));
+      const visible = yield* Effect.filter(listed, (link) =>
+        environmentAllowedInActiveProfile(profileSettings, link.environmentId),
+      );
       return {
         environmentId: scope.environmentId,
-        links: listed.map((link) => ({
+        links: visible.map((link) => ({
           environmentId: link.environmentId,
           label: link.label,
           status: link.status,
@@ -319,7 +331,10 @@ const make = Effect.gen(function* () {
           expiresAt: DateTime.formatIso(link.expiresAt),
           lastError: link.lastError,
         })),
-        notListed: NOT_LISTED,
+        notListed:
+          visible.length === listed.length
+            ? NOT_LISTED
+            : `${NOT_LISTED} Some linked machines are hidden because they are not allowed in the active profile.`,
       };
     },
   );

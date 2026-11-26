@@ -1,3 +1,6 @@
+import { EnvironmentId } from "@t3tools/contracts";
+import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
+import * as ServerSettings from "../serverSettings.ts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { expect, it } from "@effect/vitest";
 import { ScheduledTaskUpsertInput } from "@t3tools/contracts";
@@ -18,6 +21,13 @@ import { ServerActivation } from "../serverActivation.ts";
 import * as ScheduledTaskService from "./ScheduledTaskService.ts";
 import * as ManagedPolicy from "../policy/ManagedPolicy.ts";
 
+const layerScheduleProfile = Layer.mergeAll(
+  ServerSettings.layerTest(),
+  Layer.succeed(ServerEnvironment.ServerEnvironmentIdentity, {
+    getEnvironmentId: Effect.succeed(EnvironmentId.make("environment:test")),
+  }),
+);
+
 afterEach(() => vi.unstubAllEnvs());
 
 const dependencies = Layer.mergeAll(
@@ -35,7 +45,10 @@ const dependencies = Layer.mergeAll(
   Layer.mock(ThreadManagementService.ThreadManagementService)({}),
   Layer.mock(SecretRequests.SecretRequests)({}),
 );
-const serviceLayer = ScheduledTaskService.layer.pipe(Layer.provide(dependencies));
+const serviceLayer = ScheduledTaskService.layer.pipe(
+  Layer.provide(layerScheduleProfile),
+  Layer.provide(dependencies),
+);
 const decodeInput = Schema.decodeUnknownEffect(ScheduledTaskUpsertInput);
 const input = {
   commandId: "interval-duration",
@@ -136,6 +149,7 @@ it.effect.each([
 
 // Each launch takes two minutes, so a manual run can start before the run time and end after it.
 const slowLaunchLayer = ScheduledTaskService.layer.pipe(
+  Layer.provide(layerScheduleProfile),
   Layer.provide(
     Layer.merge(
       dependencies,
@@ -231,6 +245,7 @@ it.effect.each([
         }),
       );
       const layer = ScheduledTaskService.layer.pipe(
+        Layer.provide(layerScheduleProfile),
         Layer.provide(Layer.merge(dependencies, writeMidSave)),
       );
       yield* Effect.gen(function* () {
@@ -301,6 +316,7 @@ it.effect("reports the stored task when the row was replaced during the run", ()
       }),
     );
     const layer = ScheduledTaskService.layer.pipe(
+      Layer.provide(layerScheduleProfile),
       Layer.provide(Layer.merge(dependencies, replaceRowDuringLaunch)),
     );
     yield* Effect.gen(function* () {

@@ -1,3 +1,5 @@
+import { environmentAllowedInActiveProfile, ENVIRONMENT_NOT_IN_PROFILE } from "../activeProfile.ts";
+import * as ServerSettings from "../serverSettings.ts";
 import {
   type EnvironmentId,
   type OrchestrationV2LinkOrigin,
@@ -451,6 +453,7 @@ const routed = Effect.fn("McpToolAccess.routed")(function* <Tools extends Record
 ) {
   // Optional so toolkits that never leave this environment build without it.
   const forwarding = yield* Effect.serviceOption(PeerForwarding.PeerForwarding);
+  const profileSettings = yield* Effect.serviceOption(ServerSettings.ServerSettingsService);
   const handlers: Record<string, unknown> = { ...checked };
   for (const [name, declaration] of Object.entries<Declaration<unknown>>(declarations)) {
     const tool = toolkit.tools[name];
@@ -477,6 +480,16 @@ const routed = Effect.fn("McpToolAccess.routed")(function* <Tools extends Record
     handlers[name] = ({ environmentId, ...params }: { readonly environmentId?: EnvironmentId }) =>
       Effect.gen(function* () {
         const scope = yield* McpInvocationContext.McpInvocationContext;
+        if (
+          environmentId !== undefined &&
+          Option.isSome(profileSettings) &&
+          !(yield* environmentAllowedInActiveProfile(profileSettings.value, environmentId))
+        ) {
+          return yield* new OrchestratorMcpFailure({
+            code: "invalid_request",
+            message: ENVIRONMENT_NOT_IN_PROFILE,
+          });
+        }
         const target = PeerForwarding.remoteTarget(scope, environmentId);
         if (target === undefined) return yield* here(params);
         if (scope.linkedEnvironments === false) return yield* PeerForwarding.linkedEnvironmentsOff;

@@ -1,3 +1,4 @@
+import { restrictProfileTo } from "./profile.testkit.ts";
 import * as DocumentText from "../provider/DocumentText.ts";
 import { NodeHttpServer } from "@effect/platform-node";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
@@ -2816,6 +2817,36 @@ it.effect("a local task runs in this thread's project", () =>
       });
       expect(result.isError).toBe(true);
       expect(JSON.stringify(result.content)).toContain("invalid_request");
+    }),
+  ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+);
+
+it.effect("refuses delegation to an excluded machine before forwarding a delegated launch", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const thread = yield* makeBoxThread;
+      const b = yield* serveBox(thread);
+      const offers = yield* SubscriptionRef.make<
+        ReadonlyArray<ProviderContinuationRequests.ProviderContinuationRequest>
+      >([]);
+      const database = yield* SqlitePersistence.layerMemory.pipe(Layer.build);
+      const a = yield* makeLaptop(database, offers);
+      yield* linkTo(a.links, b, "full-access");
+      yield* seedParent(a);
+      yield* restrictProfileTo(a.settings, laptop.environmentId);
+      const result = yield* a.call("delegate_task", {
+        task: "Do the work",
+        target: { environmentId: box.environmentId },
+      });
+      expect(
+        result.structuredContent ??
+          JSON.parse(result.content[0]?.type === "text" ? result.content[0].text : "null"),
+      ).toMatchObject({
+        code: "invalid_request",
+        message: expect.stringContaining("not allowed in the active profile"),
+      });
+      expect(yield* Ref.get(thread.launched)).toBeNull();
+      expect((yield* a.orchestrator.getThreadProjection(parentThreadId)).subagents).toHaveLength(0);
     }),
   ).pipe(Effect.provide(NodeHttpServer.layerTest)),
 );

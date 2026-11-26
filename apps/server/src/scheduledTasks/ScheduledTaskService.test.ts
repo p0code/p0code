@@ -1,3 +1,6 @@
+import { EnvironmentId } from "@t3tools/contracts";
+import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
+import * as ServerSettings from "../serverSettings.ts";
 import * as Scheduler from "../scheduling/Scheduler.ts";
 import * as NodeUtil from "node:util";
 
@@ -36,6 +39,13 @@ import * as ManagedProjectFolders from "../project/ManagedProjectFolders.ts";
 import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import * as ScheduledTaskService from "./ScheduledTaskService.ts";
 import * as ManagedPolicy from "../policy/ManagedPolicy.ts";
+
+const layerScheduleProfile = Layer.mergeAll(
+  ServerSettings.layerTest(),
+  Layer.succeed(ServerEnvironment.ServerEnvironmentIdentity, {
+    getEnvironmentId: Effect.succeed(EnvironmentId.make("environment:test")),
+  }),
+);
 
 const isScheduledTaskError = Schema.is(ScheduledTaskError);
 
@@ -199,7 +209,7 @@ it.effect(
         Effect.gen(function* () {
           yield* Layer.build(
             Layer.provideMerge(
-              ScheduledTaskService.layer,
+              ScheduledTaskService.layer.pipe(Layer.provide(layerScheduleProfile)),
               Layer.mergeAll(
                 ManagedPolicy.layerTest(),
                 Layer.mock(ThreadLaunchService.ThreadLaunchService)({
@@ -293,7 +303,7 @@ it.effect(
         Effect.gen(function* () {
           yield* Layer.build(
             Layer.provideMerge(
-              ScheduledTaskService.layer,
+              ScheduledTaskService.layer.pipe(Layer.provide(layerScheduleProfile)),
               Layer.mergeAll(
                 ManagedPolicy.layerTest(),
                 Layer.mock(ThreadLaunchService.ThreadLaunchService)({
@@ -358,6 +368,7 @@ it.effect("thread cleanup notifies subscribers and a finishing run cannot recrea
     const running = yield* Deferred.make<void>();
     const removed = yield* Deferred.make<void>();
     const layer = ScheduledTaskService.layer.pipe(
+      Layer.provide(layerScheduleProfile),
       Layer.provide(
         Layer.mergeAll(
           ManagedPolicy.layerTest(),
@@ -433,6 +444,7 @@ it.effect.each([
     const sent = yield* Ref.make("");
     const run = { id: "run:2", status: outcome.status, rootNodeId: "node:root" };
     const layer = ScheduledTaskService.layer.pipe(
+      Layer.provide(layerScheduleProfile),
       Layer.provide(
         Layer.mergeAll(
           ManagedPolicy.layerTest(),
@@ -524,6 +536,7 @@ it.effect("a one-time task is removed once its turn completes", () =>
     const sent = yield* Ref.make("");
     const run = { id: "run:1", status: "completed", rootNodeId: "node:root" };
     const layer = ScheduledTaskService.layer.pipe(
+      Layer.provide(layerScheduleProfile),
       Layer.provide(
         Layer.mergeAll(
           ManagedPolicy.layerTest(),
@@ -596,6 +609,7 @@ it.effect("a paused one-time task run by hand before its time is kept", () =>
     const sent = yield* Ref.make("");
     const run = { id: "run:1", status: "completed", rootNodeId: "node:root" };
     const layer = ScheduledTaskService.layer.pipe(
+      Layer.provide(layerScheduleProfile),
       Layer.provide(
         Layer.mergeAll(
           ManagedPolicy.layerTest(),
@@ -662,6 +676,7 @@ it.effect("a bound run follows its thread when promotion moves it mid-send", () 
     // read and the retry.
     const shellProjects = yield* Ref.make([promoted, scratch, promoted]);
     const layer = ScheduledTaskService.layer.pipe(
+      Layer.provide(layerScheduleProfile),
       Layer.provide(
         Layer.mergeAll(
           ManagedPolicy.layerTest(),
@@ -732,6 +747,7 @@ it.effect("a fresh-session task launches one thread, then starts each later run 
     const sends = yield* Ref.make<Array<{ threadId: ThreadId; freshContext?: boolean }>>([]);
     const launched = ThreadId.make("thread:fresh-session-task");
     const layer = ScheduledTaskService.layer.pipe(
+      Layer.provide(layerScheduleProfile),
       Layer.provide(
         Layer.mergeAll(
           ManagedPolicy.layerTest(),
@@ -841,6 +857,7 @@ it.effect("a refused dispatch records its refusal, and opaque causes stay generi
     ] as const;
     const failure = yield* Ref.make<unknown>(undefined);
     const layer = ScheduledTaskService.layer.pipe(
+      Layer.provide(layerScheduleProfile),
       Layer.provide(
         Layer.mergeAll(
           ManagedPolicy.layerTest(),
@@ -888,6 +905,7 @@ it.effect("a refused dispatch records its refusal, and opaque causes stay generi
 it.effect("a first run whose thread was deleted before it bound removes the task", () =>
   Effect.gen(function* () {
     const layer = ScheduledTaskService.layer.pipe(
+      Layer.provide(layerScheduleProfile),
       Layer.provide(
         Layer.mergeAll(
           ManagedPolicy.layerTest(),
@@ -941,6 +959,7 @@ it.effect.each(["recreated under the same id", "moved to another project"] as co
       const launching = yield* Deferred.make<void>();
       const proceed = yield* Deferred.make<void>();
       const layer = ScheduledTaskService.layer.pipe(
+        Layer.provide(layerScheduleProfile),
         Layer.provide(
           Layer.mergeAll(
             ManagedPolicy.layerTest(),
@@ -1002,6 +1021,7 @@ it.effect.each(["recreated under the same id", "moved to another project"] as co
 it.effect("refuses saving an enabled task above the policy ceiling", () =>
   Effect.gen(function* () {
     const layer = ScheduledTaskService.layer.pipe(
+      Layer.provide(layerScheduleProfile),
       Layer.provide(
         Layer.mergeAll(
           ManagedPolicy.layerTest({
@@ -1085,6 +1105,7 @@ it.effect("checks a task's destination thread only when the destination changes"
     );
     const consumed = yield* Ref.make(0);
     const layer = ScheduledTaskService.layer.pipe(
+      Layer.provide(layerScheduleProfile),
       Layer.provide(
         Layer.mergeAll(
           ManagedPolicy.layerTest(),
@@ -1163,6 +1184,7 @@ it.effect("a run interrupted right after it reserves the task does not block the
   Effect.gen(function* () {
     const launches = yield* Ref.make(0);
     const layer = ScheduledTaskService.layer.pipe(
+      Layer.provide(layerScheduleProfile),
       Layer.provide(
         Layer.mergeAll(
           ManagedPolicy.layerTest(),

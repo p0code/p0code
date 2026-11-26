@@ -84,6 +84,13 @@ import * as ProviderReplayHarness from "./testkit/ProviderReplayHarness.ts";
 import * as RemoteDelegation from "../peer/RemoteDelegation.ts";
 import type * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
 
+const layerScheduleProfile = Layer.mergeAll(
+  ServerSettings.layerTest(),
+  Layer.succeed(ServerEnvironment.ServerEnvironmentIdentity, {
+    getEnvironmentId: Effect.succeed(EnvironmentId.make("environment:test")),
+  }),
+);
+
 const projectId = ProjectId.make("project:launch-test");
 const otherProjectId = ProjectId.make("project:launch-other");
 const encodeThreadProjection = Schema.encodeEffect(OrchestrationV2ThreadProjectionJson);
@@ -401,6 +408,7 @@ it.effect.each(
   ({ target, createdBy }) => {
     const harness = makeHarness();
     const layerScheduledTasks = ScheduledTasks.layer.pipe(
+      Layer.provide(layerScheduleProfile),
       Layer.provide(
         Layer.mergeAll(
           harness.layer,
@@ -468,6 +476,7 @@ it.effect(
   () => {
     const harness = makeHarness();
     const layerScheduledTasks = ScheduledTasks.layer.pipe(
+      Layer.provide(layerScheduleProfile),
       Layer.provide(
         Layer.mergeAll(
           harness.layer,
@@ -558,6 +567,7 @@ it.effect("leaves delegated tasks and workflow agent steps out of the top-level 
 it.effect("runs a thread-bound automation on the provider the thread uses now", () => {
   const harness = makeHarness({ adapters: [adapter, claudeAdapter] });
   const layerScheduledTasks = ScheduledTasks.layer.pipe(
+    Layer.provide(layerScheduleProfile),
     Layer.provide(
       Layer.mergeAll(
         harness.layer,
@@ -1174,6 +1184,7 @@ function scratchHarness({ scratch = true }: { readonly scratch?: boolean } = {})
           } as never),
   });
   const layerScheduledTasks = ScheduledTasks.layer.pipe(
+    Layer.provide(layerScheduleProfile),
     Layer.provide(
       Layer.mergeAll(
         harness.layer,

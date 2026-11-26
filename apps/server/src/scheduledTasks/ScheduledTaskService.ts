@@ -1,3 +1,6 @@
+import { environmentAllowedInActiveProfile, ENVIRONMENT_NOT_IN_PROFILE } from "../activeProfile.ts";
+import * as ServerSettings from "../serverSettings.ts";
+import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import {
   CommandId,
   MessageId,
@@ -476,6 +479,8 @@ export const layer = Layer.effect(
     const random = yield* SecureRandom.SecureRandom;
     const digest = yield* Digest.Digest;
     const mac = yield* Mac.Mac;
+    const profileSettings = yield* ServerSettings.ServerSettingsService;
+    const environment = yield* ServerEnvironment.ServerEnvironmentIdentity;
     const threadLaunch = yield* ThreadLaunchService.ThreadLaunchService;
     const threadManagement = yield* ThreadManagementService.ThreadManagementService;
     const serviceScope = yield* Effect.scope;
@@ -1106,8 +1111,16 @@ export const layer = Layer.effect(
             );
 
         // Capture defects and interrupts too so dispatch failures still reach markCompleted.
-        const result =
-          active.threadId === null
+        // Schedules are unattended: both bound sends and new launches follow the active profile.
+        const allowed = yield* environmentAllowedInActiveProfile(
+          profileSettings,
+          yield* environment.getEnvironmentId,
+        );
+        const result = !allowed
+          ? yield* Effect.exit(
+              Effect.fail(taskError(ENVIRONMENT_NOT_IN_PROFILE, { taskId: active.id })),
+            )
+          : active.threadId === null
             ? yield* Effect.exit(
                 threadLaunch
                   .launch({
