@@ -9,6 +9,8 @@ import {
   type RefObject,
 } from "react";
 
+import { useNavigationDismiss } from "~/hooks/useNavigationDismiss";
+
 import { cn } from "~/lib/utils";
 import { useNativeTitlebarHeight } from "~/lib/windowControlsOverlay";
 
@@ -68,14 +70,25 @@ function TooltipScrollDismissArea({
   );
 }
 
-function Tooltip<Payload>(props: TooltipPrimitive.Root.Props<Payload>) {
+function Tooltip<Payload>({
+  dismissOnScroll = false,
+  ...props
+}: TooltipPrimitive.Root.Props<Payload> & { dismissOnScroll?: boolean }) {
   const tracker = useTooltipScrollTracker();
   const localActionsRef = useRef<TooltipPrimitive.Root.Actions | null>(null);
   const actionsRef = props.actionsRef ?? localActionsRef;
+  useNavigationDismiss(() => actionsRef.current?.close());
+  const [open, setOpen] = useState(false);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- a stationary pointer gets no leave event when the list scrolls beneath it
+  useEffect(() => {
+    if (!dismissOnScroll || !open) return;
+    const close = () => actionsRef.current?.close();
+    document.addEventListener("scroll", close, true);
+    return () => document.removeEventListener("scroll", close, true);
+  }, [actionsRef, dismissOnScroll, open]);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- releases this tooltip from the scroll tracker on unmount
   useEffect(() => () => tracker?.release(actionsRef), [actionsRef, tracker]);
 
-  if (!tracker) return <TooltipPrimitive.Root {...props} />;
   return (
     <TooltipHoverContext value={actionsRef}>
       <TooltipPrimitive.Root
@@ -83,7 +96,10 @@ function Tooltip<Payload>(props: TooltipPrimitive.Root.Props<Payload>) {
         actionsRef={actionsRef}
         onOpenChange={(open, details) => {
           props.onOpenChange?.(open, details);
-          if (!open && !details.isCanceled) tracker.release(actionsRef);
+          if (!details.isCanceled) {
+            if (dismissOnScroll) setOpen(open);
+            if (!open) tracker?.release(actionsRef);
+          }
         }}
       />
     </TooltipHoverContext>

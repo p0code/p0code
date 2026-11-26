@@ -11,6 +11,7 @@ import {
   type ReactElement,
   type ReactNode,
 } from "react";
+import { useNavigationDismiss } from "~/hooks/useNavigationDismiss";
 import { flushSync } from "react-dom";
 
 import { Tooltip, TooltipPopup, TooltipTrigger, useTooltipScrollTracker } from "./tooltip";
@@ -139,6 +140,11 @@ export function SharedTooltipProvider({ children }: { children: ReactNode }) {
       clearTimer();
     },
   }));
+
+  useNavigationDismiss(() => {
+    clearTimer();
+    if (current.current) api.dismiss(current.current.anchor);
+  });
 
   const activeAnchor = state?.open ? state.anchor : null;
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- links the active trigger DOM element to the shared tooltip popup via aria-describedby

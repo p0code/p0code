@@ -15,6 +15,11 @@ vi.mock(import("../state/server"), async (original) => {
 // The thread list needs live environments; the shortcut lives in the shell around it.
 vi.mock(import("./Sidebar"), () => ({ default: (() => null) as never }));
 
+import { useLocation } from "@tanstack/react-router";
+import { SettingsWorkspace } from "./settings/SettingsWorkspace";
+import { SidebarInset } from "./ui/sidebar";
+import { WorkspacePageHeader } from "./WorkspacePageHeader";
+import { isAppModalPage } from "./sidebar/mainAppLocation";
 import { AppSidebarLayout } from "./AppSidebarLayout";
 
 describe("sidebar toggle shortcut", () => {
@@ -39,4 +44,39 @@ describe("sidebar toggle shortcut", () => {
     await userEvent.keyboard("{Control>}b{/Control}");
     await vi.waitFor(() => expect(wrapper.getAttribute("data-sidebar-state")).toBe("collapsed"));
   });
+});
+
+it("keeps the workspace sidebar action usable on Settings and Pull requests", async () => {
+  await page.viewport(1280, 800);
+  function RouteFrame() {
+    const path = useLocation({ select: (location) => location.pathname });
+    return (
+      <AppSidebarLayout>
+        {path.startsWith("/settings") ? (
+          <SettingsWorkspace breadcrumb="Settings">
+            <input aria-label="Setting" />
+          </SettingsWorkspace>
+        ) : (
+          <SidebarInset>
+            <WorkspacePageHeader>Pull requests</WorkspacePageHeader>
+          </SidebarInset>
+        )}
+      </AppSidebarLayout>
+    );
+  }
+  await using screen = await render(<RouteFrame />, { router: "/pull-requests" });
+  const toggle = screen.getByRole("button", { name: "Toggle main sidebar" });
+  const wrapper = screen.container.querySelector('[data-slot="sidebar-wrapper"]')!;
+  const initial = wrapper.getAttribute("data-sidebar-state");
+  await userEvent.click(toggle);
+  await vi.waitFor(() => expect(wrapper.getAttribute("data-sidebar-state")).not.toBe(initial));
+  for (const path of ["/settings/general", "/settings/appearance", "/pull-requests"]) {
+    expect(isAppModalPage(path)).toBe(false);
+    await screen.router!.navigate({ to: path });
+    await expect.element(toggle).toBeVisible();
+    const before = wrapper.getAttribute("data-sidebar-state");
+    await userEvent.click(toggle);
+    await vi.waitFor(() => expect(wrapper.getAttribute("data-sidebar-state")).not.toBe(before));
+    expect(document.querySelector("[data-app-modal]")).toBeNull();
+  }
 });
