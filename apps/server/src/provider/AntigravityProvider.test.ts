@@ -32,6 +32,7 @@ import {
   buildAntigravityModelsFromSession,
   makeAntigravityProvider,
 } from "./AntigravityProvider.ts";
+import type { AntigravityAccountState } from "./AntigravityAccount.ts";
 import { mergeProviderSnapshot } from "./ProviderRegistry.ts";
 
 const decodeSettings = Schema.decodeSync(AntigravitySettings);
@@ -141,6 +142,8 @@ const makeHarness = Effect.fn("makeAntigravityProviderHarness")(function* (
     readonly safe?: boolean;
     readonly probeUsage?: Effect.Effect<ServerProviderUsageLimits>;
     readonly rememberedRuntimeModes?: ReadonlyArray<RuntimeMode>;
+    readonly readAccount?: Effect.Effect<AntigravityAccountState>;
+    readonly forgetAccount?: Effect.Effect<void>;
   } = {},
 ) {
   const savedRuntimeModes = yield* Ref.make<ReadonlyArray<ReadonlyArray<RuntimeMode>>>([]);
@@ -160,6 +163,8 @@ const makeHarness = Effect.fn("makeAntigravityProviderHarness")(function* (
       ...(options.rememberedRuntimeModes
         ? { rememberedRuntimeModes: options.rememberedRuntimeModes }
         : {}),
+      ...(options.readAccount ? { readAccount: options.readAccount } : {}),
+      ...(options.forgetAccount ? { forgetAccount: options.forgetAccount } : {}),
       rememberRuntimeModes: (modes) => Ref.update(savedRuntimeModes, (saved) => [...saved, modes]),
       probe: Ref.update(probeCalls, (count) => count + 1).pipe(
         Effect.andThen(Ref.get(probe)),
@@ -517,6 +522,44 @@ it.layer(layerTest)("Antigravity provider snapshots", (it) => {
       expect((yield* harness.provider.snapshot.getSnapshot).slashCommands).toEqual(
         expectedCommands.slice(1),
       );
+    }),
+  );
+
+  it.effect("keeps an expired saved account visible and forgets it only on sign-out", () =>
+    Effect.gen(function* () {
+      const account: AntigravityAccountState = {
+        email: "paid@example.com",
+        expiresAt: "2026-11-24T12:00:00.000Z",
+        credentialStatus: "expired",
+        canRenew: true,
+        hasSignIn: true,
+      };
+      const forgotten = yield* Ref.make(false);
+      const harness = yield* makeHarness({
+        readAccount: Effect.succeed(account),
+        forgetAccount: Ref.set(forgotten, true),
+      });
+      yield* harness.initialize;
+      yield* harness.provider.onSessionStarted(started, "/workspace");
+
+      yield* harness.provider.onAuthRequired;
+      const expired = yield* harness.provider.snapshot.getSnapshot;
+      expect(expired).toMatchObject({
+        status: "warning",
+        auth: {
+          status: "authenticated",
+          email: "paid@example.com",
+          credentialStatus: "expired",
+          canRenewCredential: true,
+        },
+      });
+      expect(expired.models.length).toBeGreaterThan(0);
+
+      yield* harness.provider.onSignedOut;
+      expect(yield* Ref.get(forgotten)).toBe(true);
+      expect((yield* harness.provider.snapshot.getSnapshot).auth).toMatchObject({
+        status: "unauthenticated",
+      });
     }),
   );
 

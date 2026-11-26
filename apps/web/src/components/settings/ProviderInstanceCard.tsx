@@ -40,8 +40,12 @@ import {
 } from "@t3tools/shared/model";
 import { cn } from "../../lib/utils";
 import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
+import { useNowMinute } from "../../hooks/useNowMinute";
 import { useStableCallback } from "../../hooks/useStableCallback";
-import { normalizeProviderInstanceBadge } from "@t3tools/client-runtime/state/provider-instance-display";
+import {
+  normalizeProviderInstanceBadge,
+  providerCredentialStatus,
+} from "@t3tools/client-runtime/state/provider-instance-display";
 import { normalizeProviderAccentColor } from "../../providerInstances";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -87,6 +91,7 @@ import {
   getProviderSummary,
   getProviderVersionLabel,
   providerAuthLabel,
+  providerCredentialStatusLabel,
 } from "./providerStatus";
 
 const ENVIRONMENT_VARIABLE_NAME_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
@@ -815,6 +820,7 @@ export function ProviderInstanceCard({
 }: ProviderInstanceCardProps) {
   const gt = useGT();
   const m = useMessages();
+  const nowMinute = useNowMinute();
   const enabled = projectOverride?.effectiveEnabled ?? resolveProviderInstanceEnabled(instance);
   const effectiveProvider = liveProvider && { ...liveProvider, enabled };
   const compatibility = enabled ? liveProvider?.compatibilityAdvisory : undefined;
@@ -828,6 +834,19 @@ export function ProviderInstanceCard({
   const authLabel =
     enabled && liveProvider?.auth.status === "authenticated"
       ? (providerAuthLabel(liveProvider.auth, m) ?? null)
+      : null;
+  const credentialStatus =
+    enabled && liveProvider
+      ? providerCredentialStatus(liveProvider.auth, Date.parse(nowMinute))
+      : "unknown";
+  const credentialStatusLabel = enabled
+    ? (providerCredentialStatusLabel(liveProvider?.auth, m) ?? null)
+    : null;
+  const accountLine =
+    isAuthenticated && authEmail
+      ? [authEmail, credentialStatus === "expiring" ? credentialStatusLabel : null]
+          .filter(Boolean)
+          .join(" · ")
       : null;
   const versionLabel = getProviderVersionLabel(liveProvider?.version);
   const versionAdvisory = getProviderVersionAdvisoryPresentation(
@@ -1056,6 +1075,7 @@ export function ProviderInstanceCard({
           </T>
         </span>
         {authLabel ? <span>· {authLabel}</span> : null}
+        {credentialStatusLabel ? <span>· {credentialStatusLabel}</span> : null}
         {inlineStatusDetail ? (
           <span className="min-w-0 [overflow-wrap:anywhere]">· {inlineStatusDetail}</span>
         ) : null}
@@ -1235,6 +1255,7 @@ export function ProviderInstanceCard({
                   ) : (
                     <>
                       {summary.headline}
+                      {accountLine ? ` · ${accountLine}` : null}
                       {needsAttention && inlineStatusDetail ? ` · ${inlineStatusDetail}` : null}
                     </>
                   )}

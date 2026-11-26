@@ -41,6 +41,8 @@ import { OpenAI } from "../Icons";
 import { Alert, AlertTitle } from "../ui/alert";
 import { Popover, PopoverCreateHandle, PopoverPopup, PopoverTrigger } from "../ui/popover";
 import { PaceIcon, ResetCreditDialog, barColor, usePaceMark, useResetCredit } from "./UsageLimits";
+import { ExpiredCredentialNotices } from "./ExpiredCredentialNotices";
+import { collectExpiredCredentialAccounts } from "./expiredCredentials";
 import {
   collectExternalUsageLinks,
   collectLimitNotices,
@@ -724,12 +726,15 @@ export function UsageLimitsPooled({
   const quotaSources = collectHttpQuotaSources(presentations);
   const notices = collectLimitNotices(presentations, m);
   const externalLinks = collectExternalUsageLinks(presentations, m);
+  const expiredCredentials = collectExpiredCredentialAccounts(presentations).length > 0;
   return (
     <div className="flex flex-col gap-8">
+      {expiredCredentials ? <ExpiredCredentialNotices presentations={presentations} /> : null}
       {pools.length === 0 &&
       notices.length === 0 &&
       externalLinks.length === 0 &&
-      quotaSources.length === 0 ? (
+      quotaSources.length === 0 &&
+      !expiredCredentials ? (
         <p className="text-sm text-muted-foreground">
           <T>No provider on the selected environments reports subscription limits.</T>
         </p>

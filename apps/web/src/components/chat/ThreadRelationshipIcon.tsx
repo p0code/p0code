@@ -9,6 +9,7 @@ import {
   shouldShowInstanceBadge,
   type ProviderInstanceEntry,
 } from "../../providerInstances";
+import { providerCredentialStatusLabel } from "../settings/providerStatus";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { ProviderInstanceIcon } from "./ProviderInstanceIcon";
 
@@ -78,7 +79,9 @@ export function ThreadRelationshipIcon({
     ? providerEntries.find((candidate) => candidate.instanceId === provider?.instanceId)
     : undefined;
   const showInstanceBadge = entry !== undefined && shouldShowInstanceBadge(entry, providerEntries);
-  const accountName = entry ? providerInstanceAccountName(entry) : undefined;
+  const accountName = entry
+    ? providerInstanceAccountName(entry, providerCredentialStatusLabel(entry.snapshot.auth, m))
+    : undefined;
   const icon = (
     <span className="relative inline-flex size-4 shrink-0 items-center justify-center">
       {driver ? (

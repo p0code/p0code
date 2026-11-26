@@ -5,6 +5,7 @@ import {
   getProviderSummary,
   getProviderVersionAdvisoryPresentation,
   getProviderStatusKey,
+  providerCredentialStatusLabel,
 } from "./providerStatus";
 
 const provider: ServerProvider = {
@@ -47,6 +48,41 @@ describe("getProviderSummary", () => {
       headline: "Not authenticated",
       detail: "Run codex login.",
     });
+  });
+});
+
+describe("Antigravity with an expired saved sign-in", () => {
+  const expired: ServerProvider = {
+    ...provider,
+    instanceId: ProviderInstanceId.make("antigravity-paid"),
+    driver: ProviderDriverKind.make("antigravity"),
+    displayName: "Antigravity Paid",
+    status: "warning",
+    auth: {
+      status: "authenticated",
+      type: "oauth-personal",
+      label: "Google account",
+      email: "paid@example.com",
+      credentialStatus: "expired",
+      canRenewCredential: true,
+    },
+    message:
+      "Antigravity's saved sign-in has expired. Re-authenticate or start a turn to renew it.",
+  };
+
+  it("names the account and marks the sign-in expired instead of claiming it is fine", () => {
+    expect(getProviderSummary(expired)).toEqual({
+      headline: "Sign-in expired",
+      detail: expired.message,
+    });
+    expect(getProviderStatusKey(expired)).toBe("warning");
+    expect(providerCredentialStatusLabel(expired.auth)).toBe("Sign-in expired");
+  });
+
+  it("says a sign-in expires soon before it lapses", () => {
+    expect(providerCredentialStatusLabel({ credentialStatus: "expiring" })).toBe(
+      "Sign-in expires soon",
+    );
   });
 });
 

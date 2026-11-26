@@ -16,6 +16,7 @@ import {
   makeUnavailableUsageLimits,
   makeUsageLimits,
 } from "@t3tools/provider-core/server/usageLimits";
+import { rememberAntigravityAccountEmail } from "./AntigravityAccount.ts";
 
 export function antigravityUserAgent(platform: NodeJS.Platform, architecture: NodeJS.Architecture) {
   return `antigravity/hub/2.24.0 (aidev_client; os_type=${platform}; arch=${architecture}; cl=963137146)`;
@@ -53,7 +54,10 @@ const TokenResponse = Schema.Struct({
   access_token: Schema.NonEmptyString,
   expires_in: Schema.Number.check(Schema.isGreaterThan(0)),
 });
-const UserInfo = Schema.Struct({ id: Schema.NonEmptyString });
+const UserInfo = Schema.Struct({
+  id: Schema.NonEmptyString,
+  email: Schema.optional(Schema.String),
+});
 const Quota = Schema.Struct({
   remainingFraction: Schema.optional(Schema.Number),
   resetTime: Schema.optional(Schema.String),
@@ -347,6 +351,20 @@ export const makeAntigravityUsageProbe = Effect.fn("makeAntigravityUsageProbe")(
       Effect.flatMap((response) => response.json),
       Effect.timeout("10 seconds"),
     );
+  const accountFingerprint = (userInfo: unknown) =>
+    decodeUserInfo(userInfo).pipe(
+      Effect.tap((info) =>
+        info.email
+          ? rememberAntigravityAccountEmail(input.profileDirectory, info.email).pipe(
+              Effect.provideService(FileSystem.FileSystem, fs),
+              Effect.provideService(Path.Path, path),
+              Effect.ignore,
+            )
+          : Effect.void,
+      ),
+      Effect.flatMap((info) => sha256(`google-account\0${info.id}`)),
+    );
+
   const read = Effect.gen(function* () {
     const startedGeneration = generation;
     const checkedAt = DateTime.formatIso(yield* DateTime.now);
@@ -387,7 +405,7 @@ export const makeAntigravityUsageProbe = Effect.fn("makeAntigravityUsageProbe")(
           HttpClientRequest.setHeaders({ Authorization: `Bearer ${accessToken}` }),
         ),
       ).pipe(
-        Effect.flatMap(antigravityAccountFingerprint),
+        Effect.flatMap(accountFingerprint),
         Effect.catch(() => sha256(`antigravity-cli\0${token.refresh_token || accessToken}`)),
       );
     } else {
@@ -415,7 +433,7 @@ export const makeAntigravityUsageProbe = Effect.fn("makeAntigravityUsageProbe")(
             HttpClientRequest.setHeaders({ Authorization: `Bearer ${accessToken}` }),
           ),
         ).pipe(
-          Effect.flatMap(antigravityAccountFingerprint),
+          Effect.flatMap(accountFingerprint),
           Effect.orElseSucceed(() => fingerprint),
         );
         if (generation === startedGeneration) {

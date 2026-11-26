@@ -21,6 +21,7 @@ import {
   shouldShowInstanceBadge,
   type ProviderInstanceEntry,
 } from "../../providerInstances";
+import { providerCredentialStatusLabel } from "../settings/providerStatus";
 
 function describeUnavailableInstance(
   entry: ProviderInstanceEntry,
@@ -33,6 +34,14 @@ function describeUnavailableInstance(
   }
   if (entry.status === "ready" && entry.isAvailable) {
     return label;
+  }
+  const auth = entry.snapshot.auth;
+  if (auth.credentialStatus === "expired" && auth.canRenewCredential !== true) {
+    return resolve(
+      msg("{label}: Sign-in expired. Sign in again in provider settings to use this account.", {
+        label,
+      }),
+    );
   }
   const message = entry.snapshot.message?.trim();
   if (message) {
@@ -195,7 +204,10 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
               ? describeUnavailableInstance(entry, m)
               : isContextDisabled
                 ? (props.getDisabledInstanceTooltip?.(entry) ?? entry.displayName)
-                : providerInstanceAccountName(entry);
+                : providerInstanceAccountName(
+                    entry,
+                    providerCredentialStatusLabel(entry.snapshot.auth, m),
+                  );
             const tooltip =
               usageSummary === null ? baseTooltip : `${baseTooltip} · ${usageSummary}`;
 

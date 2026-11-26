@@ -60,6 +60,15 @@ export const ServerProviderAuthStatus = Schema.Literals([
 ]);
 export type ServerProviderAuthStatus = typeof ServerProviderAuthStatus.Type;
 
+/** How long an account's saved sign-in can still be used without signing in again. */
+export const ProviderCredentialStatus = Schema.Literals([
+  "valid",
+  "expiring",
+  "expired",
+  "unknown",
+]);
+export type ProviderCredentialStatus = typeof ProviderCredentialStatus.Type;
+
 export const ServerProviderAuth = Schema.Struct({
   status: ServerProviderAuthStatus,
   type: Schema.optional(TrimmedNonEmptyString),
@@ -72,6 +81,12 @@ export const ServerProviderAuth = Schema.Struct({
   workspaceId: Schema.optional(TrimmedNonEmptyString),
   /** Origin of the custom endpoint the instance sends its requests to. */
   endpoint: Schema.optional(TrimmedNonEmptyString),
+  /** Saved sign-in health, so clients can say valid, expiring or expired without probing. */
+  credentialStatus: Schema.optional(ProviderCredentialStatus),
+  /** When the saved access token lapses; undefined when only a refreshable sign-in is known. */
+  expiresAt: Schema.optional(IsoDateTime),
+  /** A new Antigravity turn renews this saved sign-in before it needs a full sign-in. */
+  canRenewCredential: Schema.optional(Schema.Boolean),
 });
 export type ServerProviderAuth = typeof ServerProviderAuth.Type;
 

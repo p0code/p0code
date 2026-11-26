@@ -96,6 +96,8 @@ export function collectLimitNotices(
   for (const presentation of presentations.values()) {
     const environmentLabel = presentation.entry.target.label;
     for (const provider of providersWithLimits(presentation.serverConfig?.providers ?? [])) {
+      // A lapsed saved sign-in has a dedicated notice that links to its account and renews it.
+      if (provider.auth.credentialStatus === "expired") continue;
       const limits = provider.usageLimits;
       // A bare unsupported means the account has no limits; an external usage link shows its message.
       if (

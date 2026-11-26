@@ -36,6 +36,11 @@ import {
   makeAntigravityTextGeneration,
 } from "../../textGeneration/AntigravityTextGeneration.ts";
 import { makeAntigravityAuth, type AntigravityAuth } from "../AntigravityAuth.ts";
+import {
+  forgetAntigravityAccount,
+  readAntigravityAccountState,
+  rememberAntigravityAccountEmail,
+} from "../AntigravityAccount.ts";
 import * as AntigravityInstallation from "../AntigravityInstallation.ts";
 import { brokenRuntimeError } from "../providerCompatibility.ts";
 import * as AntigravityUsage from "./AntigravityUsage.ts";
@@ -576,6 +581,23 @@ export const AntigravityDriver: ProviderDriver<
       };
     });
 
+    const readAccount = readAntigravityAccountState(profileDirectory, auth.authMethod).pipe(
+      Effect.provideService(FileSystem.FileSystem, fileSystem),
+      Effect.provideService(Path.Path, path),
+      Effect.tap((account) =>
+        account.email
+          ? rememberAntigravityAccountEmail(profileDirectory, account.email).pipe(
+              Effect.provideService(FileSystem.FileSystem, fileSystem),
+              Effect.provideService(Path.Path, path),
+              Effect.ignore,
+            )
+          : Effect.void,
+      ),
+    );
+    const forgetAccount = forgetAntigravityAccount(profileDirectory).pipe(
+      Effect.provideService(FileSystem.FileSystem, fileSystem),
+      Effect.provideService(Path.Path, path),
+    );
     const usage = yield* makeAntigravityUsageProbe({
       profileDirectory,
       authMethod: auth.authMethod,
@@ -592,6 +614,8 @@ export const AntigravityDriver: ProviderDriver<
       probeUsage: usage.probe,
       clearUsage: usage.clear,
       auth: { type: auth.authMethod, label: antigravityAuthLabel(auth.authMethod) },
+      readAccount,
+      forgetAccount,
       ...(rememberedRuntimeModes ? { rememberedRuntimeModes } : {}),
       rememberRuntimeModes: (modes) =>
         writeFileStringAtomically({

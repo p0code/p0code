@@ -43,6 +43,7 @@ import {
 import { resolveUsageLimitsAfterProbe } from "@t3tools/provider-core/server/usageLimits";
 
 import { antigravityThinkingConfig } from "./acp/AntigravityAcpSupport.ts";
+import type { AntigravityAccountState } from "./AntigravityAccount.ts";
 
 const EMPTY_MODEL_CAPABILITIES = createModelCapabilities({ optionDescriptors: [] });
 const MAX_WORKSPACE_SNAPSHOTS = 32;
@@ -168,6 +169,10 @@ interface AntigravityProviderOptions {
   readonly clearUsage?: Effect.Effect<void>;
   readonly maintenanceCapabilities?: ProviderMaintenanceCapabilities;
   readonly auth?: { readonly type: string; readonly label: string };
+  /** What the saved sign-in says about its account, if the driver can read it. */
+  readonly readAccount?: Effect.Effect<AntigravityAccountState>;
+  /** Drops the stored account identity after an explicit sign-out. */
+  readonly forgetAccount?: Effect.Effect<void>;
   /** Modes the last session advertised, saved because initialize alone does not report them. */
   readonly rememberedRuntimeModes?: ReadonlyArray<RuntimeMode>;
   readonly rememberRuntimeModes?: (modes: ReadonlyArray<RuntimeMode>) => Effect.Effect<void>;
@@ -203,6 +208,18 @@ export const makeAntigravityProvider = Effect.fn("makeAntigravityProvider")(func
     ? `Antigravity is installed. Connect with ${options.auth.label} to load models.`
     : AUTH_UNCHECKED_MESSAGE;
   const checkedAt = DateTime.formatIso(yield* DateTime.now);
+  const initialAccount = options.readAccount ? yield* options.readAccount : undefined;
+  const accountAuth = (account: AntigravityAccountState | undefined) =>
+    account === undefined
+      ? {}
+      : {
+          ...(account.email ? { email: account.email } : {}),
+          ...(account.expiresAt ? { expiresAt: account.expiresAt } : {}),
+          ...(account.credentialStatus !== "unknown"
+            ? { credentialStatus: account.credentialStatus }
+            : {}),
+          canRenewCredential: account.canRenew,
+        };
   const initialDraft = {
     ...buildServerProvider({
       presentation: {
@@ -217,7 +234,11 @@ export const makeAntigravityProvider = Effect.fn("makeAntigravityProvider")(func
         installed: false,
         version: null,
         status: "warning",
-        auth: { status: "unknown", ...(options.auth ? { type: options.auth.type } : {}) },
+        auth: {
+          status: initialAccount?.hasSignIn ? "authenticated" : "unknown",
+          ...(options.auth ? { type: options.auth.type } : {}),
+          ...accountAuth(initialAccount),
+        },
         message: settings.enabled
           ? "Checking Antigravity availability."
           : "Antigravity is disabled in p0code settings.",
@@ -324,26 +345,44 @@ export const makeAntigravityProvider = Effect.fn("makeAntigravityProvider")(func
               : `Antigravity did not respond to its local health check within ${timeoutMs / 1_000} seconds.`;
     const supportsTextGeneration =
       initialized !== undefined ? yield* options.supportsTextGeneration : false;
+    const account = options.readAccount ? yield* options.readAccount : undefined;
     const updatedAt = DateTime.formatIso(yield* DateTime.now);
     const applyCheck = (state: AntigravityProviderState) => {
       if (state.authRevision !== before.authRevision) return state;
       const { message: _previousMessage, ...draft } = state.draft;
-      const authenticated = draft.auth.status === "authenticated";
+      const auth = {
+        ...draft.auth,
+        ...accountAuth(account),
+        ...(draft.auth.status === "unknown" && account?.hasSignIn
+          ? { status: "authenticated" as const }
+          : {}),
+      };
+      const authenticated = auth.status === "authenticated";
+      const expired = auth.credentialStatus === "expired";
       const message =
         errorMessage ??
-        (authenticated
+        (authenticated && !expired
           ? undefined
-          : draft.auth.status === "unauthenticated"
+          : auth.status === "unauthenticated"
             ? signInMessage
-            : authUncheckedMessage);
+            : expired
+              ? undefined
+              : authUncheckedMessage);
       return {
         ...state,
         draft: {
           ...draft,
+          auth,
           installed: !missingInstallation,
           // Lightweight custom-launcher probes lack versions; preserve the real handshake's version.
           version: version === "unknown" ? draft.version : version || draft.version,
-          status: errorMessage ? "error" : authenticated ? "ready" : "warning",
+          status: errorMessage
+            ? "error"
+            : expired
+              ? "warning"
+              : authenticated
+                ? "ready"
+                : "warning",
           checkedAt: updatedAt,
           usageLimits: missingInstallation ? undefined : draft.usageLimits,
           ...(missingInstallation
@@ -357,8 +396,7 @@ export const makeAntigravityProvider = Effect.fn("makeAntigravityProvider")(func
             : {}),
           ...(initialized !== undefined
             ? {
-                supportsTextGeneration:
-                  supportsTextGeneration && draft.auth.status !== "unauthenticated",
+                supportsTextGeneration: supportsTextGeneration && auth.status !== "unauthenticated",
               }
             : {}),
           ...(message ? { message } : {}),
@@ -405,6 +443,7 @@ export const makeAntigravityProvider = Effect.fn("makeAntigravityProvider")(func
     if (!settings.enabled) return;
     observeThinkingLevels(started.sessionSetupResult.configOptions);
     const before = yield* SubscriptionRef.get(metadata);
+    const accountState = options.readAccount ? yield* options.readAccount : undefined;
     const supportsTextGeneration = yield* options.supportsTextGeneration;
     const updatedAt = DateTime.formatIso(yield* DateTime.now);
     const supportedRuntimeModes = antigravityRuntimeModes(started.sessionSetupResult);
@@ -429,6 +468,7 @@ export const makeAntigravityProvider = Effect.fn("makeAntigravityProvider")(func
             status: "authenticated",
             type: options.auth?.type ?? "oauth-personal",
             label: options.auth?.label ?? "Google account",
+            ...accountAuth(accountState),
           },
           checkedAt: updatedAt,
           models: buildAntigravityModelsFromSession(started.sessionSetupResult, thinkingLevels),
@@ -501,36 +541,57 @@ export const makeAntigravityProvider = Effect.fn("makeAntigravityProvider")(func
     });
   });
 
-  const clearAccountMetadata = Effect.fn("AntigravityProvider.clearAccountMetadata")(function* () {
+  const clearAccountMetadata = Effect.fn("AntigravityProvider.clearAccountMetadata")(function* (
+    keepSavedAccount: boolean,
+  ) {
     yield* resetUsage;
     if (!settings.enabled) return;
+    const account =
+      keepSavedAccount && options.readAccount ? yield* options.readAccount : undefined;
+    const keepsAccount = account?.hasSignIn === true;
     const updatedAt = DateTime.formatIso(yield* DateTime.now);
-    const previousModes = yield* SubscriptionRef.modify(metadata, (state) => [
-      state.draft.supportedRuntimeModes,
-      {
-        authRevision: state.authRevision + 1,
-        draft: {
-          ...state.draft,
-          auth: {
-            status: "unauthenticated",
-            ...(usesCredentials ? options.auth : {}),
+    const previousModes = yield* SubscriptionRef.modify(metadata, (state) => {
+      const { message: _previousMessage, ...draft } = state.draft;
+      return [
+        state.draft.supportedRuntimeModes,
+        {
+          authRevision: state.authRevision + 1,
+          draft: {
+            ...draft,
+            auth: keepsAccount
+              ? {
+                  ...state.draft.auth,
+                  status: "authenticated",
+                  ...(usesCredentials ? options.auth : {}),
+                  ...accountAuth(account),
+                }
+              : {
+                  status: "unauthenticated",
+                  ...(usesCredentials ? options.auth : {}),
+                },
+            status: "warning",
+            ...(keepsAccount ? {} : { message: signInMessage }),
+            checkedAt: updatedAt,
+            usageLimits: undefined,
+            ...(keepsAccount
+              ? {}
+              : {
+                  models: [],
+                  slashCommands: [],
+                  skills: [],
+                  workspaceSnapshots: [],
+                  supportedRuntimeModes: RUNTIME_MODES_WITHOUT_AUTO,
+                  supportsTextGeneration: false,
+                }),
           },
-          status: "warning",
-          message: signInMessage,
-          checkedAt: updatedAt,
-          models: [],
-          slashCommands: [],
-          skills: [],
-          workspaceSnapshots: [],
-          supportedRuntimeModes: RUNTIME_MODES_WITHOUT_AUTO,
-          supportsTextGeneration: false,
-          usageLimits: undefined,
-        },
-      } satisfies AntigravityProviderState,
-    ]);
-    yield* rememberRuntimeModes(previousModes, RUNTIME_MODES_WITHOUT_AUTO);
-    discoveredSkills.clear();
-    thinkingLevels.clear();
+        } satisfies AntigravityProviderState,
+      ] as const;
+    });
+    if (!keepsAccount) {
+      yield* rememberRuntimeModes(previousModes, RUNTIME_MODES_WITHOUT_AUTO);
+      discoveredSkills.clear();
+      thinkingLevels.clear();
+    }
   });
 
   const snapshotForCwd = Effect.fn("AntigravityProvider.snapshotForCwd")(function* (
@@ -583,8 +644,11 @@ export const makeAntigravityProvider = Effect.fn("makeAntigravityProvider")(func
       ),
       Effect.asVoid,
     ),
-    onSignedOut: clearAccountMetadata(),
-    onAuthRequired: clearAccountMetadata(),
+    onSignedOut: clearAccountMetadata(false).pipe(
+      Effect.andThen(options.forgetAccount ?? Effect.void),
+    ),
+    // Keep a lapsed account visible; only an explicit sign-out forgets who it was.
+    onAuthRequired: clearAccountMetadata(true),
     snapshotForCwd,
   };
 });

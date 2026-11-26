@@ -6,7 +6,7 @@ import {
   type ResolvedKeybindingsConfig,
 } from "@t3tools/contracts";
 import { RegistryContext } from "@effect/atom-react";
-import { T, useGT } from "gt-react";
+import { T, useGT, useMessages } from "gt-react";
 import {
   createContext,
   memo,
@@ -33,6 +33,7 @@ import {
   shouldShowInstanceBadge,
   type ProviderInstanceEntry,
 } from "../../providerInstances";
+import { providerCredentialStatusLabel } from "../settings/providerStatus";
 import { ComposerControl, type ComposerControlSize } from "./ComposerControl";
 import { takeOpenTarget, useComposerMenuProps } from "./composerEventScope";
 import { shortcutLabelForCommand } from "../../keybindings";
@@ -154,6 +155,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
     if (isMenuOpen) refreshModelCatalog();
   }, [isMenuOpen]);
   const gt = useGT();
+  const messages = useMessages();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popupRef = useRef<HTMLDivElement | null>(null);
@@ -460,7 +462,12 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
                   >
                     {shortInstanceLabel}
                   </TooltipTrigger>
-                  <TooltipPopup side="top">{providerInstanceAccountName(activeEntry)}</TooltipPopup>
+                  <TooltipPopup side="top">
+                    {providerInstanceAccountName(
+                      activeEntry,
+                      providerCredentialStatusLabel(activeEntry.snapshot.auth, messages),
+                    )}
+                  </TooltipPopup>
                 </Tooltip>
               ) : null}
             </span>
