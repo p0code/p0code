@@ -1,3 +1,4 @@
+import "~/index.css";
 import { ThreadId, type WorktreeSetupSnapshot } from "@t3tools/contracts";
 import { expect, it, vi } from "vite-plus/test";
 
@@ -52,6 +53,21 @@ it("ticks the running stage while finished stages keep their duration", async ()
   await using screen = await render(card(snapshot({})));
   // Assert synchronously: expect.element polls on timers these tests fake.
   const section = screen.getByRole("region", { name: "Worktree setup" });
+
+  const shimmers = () =>
+    section
+      .element()
+      .getAnimations({ subtree: true })
+      .filter(
+        (animation) =>
+          animation instanceof CSSAnimation &&
+          animation.animationName.startsWith("live-activity-focus"),
+      );
+  const animations = shimmers();
+  expect(animations.length).toBeGreaterThan(0);
+  // Finishing an infinite animation throws: pending work must eventually stop repainting.
+  for (const animation of animations) animation.finish();
+  expect(shimmers()).toHaveLength(0);
 
   expect(section.element().textContent).toContain("Fetch base branch3s");
   expect(section.element().textContent).toContain("Check out files7s");
