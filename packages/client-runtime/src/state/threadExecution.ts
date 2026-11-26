@@ -523,6 +523,7 @@ export function deriveThreadStructureRuntime(
       liveActivityRun === null
         ? null
         : DateTime.formatIso(orchestrationV2RunWorkStartedAt(liveActivityRun)),
+    pendingBackgroundWork: backgroundWorkHoldsRun,
     providerInstanceId: projection.thread.providerInstanceId,
     providerName: providerSession?.driver ?? null,
     ...threadErrorSummary(failureItem?.failure ?? null, sessionError),

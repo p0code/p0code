@@ -12,7 +12,12 @@ import {
 import * as DateTime from "effect/DateTime";
 import { describe, expect, it } from "vite-plus/test";
 
-import { presentThreadShell, resolveThreadWorkingStartedAt } from "./models.ts";
+import {
+  presentThreadShell,
+  resolveThreadWorkingStartedAt,
+  threadRuntimeCanArchive,
+  threadRuntimeIsActive,
+} from "./models.ts";
 import { v2Projection, v2ThreadShell } from "./orchestrationV2TestFixtures.ts";
 import { deriveLatestThreadRun, deriveThreadRuntime } from "./threadExecution.ts";
 import { isThreadWorking } from "./threadInbox.ts";
@@ -163,9 +168,56 @@ describe("V2 client presentation", () => {
       ],
     });
 
-    expect(shell.runtime).toMatchObject({ status: "failed", lastError: "Provider turn failed" });
+    expect(shell.runtime).toMatchObject({
+      status: "failed",
+      lastError: "Provider turn failed",
+      pendingBackgroundWork: true,
+    });
     expect(shell.pendingBackgroundTasks).toHaveLength(1);
+    expect(isThreadWorking(shell)).toBe(false);
+    expect(threadRuntimeCanArchive(shell.runtime)).toBe(false);
   });
+
+  it.each([
+    { label: "empty roster", tasks: [], expected: false },
+    {
+      label: "unmarked command (dev server)",
+      tasks: [{ taskId: "dev", kind: "command" }],
+      expected: false,
+    },
+    { label: "unmarked monitor", tasks: [{ taskId: "mon", kind: "monitor" }], expected: false },
+    {
+      label: "awaited command",
+      tasks: [{ taskId: "cmd", kind: "command", awaited: true }],
+      expected: true,
+    },
+    {
+      label: "awaited monitor",
+      tasks: [{ taskId: "mon", kind: "monitor", awaited: true }],
+      expected: true,
+    },
+    { label: "subagent", tasks: [{ taskId: "sub", kind: "subagent" }], expected: true },
+    {
+      label: "background task",
+      tasks: [{ taskId: "bg", kind: "background_task" }],
+      expected: true,
+    },
+  ] as const)(
+    "derives pendingBackgroundWork, activity, and archive guard for $label",
+    ({ tasks, expected }) => {
+      const shell = presentThreadShell(environmentId, {
+        ...v2ThreadShell,
+        latestRunId: RunId.make("run-completed"),
+        activeRunId: null,
+        status: "completed",
+        pendingBackgroundTasks: [...tasks],
+      });
+
+      expect(shell.runtime?.pendingBackgroundWork).toBe(expected);
+      expect(threadRuntimeIsActive(shell.runtime)).toBe(expected);
+      expect(threadRuntimeCanArchive(shell.runtime)).toBe(!expected);
+    },
+  );
 
   it("keeps an older active run visible over a newer cancelled run", () => {
     const activeRunId = RunId.make("run-active");
@@ -410,18 +462,19 @@ describe("V2 client presentation", () => {
       deriveThreadRuntime({ ...v2Projection, runs: [run], turnItems: [commandItem] }),
     ).toMatchObject({ status: "waiting", activeRunId: null });
 
-    for (const [turnItems, status] of [
-      [[commandItem], "completed"],
-      [[backgroundItem], "idle"],
-      [[commandItem, backgroundItem], "idle"],
+    for (const [turnItems, status, pendingBackgroundWork] of [
+      [[commandItem], "completed", false],
+      [[backgroundItem], "idle", true],
+      [[commandItem, backgroundItem], "idle", true],
     ] as const) {
-      expect(
-        deriveThreadRuntime({
-          ...v2Projection,
-          runs: [{ ...run, status: "completed", completedAt: now }],
-          turnItems,
-        }),
-      ).toMatchObject({ status, activeRunId: null });
+      const derived = deriveThreadRuntime({
+        ...v2Projection,
+        runs: [{ ...run, status: "completed", completedAt: now }],
+        turnItems,
+      });
+      expect(derived).toMatchObject({ status, activeRunId: null, pendingBackgroundWork });
+      expect(threadRuntimeIsActive(derived)).toBe(pendingBackgroundWork);
+      expect(threadRuntimeCanArchive(derived)).toBe(!pendingBackgroundWork);
     }
 
     for (const held of [{ kind: "monitor", awaited: true }, { kind: "background_task" }] as const) {
