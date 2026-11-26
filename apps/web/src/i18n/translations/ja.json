@@ -8314,7 +8314,7 @@
     " にデプロイします。"
   ],
   "cc5d2f5ce8ee576e": "環境",
-  "c317fa79a76d4963": "ソース",
+  "c317fa79a76d4963": "Source",
   "de770505be25f1ff": "フォルダー",
   "0cf4a3a1f32e799c": "プロジェクト外のフォルダを許可",
   "0d8211b2f3552d93": [
@@ -9353,7 +9353,6 @@
   "90bf2fc7bc9f493d": "No plugins match these filters.",
   "a8be41b9de3db0b0": "Size",
   "546af09c7510bc49": "License",
-  "c317fa79a76d4963": "Source",
   "fe3950a5a487ed9d": "Capabilities",
   "f52a93c7232fdd60": "Versions",
   "169d7abc9569cca3": "Remove this plugin? Its code is deleted; data and secrets stay unless you purge them.",

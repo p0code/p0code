@@ -1,5 +1,5 @@
 /**
- * Deploy state in the server database (migration 121): linked accounts (names and profiles, no
+ * Deploy state in the server database (migration 122): linked accounts (names and profiles, no
  * credentials), project mappings, recent deployments and held approvals. Deployments and
  * approvals are capped per project on every insert, so the tables never grow without bound.
  */
