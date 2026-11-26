@@ -122,11 +122,4 @@ The source code in this repository is licensed under the [MIT License](./LICENSE
 
 ## Trademarks and forks
 
-The MIT license applies **only to the source code**. It does not grant any rights to T3 Tools, Inc.'s trademarks, branding, or trade dress, including the **T3 Code** name, wordmark, logos, and application icons.
-
-If you fork, redistribute, or build on T3 Code's source code:
-
-- **Use your own branding.** Replace the T3 Code name, wordmark, logos, and application icons in any public fork, redistributed build, website, package, or app store listing.
-- **Be explicitly clear that your project is unofficial.** Do not use the T3 Code name, wordmark, logo, or branding in your own projects without making it unmistakably clear that your project is unofficial and not affiliated with or endorsed by T3 Tools, Inc.
-
-Using our name, wordmark, logo, or branding in a way that suggests official status or affiliation is trademark infringement and unlawful. **Any project indicating or implying that it is an official version of T3 Code when it is not will be pursued to the full extent of the law.**
+p0code is an independent, unofficial fork of [T3 Code](https://github.com/pingdotgg/t3code). The MIT license covers the source code only; it does not grant rights to T3 Tools, Inc.'s trademarks, branding, or trade dress, including the T3 Code name, wordmark, logos, and application icons. If you fork or redistribute this code, use your own branding and make it clear that your project is unofficial and not affiliated with or endorsed by T3 Tools, Inc.
