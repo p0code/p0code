@@ -25,6 +25,32 @@ import { isLocalLoopbackHost, isWildcardHost } from "./hostClassification.ts";
 
 const MINUTE = 60_000;
 
+/** The upstream provider a model slug routes through, such as "opencode-go" in "opencode-go/deepseek-v4.1-flash". */
+function modelRoute(model: string): string {
+  return model.split("/")[0] ?? "";
+}
+
+/** A window names the models or providers it meters; one with neither applies to the whole account. */
+function usageWindowAppliesToModel(
+  window: Pick<ServerProviderUsageWindow, "modelIds" | "providerIds">,
+  model: string,
+): boolean {
+  return (
+    (window.modelIds === undefined || window.modelIds.includes(model)) &&
+    (window.providerIds === undefined || window.providerIds.includes(modelRoute(model)))
+  );
+}
+
+/** Keep only the quota the selected model's backend reports, never another route's plan windows. */
+export function usageLimitsForModel(
+  limits: ServerProviderUsageLimits,
+  model: string | null,
+): ServerProviderUsageLimits {
+  if (model === null) return limits;
+  const windows = limits.windows.filter((window) => usageWindowAppliesToModel(window, model));
+  return windows.length === limits.windows.length ? limits : { ...limits, windows };
+}
+
 export function exhaustedUsageWindow(
   provider: ServerProvider | undefined,
   now: number,
@@ -34,10 +60,7 @@ export function exhaustedUsageWindow(
   const exhausted = windows.filter(
     (window) =>
       (window.usedPercent ?? 0) >= 100 &&
-      (model === undefined || window.modelIds === undefined || window.modelIds.includes(model)) &&
-      (model === undefined ||
-        window.providerIds === undefined ||
-        window.providerIds.includes(model.split("/")[0] ?? "")) &&
+      (model === undefined || usageWindowAppliesToModel(window, model)) &&
       (!window.resetsAt ||
         !Number.isFinite(Date.parse(window.resetsAt)) ||
         Date.parse(window.resetsAt) > now),
@@ -1262,6 +1285,9 @@ export function collectProviderUsageLimits(
     usage: { provider, limits },
     credits,
   } of native) {
+    const applicable = usageLimitsForModel(limits, model);
+    // A selected model on another backend must not borrow this route's plan windows.
+    if (model !== null && limits.windows.length > 0 && applicable.windows.length === 0) continue;
     const key = resolveKey(nativeReport(provider));
     // Only a hub this instance reaches may redeem a credit for its thread.
     const hubCredits = shownHubs
@@ -1303,12 +1329,19 @@ export function collectProviderUsageLimits(
       ...(provider.displayName ? { displayName: provider.displayName } : {}),
       ...(provider.accentColor ? { accentColor: provider.accentColor } : {}),
       ...(provider.auth.email ? { email: provider.auth.email } : {}),
-      limits: shownCredits ? { ...limits, resetCredits: shownCredits } : limits,
+      limits: shownCredits ? { ...applicable, resetCredits: shownCredits } : applicable,
     });
   }
   for (const source of shownHubs) {
     const matching = source.accounts.filter(routes);
     for (const account of matching) {
+      const applicable = usageLimitsForModel(account.usageLimits, model);
+      if (
+        model !== null &&
+        account.usageLimits.windows.length > 0 &&
+        applicable.windows.length === 0
+      )
+        continue;
       const key = resolveKey(account);
       if (key && nativeAccountKeys.has(key)) continue;
       accounts.push({
@@ -1316,23 +1349,24 @@ export function collectProviderUsageLimits(
         driver: account.driver,
         label: `${source.label} · ${hubAccountName(account)}`,
         sourceLabel: "CLI Proxy",
-        ...(account.usageLimits.resetCredits?.nextCreditId
+        ...(applicable.resetCredits?.nextCreditId
           ? {
               resetCreditInput: {
                 sourceId: source.id,
                 accountId: account.id,
-                creditId: account.usageLimits.resetCredits.nextCreditId,
+                creditId: applicable.resetCredits.nextCreditId,
               },
             }
           : {}),
         ...(account.plan ? { plan: account.plan } : {}),
         ...(account.email ? { email: account.email } : {}),
-        limits: account.usageLimits,
+        limits: applicable,
       });
     }
     if (source.error && (matching.length > 0 || source.accounts.length === 0)) {
       notices.push(`${source.label}: ${source.error}`);
     }
   }
+  if (accounts.length === 0 && notices.length === 0) return null;
   return { createdAt: DateTime.formatIso(DateTime.makeUnsafe(now)), accounts, notices };
 }

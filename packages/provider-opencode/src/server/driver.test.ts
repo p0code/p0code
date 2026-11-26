@@ -1327,7 +1327,10 @@ it.layer(layer)("OpenCodeDriver runtime selection", (it) => {
           {
             name: "OPENCODE_AUTH_CONTENT",
             sensitive: true,
-            value: JSON.stringify({ "opencode-go": { type: "api", key: "test-go-key" } }),
+            value: JSON.stringify({
+              "opencode-go": { type: "api", key: "test-go-key" },
+              wandb: { type: "api", key: "test-wandb-key" },
+            }),
           },
           { name: "OPENCODE_API_KEY", sensitive: true, value: "" },
         ],
@@ -1351,6 +1354,11 @@ it.layer(layer)("OpenCodeDriver runtime selection", (it) => {
       assert.deepStrictEqual(
         snapshot?.usageLimits?.windows.map((window) => window.kind),
         ["session", "weekly", "monthly"],
+      );
+      // The windows name their backend, so a W&B model never inherits them.
+      assert.deepStrictEqual(
+        snapshot?.usageLimits?.windows.map((window) => window.providerIds),
+        [["opencode-go"], ["opencode-go"], ["opencode-go"]],
       );
       assert.strictEqual(goUsageReads, 1);
     }).pipe(Effect.scoped, Effect.provide(TestClock.layer())),

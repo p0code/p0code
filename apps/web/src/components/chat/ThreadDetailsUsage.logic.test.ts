@@ -116,6 +116,35 @@ function shown(
 }
 
 describe("resolveThreadDetailsLimits", () => {
+  it("shows OpenCode Go quotas only for a model on the Go route", () => {
+    const opencode = ProviderDriverKind.make("opencode");
+    const instance = {
+      ...claudeInstance({
+        checkedAt,
+        windows: [
+          {
+            id: "go_weekly",
+            kind: "weekly",
+            label: "Go · Weekly",
+            providerIds: ["opencode-go"],
+            usedPercent: 36,
+          },
+        ],
+      }),
+      instanceId: ProviderInstanceId.make("opencode"),
+      driver: opencode,
+      auth: { status: "authenticated" as const },
+    };
+    const forModel = (model: string) =>
+      resolveThreadDetailsLimits(instance.instanceId, model, [instance], [], now);
+    expect(forModel("wandb/deepseek-ai/DeepSeek-V4.1-Flash-1017")).toBeNull();
+    expect(forModel("opencode-go/deepseek-v4.1-flash")).toEqual({
+      kind: "instance",
+      limits: { checkedAt, windows: [instance.usageLimits!.windows[0]] },
+    });
+    expect(forModel("unknown/model")).toBeNull();
+  });
+
   it("keeps an instance's failed reading instead of a hub it is not sent to", () => {
     const failed: ServerProviderUsageLimits = {
       checkedAt,
