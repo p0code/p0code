@@ -403,6 +403,15 @@ describe("OpenCode2Client usage limits", () => {
       assert.isTrue(
         first?.windows.every((window) => window.resetsAt === "2026-11-01T00:00:00.000Z"),
       );
+      // Go meters are labelled as Go and scoped to Go, so other routes filter them out.
+      assert.deepStrictEqual(
+        first?.windows.slice(0, 3).map((window) => [window.label, window.providerIds]),
+        [
+          ["Go · Session", ["opencode-go"]],
+          ["Go · Weekly", ["opencode-go"]],
+          ["Go · Monthly", ["opencode-go"]],
+        ],
+      );
       assert.include(first?.windows[3]?.label ?? "", "Shared");
       assert.include(first?.windows[4]?.label ?? "", "Model A");
       assert.deepStrictEqual(first?.windows[4]?.modelIds, ["opencode/a"]);

@@ -149,6 +149,7 @@ export const readServerUsageLimits = Effect.fn("OpenCode2Client.usageLimits")(fu
           id: `go_${key}`,
           kind,
           label: `Go · ${label}`,
+          providerIds: ["opencode-go"],
           usedPercent: meter.limited ? 100 : clampPercent(meter.percent),
           resetsAt: resetTime(meter.resetsAt),
           ...(duration === undefined ? {} : { windowDurationMins: duration }),

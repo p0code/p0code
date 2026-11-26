@@ -14,6 +14,7 @@ import {
   hubRoutes,
   instanceHubs,
   type LimitPoolWindow,
+  usageLimitsForModel,
 } from "@t3tools/shared/usageLimits";
 import { limitsNotice } from "@t3tools/shared/usageLimitsCopy";
 
@@ -36,10 +37,13 @@ export function resolveThreadDetailsLimits(
   const report = collectProviderUsageLimits(provider.instanceId, providers, sources, now, model);
   // Only this instance's data: the report keeps one instance per login, and any other entry may be
   // a different login or workspace, so fall back to the instance's own snapshot.
+  const fallback = provider.usageLimits && usageLimitsForModel(provider.usageLimits, model);
   const own =
-    report?.accounts.find((entry) => entry.instanceId === provider.instanceId)?.limits ??
-    provider.usageLimits;
+    report?.accounts.find((entry) => entry.instanceId === provider.instanceId)?.limits ?? fallback;
   if (!own) return null;
+  // The selected model's backend reports no quota, so another route's windows must not stand in.
+  if (model !== null && own.windows.length === 0 && (provider.usageLimits?.windows.length ?? 0) > 0)
+    return null;
   const hubs = instanceHubs(provider, sources);
   if (limitsNotice(own) === null || hubs.length === 0) return { kind: "instance", limits: own };
   // An instance sent to a hub reads no limits of its own; its hub pools the accounts it spends.

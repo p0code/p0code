@@ -2091,6 +2091,59 @@ describe("/usage-limits", () => {
     expect(report?.accounts[0]?.limits.resetCredits?.availableCount).toBe(3);
   });
 
+  it("shows only the selected model's backend quota, never another route's plan windows", () => {
+    const opencode = ProviderDriverKind.make("opencode");
+    const goWindows = [
+      {
+        id: "go_session",
+        kind: "session" as const,
+        label: "Go · Session",
+        providerIds: ["opencode-go"],
+        usedPercent: 0,
+      },
+      {
+        id: "go_weekly",
+        kind: "weekly" as const,
+        label: "Go · Weekly",
+        providerIds: ["opencode-go"],
+        usedPercent: 36,
+      },
+      {
+        id: "go_monthly",
+        kind: "monthly" as const,
+        label: "Go · Monthly",
+        providerIds: ["opencode-go"],
+        usedPercent: 100,
+      },
+      {
+        id: "budget_wandb",
+        kind: "other" as const,
+        label: "Console · Individual · DeepSeek V4.1 Flash",
+        modelIds: ["wandb/deepseek-ai/DeepSeek-V4.1-Flash-1017"],
+        usedPercent: 20,
+      },
+    ];
+    // The instance reads one Go credential while the composer routes to W&B, both live in OpenCode.
+    const instance = provider({
+      instanceId: ProviderInstanceId.make("opencode"),
+      driver: opencode,
+      usageLimits: { checkedAt: limits.checkedAt, windows: goWindows },
+    });
+    const shown = (model: string) =>
+      collectProviderUsageLimits(instance.instanceId, [instance], [], now, model)?.accounts.flatMap(
+        (account) => account.limits.windows.map((window) => window.label),
+      );
+    expect(shown("wandb/deepseek-ai/DeepSeek-V4.1-Flash-1017")).toEqual([
+      "Console · Individual · DeepSeek V4.1 Flash",
+    ]);
+    expect(shown("opencode-go/deepseek-v4.1-flash")).toEqual([
+      "Go · Session",
+      "Go · Weekly",
+      "Go · Monthly",
+    ]);
+    expect(shown("unknown/model")).toBeUndefined();
+  });
+
   it("labels hub rows by account id without .json", () => {
     const hub = [
       {
