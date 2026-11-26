@@ -12,7 +12,10 @@ module.exports = async function afterSign(context) {
   const identities = execFileSync("security", ["find-identity", "-p", "codesigning"], {
     encoding: "utf8",
   });
-  if (!identities.includes(`"${identity}"`)) {
+  const identityExists = /^[a-f0-9]{40}$/i.test(identity)
+    ? identities.toUpperCase().includes(identity.toUpperCase())
+    : identities.includes(`"${identity}"`);
+  if (!identityExists) {
     if (requested)
       throw new Error(`P0CODE_MAC_SIGN_IDENTITY "${identity}" is not in the keychain.`);
     return;
