@@ -223,14 +223,104 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
           index: 3,
           message: configState.issues[2]?.message ?? "",
         },
-        {
-          kind: "keybindings.invalid-entry",
-          index: 4,
-          message: configState.issues[3]?.message ?? "",
-        },
       ]);
     }).pipe(Effect.provide(layerKeybindings())),
   );
+
+  it.effect("drops keybinding entries for commands that no longer exist on load", () => {
+    const messages: string[] = [];
+    const logger = Logger.make(({ message }) => {
+      messages.push(String(message));
+    });
+
+    return Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const { keybindingsConfigPath } = yield* ServerConfig.ServerConfig;
+      yield* fs.writeFileString(
+        keybindingsConfigPath,
+        JSON.stringify([
+          { key: "mod+alt+e", command: "environment.switch" },
+          { key: "mod+r", command: "script.run-tests.run" },
+        ]),
+      );
+
+      const keybindings = yield* Keybindings.Keybindings;
+      const configState = yield* keybindings.loadConfigState;
+
+      assert.isTrue(
+        configState.keybindings.some((rule) => rule.command === "script.run-tests.run"),
+      );
+      assert.isFalse(
+        configState.keybindings.some((rule) => String(rule.command) === "environment.switch"),
+      );
+      assert.deepEqual(configState.issues, []);
+      assert.deepEqual(JSON.parse(yield* fs.readFileString(keybindingsConfigPath)), [
+        { key: "mod+r", command: "script.run-tests.run" },
+      ]);
+
+      const dropMessages = messages.filter((message) => message.includes("unknown commands"));
+      assert.equal(dropMessages.length, 1);
+      assert.isTrue(dropMessages[0]?.includes("environment.switch"));
+
+      // A later load finds nothing to prune and leaves the cleaned file alone.
+      yield* keybindings.revalidate;
+      assert.equal(messages.filter((message) => message.includes("unknown commands")).length, 1);
+    }).pipe(
+      Effect.provide(
+        Layer.mergeAll(layerKeybindings(), Logger.layer([logger], { mergeWithExisting: false })),
+      ),
+    );
+  });
+
+  it.effect("does not rewrite a config whose commands all still exist", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const { keybindingsConfigPath } = yield* ServerConfig.ServerConfig;
+      const original = '[{"key":"mod+r","command":"script.run-tests.run"}]';
+      yield* fs.writeFileString(keybindingsConfigPath, original);
+
+      const keybindings = yield* Keybindings.Keybindings;
+      yield* keybindings.loadConfigState;
+
+      assert.equal(yield* fs.readFileString(keybindingsConfigPath), original);
+    }).pipe(Effect.provide(layerKeybindings())),
+  );
+
+  it.effect("drops every entry for an unknown command and logs its id once", () => {
+    const messages: string[] = [];
+    const logger = Logger.make(({ message }) => {
+      messages.push(String(message));
+    });
+
+    return Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const { keybindingsConfigPath } = yield* ServerConfig.ServerConfig;
+      yield* fs.writeFileString(
+        keybindingsConfigPath,
+        JSON.stringify([
+          { key: "mod+alt+e", command: "environment.switch" },
+          { key: "mod+alt+shift+e", command: "environment.switch" },
+          { key: "mod+r", command: "script.run-tests.run" },
+        ]),
+      );
+
+      const keybindings = yield* Keybindings.Keybindings;
+      yield* keybindings.loadConfigState;
+
+      assert.deepEqual(JSON.parse(yield* fs.readFileString(keybindingsConfigPath)), [
+        { key: "mod+r", command: "script.run-tests.run" },
+      ]);
+
+      const dropMessages = messages.filter((message) => message.includes("unknown commands"));
+      assert.equal(dropMessages.length, 1);
+      assert.isTrue(dropMessages[0]?.includes("dropped 2 keybinding entries"));
+      assert.equal((dropMessages[0]?.match(/environment\.switch/g) ?? []).length, 1);
+    }).pipe(
+      Effect.provide(
+        Layer.mergeAll(layerKeybindings(), Logger.layer([logger], { mergeWithExisting: false })),
+      ),
+    );
+  });
 
   it.effect(
     "upserts missing default keybindings on startup without overriding existing command rules",
@@ -642,7 +732,7 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
     }).pipe(Effect.provide(layerKeybindings())),
   );
 
-  it.effect("keeps entries it cannot decode when editing other keybindings", () =>
+  it.effect("keeps invalid entries it cannot decode and drops unknown commands when editing", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const { keybindingsConfigPath } = yield* ServerConfig.ServerConfig;
@@ -663,10 +753,9 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
         key: "mod+shift+r",
         command: "script.run-tests.run",
       });
-      assert.equal(saved.issues.length, 2);
+      assert.equal(saved.issues.length, 1);
       assert.deepEqual(yield* persisted, [
         { key: "mod+r", command: "script.run-tests.run" },
-        futureCommand,
         badShortcut,
         { key: "mod+shift+r", command: "script.run-tests.run" },
       ]);
@@ -676,7 +765,6 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
         command: "script.run-tests.run",
       });
       assert.deepEqual(yield* persisted, [
-        futureCommand,
         badShortcut,
         { key: "mod+shift+r", command: "script.run-tests.run" },
       ]);
@@ -684,7 +772,7 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
       assert.deepEqual(removed.issues, issues);
       assert.deepEqual(
         issues.map((issue) => issue.kind === "keybindings.invalid-entry" && issue.index),
-        [0, 1],
+        [0],
       );
     }).pipe(Effect.provide(layerKeybindings())),
   );
