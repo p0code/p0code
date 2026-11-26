@@ -3,6 +3,7 @@ import type {
   ServerProviderVersionAdvisory,
   ServerProviderCompatibilityAdvisory,
 } from "@t3tools/contracts";
+import { providerCredentialStatus } from "@t3tools/client-runtime/state/provider-instance-display";
 import { msg } from "gt-react";
 
 import { m, type MessageResolver } from "../../i18n/messages";
@@ -53,7 +54,24 @@ function isAntigravitySignInUnchecked(provider: ServerProvider): boolean {
 export function getProviderStatusKey(provider: ServerProvider | undefined): ProviderStatusKey {
   if (provider && !provider.enabled) return "disabled";
   if (provider && isAntigravitySignInUnchecked(provider)) return "neutral";
+  if (provider && providerCredentialStatus(provider.auth, Date.now()) === "expired")
+    return "warning";
   return provider?.status ?? "warning";
+}
+
+/** "Sign-in expired", "Sign-in expires soon", or nothing for a healthy saved sign-in. */
+export function providerCredentialStatusLabel(
+  auth: Pick<ServerProvider["auth"], "credentialStatus" | "expiresAt"> | undefined,
+  resolve: MessageResolver = m,
+): string | undefined {
+  switch (providerCredentialStatus(auth, Date.now())) {
+    case "expired":
+      return resolve(msg("Sign-in expired"));
+    case "expiring":
+      return resolve(msg("Sign-in expires soon"));
+    default:
+      return undefined;
+  }
 }
 
 export function getProviderSummary(
@@ -95,6 +113,16 @@ export function getProviderSummary(
     return {
       headline: resolve(msg("Installed · Sign-in not checked")),
       detail: provider.message ?? null,
+    };
+  }
+  if (
+    provider.auth.status === "authenticated" &&
+    providerCredentialStatus(provider.auth, Date.now()) === "expired"
+  ) {
+    return {
+      headline: resolve(msg("Sign-in expired")),
+      detail:
+        provider.message ?? resolve(msg("Re-authenticate or start a turn to renew this sign-in.")),
     };
   }
   if (provider.status === "warning") {

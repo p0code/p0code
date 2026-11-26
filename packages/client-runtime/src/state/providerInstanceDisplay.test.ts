@@ -4,6 +4,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   normalizeProviderAccentColor,
   providerAccentForegroundColor,
+  providerCredentialStatus,
   providerInstanceAccountDetail,
   providerInstanceBadgeLength,
   providerInstanceInitials,
@@ -173,6 +174,26 @@ describe("providerInstanceBadgeLength", () => {
 describe("providerInstanceAccountDetail", () => {
   it("joins the account email and plan when known", () => {
     expect(providerInstanceAccountDetail({ email: "a@b.c", label: "Max" })).toBe("a@b.c · Max");
+    expect(providerInstanceAccountDetail({}, "Sign-in expired")).toBe("Sign-in expired");
     expect(providerInstanceAccountDetail({})).toBeUndefined();
+  });
+});
+
+describe("providerCredentialStatus", () => {
+  const now = Date.parse("2026-11-25T12:00:00.000Z");
+
+  it("recomputes valid, expiring and expired from a known expiry", () => {
+    expect(providerCredentialStatus({ expiresAt: "2026-11-27T12:00:00.000Z" }, now)).toBe("valid");
+    expect(providerCredentialStatus({ expiresAt: "2026-11-26T06:00:00.000Z" }, now)).toBe(
+      "expiring",
+    );
+    expect(providerCredentialStatus({ expiresAt: "2026-11-25T11:00:00.000Z" }, now)).toBe(
+      "expired",
+    );
+  });
+
+  it("falls back to the server's report when it has no expiry", () => {
+    expect(providerCredentialStatus({ credentialStatus: "expired" }, now)).toBe("expired");
+    expect(providerCredentialStatus({}, now)).toBe("unknown");
   });
 });

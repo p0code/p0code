@@ -33,7 +33,7 @@ export function isListedProfileAccount(provider: ServerProvider): boolean {
     provider.enabled &&
     provider.installed &&
     isProviderAvailable(provider) &&
-    provider.auth.status !== "unauthenticated"
+    (provider.auth.status !== "unauthenticated" || provider.auth.credentialStatus === "expired")
   );
 }
 
@@ -70,10 +70,12 @@ interface RouteInput {
 }
 
 function canRun(provider: ServerProvider, input: RouteInput): boolean {
+  const expiredSignIn = provider.auth.credentialStatus === "expired";
   return (
     provider.enabled &&
     provider.installed &&
-    provider.auth.status !== "unauthenticated" &&
+    (provider.auth.status !== "unauthenticated" || expiredSignIn) &&
+    (!expiredSignIn || provider.auth.canRenewCredential === true) &&
     isProviderAvailable(provider) &&
     resolveProjectProviderInstanceEnabled(input.settings, input.projectId, provider.instanceId) &&
     // Accounts of one driver can still differ in plan; never route a model the target lacks.

@@ -1,6 +1,7 @@
 import {
   defaultInstanceIdForDriver,
   PROVIDER_DISPLAY_NAMES,
+  type ProviderCredentialStatus,
   type ProviderDriverKind,
   type ServerProvider,
 } from "@t3tools/contracts";
@@ -179,11 +180,32 @@ export function resolveProviderInstanceBadges(
   return badges;
 }
 
+const EXPIRING_SOON_MS = 24 * 60 * 60 * 1_000;
+
+/** Saved sign-in health, preferring a known expiry over the server's last report. */
+export function providerCredentialStatus(
+  auth: Pick<ServerProvider["auth"], "credentialStatus" | "expiresAt"> | undefined,
+  now: number,
+): ProviderCredentialStatus {
+  const expiresAt = auth?.expiresAt;
+  if (expiresAt) {
+    const expiry = Date.parse(expiresAt);
+    if (Number.isFinite(expiry)) {
+      if (expiry <= now) return "expired";
+      return expiry - now <= EXPIRING_SOON_MS ? "expiring" : "valid";
+    }
+  }
+  return auth?.credentialStatus ?? "unknown";
+}
+
 /** Who the instance is signed in as, for tooltips that name the account. */
 export function providerInstanceAccountDetail(
   auth: Pick<ServerProvider["auth"], "email" | "label"> | undefined,
+  credentialStatus: string | undefined = undefined,
 ): string | undefined {
-  const parts = [auth?.email, auth?.label].filter((part): part is string => Boolean(part));
+  const parts = [auth?.email, auth?.label, credentialStatus].filter((part): part is string =>
+    Boolean(part),
+  );
   return parts.length > 0 ? parts.join(" · ") : undefined;
 }
 

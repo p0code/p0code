@@ -15,6 +15,7 @@ import {
   type EnvironmentId,
   PROVIDER_DISPLAY_NAMES,
   type ProviderDriverKind,
+  type ProviderInstanceId,
   type RuntimeMode,
   type ServerProvider,
 } from "@t3tools/contracts";
@@ -30,6 +31,8 @@ import { ArrowDownIcon, ArrowUpIcon, GripVerticalIcon, PlusIcon, Trash2Icon } fr
 import { useState } from "react";
 
 import { useEnvironmentSettings, useUpdateEnvironmentSettings } from "../../hooks/useSettings";
+import { serverEnvironment } from "../../state/server";
+import { useAtomCommand } from "../../state/use-atom-command";
 import { useNowMinute } from "../../hooks/useNowMinute";
 import { m } from "../../i18n/messages";
 import { cn } from "../../lib/utils";
@@ -61,6 +64,9 @@ export function AccountProfilesSettings({
     activeAccountProfileId: current.activeAccountProfileId,
   }));
   const updateSettings = useUpdateEnvironmentSettings(environmentId);
+  const refreshProviders = useAtomCommand(serverEnvironment.refreshProviders, {
+    reportFailure: false,
+  });
   const [editingId, setEditingId] = useState<AccountProfileId | null>(null);
   const profiles = settings.accountProfiles;
   const editing =
@@ -261,6 +267,12 @@ export function AccountProfilesSettings({
                 now={now}
                 readOnly={readOnly}
                 onChange={saveProfile}
+                onRenew={(instanceId) =>
+                  void refreshProviders({
+                    environmentId,
+                    input: { instanceId, refreshModels: true },
+                  })
+                }
               />
             ))
           )}
@@ -277,6 +289,7 @@ function DriverOrder(props: {
   readonly now: number;
   readonly readOnly: boolean;
   readonly onChange: (profile: AccountProfile) => void;
+  readonly onRenew: (instanceId: ProviderInstanceId) => void;
 }) {
   const gt = useGT();
   const ordered = orderInstancesForDriver(props.profile, props.providers, props.driver).filter(
@@ -326,6 +339,7 @@ function DriverOrder(props: {
                 readOnly={props.readOnly}
                 onToggleAllowed={(allowed) => toggleAllowed(provider.instanceId, allowed)}
                 onMove={(steps) => move(index, steps)}
+                onRenew={() => props.onRenew(provider.instanceId)}
               />
             ))}
           </ol>
@@ -344,9 +358,13 @@ function AccountRow(props: {
   readonly readOnly: boolean;
   readonly onToggleAllowed: (allowed: boolean) => void;
   readonly onMove: (steps: number) => void;
+  readonly onRenew: () => void;
 }) {
   const gt = useGT();
   const name = props.provider.displayName ?? props.provider.instanceId;
+  const email = props.provider.auth.email?.trim();
+  const expired = props.provider.auth.credentialStatus === "expired";
+  const canRenew = expired && props.provider.auth.canRenewCredential === true;
   const { listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } =
     useSortable({ id: props.provider.instanceId, disabled: props.readOnly || props.count <= 1 });
   return (
@@ -369,7 +387,22 @@ function AccountRow(props: {
         badgeContent="none"
         size="compact"
       />
-      <span className="min-w-0 flex-1 truncate text-sm">{name}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm">{name}</span>
+        {email ? (
+          <span className="block truncate text-2xs text-muted-foreground">{email}</span>
+        ) : null}
+      </span>
+      {expired ? (
+        <span className="rounded-sm bg-warning/12 px-1 text-2xs text-warning">
+          <T>Sign-in expired</T>
+        </span>
+      ) : null}
+      {canRenew && !props.readOnly ? (
+        <Button size="xs" variant="outline" onClick={props.onRenew}>
+          <T>Re-authenticate</T>
+        </Button>
+      ) : null}
       {props.limited ? (
         <span className="rounded-sm bg-warning/12 px-1 text-2xs text-warning">
           <T>At limit</T>

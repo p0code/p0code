@@ -1,4 +1,5 @@
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
+import { providerCredentialStatus } from "@t3tools/client-runtime/state/provider-instance-display";
 import { m } from "~/i18n/messages";
 import {
   isAtomCommandInterrupted,
@@ -17,6 +18,7 @@ import { lazy, Suspense, useRef, useState } from "react";
 import { CopyIcon } from "lucide-react";
 
 import { writeTextToClipboard } from "../../hooks/useCopyToClipboard";
+import { useNowMinute } from "../../hooks/useNowMinute";
 import { isWebUrl } from "../../browser/webUrl";
 import { ensureLocalApi } from "../../localApi";
 import { useEnvironmentQuery } from "../../state/query";
@@ -45,6 +47,7 @@ export function ProviderAuthenticationSection({
   readonly readOnly: boolean;
 }) {
   const gt = useGT();
+  const nowMinute = useNowMinute();
   const target = { environmentId, input: { instanceId } };
   const query = useEnvironmentQuery(serverEnvironment.providerAuthState(target), useMessages());
   const commands = { reportFailure: false, reportDefect: false };
@@ -53,6 +56,7 @@ export function ProviderAuthenticationSection({
   const complete = useAtomCommand(serverEnvironment.completeProviderAuth, commands);
   const cancel = useAtomCommand(serverEnvironment.cancelProviderAuth, commands);
   const logout = useAtomCommand(serverEnvironment.logoutProviderAuth, commands);
+  const refreshProviders = useAtomCommand(serverEnvironment.refreshProviders, commands);
   const [methodId, setMethodId] = useState("");
   const [draft, setDraft] = useState({ id: "", values: {} as Record<string, string> });
   const [error, setError] = useState<string | null>(null);
@@ -67,6 +71,10 @@ export function ProviderAuthenticationSection({
   const signedIn =
     provider.auth.status === "authenticated" ||
     (provider.auth.status === "unknown" && auth?.phase === "succeeded");
+  const credentialStatus = providerCredentialStatus(provider.auth, Date.parse(nowMinute));
+  const credentialExpired = credentialStatus === "expired";
+  const credentialExpiring = credentialStatus === "expiring";
+  const canRenewCredential = provider.auth.canRenewCredential === true;
   const isDiscovering =
     provider.driver === "acpRegistry" &&
     !active &&
@@ -191,6 +199,8 @@ export function ProviderAuthenticationSection({
                 className="max-w-full truncate"
               />
             </T>
+            {credentialExpired ? <span> · {gt("Sign-in expired")}</span> : null}
+            {credentialExpiring ? <span> · {gt("Sign-in expires soon")}</span> : null}
           </span>
         ) : (
           <span role="status">{accountDescription}</span>
@@ -277,6 +287,26 @@ export function ProviderAuthenticationSection({
             </>
           ) : null}
           <>
+            {!active &&
+            signedIn &&
+            canRenewCredential &&
+            (credentialExpired || credentialExpiring) ? (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={disabled}
+                onClick={() =>
+                  void run(() =>
+                    refreshProviders({
+                      environmentId,
+                      input: { instanceId, refreshModels: true },
+                    }),
+                  )
+                }
+              >
+                <T>Re-authenticate</T>
+              </Button>
+            ) : null}
             {needsExternalSetup && provider.setup?.documentationUrl ? (
               <Button
                 size="sm"
@@ -321,7 +351,9 @@ export function ProviderAuthenticationSection({
                 }
               >
                 {signedIn
-                  ? gt("Change account")
+                  ? credentialExpired
+                    ? gt("Sign in again")
+                    : gt("Change account")
                   : auth?.phase === "failed" || auth?.phase === "cancelled"
                     ? usesCredentials
                       ? gt("Retry connection")

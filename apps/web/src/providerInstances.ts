@@ -52,8 +52,9 @@ export interface ProviderInstanceEntry {
 /** The instance's name with the account it is signed in as, when the provider reports one. */
 export function providerInstanceAccountName(
   entry: Pick<ProviderInstanceEntry, "displayName" | "snapshot">,
+  credentialStatusLabel?: string,
 ): string {
-  const detail = providerInstanceAccountDetail(entry.snapshot.auth);
+  const detail = providerInstanceAccountDetail(entry.snapshot.auth, credentialStatusLabel);
   return detail ? `${entry.displayName} · ${detail}` : entry.displayName;
 }
 
@@ -91,7 +92,9 @@ export function isProviderInstancePickerReady(entry: ProviderInstanceEntry): boo
     entry.status === "warning" &&
     entry.installed &&
     auth.status === "authenticated" &&
-    entry.models.length > 0
+    entry.models.length > 0 &&
+    // A lapsed sign-in that a turn renews stays selectable; one that cannot is explained instead.
+    (auth.credentialStatus !== "expired" || auth.canRenewCredential === true)
   );
 }
 

@@ -123,6 +123,21 @@ describe("listedProfileDrivers", () => {
       ]),
     ).toEqual([claude]);
   });
+
+  it("keeps an expired Antigravity account listed whether or not a turn renews it", () => {
+    for (const canRenewCredential of [true, false]) {
+      const expired = provider(personal, {
+        auth: {
+          status: "authenticated",
+          credentialStatus: "expired",
+          canRenewCredential,
+          email: "paid@example.com",
+        },
+      });
+      expect(isListedProfileAccount(expired)).toBe(true);
+      expect(listedProfileDrivers([expired])).toEqual([claude]);
+    }
+  });
 });
 
 describe("routeSelectionToAccountProfile", () => {
@@ -140,6 +155,28 @@ describe("routeSelectionToAccountProfile", () => {
       "personal",
       [provider(company, limited), provider(personal, limited), provider(second, limited)],
       company,
+    ],
+    [
+      "personal",
+      [
+        provider(company),
+        provider(personal, {
+          auth: { status: "authenticated", credentialStatus: "expired", canRenewCredential: true },
+        }),
+        provider(second),
+      ],
+      personal,
+    ],
+    [
+      "personal",
+      [
+        provider(company),
+        provider(personal, {
+          auth: { status: "authenticated", credentialStatus: "expired", canRenewCredential: false },
+        }),
+        provider(second),
+      ],
+      second,
     ],
   ] as const)("profile %s routes to its first usable account", (profile, list, expected) => {
     expect(

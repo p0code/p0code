@@ -24,6 +24,7 @@ const setup = vi.hoisted(() => ({
   startInstall: vi.fn(),
   cancelInstall: vi.fn(),
   removeInstall: vi.fn(),
+  refreshProviders: vi.fn(),
   confirm: vi.fn(),
 }));
 
@@ -43,6 +44,7 @@ vi.mock(import("../../state/server"), async (original) => {
       startProviderInstall: setup.startInstall as never,
       cancelProviderInstall: setup.cancelInstall as never,
       removeProviderInstallation: setup.removeInstall as never,
+      refreshProviders: setup.refreshProviders as never,
     },
   };
 });
@@ -174,6 +176,7 @@ function resetSetup() {
     setup.startInstall,
     setup.cancelInstall,
     setup.removeInstall,
+    setup.refreshProviders,
   ]) {
     command.mockReset().mockResolvedValue({ _tag: "Success", value: undefined });
   }
@@ -181,6 +184,35 @@ function resetSetup() {
 }
 
 describe("Antigravity setup", () => {
+  it("renews an expired sign-in with one click instead of hiding the account", async () => {
+    resetSetup();
+    setup.auth = authState({ phase: "idle", flowId: null, authorizationUrl: null });
+    const expired: ServerProvider = {
+      ...provider,
+      status: "warning",
+      auth: {
+        status: "authenticated",
+        type: "oauth-personal",
+        label: "Google account",
+        email: "paid@example.com",
+        credentialStatus: "expired",
+        canRenewCredential: true,
+      },
+      message: "Antigravity's saved sign-in has expired.",
+    };
+    await using screen = await renderSetup({ provider: expired });
+
+    await userEvent.click(screen.getByRole("button", { name: "Toggle account email visibility" }));
+    await expect.element(screen.getByText("paid@example.com")).toBeVisible();
+    expect(screen.container.textContent).toContain("Sign-in expired");
+
+    await screen.click("Re-authenticate");
+    expect(setup.refreshProviders).toHaveBeenCalledWith({
+      environmentId,
+      input: { instanceId, refreshModels: true },
+    });
+  });
+
   it("can start installation before the first install snapshot arrives", async () => {
     resetSetup();
     setup.auth = authState({ phase: "idle", flowId: null, authorizationUrl: null });
