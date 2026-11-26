@@ -2516,7 +2516,10 @@ export function buildThreadFeed(
     readonly locale?: string;
   },
 ): ReadonlyArray<ThreadFeedEntry> {
-  visibleTurnItems = visibleTurnItems.filter(({ item }) => item.type !== "feedback_request");
+  // Filter only when needed: an unchanged input array keeps the cached feed.
+  if (visibleTurnItems.some(({ item }) => item.type === "feedback_request")) {
+    visibleTurnItems = visibleTurnItems.filter(({ item }) => item.type !== "feedback_request");
+  }
   const anchoredMessages = options?.anchoredMessages ?? [];
   const resolve = options?.resolve ?? m;
   const locale = options?.locale;
