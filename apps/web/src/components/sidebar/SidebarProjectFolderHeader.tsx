@@ -11,6 +11,7 @@ import type { SidebarProjectSnapshot } from "../../sidebarProjectGrouping";
 import { useUiStateStore } from "../../uiStateStore";
 import { resolveSidebarFolderDot, resolveThreadLastVisitedAt } from "../Sidebar.logic";
 import { ProjectFavicon } from "../ProjectFavicon";
+import { SidebarProjectDeployRow } from "./SidebarDeployIndicators";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 
@@ -111,7 +112,7 @@ export const SidebarProjectFolderHeader = memo(function SidebarProjectFolderHead
         />
       </button>
       {/* Sits over the count, which hides on hover or focus, and left of the chevron. */}
-      <span className="absolute inset-y-0 right-6 flex items-center opacity-0 focus-within:opacity-100 group-hover/project-folder:opacity-100 pointer-coarse:opacity-100">
+      <span className="absolute top-0 right-6 flex h-8 items-center opacity-0 focus-within:opacity-100 group-hover/project-folder:opacity-100 pointer-coarse:opacity-100">
         <Tooltip>
           <TooltipTrigger
             render={
@@ -133,6 +134,7 @@ export const SidebarProjectFolderHeader = memo(function SidebarProjectFolderHead
           </TooltipPopup>
         </Tooltip>
       </span>
+      <SidebarProjectDeployRow environmentId={group.environmentId} projectId={group.id} />
     </li>
   );
 });

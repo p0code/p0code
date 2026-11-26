@@ -8132,20 +8132,32 @@
   "c56b618d212bf018": "Neu starten und zurückgewinnen",
   "be1eeddb87fc6fe9": "Bereitstellen",
   "129164189c938942": "Bereitstellungsanbieter",
+  "3813b894c79465cc": "Zeigt Konten im Profil {profile} sowie nicht zugeordnete Konten.",
   "3a2e919ca921a60c": "Bereitstellungen",
   "1e80233b9193116f": "In Plugins aus",
   "58b7b0e79013a091": "Verknüpft",
   "364cae9e608a63d4": "Sign-in expired",
   "4ad258969e361b3c": "Fehler",
   "fa83ec856513632c": "Nicht verknüpft",
+  "cb08f24f16c20636": "{provider}-Kontoname",
+  "d15c8b6978f84bb0": "Team-ID (optional)",
+  "3dd856f39c7357c1": "{provider}-Team-ID",
   "8f6976097de6cd25": "Zugriffstoken (optional)",
   "bd33c4006ff50a0b": "Zugriffstoken für {provider}",
-  "ce63a11bca54e095": "Trennen",
-  "19cb8f9ff8df4979": "Neu verknüpfen",
+  "c470de965e25e06c": "Konto hinzufügen",
   "e176b5f17630f05b": "Verknüpfen",
+  "d12f3de27e2c3e33": "{account}-Zugriffstoken",
+  "19cb8f9ff8df4979": "Neu verknüpfen",
+  "ce63a11bca54e095": "Trennen",
+  "8551834f1c340cdd": "Pages",
+  "2a1b75440047d80f": "Worker",
+  "7c7b27a74ff7278e": "Projekt",
   "afdefb17101fac3a": "Bereitstellungsziel für {project}",
   "8a88e44ae853c80d": "Ziel wählen",
   "e9755757b8a9fdc9": "Kein Ziel",
+  "e944ce52b43a8a6c": "Standardumgebung für {project}",
+  "b1cb84e4eca5b06b": "Produktion",
+  "bf0f37f53a4e2d62": "Vorschau",
   "efbb8f3d8336378c": "Auf {deployment} zurückgesetzt.",
   "2a1419da20c2bb27": "In Warteschlange",
   "d000f2b5e832a45d": "Wird gebaut",
@@ -8153,11 +8165,11 @@
   "d01b83620a105d50": "Fehlgeschlagen",
   "7318f8b5cbcc0ff0": "Abgebrochen",
   "5942a61dbfb5214e": "Warte auf Logzeilen…",
-  "b1cb84e4eca5b06b": "Produktion",
-  "bf0f37f53a4e2d62": "Vorschau",
   "5b84d580f80b3688": "Git-Branch",
   "457bf48449fb47aa": "Lokaler Build",
   "15ed472fb3ba4a6d": "Standard-Branch",
+  "0deabb397a585f0c": "Projektstammverzeichnis",
+  "8c74857ecf98c255": "Entwicklung",
   "f59d5b9846c2a3c6": "Verbinde eine Umgebung mit dieser Version, um daraus bereitzustellen.",
   "0c5c6d47c9eec1cd": "Keine Bereitstellungsanbieter installiert",
   "3e68a8b268965f62": [
@@ -8172,6 +8184,9 @@
   "5486b18239ddf78e": "Füge dieser Umgebung ein Projekt hinzu, um es bereitzustellen.",
   "7f9c4906e0c768ca": "Hier erscheinen Bereitstellungen, die aus dieser Umgebung gestartet wurden.",
   "7770f2ba0e443fb7": "Schalte dieses Plugin unter Plugins ein, um ein Konto zu verknüpfen.",
+  "583bcfdd538ebd2d": "Verknüpfen Sie ein oder mehrere Konten für Bereitstellungen mit diesem Anbieter.",
+  "7245b7d43b25b231": "Weiteres benanntes Konto für ein anderes Team oder Profil hinzufügen.",
+  "6a4c8edee7d78217": "Anmeldung abschließen",
   "a4f401eedf02e8ef": [
     "Konto: ",
     {
@@ -8180,26 +8195,17 @@
       "v": "v"
     }
   ],
-  "6a4c8edee7d78217": "Anmeldung abschließen",
-  "fa320e2be19caa64": [
-    "Wird auf ",
+  "8ada67f73f632595": [
+    "Team: ",
     {
       "i": 1,
       "k": "_gt_value_1",
       "v": "v"
-    },
-    " bei ",
-    {
-      "i": 2,
-      "k": "_gt_value_2",
-      "v": "v"
-    },
-    " bereitgestellt"
+    }
   ],
-  "42ff68458bdb217c": "Keinem Bereitstellungsziel zugeordnet.",
-  "8279db589cda9dcf": "Bereitstellen",
-  "0834382733f42ced": [
-    "Ein Thread ohne Vollzugriff möchte auf ",
+  "0ff72af5fbb1cafa": "Alle Profile",
+  "0433e5db08bed6e4": [
+    "Stellt bereit auf ",
     {
       "i": 1,
       "k": "_gt_value_1",
@@ -8211,7 +8217,42 @@
       "k": "_gt_value_2",
       "v": "v"
     },
-    ") bereitstellen."
+    ") über ",
+    {
+      "i": 3,
+      "k": "_gt_value_3",
+      "v": "v"
+    },
+    " auf ",
+    {
+      "i": 4,
+      "k": "_gt_value_4",
+      "v": "v"
+    }
+  ],
+  "42ff68458bdb217c": "Keinem Bereitstellungsziel zugeordnet.",
+  "88de3ba4187a7749": "Umgebungsvariablen",
+  "8279db589cda9dcf": "Bereitstellen",
+  "5c4bd5451af801f3": [
+    "Ein Thread ohne Vollzugriff hat eine Bereitstellung auf ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " über ",
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    },
+    " (",
+    {
+      "i": 3,
+      "k": "_gt_value_3",
+      "v": "v"
+    },
+    ") angefordert."
   ],
   "4064fb5fc6c6be17": "Genehmigen und bereitstellen",
   "7f41545dc72a20ff": "Logs",
@@ -8232,17 +8273,23 @@
     },
     " bereitstellen"
   ],
-  "5b31e4555d3aa954": [
-    "Auf ",
+  "3af37890f04d0b44": [
+    "Nach ",
     {
       "i": 1,
       "k": "_gt_value_1",
       "v": "v"
     },
-    " bei ",
+    " über ",
     {
       "i": 2,
       "k": "_gt_value_2",
+      "v": "v"
+    },
+    " auf ",
+    {
+      "i": 3,
+      "k": "_gt_value_3",
       "v": "v"
     },
     "."
@@ -8265,6 +8312,35 @@
   ],
   "cc5d2f5ce8ee576e": "Umgebung",
   "c317fa79a76d4963": "Quelle",
+  "de770505be25f1ff": "Ordner",
+  "0cf4a3a1f32e799c": "Ordner außerhalb dieses Projekts zulassen",
+  "0d8211b2f3552d93": [
+    "Umgebungsvariablen für ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    }
+  ],
+  "f7f4685e5a7cf22d": [
+    "Setzt oder entfernt Variablen für ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " über ",
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    },
+    "."
+  ],
+  "ae497ef10f297982": "Variablen setzen (KEY=Wert, eine pro Zeile)",
+  "c9187cb6781c55a2": "Als Geheimnisse speichern",
+  "dd10bcccf50cb719": "Zu entfernende Variablennamen (optional)",
+  "ded1117a241100bb": "Variablen speichern",
   "c0472e6d94fdfac6": "Backend-Status konnte nicht gelesen werden.",
   "80e9842fba54a764": "Background service",
   "20119adcdeba05d6": "Remote URL (experimental)",
@@ -11296,7 +11372,6 @@
   "fe4208562792c313": "Alte rotierte Logs löschen",
   "8debac9c8e9cff47": "Inaktive rotierte Log-Dateien nach so vielen Tagen löschen. Aktuelle Logs bleiben erhalten.",
   "80d58a3fd4e4212a": "Projekt",
-  "de770505be25f1ff": "Ordner",
   "ada7b9a4d96959d2": "Thread",
   "ceab58aa6cb191f3": [
     {
@@ -12233,6 +12308,8 @@
   "2a50e229df85d553": "Vorwärts",
   "8e9626aa27cb188a": "Issues",
   "9d2fc1003e82feb1": "Nutzung",
+  "1c0928f04336f524": "Bereitstellung auf {provider} ({account}): {state}, {host}",
+  "fda9a41f46928c89": "Bereitstellung auf {provider} ({account}): {state}",
   "20283eb1dd6119f9": "{count, plural, one {{count} Anhang} other {{count} Anhänge}}",
   "ffedb03b620f97a9": "Nicht gesendeter Entwurf",
   "90a349d827d1dcf5": "Entwurf verwerfen",

@@ -8132,20 +8132,32 @@
   "c56b618d212bf018": "Reiniciar e recuperar",
   "be1eeddb87fc6fe9": "Implantar",
   "129164189c938942": "Provedores de implantação",
+  "3813b894c79465cc": "Mostrando contas do perfil {profile} e contas sem perfil.",
   "3a2e919ca921a60c": "Implantações",
   "1e80233b9193116f": "Desativado em Plugins",
   "58b7b0e79013a091": "Vinculado",
   "364cae9e608a63d4": "Sign-in expired",
   "4ad258969e361b3c": "Erro",
   "fa83ec856513632c": "Não vinculado",
+  "cb08f24f16c20636": "Nome da conta {provider}",
+  "d15c8b6978f84bb0": "ID da equipe (opcional)",
+  "3dd856f39c7357c1": "ID da equipe {provider}",
   "8f6976097de6cd25": "Token de acesso (opcional)",
   "bd33c4006ff50a0b": "Token de acesso do {provider}",
-  "ce63a11bca54e095": "Desvincular",
-  "19cb8f9ff8df4979": "Vincular novamente",
+  "c470de965e25e06c": "Adicionar conta",
   "e176b5f17630f05b": "Vincular",
+  "d12f3de27e2c3e33": "Token de acesso de {account}",
+  "19cb8f9ff8df4979": "Vincular novamente",
+  "ce63a11bca54e095": "Desvincular",
+  "8551834f1c340cdd": "Pages",
+  "2a1b75440047d80f": "Worker",
+  "7c7b27a74ff7278e": "Projeto",
   "afdefb17101fac3a": "Destino de implantação de {project}",
   "8a88e44ae853c80d": "Escolher destino",
   "e9755757b8a9fdc9": "Sem destino",
+  "e944ce52b43a8a6c": "Ambiente padrão para {project}",
+  "b1cb84e4eca5b06b": "Produção",
+  "bf0f37f53a4e2d62": "Pré-visualização",
   "efbb8f3d8336378c": "Revertido para {deployment}.",
   "2a1419da20c2bb27": "Na fila",
   "d000f2b5e832a45d": "Compilando",
@@ -8153,11 +8165,11 @@
   "d01b83620a105d50": "Falhou",
   "7318f8b5cbcc0ff0": "Cancelado",
   "5942a61dbfb5214e": "Aguardando linhas de log…",
-  "b1cb84e4eca5b06b": "Produção",
-  "bf0f37f53a4e2d62": "Pré-visualização",
   "5b84d580f80b3688": "Branch do Git",
   "457bf48449fb47aa": "Build local",
   "15ed472fb3ba4a6d": "Branch padrão",
+  "0deabb397a585f0c": "Raiz do projeto",
+  "8c74857ecf98c255": "Desenvolvimento",
   "f59d5b9846c2a3c6": "Conecte um ambiente com esta versão para implantar a partir dele.",
   "0c5c6d47c9eec1cd": "Nenhum provedor de implantação instalado",
   "3e68a8b268965f62": [
@@ -8172,6 +8184,9 @@
   "5486b18239ddf78e": "Adicione um projeto a este ambiente para implantá-lo.",
   "7f9c4906e0c768ca": "As implantações iniciadas neste ambiente aparecem aqui.",
   "7770f2ba0e443fb7": "Ative este plugin em Plugins para vincular uma conta.",
+  "583bcfdd538ebd2d": "Vincule uma ou mais contas para fazer deploy com este provedor.",
+  "7245b7d43b25b231": "Adicione outra conta nomeada para uma equipe ou perfil diferente.",
+  "6a4c8edee7d78217": "Concluir login",
   "a4f401eedf02e8ef": [
     "Conta: ",
     {
@@ -8180,25 +8195,17 @@
       "v": "v"
     }
   ],
-  "6a4c8edee7d78217": "Concluir login",
-  "fa320e2be19caa64": [
-    "Implanta em ",
+  "8ada67f73f632595": [
+    "Equipe: ",
     {
       "i": 1,
       "k": "_gt_value_1",
       "v": "v"
-    },
-    " no ",
-    {
-      "i": 2,
-      "k": "_gt_value_2",
-      "v": "v"
     }
   ],
-  "42ff68458bdb217c": "Não associado a um destino de implantação.",
-  "8279db589cda9dcf": "Implantar",
-  "0834382733f42ced": [
-    "Um thread sem acesso total pediu para implantar em ",
+  "0ff72af5fbb1cafa": "Todos os perfis",
+  "0433e5db08bed6e4": [
+    "Faz deploy em ",
     {
       "i": 1,
       "k": "_gt_value_1",
@@ -8208,6 +8215,41 @@
     {
       "i": 2,
       "k": "_gt_value_2",
+      "v": "v"
+    },
+    ") via ",
+    {
+      "i": 3,
+      "k": "_gt_value_3",
+      "v": "v"
+    },
+    " em ",
+    {
+      "i": 4,
+      "k": "_gt_value_4",
+      "v": "v"
+    }
+  ],
+  "42ff68458bdb217c": "Não associado a um destino de implantação.",
+  "88de3ba4187a7749": "Variáveis",
+  "8279db589cda9dcf": "Implantar",
+  "5c4bd5451af801f3": [
+    "Uma conversa sem acesso total pediu para fazer deploy em ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " via ",
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    },
+    " (",
+    {
+      "i": 3,
+      "k": "_gt_value_3",
       "v": "v"
     },
     ")."
@@ -8231,17 +8273,23 @@
       "v": "v"
     }
   ],
-  "5b31e4555d3aa954": [
+  "3af37890f04d0b44": [
     "Para ",
     {
       "i": 1,
       "k": "_gt_value_1",
       "v": "v"
     },
-    " no ",
+    " via ",
     {
       "i": 2,
       "k": "_gt_value_2",
+      "v": "v"
+    },
+    " em ",
+    {
+      "i": 3,
+      "k": "_gt_value_3",
       "v": "v"
     },
     "."
@@ -8264,6 +8312,35 @@
   ],
   "cc5d2f5ce8ee576e": "Ambiente",
   "c317fa79a76d4963": "Origem",
+  "de770505be25f1ff": "Pasta",
+  "0cf4a3a1f32e799c": "Permitir pasta fora deste projeto",
+  "0d8211b2f3552d93": [
+    "Variáveis de ambiente de ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    }
+  ],
+  "f7f4685e5a7cf22d": [
+    "Define ou remove variáveis em ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " via ",
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    },
+    "."
+  ],
+  "ae497ef10f297982": "Definir variáveis (CHAVE=valor, uma por linha)",
+  "c9187cb6781c55a2": "Salvar como segredos",
+  "dd10bcccf50cb719": "Nomes de variáveis a remover (opcional)",
+  "ded1117a241100bb": "Salvar variáveis",
   "c0472e6d94fdfac6": "Não foi possível ler o status do backend.",
   "80e9842fba54a764": "Background service",
   "20119adcdeba05d6": "Remote URL (experimental)",
@@ -11293,7 +11370,6 @@
   "fe4208562792c313": "Excluir logs rotacionados antigos",
   "8debac9c8e9cff47": "Exclui os arquivos de log rotacionados inativos após esta quantidade de dias. Os logs atuais são mantidos.",
   "80d58a3fd4e4212a": "Projeto",
-  "de770505be25f1ff": "Pasta",
   "ada7b9a4d96959d2": "Thread",
   "ceab58aa6cb191f3": [
     {
@@ -12229,6 +12305,8 @@
   "2a50e229df85d553": "Avançar",
   "8e9626aa27cb188a": "Issues",
   "9d2fc1003e82feb1": "Uso",
+  "1c0928f04336f524": "Deploy em {provider} ({account}): {state}, {host}",
+  "fda9a41f46928c89": "Deploy em {provider} ({account}): {state}",
   "20283eb1dd6119f9": "{count, plural, one {{count} anexo} other {{count} anexos}}",
   "ffedb03b620f97a9": "Rascunho não enviado",
   "90a349d827d1dcf5": "Descartar rascunho",
