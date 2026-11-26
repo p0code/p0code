@@ -63,7 +63,8 @@ export function stripHopByHopHeaders(
     if (value === undefined) continue;
     const lower = key.toLowerCase();
     if (options?.keepUpgrade && (lower === "connection" || lower === "upgrade")) {
-      result[lower] = value;
+      // Node never repeats these as arrays; it joins them into one string.
+      if (typeof value === "string") result[lower] = value;
       continue;
     }
     if (HOP_BY_HOP_HEADERS.has(lower) || connectionTokens.has(lower)) {

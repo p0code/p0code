@@ -831,7 +831,14 @@ const layerRuntimeDependencies = layerRuntimeCoreDependencies.pipe(
   // GitVcsDriver.layer is memoized and some of its build sites live outside this file, so the
   // fetch interval goes in context here, before the first build captures it.
   Layer.provideMerge(VcsAutomaticFetchInterval.layer.pipe(Layer.provide(layerServerSettings))),
-  Layer.provideMerge(PublicTunnels.layer),
+  // Public tunnels read settings, the managed policy, and the secret store. Those are built
+  // above, so reuse the same layer values; layers memoize by reference.
+  Layer.provideMerge(
+    PublicTunnels.layer.pipe(
+      Layer.provide(layerServerSettings),
+      Layer.provide(ServerSecretStore.layer),
+    ),
+  ),
   Layer.provide(NetService.layer),
 );
 

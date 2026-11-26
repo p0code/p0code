@@ -255,10 +255,16 @@ it.effect(
       yield* Effect.ensuring(
         Effect.gen(function* () {
           yield* projectStore.apply({
-            type: "project.created",
-            commandId: CommandId.make("cmd-proj-1"),
+            sequence: 0,
             eventId: EventId.make("evt-proj-1"),
-            timestamp: nowIso,
+            aggregateKind: "project",
+            aggregateId: projectId,
+            occurredAt: nowIso,
+            commandId: CommandId.make("cmd-proj-1"),
+            causationEventId: null,
+            correlationId: null,
+            metadata: {},
+            type: "project.created",
             payload: {
               projectId,
               title: "Demo Project",
@@ -398,10 +404,16 @@ it.effect(
           const projectId = ProjectId.make("proj-agent");
           const nowIso = IsoDateTime.make("2026-11-26T00:00:00.000Z");
           yield* projectStore.apply({
-            type: "project.created",
-            commandId: CommandId.make("cmd-proj-agent"),
+            sequence: 0,
             eventId: EventId.make("evt-proj-agent"),
-            timestamp: nowIso,
+            aggregateKind: "project",
+            aggregateId: projectId,
+            occurredAt: nowIso,
+            commandId: CommandId.make("cmd-proj-agent"),
+            causationEventId: null,
+            correlationId: null,
+            metadata: {},
+            type: "project.created",
             payload: {
               projectId,
               title: "Agent Project",
@@ -742,7 +754,6 @@ it.effect(
 
       const seededDb = Layer.provideMerge(seedDb, dbLayer);
       const infraLayer = Layer.mergeAll(
-        seededDb,
         ManagedPolicy.layerTest({
           schemaVersion: 1,
           organization: "Acme",
@@ -753,7 +764,11 @@ it.effect(
           publicTunnels: { enabled: true },
         }),
         makeFakeSelfRelayLayer(relayRef),
-      ).pipe(Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodePlatformCrypto.layer)));
+      ).pipe(
+        // The seeded database brings the SQL client every other layer here reads.
+        Layer.provideMerge(seededDb),
+        Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodePlatformCrypto.layer)),
+      );
 
       const baseDeps = Layer.mergeAll(
         infraLayer,
