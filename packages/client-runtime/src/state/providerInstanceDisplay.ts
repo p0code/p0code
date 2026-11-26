@@ -179,6 +179,32 @@ export function resolveProviderInstanceBadges(
   return badges;
 }
 
+/**
+ * What tells an instance apart from its siblings: the account in "Claude (Denny NCSE)".
+ * A name with no trailing parenthetical, or an empty one, stays whole.
+ */
+export function providerInstanceShortLabel(displayName: string): string {
+  const trimmed = displayName.trim();
+  if (!trimmed.endsWith(")")) return trimmed;
+  let depth = 0;
+  let open = -1;
+  for (let index = trimmed.length - 1; index >= 0; index--) {
+    const char = trimmed[index];
+    if (char === ")") {
+      depth += 1;
+    } else if (char === "(") {
+      depth -= 1;
+      if (depth === 0) {
+        open = index;
+        break;
+      }
+    }
+  }
+  if (open < 0) return trimmed;
+  const inner = trimmed.slice(open + 1, -1).trim();
+  return inner.length > 0 ? inner : trimmed;
+}
+
 /** Who the instance is signed in as, for tooltips that name the account. */
 export function providerInstanceAccountDetail(
   auth: Pick<ServerProvider["auth"], "email" | "label"> | undefined,

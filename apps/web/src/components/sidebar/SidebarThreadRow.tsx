@@ -127,7 +127,11 @@ import { ThreadSearchMatchExcerpt } from "../ThreadSearchMatch";
 import { makeWorkspaceFileDropHandlers } from "../chat/workspaceFileDrop";
 import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
 import { getTriggerDisplayModelName } from "../chat/providerIconUtils";
-import { shouldShowInstanceBadge, type ProviderInstanceEntry } from "../../providerInstances";
+import {
+  providerInstanceShortLabel,
+  shouldShowInstanceBadge,
+  type ProviderInstanceEntry,
+} from "../../providerInstances";
 import { useThreadRunningTerminalIds } from "../../state/terminalSessions";
 import { InlineButton } from "../ui/button";
 import { Kbd } from "../ui/kbd";
@@ -382,7 +386,7 @@ function SidebarThreadTooltip({
             />
             <div className="min-w-0 truncate text-foreground/75">
               {showInstanceBadge && providerEntry
-                ? `${modelLabel} · ${providerEntry.displayName}`
+                ? `${modelLabel} · ${providerInstanceShortLabel(providerEntry.displayName)}`
                 : modelLabel}
             </div>
           </div>

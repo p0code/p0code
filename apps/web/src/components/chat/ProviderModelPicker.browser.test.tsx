@@ -455,3 +455,40 @@ it("tells two accounts of one provider apart by badge, name and signed-in accoun
     .element(page.getByText("Claude Work Business · biz@example.com · Max"))
     .toBeVisible();
 });
+
+it("shows the account instead of cutting Claude (Den…", async () => {
+  const entries = deriveProviderInstanceEntries(
+    ["Claude (Denny NCSE)", "Claude (Other NCSE)"].map((name, index) => ({
+      instanceId: ProviderInstanceId.make(`account-${index}`),
+      driver: ProviderDriverKind.make("claudeAgent"),
+      displayName: name,
+      enabled: true,
+      installed: true,
+      version: null,
+      status: "ready" as const,
+      auth: { status: "authenticated" as const, email: `account-${index}@example.com` },
+      checkedAt: "2026-01-01T00:00:00.000Z",
+      models: [{ slug: `account-${index}-opus`, name: "Opus", isCustom: false, capabilities: {} }],
+      slashCommands: [],
+      skills: [],
+    })),
+  );
+  const active = entries[0]!;
+
+  await using screen = await render(
+    <ProviderModelPicker
+      environmentId={null}
+      activeInstanceId={active.instanceId}
+      model="account-0-opus"
+      lockedProvider={null}
+      instanceEntries={entries}
+      modelOptionsByInstance={new Map(entries.map((entry) => [entry.instanceId, entry.models]))}
+      onInstanceModelChange={() => {}}
+    />,
+  );
+  const trigger = screen.container.querySelector("[data-chat-provider-model-picker]")!;
+  expect(trigger.querySelector("[data-chat-provider-model-picker-instance]")?.textContent).toBe(
+    "Denny NCSE",
+  );
+  expect(trigger.getAttribute("aria-label")).toContain("Claude (Denny NCSE)");
+});

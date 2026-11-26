@@ -7,6 +7,7 @@ import {
   providerInstanceAccountDetail,
   providerInstanceBadgeLength,
   providerInstanceInitials,
+  providerInstanceShortLabel,
   resolveProviderInstanceBadges,
   shouldShowInstanceBadge,
 } from "./providerInstanceDisplay.ts";
@@ -32,6 +33,27 @@ describe("providerInstanceInitials", () => {
   it("keeps an emoji whole instead of splitting its surrogate pair", () => {
     expect(providerInstanceInitials("😀 Work")).toBe("😀W");
     expect(providerInstanceInitials("😀")).toBe("😀");
+  });
+});
+
+describe("providerInstanceShortLabel", () => {
+  it("returns only the account in a trailing parenthetical", () => {
+    expect(providerInstanceShortLabel("Claude (Denny NCSE)")).toBe("Denny NCSE");
+    expect(providerInstanceShortLabel("  Claude ( Denny NCSE )  ")).toBe("Denny NCSE");
+    expect(providerInstanceShortLabel("(Denny)")).toBe("Denny");
+    expect(providerInstanceShortLabel("Claude (Work (Night))")).toBe("Work (Night)");
+  });
+
+  it("leaves names without a trailing parenthetical alone", () => {
+    expect(providerInstanceShortLabel("Claude")).toBe("Claude");
+    expect(providerInstanceShortLabel("  Claude  ")).toBe("Claude");
+    expect(providerInstanceShortLabel("Claude (Denny) NCSE")).toBe("Claude (Denny) NCSE");
+    expect(providerInstanceShortLabel("Claude )Denny(")).toBe("Claude )Denny(");
+  });
+
+  it("falls back to the full name when the parenthetical is empty", () => {
+    expect(providerInstanceShortLabel("Claude ()")).toBe("Claude ()");
+    expect(providerInstanceShortLabel("Claude (   )")).toBe("Claude (   )");
   });
 });
 
