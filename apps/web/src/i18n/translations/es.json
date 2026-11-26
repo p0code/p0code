@@ -2099,6 +2099,51 @@
     "."
   ],
   "d71a78d5a0b8045d": "Obtener ayuda",
+  "73d9e876321196c0": "No se pudo mover el hilo",
+  "b5ff56c423bb517c": "Hilo movido",
+  "6b35c88472cde70a": "Repositorio Git",
+  "95be4cac9ca707c4": "No es un repositorio Git",
+  "f3368d7b172c8cd2": "Mantener su carpeta actual",
+  "bd6411ffbe7eb068": "Esta carpeta está fuera del proyecto. El chat seguirá trabajando allí.",
+  "32fd0595b10f90a6": "Usar la carpeta del proyecto",
+  "c906c30ccbf8cb11": "Crear un worktree nuevo",
+  "a3c785cebebb120b": "Una copia nueva en una rama nueva, desde este proyecto.",
+  "7fb81f6c93b1cd2d": "Necesita un proyecto con un repositorio Git.",
+  "928b077c2e1a7563": "Mover a un proyecto",
+  "6b9565b4a76a8b31": "Elige el proyecto al que debe pertenecer este chat.",
+  "473e6e2207250222": "Primero añade otro proyecto.",
+  "c53709d8945dcedb": "¿Dónde debe trabajar?",
+  "cf391191cca339f9": "Se mantiene",
+  "1f34fe7590628e3a": "Sus mensajes, adjuntos, borradores, elección de modelo, enlaces, programación e hilos padre-hijo.",
+  "9458e2ae2b00a553": [
+    "El proyecto pasa a ser ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    ". El chat sigue trabajando en su carpeta actual."
+  ],
+  "9776ef8a6004abe4": [
+    "El proyecto pasa a ser ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    ", y pasa a un worktree nuevo."
+  ],
+  "fc9f046956631ea0": [
+    "El proyecto pasa a ser ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    ", y trabaja en la carpeta del proyecto."
+  ],
+  "8fe9fce5c6d47b60": "Moviendo…",
+  "dbdefddd97dbdbac": "Mover hilo",
   "b9e49ec03efc8383": "No hay ningún hilo activo",
   "fc7b51a6f2a86236": "Elige un hilo para continuar",
   "7543807a82fa9ccd": "Selecciona un hilo existente o crea uno nuevo para empezar.",
@@ -2665,6 +2710,7 @@
   "3364346f40934e88": "Mostrar todos los proyectos",
   "666f3ac177c116b6": "Filtrar por {project}",
   "1385e2d8bd696370": "Convertir en proyecto",
+  "5965b96c7e7ec5f9": "Mover a un proyecto…",
   "fcf482cda9bf739f": "Resolución automática",
   "39eb35d54cacd314": "Según los ajustes",
   "65e3725b1c46b314": "Nunca",
@@ -3461,6 +3507,7 @@
     " para empezar"
   ],
   "99c183d2407cd36d": "Añade un proyecto para empezar",
+  "37a767042792de9f": "Mover a un proyecto…",
   "06b6bb85f2e34802": "¿Qué construimos en {project}?",
   "5a405f15d9985bd6": "¿Qué construimos?",
   "613f8257a433cec4": "Multimedia",
@@ -9155,7 +9202,6 @@
   "cd2acbace965052d": "Una o dos letras o números.",
   "fc10b8da35c8560e": "O pega cualquier emoji",
   "4051af9bdf152942": "Guardar icono",
-  "6b35c88472cde70a": "Repositorio Git",
   "3dfe25dfe70c88e9": "Carpeta",
   "2eef8f0c67ab3cdd": "No encontrada",
   "3e9aef0d35e449a1": "No se pudo añadir la carpeta",
@@ -9728,7 +9774,6 @@
   "cf2974e9fbb75853": "Ju",
   "aa92b88e3adcf48a": "Vi",
   "43fe8ba8a74537d9": "Sá",
-  "c906c30ccbf8cb11": "Crear un worktree nuevo",
   "8f10acca82ed4772": "Usar el checkout del proyecto",
   "f74095e733bcbac1": "Usar un checkout concreto",
   "987167a51fcdd1e7": "Sin conexión: {environments}",

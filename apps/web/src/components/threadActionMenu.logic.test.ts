@@ -78,6 +78,23 @@ describe("buildThreadActionMenuItems", () => {
     expect(items.find((item) => item.id === "turn-into-project")?.disabled).toBe(true);
   });
 
+  it("offers moving a No project thread only when the server can, disabled while running", () => {
+    expect(
+      buildThreadActionMenuItems(baseState).find((item) => item.id === "move-to-project"),
+    ).toBeUndefined();
+    const idle = buildThreadActionMenuItems({ ...baseState, canMoveToProject: true });
+    expect(idle.find((item) => item.id === "move-to-project")).toMatchObject({
+      label: "Move to project…",
+      disabled: false,
+    });
+    const running = buildThreadActionMenuItems({
+      ...baseState,
+      canMoveToProject: true,
+      isRunning: true,
+    });
+    expect(running.find((item) => item.id === "move-to-project")?.disabled).toBe(true);
+  });
+
   it.each([
     ["while the thread is running", { isRunning: true }],
     ["before any run has completed", { hasCompletedRun: false }],

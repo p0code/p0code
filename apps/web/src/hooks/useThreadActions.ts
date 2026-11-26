@@ -16,6 +16,7 @@ import {
   OPEN_ENDED_SNOOZE_UNTIL,
   type ScopedThreadRef,
   ThreadId,
+  type ThreadMoveToProjectInput,
   isOpenEndedSnooze,
   sessionGrantsScope,
 } from "@t3tools/contracts";
@@ -289,6 +290,18 @@ export function canTurnThreadIntoProject(threadRef: ScopedThreadRef): boolean {
   return project !== null && isScratchProject(project, config.scratchWorkspaceRoot);
 }
 
+/** A No project thread on a server that can move it into an existing project. */
+export function canMoveThreadIntoProject(threadRef: ScopedThreadRef): boolean {
+  const thread = readThreadShell(threadRef);
+  const config = appAtomRegistry.get(environmentServerConfigsAtom).get(threadRef.environmentId);
+  if (!thread || config?.environment.capabilities.threadMoveToProject !== true) return false;
+  const project = readProject({
+    environmentId: threadRef.environmentId,
+    projectId: thread.projectId,
+  });
+  return project !== null && isScratchProject(project, config.scratchWorkspaceRoot);
+}
+
 function threadOperationFailure(target: ScopedThreadRef) {
   return readEnvironmentScope(target.environmentId, AuthOrchestrationOperateScope)
     ? null
@@ -349,6 +362,9 @@ export function useThreadActions() {
   );
   const markThreadUnread = useMarkThreadUnread();
   const createProjectFromThread = useAtomCommand(projectEnvironment.createFromThread, {
+    reportFailure: false,
+  });
+  const moveThreadToProject = useAtomCommand(projectEnvironment.moveThreadToProject, {
     reportFailure: false,
   });
   const stopThreadSession = useOrchestrationCommand(threadEnvironment.stopSession);
@@ -1087,6 +1103,14 @@ export function useThreadActions() {
       createProjectFromThread({
         environmentId: target.environmentId,
         input: { threadId: target.threadId },
+      }),
+    moveThreadToProject: (
+      target: ScopedThreadRef,
+      input: Omit<ThreadMoveToProjectInput, "threadId">,
+    ) =>
+      moveThreadToProject({
+        environmentId: target.environmentId,
+        input: { ...input, threadId: target.threadId },
       }),
   };
 }

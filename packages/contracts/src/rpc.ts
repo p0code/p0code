@@ -341,6 +341,9 @@ import {
   ProjectCreateFromThreadInput,
   ProjectCreateFromThreadResult,
   ProjectEnsureScratchResult,
+  ThreadMoveToProjectError,
+  ThreadMoveToProjectInput,
+  ThreadMoveToProjectResult,
   ProjectListEntriesError,
   ProjectListEntriesInput,
   ProjectListEntriesResult,
@@ -552,6 +555,7 @@ export const WS_METHODS = {
   projectsEnsureScratch: "projects.ensureScratch",
   projectsCreateNew: "projects.createNew",
   projectsCreateFromThread: "projects.createFromThread",
+  threadsMoveToProject: "threads.moveToProject",
 
   shellOpenInEditor: "shell.openInEditor",
 
@@ -1956,6 +1960,12 @@ const WsProjectsCreateFromThreadRpc = Rpc.make(WS_METHODS.projectsCreateFromThre
   error: Schema.Union([OrchestrationDispatchCommandError, EnvironmentAuthorizationError]),
 });
 
+const WsThreadsMoveToProjectRpc = Rpc.make(WS_METHODS.threadsMoveToProject, {
+  payload: ThreadMoveToProjectInput,
+  success: ThreadMoveToProjectResult,
+  error: Schema.Union([ThreadMoveToProjectError, EnvironmentAuthorizationError]),
+});
+
 const WsShellOpenInEditorRpc = Rpc.make(WS_METHODS.shellOpenInEditor, {
   payload: LaunchEditorInput,
   error: Schema.Union([ExternalLauncherError, EnvironmentAuthorizationError]),
@@ -2932,6 +2942,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsProjectsEnsureScratchRpc,
   WsProjectsCreateNewRpc,
   WsProjectsCreateFromThreadRpc,
+  WsThreadsMoveToProjectRpc,
   WsProjectsWriteFileRpc,
   WsProjectsMutateRpc,
   WsShellOpenInEditorRpc,

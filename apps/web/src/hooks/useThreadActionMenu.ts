@@ -2,6 +2,7 @@ import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import { requestCustomSnooze } from "../components/CustomSnoozeDialog";
 import { openGuestShareDialog } from "../components/chat/guestShareDialogState";
+import { openMoveThreadToProjectDialog } from "../components/MoveThreadToProjectDialog";
 import {
   type AtomCommandResult,
   isAtomCommandInterrupted,
@@ -52,7 +53,11 @@ import { threadRuntimeCanArchive } from "@t3tools/client-runtime/state/models";
 import { useCopyToClipboard } from "./useCopyToClipboard";
 import { useNewThreadHandler } from "./useHandleNewThread";
 import { useClientSettings } from "./useSettings";
-import { canTurnThreadIntoProject, useThreadActions } from "./useThreadActions";
+import {
+  canMoveThreadIntoProject,
+  canTurnThreadIntoProject,
+  useThreadActions,
+} from "./useThreadActions";
 
 function failureToast(title: string, error: unknown) {
   toastManager.add(
@@ -152,6 +157,7 @@ export function useThreadActionMenu(input: {
       snoozePresets,
       canShareWithGuest,
       canTurnIntoProject: canTurnThreadIntoProject(threadRef),
+      canMoveToProject: canMoveThreadIntoProject(threadRef),
     });
     const run = async (action: ThreadActionMenuId) => {
       const api = readLocalApi();
@@ -289,6 +295,9 @@ export function useThreadActionMenu(input: {
           }
           return;
         }
+        case "move-to-project":
+          openMoveThreadToProjectDialog(threadRef);
+          return;
         case "copy-path": {
           const workspacePath = thread.worktreePath ?? projectCwd;
           if (!workspacePath) {

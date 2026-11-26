@@ -2099,6 +2099,51 @@
     "."
   ],
   "d71a78d5a0b8045d": "Obtenir de l’aide",
+  "73d9e876321196c0": "Impossible de déplacer le fil",
+  "b5ff56c423bb517c": "Fil déplacé",
+  "6b35c88472cde70a": "Dépôt Git",
+  "95be4cac9ca707c4": "Pas un dépôt Git",
+  "f3368d7b172c8cd2": "Garder son dossier actuel",
+  "bd6411ffbe7eb068": "Ce dossier est en dehors du projet. Le fil continue d’y travailler.",
+  "32fd0595b10f90a6": "Utiliser le dossier du projet",
+  "c906c30ccbf8cb11": "Créer un nouveau worktree",
+  "a3c785cebebb120b": "Une nouvelle copie sur une nouvelle branche, depuis ce projet.",
+  "7fb81f6c93b1cd2d": "Nécessite un projet avec un dépôt Git.",
+  "928b077c2e1a7563": "Déplacer vers un projet",
+  "6b9565b4a76a8b31": "Choisissez le projet auquel ce fil doit appartenir.",
+  "473e6e2207250222": "Ajoutez d’abord un autre projet.",
+  "c53709d8945dcedb": "Où doit-il travailler ?",
+  "cf391191cca339f9": "Conserve",
+  "1f34fe7590628e3a": "Ses messages, pièces jointes, brouillons, choix de modèle, liens, planification et fils parent-enfant.",
+  "9458e2ae2b00a553": [
+    "Le projet devient ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    ". Le fil continue de travailler dans son dossier actuel."
+  ],
+  "9776ef8a6004abe4": [
+    "Le projet devient ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    ", et il passe sur un nouveau worktree."
+  ],
+  "fc9f046956631ea0": [
+    "Le projet devient ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    ", et travaille dans le dossier du projet."
+  ],
+  "8fe9fce5c6d47b60": "Déplacement…",
+  "dbdefddd97dbdbac": "Déplacer le fil",
   "b9e49ec03efc8383": "Aucun fil actif",
   "fc7b51a6f2a86236": "Choisissez un fil pour continuer",
   "7543807a82fa9ccd": "Sélectionnez un fil existant ou créez-en un pour commencer.",
@@ -2665,6 +2710,7 @@
   "3364346f40934e88": "Afficher tous les projets",
   "666f3ac177c116b6": "Filtrer par {project}",
   "1385e2d8bd696370": "Transformer en projet",
+  "5965b96c7e7ec5f9": "Déplacer vers un projet…",
   "fcf482cda9bf739f": "Comportement de la clôture automatique",
   "39eb35d54cacd314": "Suivre les paramètres",
   "65e3725b1c46b314": "Jamais",
@@ -3461,6 +3507,7 @@
     " pour commencer"
   ],
   "99c183d2407cd36d": "Ajoutez un projet pour commencer",
+  "37a767042792de9f": "Déplacer vers un projet…",
   "06b6bb85f2e34802": "Que devons-nous construire dans {project} ?",
   "5a405f15d9985bd6": "Que construit-on ?",
   "613f8257a433cec4": "Médias",
@@ -9157,7 +9204,6 @@
   "cd2acbace965052d": "Une ou deux lettres ou chiffres.",
   "fc10b8da35c8560e": "Ou collez n’importe quel emoji",
   "4051af9bdf152942": "Enregistrer l’icône",
-  "6b35c88472cde70a": "Dépôt Git",
   "3dfe25dfe70c88e9": "Dossier",
   "2eef8f0c67ab3cdd": "Introuvable",
   "3e9aef0d35e449a1": "Échec de l’ajout du dossier",
@@ -9730,7 +9776,6 @@
   "cf2974e9fbb75853": "Je",
   "aa92b88e3adcf48a": "Ve",
   "43fe8ba8a74537d9": "Sa",
-  "c906c30ccbf8cb11": "Créer un nouveau worktree",
   "8f10acca82ed4772": "Utiliser le checkout du projet",
   "f74095e733bcbac1": "Utiliser un checkout précis",
   "987167a51fcdd1e7": "Non connecté : {environments}",

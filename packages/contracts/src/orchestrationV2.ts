@@ -3909,12 +3909,18 @@ const OrchestrationV2InternalCommand = Schema.Union([
     text: Schema.String,
     attachments: Schema.optional(Schema.Array(ChatAttachment)),
   }),
-  /** Moves a thread to a project rooted at the folder it already works in, so its cwd never changes. */
+  /** Moves a thread to a project, optionally rebinding its workspace in the same commit. */
   Schema.Struct({
     type: Schema.Literal("thread.project.adopt-folder"),
     commandId: CommandId,
     threadId: ThreadId,
     projectId: ProjectId,
+    /** The thread's new worktree; null points it at the project root. Absent keeps it. */
+    worktreePath: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
+    /** The branch that goes with `worktreePath`; absent keeps the thread's branch. */
+    branch: Schema.optional(Schema.NullOr(GitRefName)),
+    /** Keep a folder outside the project root, as an explicit "keep" asks. */
+    allowOutsideWorkspace: Schema.optional(Schema.Boolean),
   }),
   /**
    * After a push, the thread's watches forget whether their checks were running, since the push

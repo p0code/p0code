@@ -6024,14 +6024,20 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     if (threadHasUnfinishedWork(projection)) {
       return yield* reject("still has work in progress. Finish or stop it first.");
     }
-    const current = yield* projects.get(thread.projectId).pipe(mapDispatchError(command));
     const target = yield* projects.get(command.projectId).pipe(mapDispatchError(command));
     if (Option.isNone(target) || target.value.deletedAt !== null) {
       return yield* reject(`cannot move to missing project ${command.projectId}.`);
     }
-    // The thread always lands in the project root, so the move must not change its cwd.
-    const cwd = thread.worktreePath ?? Option.getOrUndefined(current)?.workspaceRoot;
-    if (cwd !== target.value.workspaceRoot) {
+    // The thread lands where the command says, or stays in its folder when it names none.
+    const worktreePath =
+      command.worktreePath === undefined ? thread.worktreePath : command.worktreePath;
+    const branch = command.branch === undefined ? thread.branch : command.branch;
+    const cwd = worktreePath ?? target.value.workspaceRoot;
+    const relative = path.relative(target.value.workspaceRoot, cwd);
+    const insideWorkspace =
+      relative === "" ||
+      (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
+    if (!insideWorkspace && command.allowOutsideWorkspace !== true) {
       return yield* reject(`does not work in ${target.value.workspaceRoot}.`);
     }
     const now = yield* DateTime.now;
@@ -6043,7 +6049,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       threadId: command.threadId,
       providerInstanceId: thread.providerInstanceId,
       occurredAt: now,
-      payload: { ...thread, projectId: command.projectId, worktreePath: null, updatedAt: now },
+      payload: { ...thread, projectId: command.projectId, worktreePath, branch, updatedAt: now },
     });
   });
 

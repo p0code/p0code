@@ -21,6 +21,7 @@ import { GuestShareDialogHost } from "../components/chat/GuestShareControls";
 import { CommandPalette } from "../components/CommandPalette";
 import { ConfirmDialogHost } from "../components/ConfirmDialogHost";
 import { CustomSnoozeDialogHost } from "../components/CustomSnoozeDialog";
+import { MoveThreadToProjectDialogHost } from "../components/MoveThreadToProjectDialog";
 import { WorktreeLayoutApprovalDialogHost } from "../components/WorktreeLayoutApprovalDialogHost";
 import { DevReplayHost } from "../components/DevReplayHost";
 import { UseInAnotherAppDialogHost } from "../components/mcp/UseInAnotherAppDialog";
@@ -204,6 +205,7 @@ function RootRouteBranch() {
       <ConfirmDialogHost />
       <WorktreeLayoutApprovalDialogHost />
       <CustomSnoozeDialogHost />
+      <MoveThreadToProjectDialogHost />
       <GuestShareDialogHost />
       <ProjectCloneToastCoordinator />
       <AccountProfileSyncCoordinator />
