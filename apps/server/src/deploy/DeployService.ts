@@ -1,59 +1,83 @@
 /**
- * Settings → Deploy. Providers are `deploy:provider` plugins that keep their own token in plugin
- * storage, so nothing here holds, logs or returns one. Threads below Full access need an approval.
- * Not wired yet (p0deploy): the built-in own-server provider is stubbed in `./ownServer.ts`.
+ * Settings → Deploy. Providers are `deploy:provider` plugins; each can have several linked
+ * accounts, whose credentials the plugin keeps in its own storage keyed by the account id the host
+ * hands it, so nothing here holds, logs or returns one. Accounts belong to account profiles: one
+ * outside the active profile is hidden from every list and refused for every call. Threads below
+ * Full access need an approval. Not wired yet (p0deploy): the own-server provider in `./ownServer.ts`.
  */
 import {
+  type AccountProfileId,
+  type DeployAccount,
+  type DeployAccountRef,
+  type DeployAccountSummary,
+  type DeployDecideApprovalInput,
+  type DeployDeploymentInput,
   type DeployDomain,
   DeployError,
-  type DeployLinkResult,
   type DeployLinkRpcInput,
+  type DeployLinkRpcResult,
+  type DeployLogsInput,
   type DeployMapProjectInput,
   type DeployOverview,
   type DeployPendingApproval,
   type DeployProjectMapping,
   type DeployProjectRollbackInput,
   type DeployProviderProject,
+  type DeployProviderStatus,
   type DeployProviderSummary,
   type DeployRecord,
   type DeployResult,
   type DeploySetEnvInput,
   type DeployStartInput,
   type DeployStartResult,
+  type DeployUpdateAccountInput,
   type DeploymentStatus,
-  type DeployLogsInput,
-  type DeployDeploymentInput,
-  type DeployDecideApprovalInput,
+  isDeployAccountInProfile,
   type ProjectId,
+  resolveActiveAccountProfile,
   type RuntimeMode,
   type ThreadId,
 } from "@t3tools/contracts";
-import type { PluginError } from "@t3tools/plugin-api";
+import type { PluginError, StartedDeployProvider } from "@t3tools/plugin-api";
 import * as Context from "effect/Context";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Path from "effect/Path";
 import * as Stream from "effect/Stream";
 
 import * as Orchestrator from "../orchestration-v2/Orchestrator.ts";
 import { PluginHost } from "../plugins/PluginHost.ts";
+import { ProjectService } from "../project/ProjectService.ts";
 import * as ServerSettings from "../serverSettings.ts";
+import { DeployStore } from "./DeployStore.ts";
 
-/** How the deploy gate learns a thread's runtime mode; null when the thread is unknown. */
-export class DeployThreadModes extends Context.Service<
-  DeployThreadModes,
-  { readonly runtimeMode: (threadId: ThreadId) => Effect.Effect<RuntimeMode | null> }
->()("p0/deploy/DeployService/DeployThreadModes") {}
+/** What the deploy gate and the folder check need to know about threads and projects. */
+export class DeployWorkspace extends Context.Service<
+  DeployWorkspace,
+  {
+    /** Null when the thread is unknown. */
+    readonly thread: (threadId: ThreadId) => Effect.Effect<{
+      readonly runtimeMode: RuntimeMode;
+      readonly projectId: ProjectId;
+      readonly worktreePath: string | null;
+    } | null>;
+    /** The project's folder on this machine; null when the project is unknown. */
+    readonly projectRoot: (projectId: ProjectId) => Effect.Effect<string | null>;
+  }
+>()("p0/deploy/DeployService/DeployWorkspace") {}
 
 export class DeployService extends Context.Service<
   DeployService,
   {
     readonly overview: Effect.Effect<DeployOverview, DeployError>;
-    readonly link: (input: DeployLinkRpcInput) => Effect.Effect<DeployLinkResult, DeployError>;
-    readonly unlink: (pluginId: string) => Effect.Effect<void, DeployError>;
+    readonly link: (input: DeployLinkRpcInput) => Effect.Effect<DeployLinkRpcResult, DeployError>;
+    readonly unlink: (accountId: string) => Effect.Effect<void, DeployError>;
+    readonly updateAccount: (input: DeployUpdateAccountInput) => Effect.Effect<void, DeployError>;
     readonly listProjects: (
-      pluginId: string,
+      accountId: string,
     ) => Effect.Effect<ReadonlyArray<DeployProviderProject>, DeployError>;
     readonly mapProject: (input: DeployMapProjectInput) => Effect.Effect<void, DeployError>;
     /** Full-access threads and people deploy now; other threads file an approval request. */
@@ -73,133 +97,180 @@ export class DeployService extends Context.Service<
   }
 >()("p0/deploy/DeployService") {}
 
-/** Deploys kept for the list; older ones fall off. */
-const MAX_RECORDS = 50;
-
-const UNKNOWN_STATUS = { state: "unlinked", accountLabel: null, message: null } as const;
+const UNLINKED: DeployProviderStatus = { state: "unlinked", accountLabel: null, message: null };
 
 /** Removes a secret the caller just handed over from any text going back out. */
 export const redact = (text: string, secret: string | undefined): string =>
   secret === undefined || secret.length < 4 ? text : text.split(secret).join("[redacted]");
 
-interface HeldDeploy {
-  readonly approval: DeployPendingApproval;
-  readonly input: DeployStartInput;
-}
+const refOf = (account: DeployAccount): DeployAccountRef => ({
+  accountId: account.id,
+  ...(account.teamId === null ? {} : { teamId: account.teamId }),
+});
 
 const make = Effect.gen(function* () {
   const host = yield* PluginHost;
   const settings = yield* ServerSettings.ServerSettingsService;
-  const threadModes = yield* DeployThreadModes;
+  const workspace = yield* DeployWorkspace;
+  const store = yield* DeployStore;
   const random = yield* SecureRandom.SecureRandom;
-  const records: Array<DeployRecord> = [];
-  const held = new Map<string, HeldDeploy>();
+  const path = yield* Path.Path;
+
+  const fail = (reason: DeployError["reason"], message: string) =>
+    Effect.fail(new DeployError({ reason, message }));
 
   const providerFailed =
     (secret?: string) =>
     (error: PluginError): DeployError =>
       new DeployError({ reason: "provider-failed", message: redact(error.message, secret) });
 
+  // Unreadable settings leave every account visible, as thread launches do.
+  const activeProfile: Effect.Effect<AccountProfileId | null> = settings.getSettings.pipe(
+    Effect.map((current) => resolveActiveAccountProfile(current)?.id ?? null),
+    Effect.orElseSucceed(() => null),
+  );
+
   const requireProvider = Effect.fn("DeployService.requireProvider")(function* (pluginId: string) {
     const entries = yield* host.deployProviders;
     const entry = entries.find((candidate) => candidate.manifest.id === pluginId);
     if (entry === undefined) {
-      return yield* new DeployError({
-        reason: "unknown-provider",
-        message: "No installed plugin provides this deploy target.",
-      });
+      return yield* fail("unknown-provider", "No installed plugin provides this deploy target.");
     }
     if (entry.provider === null) {
-      return yield* new DeployError({
-        reason: "provider-off",
-        message: `Turn on ${entry.manifest.name} in Plugins first.`,
-      });
+      return yield* fail("provider-off", `Turn on ${entry.manifest.name} in Plugins first.`);
     }
     return entry.provider;
   });
 
-  const settingsFailed = (error: { readonly message: string }) =>
-    new DeployError({ reason: "settings-failed", message: error.message });
+  /** The account, if it exists and the active profile shows it. */
+  const requireAccount = Effect.fn("DeployService.requireAccount")(function* (accountId: string) {
+    const account = yield* store.getAccount(accountId);
+    if (account === null) return yield* fail("unknown-account", "This deploy account is not linked.");
+    if (!isDeployAccountInProfile(account, yield* activeProfile)) {
+      return yield* fail(
+        "not-in-profile",
+        "This deploy account is not in the active profile. Add it to the profile in Settings → Deploy.",
+      );
+    }
+    return account;
+  });
 
-  const mappings = settings.getSettings.pipe(
-    Effect.map((current) => current.deployProjects),
-    Effect.mapError(settingsFailed),
-  );
+  const requireAccountProvider = Effect.fn("DeployService.requireAccountProvider")(function* (
+    accountId: string,
+  ) {
+    const account = yield* requireAccount(accountId);
+    return { account, ref: refOf(account), provider: yield* requireProvider(account.pluginId) };
+  });
 
   const requireMapping = Effect.fn("DeployService.requireMapping")(function* (
     projectId: ProjectId,
   ) {
-    const mapping = (yield* mappings)[projectId];
-    if (mapping === undefined) {
-      return yield* new DeployError({
-        reason: "not-mapped",
-        message: "Choose a deploy target for this project first.",
-      });
+    const mapping = yield* store.getMapping(projectId);
+    if (mapping === null) {
+      return yield* fail("not-mapped", "Choose a deploy target for this project first.");
     }
-    return { mapping, provider: yield* requireProvider(mapping.pluginId) };
+    return { mapping, ...(yield* requireAccountProvider(mapping.accountId)) };
   });
 
-  const summarize = (
-    entry: Effect.Success<typeof host.deployProviders>[number],
-  ): Effect.Effect<DeployProviderSummary> => {
-    const base = { pluginId: entry.manifest.id };
-    if (entry.provider === null) {
-      return Effect.succeed({
-        ...base,
-        label: entry.manifest.name,
-        icon: null,
-        running: false,
-        status: UNKNOWN_STATUS,
-      });
+  /**
+   * The project's root (a thread's own worktree when the thread belongs to the project) and the
+   * folder to deploy from, refusing one outside the root unless the caller allowed it.
+   */
+  const resolveSource = Effect.fn("DeployService.resolveSource")(function* (
+    input: DeployStartInput,
+    mapping: DeployProjectMapping,
+  ) {
+    const thread = input.threadId === undefined ? null : yield* workspace.thread(input.threadId);
+    const projectRoot =
+      thread !== null && thread.projectId === input.projectId && thread.worktreePath !== null
+        ? thread.worktreePath
+        : yield* workspace.projectRoot(input.projectId);
+    if (projectRoot === null) {
+      return yield* fail("unknown-project", "This project's folder is not known on this server.");
     }
-    const { descriptor } = entry.provider;
-    return entry.provider.status.pipe(
-      Effect.timeout("10 seconds"),
-      Effect.catchCause(() =>
-        Effect.succeed({
-          state: "error" as const,
-          accountLabel: null,
-          message: "Could not reach the provider.",
-        }),
-      ),
-      Effect.map((status) => ({
-        ...base,
-        label: descriptor.label,
-        icon: descriptor.icon ?? null,
-        running: true,
-        status,
-      })),
-    );
-  };
+    const requested = input.directory ?? mapping.directory;
+    const directory = requested === undefined ? projectRoot : path.resolve(projectRoot, requested);
+    const relative = path.relative(projectRoot, directory);
+    const outside =
+      relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative);
+    if (outside && input.allowOutsideProject !== true) {
+      return yield* fail(
+        "outside-project",
+        `${directory} is outside the project folder. Allow deploying from outside the project to use it.`,
+      );
+    }
+    return { projectRoot, directory, thread };
+  });
+
+  const summarizeProvider = (
+    entry: Effect.Success<typeof host.deployProviders>[number],
+  ): DeployProviderSummary => ({
+    pluginId: entry.manifest.id,
+    label: entry.provider?.descriptor.label ?? entry.manifest.name,
+    icon: entry.provider?.descriptor.icon ?? null,
+    running: entry.provider !== null,
+  });
+
+  const summarizeAccount = (
+    account: DeployAccount,
+    provider: StartedDeployProvider | null,
+  ): Effect.Effect<DeployAccountSummary> =>
+    (provider === null
+      ? Effect.succeed(UNLINKED)
+      : provider.status(refOf(account)).pipe(
+          Effect.timeout("10 seconds"),
+          Effect.catchCause(() =>
+            Effect.succeed<DeployProviderStatus>({
+              state: "error",
+              accountLabel: null,
+              message: "Could not reach the provider.",
+            }),
+          ),
+        )
+    ).pipe(Effect.map((status) => ({ ...account, status })));
 
   const runDeploy = Effect.fn("DeployService.runDeploy")(function* (input: DeployStartInput) {
-    const { mapping, provider } = yield* requireMapping(input.projectId);
+    const { mapping, account, ref, provider } = yield* requireMapping(input.projectId);
+    if (input.accountId !== account.id) {
+      return yield* fail(
+        "account-mismatch",
+        "This project now deploys to a different account. Start the deploy again.",
+      );
+    }
+    const { projectRoot, directory } = yield* resolveSource(input, mapping);
+    const environment = input.environment ?? mapping.defaultEnvironment;
     const result = yield* provider
       .deploy({
-        projectId: mapping.providerProjectId,
-        environment: input.environment,
+        account: ref,
+        target: { kind: mapping.targetKind, id: mapping.targetId },
+        environment,
         source: {
           kind: input.sourceKind,
+          projectRoot,
+          directory,
           ...(input.branch === undefined ? {} : { branch: input.branch }),
-          ...(input.directory === undefined ? {} : { directory: input.directory }),
         },
         ...(input.envVars === undefined ? {} : { envVars: input.envVars }),
       })
       .pipe(Effect.mapError(providerFailed()));
     const record: DeployRecord = {
-      pluginId: mapping.pluginId,
+      pluginId: account.pluginId,
+      accountId: account.id,
       deploymentId: result.deploymentId,
       projectId: input.projectId,
-      environment: input.environment,
+      threadId: input.threadId ?? null,
+      targetKind: mapping.targetKind,
+      targetName: mapping.targetName,
+      environment,
       branch: input.branch ?? null,
       url: result.url ?? null,
       state: "queued",
       createdAt: DateTime.formatIso(yield* DateTime.now),
     };
-    records.unshift(record);
-    records.splice(MAX_RECORDS);
+    yield* store.insertRecord(record);
     yield* Effect.logInfo("Deploy started", {
       plugin: record.pluginId,
+      account: record.accountId,
       deploymentId: record.deploymentId,
       environment: record.environment,
     });
@@ -209,124 +280,211 @@ const make = Effect.gen(function* () {
   const hold = Effect.fn("DeployService.hold")(function* (
     input: DeployStartInput,
     threadId: ThreadId,
+    mapping: DeployProjectMapping,
+    account: DeployAccount,
+    directory: string,
   ) {
-    // Refuse early, so an approval never asks about a deploy that cannot run.
-    const { mapping } = yield* requireMapping(input.projectId);
     const approval: DeployPendingApproval = {
       id: yield* random.uuidV4(),
       projectId: input.projectId,
-      pluginId: mapping.pluginId,
-      providerProjectName: mapping.providerProjectName,
-      environment: input.environment,
+      pluginId: account.pluginId,
+      accountId: account.id,
+      targetName: mapping.targetName,
+      environment: input.environment ?? mapping.defaultEnvironment,
       branch: input.branch ?? null,
+      directory,
       threadId,
       requestedAt: DateTime.formatIso(yield* DateTime.now),
     };
-    held.set(approval.id, { approval, input });
+    yield* store.insertApproval({ approval, request: input });
     return approval;
   });
 
   return DeployService.of({
     overview: Effect.gen(function* () {
+      const activeProfileId = yield* activeProfile;
       const entries = yield* host.deployProviders;
-      const providers = yield* Effect.forEach(entries, summarize, { concurrency: "unbounded" });
+      const visible = (yield* store.listAccounts).filter((account) =>
+        isDeployAccountInProfile(account, activeProfileId),
+      );
+      const accounts = yield* Effect.forEach(
+        visible,
+        (account) =>
+          summarizeAccount(
+            account,
+            entries.find((entry) => entry.manifest.id === account.pluginId)?.provider ?? null,
+          ),
+        { concurrency: "unbounded" },
+      );
+      const shown = new Set(visible.map((account) => account.id));
+      const mappings: Record<string, DeployProjectMapping> = {};
+      for (const mapping of yield* store.listMappings) {
+        if (shown.has(mapping.accountId)) mappings[mapping.projectId] = mapping;
+      }
       return {
-        providers,
-        mappings: yield* mappings,
-        deployments: [...records],
-        approvals: [...held.values()].map((entry) => entry.approval),
+        activeProfileId,
+        providers: entries.map(summarizeProvider),
+        accounts,
+        mappings,
+        deployments: (yield* store.listRecords).filter((record) => shown.has(record.accountId)),
+        approvals: (yield* store.listApprovals).filter((approval) =>
+          shown.has(approval.accountId),
+        ),
       };
     }),
     link: Effect.fn("DeployService.link")(function* (input) {
       const provider = yield* requireProvider(input.pluginId);
-      return yield* provider
-        .link(input.token === undefined ? {} : { token: input.token })
-        .pipe(Effect.mapError(providerFailed(input.token)));
+      let account: DeployAccount;
+      let created = false;
+      if (input.accountId !== undefined) {
+        account = yield* requireAccount(input.accountId);
+        if (account.pluginId !== input.pluginId) {
+          return yield* fail("unknown-account", "This account belongs to another provider.");
+        }
+        if (input.teamId !== undefined && input.teamId !== account.teamId) {
+          yield* store.updateAccount(account.id, { teamId: input.teamId });
+          account = { ...account, teamId: input.teamId };
+        }
+      } else {
+        const activeProfileId = yield* activeProfile;
+        account = {
+          id: yield* random.uuidV4(),
+          pluginId: input.pluginId,
+          label: input.label ?? null,
+          teamId: input.teamId ?? null,
+          profileIds: input.profileIds ?? (activeProfileId === null ? [] : [activeProfileId]),
+          createdAt: DateTime.formatIso(yield* DateTime.now),
+        };
+        yield* store.insertAccount(account);
+        created = true;
+      }
+      const result = yield* provider
+        .link({
+          account: refOf(account),
+          ...(input.token === undefined ? {} : { token: input.token }),
+        })
+        .pipe(
+          Effect.mapError(providerFailed(input.token)),
+          // A new account the provider refused is not kept.
+          Effect.tapError(() => (created ? store.deleteAccount(account.id) : Effect.void)),
+        );
+      if (result._tag === "linked" && result.teamId !== undefined && account.teamId === null) {
+        yield* store.updateAccount(account.id, { teamId: result.teamId });
+      }
+      return { accountId: account.id, result };
     }),
-    unlink: Effect.fn("DeployService.unlink")(function* (pluginId) {
-      const provider = yield* requireProvider(pluginId);
-      yield* provider.unlink.pipe(Effect.mapError(providerFailed()));
+    unlink: Effect.fn("DeployService.unlink")(function* (accountId) {
+      const account = yield* requireAccount(accountId);
+      const entry = (yield* host.deployProviders).find(
+        (candidate) => candidate.manifest.id === account.pluginId,
+      );
+      // A removed plugin took its storage with it; only the record is left to forget.
+      if (entry !== undefined) {
+        const provider = yield* requireProvider(account.pluginId);
+        yield* provider.unlink(refOf(account)).pipe(Effect.mapError(providerFailed()));
+      }
+      yield* store.deleteAccount(account.id);
     }),
-    listProjects: Effect.fn("DeployService.listProjects")(function* (pluginId) {
-      const provider = yield* requireProvider(pluginId);
-      return yield* provider.listProjects.pipe(Effect.mapError(providerFailed()));
+    updateAccount: Effect.fn("DeployService.updateAccount")(function* (input) {
+      const account = yield* requireAccount(input.accountId);
+      yield* store.updateAccount(account.id, {
+        ...(input.label === undefined ? {} : { label: input.label }),
+        ...(input.profileIds === undefined ? {} : { profileIds: input.profileIds }),
+      });
+    }),
+    listProjects: Effect.fn("DeployService.listProjects")(function* (accountId) {
+      const { ref, provider } = yield* requireAccountProvider(accountId);
+      return yield* provider.listProjects(ref).pipe(Effect.mapError(providerFailed()));
     }),
     mapProject: Effect.fn("DeployService.mapProject")(function* (input) {
-      if (input.mapping !== null) yield* requireProvider(input.mapping.pluginId);
-      const patch: Record<ProjectId, DeployProjectMapping | null> = {
-        [input.projectId]: input.mapping,
-      };
-      yield* settings
-        .updateSettings({ deployProjects: patch })
-        .pipe(Effect.mapError(settingsFailed));
+      const existing = yield* store.getMapping(input.projectId);
+      // Another profile's mapping stays out of reach, even to clear.
+      if (existing !== null) yield* requireAccount(existing.accountId);
+      if (input.mapping === null) {
+        yield* store.deleteMapping(input.projectId);
+        return;
+      }
+      yield* requireAccountProvider(input.mapping.accountId);
+      yield* store.setMapping({ projectId: input.projectId, ...input.mapping });
     }),
     start: Effect.fn("DeployService.start")(function* (input) {
-      if (input.threadId !== undefined) {
-        const mode = yield* threadModes.runtimeMode(input.threadId);
-        if (mode !== "full-access") {
-          return {
-            _tag: "approval-required" as const,
-            approval: yield* hold(input, input.threadId),
-          };
-        }
+      // Refuse early, so an approval never asks about a deploy that cannot run.
+      const { mapping, account } = yield* requireMapping(input.projectId);
+      if (input.accountId !== account.id) {
+        return yield* fail(
+          "account-mismatch",
+          "This project deploys to a different account than the one asked for.",
+        );
+      }
+      const { directory, thread } = yield* resolveSource(input, mapping);
+      if (input.threadId !== undefined && thread?.runtimeMode !== "full-access") {
+        return {
+          _tag: "approval-required" as const,
+          approval: yield* hold(input, input.threadId, mapping, account, directory),
+        };
       }
       return { _tag: "started" as const, deployment: yield* runDeploy(input) };
     }),
     decideApproval: Effect.fn("DeployService.decideApproval")(function* (input) {
-      const entry = held.get(input.approvalId);
-      if (entry === undefined) {
-        return yield* new DeployError({
-          reason: "unknown-approval",
-          message: "This deploy request was already answered.",
-        });
+      const held = yield* store.getApproval(input.approvalId);
+      if (held === null) {
+        return yield* fail("unknown-approval", "This deploy request was already answered.");
       }
-      held.delete(input.approvalId);
-      return input.approve ? yield* runDeploy(entry.input) : null;
+      yield* requireAccount(held.approval.accountId);
+      if (!(yield* store.deleteApproval(input.approvalId))) {
+        return yield* fail("unknown-approval", "This deploy request was already answered.");
+      }
+      return input.approve ? yield* runDeploy(held.request) : null;
     }),
     status: Effect.fn("DeployService.status")(function* (input) {
-      const provider = yield* requireProvider(input.pluginId);
+      const { ref, provider } = yield* requireAccountProvider(input.accountId);
       const status = yield* provider
-        .deploymentStatus(input.deploymentId)
+        .deploymentStatus({ account: ref, deploymentId: input.deploymentId })
         .pipe(Effect.mapError(providerFailed()));
-      const index = records.findIndex(
-        (record) =>
-          record.pluginId === input.pluginId && record.deploymentId === input.deploymentId,
-      );
-      const existing = records[index];
-      if (existing !== undefined) {
-        records[index] = { ...existing, state: status.state, url: status.url ?? existing.url };
-      }
+      yield* store.updateRecord(input.accountId, input.deploymentId, status.state, status.url ?? null);
       return status;
     }),
     logs: (input) =>
       Stream.unwrap(
-        requireProvider(input.pluginId).pipe(
-          Effect.map((provider) =>
+        requireAccountProvider(input.accountId).pipe(
+          Effect.map(({ ref, provider }) =>
             provider
-              .logs(input.deploymentId, input.follow === undefined ? {} : { follow: input.follow })
+              .logs({
+                account: ref,
+                deploymentId: input.deploymentId,
+                ...(input.follow === undefined ? {} : { follow: input.follow }),
+              })
               .pipe(Stream.mapError(providerFailed())),
           ),
         ),
       ),
     rollback: Effect.fn("DeployService.rollback")(function* (input) {
-      const { mapping, provider } = yield* requireMapping(input.projectId);
+      const { mapping, ref, provider } = yield* requireMapping(input.projectId);
       return yield* provider
         .rollback({
-          projectId: mapping.providerProjectId,
+          account: ref,
+          target: { kind: mapping.targetKind, id: mapping.targetId },
           ...(input.deploymentId === undefined ? {} : { deploymentId: input.deploymentId }),
         })
         .pipe(Effect.mapError(providerFailed()));
     }),
     domains: Effect.fn("DeployService.domains")(function* (projectId) {
-      const { mapping, provider } = yield* requireMapping(projectId);
+      const { mapping, ref, provider } = yield* requireMapping(projectId);
       return yield* provider
-        .listDomains(mapping.providerProjectId)
+        .listDomains({ account: ref, target: { kind: mapping.targetKind, id: mapping.targetId } })
         .pipe(Effect.mapError(providerFailed()));
     }),
     setEnv: Effect.fn("DeployService.setEnv")(function* (input) {
-      const { mapping, provider } = yield* requireMapping(input.projectId);
+      const { mapping, ref, provider } = yield* requireMapping(input.projectId);
       yield* provider
-        .setEnv(mapping.providerProjectId, input.vars)
+        .setEnv({
+          account: ref,
+          target: { kind: mapping.targetKind, id: mapping.targetId },
+          environment: input.environment,
+          vars: input.vars,
+          secret: input.secret ?? false,
+          remove: input.remove ?? [],
+        })
         .pipe(Effect.mapError(providerFailed()));
     }),
   });
@@ -334,17 +492,33 @@ const make = Effect.gen(function* () {
 
 export const layer = Layer.effect(DeployService, make);
 
-/** The thread gate, read from orchestration's thread shells. */
-export const layerThreadModes = Layer.effect(
-  DeployThreadModes,
-  Effect.map(Orchestrator.OrchestratorV2, (orchestrator) =>
-    DeployThreadModes.of({
-      runtimeMode: Effect.fn("DeployThreadModes.runtimeMode")((threadId) =>
+/** Threads from orchestration's thread shells, project folders from the project service. */
+export const layerWorkspace = Layer.effect(
+  DeployWorkspace,
+  Effect.gen(function* () {
+    const orchestrator = yield* Orchestrator.OrchestratorV2;
+    const projects = yield* ProjectService;
+    return DeployWorkspace.of({
+      thread: Effect.fn("DeployWorkspace.thread")((threadId) =>
         orchestrator.getThreadShell(threadId).pipe(
-          Effect.map((shell) => shell?.runtimeMode ?? null),
+          Effect.map((shell) =>
+            shell === null
+              ? null
+              : {
+                  runtimeMode: shell.runtimeMode,
+                  projectId: shell.projectId,
+                  worktreePath: shell.worktreePath,
+                },
+          ),
           Effect.orElseSucceed(() => null),
         ),
       ),
-    }),
-  ),
+      projectRoot: Effect.fn("DeployWorkspace.projectRoot")((projectId) =>
+        projects.getById(projectId).pipe(
+          Effect.map(Option.match({ onNone: () => null, onSome: (project) => project.workspaceRoot })),
+          Effect.orElseSucceed(() => null),
+        ),
+      ),
+    });
+  }),
 );

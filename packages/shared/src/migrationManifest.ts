@@ -128,6 +128,7 @@ export const migrationManifest: Array<readonly [number, string]> = [
   // p0code shipped this one as 112 before syncing upstream's 112-118; see moveForkMigration112.
   [119, "DropUnusedProviderTurnIndexes"],
   [120, "PublicTunnels"],
+  [121, "DeployHost"],
 ];
 
 export const FIRST_V2_MIGRATION_ID = 55;

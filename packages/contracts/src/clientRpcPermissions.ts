@@ -57,6 +57,7 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
   // project's variables change what runs in production, as operating a thread does.
   [WS_METHODS.deployLink]: AuthProvidersManageScope,
   [WS_METHODS.deployUnlink]: AuthProvidersManageScope,
+  [WS_METHODS.deployUpdateAccount]: AuthProvidersManageScope,
   [WS_METHODS.deployMapProject]: AuthSettingsWriteScope,
   [WS_METHODS.deployStart]: AuthOrchestrationOperateScope,
   [WS_METHODS.deployDecideApproval]: AuthOrchestrationOperateScope,
