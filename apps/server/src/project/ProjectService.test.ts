@@ -659,6 +659,7 @@ it.layer(layerTest)("ProjectService", (it) => {
             name: "Personal",
             instanceOrder: [],
             excludedInstanceIds: [],
+            linkedEnvironmentIds: [],
             autoSwitchOnLimit: false,
           },
           {
@@ -666,6 +667,7 @@ it.layer(layerTest)("ProjectService", (it) => {
             name: "Work",
             instanceOrder: [],
             excludedInstanceIds: [],
+            linkedEnvironmentIds: [],
             autoSwitchOnLimit: false,
           },
         ],

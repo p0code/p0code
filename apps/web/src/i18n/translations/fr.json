@@ -7039,6 +7039,8 @@
   "f6087a2fedb6b9a2": "Lorsqu'un fil atteint une limite d'utilisation, poursuivez-le sur le compte suivant de ce profil plutôt que d'attendre la réinitialisation. Sans cela, le fil propose le changement.",
   "f8b98aa57cfc959a": "Aucun compte à ordonner",
   "92cebb084de47f06": "Ajoutez une deuxième instance d'un fournisseur, par exemple un autre compte Claude, pour donner un ordre à ce profil.",
+  "7f99aaba0befc867": "Machines",
+  "728a139a8745cb03": "Tant que ce profil est actif, seuls les projets et fils de ces machines s’affichent. Aucune sélection signifie toutes les machines.",
   "687a2ab72c58ec21": "D'abord le premier compte.",
   "1efee63e34c00bb7": "Comptes {provider}, premier choix d'abord",
   "8101bb8e3c7427bf": "Monter {name}",

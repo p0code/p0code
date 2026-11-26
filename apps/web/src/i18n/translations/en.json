@@ -7045,6 +7045,8 @@
   "f6087a2fedb6b9a2": "When a thread hits a usage limit, continue it on the next account in this profile instead of waiting for the reset. Without this, the thread offers the switch.",
   "f8b98aa57cfc959a": "No accounts to order",
   "92cebb084de47f06": "Add a second instance of a provider, such as another Claude account, to give this profile an order.",
+  "7f99aaba0befc867": "Machines",
+  "728a139a8745cb03": "Only these machines' projects and threads show while this profile is active. None selected means all machines.",
   "687a2ab72c58ec21": "First account first.",
   "1efee63e34c00bb7": "{provider} accounts, first choice first",
   "8101bb8e3c7427bf": "Move {name} up",

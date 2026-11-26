@@ -10,7 +10,24 @@ import { parseScopedProjectKey } from "@t3tools/client-runtime/environment";
 import { AVAILABLE_CONNECTION_STATE } from "@t3tools/client-runtime/connection";
 import { AsyncResult, Atom } from "effect/reactivity";
 import { environmentServerConfigsAtom, serverEnvironment } from "./server";
-import { isProjectInActiveAccountProfile } from "@t3tools/shared/accountProfiles";
+import {
+  isProjectInActiveAccountProfile,
+  profileHiddenEnvironmentIds,
+} from "@t3tools/shared/accountProfiles";
+import { primaryEnvironmentIdAtom } from "./primaryEnvironment";
+
+const sameKeys = (a: ReadonlySet<string>, b: ReadonlySet<string>) =>
+  a.size === b.size && [...a].every((key) => b.has(key));
+
+/** Machines the active account profile leaves out of lists and pickers. */
+export const profileHiddenEnvironmentIdsAtom = Atom.make((get) =>
+  profileHiddenEnvironmentIds(
+    new Map(
+      [...get(environmentServerConfigsAtom)].map(([id, config]) => [id, config.settings] as const),
+    ),
+    get(primaryEnvironmentIdAtom),
+  ),
+).pipe(Atom.withEquality(sameKeys), Atom.withLabel("web-profile-hidden-environment-ids"));
 
 export const environmentProjects = createEnvironmentProjectAtoms({
   catalogValueAtom: environmentCatalog.catalogValueAtom,
@@ -20,7 +37,12 @@ export const environmentProjects = createEnvironmentProjectAtoms({
 /** `environmentId:projectId` keys of projects their environment's active account profile hides. */
 export const profileHiddenProjectKeysAtom = Atom.make((get) => {
   const hidden = new Set<string>();
+  const hiddenEnvironments = get(profileHiddenEnvironmentIdsAtom);
   for (const project of get(environmentProjects.projectsAtom)) {
+    if (hiddenEnvironments.has(project.environmentId)) {
+      hidden.add(`${project.environmentId}:${project.id}`);
+      continue;
+    }
     const settings = get(serverEnvironment.settingsValueAtom(project.environmentId));
     if (!isProjectInActiveAccountProfile(settings, project.id, { isScratch: project.isScratch })) {
       hidden.add(`${project.environmentId}:${project.id}`);
@@ -29,10 +51,7 @@ export const profileHiddenProjectKeysAtom = Atom.make((get) => {
   return hidden;
 }).pipe(
   // Settings pushes rebuild the set; keep it stable while the hidden projects stay the same.
-  Atom.withEquality(
-    (a: ReadonlySet<string>, b: ReadonlySet<string>) =>
-      a.size === b.size && [...a].every((key) => b.has(key)),
-  ),
+  Atom.withEquality(sameKeys),
   Atom.withLabel("web-profile-hidden-project-keys"),
 );
 

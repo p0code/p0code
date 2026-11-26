@@ -75,6 +75,7 @@ const settings = (activeAccountProfileId: string | null) => ({
       name: "Personal",
       instanceOrder: [personal, second, company],
       excludedInstanceIds: [],
+      linkedEnvironmentIds: [],
       autoSwitchOnLimit: true,
     },
     {
@@ -82,6 +83,7 @@ const settings = (activeAccountProfileId: string | null) => ({
       name: "Work",
       instanceOrder: [company],
       excludedInstanceIds: [],
+      linkedEnvironmentIds: [],
       autoSwitchOnLimit: false,
     },
   ],

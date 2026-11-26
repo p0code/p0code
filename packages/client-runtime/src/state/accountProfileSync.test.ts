@@ -22,6 +22,7 @@ function settings(activeAccountProfileId: AccountProfileId | null): ServerSettin
       name: id,
       instanceOrder: [],
       excludedInstanceIds: [],
+      linkedEnvironmentIds: [],
       autoSwitchOnLimit: false,
     })),
     activeAccountProfileId,

@@ -95,7 +95,7 @@ import {
 } from "~/rightPanelStore";
 import { useAtomCommand } from "~/state/use-atom-command";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
-import { useProjects } from "~/state/entities";
+import { useProfileEnvironments, useProfileProjects, useProjects } from "~/state/entities";
 import { useEnvironments, useIssuesSupported } from "~/state/environments";
 import { issueEnvironment, useIssueList } from "~/state/issues";
 import { useDebouncedValue } from "~/state/queries";
@@ -194,8 +194,9 @@ export function IssuesPage() {
   const resolve = useMessages();
   const navigate = useNavigate({ from: "/issues" });
   const search = useSearch({ from: "/_chat/issues" });
-  const { environments } = useEnvironments();
-  const projects = useProjects();
+  // Machines and projects outside the active account profile are left out.
+  const environments = useProfileEnvironments(useEnvironments().environments);
+  const projects = useProfileProjects(useProjects());
   const issuesSupported = useIssuesSupported();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
 

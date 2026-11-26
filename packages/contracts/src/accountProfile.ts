@@ -1,7 +1,7 @@
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
-import { TrimmedNonEmptyString } from "./baseSchemas.ts";
+import { EnvironmentId, TrimmedNonEmptyString } from "./baseSchemas.ts";
 import { ModelSelection } from "./modelSelection.ts";
 import { ProviderInstanceId } from "./providerInstance.ts";
 import { RuntimeMode } from "./providerPolicy.ts";
@@ -26,6 +26,13 @@ export const AccountProfile = Schema.Struct({
   ),
   /** Provider accounts hidden/disallowed while this profile is active (e.g. keep work Claude/Codex accounts out of Personal). */
   excludedInstanceIds: Schema.Array(ProviderInstanceId).pipe(
+    Schema.withDecodingDefaultKey(Effect.succeed([])),
+  ),
+  /**
+   * Machines whose projects and threads show while this profile is active. Empty means every
+   * machine. Shared across environments by profile sync, unlike the account fields above.
+   */
+  linkedEnvironmentIds: Schema.Array(EnvironmentId).pipe(
     Schema.withDecodingDefaultKey(Effect.succeed([])),
   ),
   /** When a thread hits a usage limit, continue it on the next account instead of waiting for the reset. */
@@ -60,3 +67,22 @@ export const isProviderInstanceAllowedInActiveProfile = (
   if (!profile) return true;
   return !profile.excludedInstanceIds.includes(instanceId);
 };
+
+type ActiveProfileSettings = {
+  readonly accountProfiles?: ReadonlyArray<AccountProfile> | undefined;
+  readonly activeAccountProfileId?: AccountProfileId | null | undefined;
+};
+
+/** The machines the active profile limits the app to, or null when every machine shows. */
+export const environmentsAllowedInActiveProfile = (
+  settings: ActiveProfileSettings,
+): ReadonlyArray<EnvironmentId> | null => {
+  const linked = resolveActiveAccountProfile(settings)?.linkedEnvironmentIds;
+  return linked === undefined || linked.length === 0 ? null : linked;
+};
+
+/** Whether a machine's projects and threads show (and accept new threads) under the active profile. */
+export const isEnvironmentAllowedInActiveProfile = (
+  settings: ActiveProfileSettings,
+  environmentId: EnvironmentId,
+): boolean => environmentsAllowedInActiveProfile(settings)?.includes(environmentId) ?? true;

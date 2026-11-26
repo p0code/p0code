@@ -5,6 +5,8 @@ import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import {
   CommandId,
   type ChatAttachment,
+  EnvironmentId,
+  isEnvironmentAllowedInActiveProfile,
   type MessageId,
   type ModelSelection,
   type OrchestrationV2Actor,
@@ -57,6 +59,7 @@ import * as ProjectSetupScriptRunner from "../project/ProjectSetupScriptRunner.t
 import * as ManagedProjectFolders from "../project/ManagedProjectFolders.ts";
 import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import * as ServerSettings from "../serverSettings.ts";
+import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import * as TextGeneration from "../textGeneration/TextGeneration.ts";
 import * as CommandReceiptStore from "./CommandReceiptStore.ts";
 import * as EventSink from "./EventSink.ts";
@@ -178,6 +181,19 @@ export class ThreadLaunchError extends Schema.TaggedError<ThreadLaunchError>()(
   }
 }
 
+/** The active account profile leaves this machine out, so it takes no new threads from the UI, MCP or schedules. */
+export class ThreadLaunchEnvironmentNotInProfileError extends Schema.TaggedError<ThreadLaunchEnvironmentNotInProfileError>()(
+  "ThreadLaunchEnvironmentNotInProfileError",
+  {
+    projectId: ProjectId,
+    environmentId: EnvironmentId,
+  },
+) {
+  override get message(): string {
+    return `This machine is not allowed in the active profile. Link it to the profile in Settings to start threads here.`;
+  }
+}
+
 export class ThreadLaunchBaseRefError extends Schema.TaggedError<ThreadLaunchBaseRefError>()(
   "ThreadLaunchBaseRefError",
   {
@@ -240,7 +256,9 @@ export class ThreadLaunchService extends Context.Service<
       input: ThreadLaunchInput,
     ) => Effect.Effect<
       ThreadLaunchResult,
-      ThreadLaunchError | ThreadManagement.ThreadManagementProviderInstanceDisabledError
+      | ThreadLaunchError
+      | ThreadLaunchEnvironmentNotInProfileError
+      | ThreadManagement.ThreadManagementProviderInstanceDisabledError
     >;
     /** Check a new worktree's base ref and branch name before creation for early errors; launch otherwise accepts and reports these failures inside the thread. */
     readonly checkWorktreeBase: (
@@ -290,6 +308,8 @@ const make = Effect.gen(function* () {
   const setupScripts = yield* ProjectSetupScriptRunner.ProjectSetupScriptRunner;
   const providerRegistry = yield* ProviderRegistry.ProviderRegistry;
   const serverSettings = yield* ServerSettings.ServerSettingsService;
+  const environmentId = yield* (yield* ServerEnvironment.ServerEnvironmentIdentity)
+    .getEnvironmentId;
   const textGeneration = yield* TextGeneration.TextGeneration;
   const receipts = yield* CommandReceiptStore.CommandReceiptStoreV2;
   const ids = yield* IdAllocator.IdAllocatorV2;
@@ -1435,6 +1455,25 @@ const make = Effect.gen(function* () {
         commandId: input.commandId,
         instanceId: input.modelSelection.instanceId,
       });
+      // New threads only: retries, reused threads, a running thread's delegated tasks and the
+      // server's own launches (workflow steps, continuations) keep working after a profile switch.
+      // Unreadable settings leave launches alone, as the rest of launch does.
+      const profileSettings =
+        Option.isNone(launchReceipt) &&
+        input.reuseExistingThread !== true &&
+        input.delegatedFrom === undefined &&
+        input.creationSource !== "server"
+          ? yield* serverSettings.getSettings.pipe(Effect.option)
+          : Option.none();
+      if (
+        Option.isSome(profileSettings) &&
+        !isEnvironmentAllowedInActiveProfile(profileSettings.value, environmentId)
+      ) {
+        return yield* new ThreadLaunchEnvironmentNotInProfileError({
+          projectId: input.projectId,
+          environmentId,
+        });
+      }
       return yield* Effect.gen(function* () {
         // Recover ids from accepted launch receipts before allocating; retries have no client id and new ids collide with receipts.
         const reusableLaunchReceipt =

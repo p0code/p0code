@@ -7038,6 +7038,8 @@
   "f6087a2fedb6b9a2": "Wenn ein Thread ein Nutzungslimit erreicht, setze ihn auf dem nächsten Konto dieses Profils fort, statt auf den Reset zu warten. Ohne diese Option bietet der Thread den Wechsel an.",
   "f8b98aa57cfc959a": "Keine Konten zum Anordnen",
   "92cebb084de47f06": "Füge eine zweite Instanz eines Anbieters hinzu, etwa ein weiteres Claude-Konto, um diesem Profil eine Reihenfolge zu geben.",
+  "7f99aaba0befc867": "Rechner",
+  "728a139a8745cb03": "Solange dieses Profil aktiv ist, werden nur Projekte und Threads dieser Rechner angezeigt. Keine Auswahl bedeutet alle Rechner.",
   "687a2ab72c58ec21": "Erstes Konto zuerst.",
   "1efee63e34c00bb7": "{provider}-Konten, erste Wahl zuerst",
   "8101bb8e3c7427bf": "{name} nach oben verschieben",

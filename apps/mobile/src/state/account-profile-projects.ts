@@ -1,6 +1,10 @@
 import { useAtomValue } from "@effect/atom-react";
 import { arrayElementsEqual } from "@t3tools/client-runtime/state/entities";
-import type { EnvironmentId, ServerSettings } from "@t3tools/contracts";
+import {
+  type EnvironmentId,
+  isEnvironmentAllowedInActiveProfile,
+  type ServerSettings,
+} from "@t3tools/contracts";
 import {
   isProjectInActiveAccountProfile,
   isThreadInActiveAccountProfile,
@@ -11,7 +15,7 @@ import { environmentProjects } from "./projects";
 import { serverEnvironment } from "./server";
 import { environmentThreadShells, steadyNavigationThreadShellsAtom } from "./threads";
 
-/** Keeps the rows shown under their environment's active account profile. */
+/** Keeps the rows shown under their environment's active account profile, on its linked machines. */
 function inActiveProfileAtom<A extends { readonly environmentId: EnvironmentId }>(
   label: string,
   source: Atom.Atom<ReadonlyArray<A>>,
@@ -20,9 +24,13 @@ function inActiveProfileAtom<A extends { readonly environmentId: EnvironmentId }
   let previous: ReadonlyArray<A> = [];
   return Atom.make((get) => {
     const items = get(source);
-    const next = items.filter((item) =>
-      shown(get(serverEnvironment.settingsValueAtom(item.environmentId)), item),
-    );
+    const next = items.filter((item) => {
+      const settings = get(serverEnvironment.settingsValueAtom(item.environmentId));
+      return (
+        (settings === null || isEnvironmentAllowedInActiveProfile(settings, item.environmentId)) &&
+        shown(settings, item)
+      );
+    });
     if (next.length === items.length) return (previous = items);
     if (arrayElementsEqual(previous, next)) return previous;
     return (previous = next);
