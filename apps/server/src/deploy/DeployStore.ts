@@ -283,17 +283,14 @@ const make = Effect.gen(function* () {
         ),
       );
     }),
-    updateRecord: Effect.fn("DeployStore.updateRecord")(function* (
-      accountId,
-      deploymentId,
-      state,
-      url,
-    ) {
-      yield* stored(sql`
+    updateRecord: Effect.fn("DeployStore.updateRecord")(
+      function* (accountId, deploymentId, state, url) {
+        yield* stored(sql`
         UPDATE deploy_records SET state = ${state}, url = COALESCE(${url}, url)
         WHERE account_id = ${accountId} AND deployment_id = ${deploymentId}
       `);
-    }),
+      },
+    ),
     listRecords: stored(
       sql<RecordRow>`
         SELECT * FROM deploy_records ORDER BY created_at DESC, rowid DESC LIMIT ${MAX_LISTED_RECORDS}

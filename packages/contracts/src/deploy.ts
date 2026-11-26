@@ -5,11 +5,9 @@ import { IsoDateTime, ProjectId, ThreadId, TrimmedNonEmptyString } from "./baseS
 import { PluginId } from "./plugins.ts";
 
 /**
- * Deploys run through plugins that declare `deploy:provider`. The host owns the UI, the linked
- * accounts' names and profiles, the project mapping, history and approvals; the provider plugin
- * owns each account's credentials (kept in its own `PluginContext.storage`, keyed by the account
- * id the host hands it) and every call to the provider's API. Nothing here carries a stored
- * token: a token only travels inward, once, in `DeployLinkInput`.
+ * Deploys run through `deploy:provider` plugins. The host owns account names, profiles, mappings,
+ * history and approvals; each plugin keeps credentials in its own storage keyed by `accountId`.
+ * Tokens only travel inward once in `DeployLinkInput` and are never stored or returned here.
  */
 
 /** Where a deployment goes. */
@@ -154,7 +152,10 @@ export const DeployLogsRequest = Schema.Struct({
 });
 export type DeployLogsRequest = typeof DeployLogsRequest.Type;
 
-export const DeployTargetRequest = Schema.Struct({ account: DeployAccountRef, target: DeployTarget });
+export const DeployTargetRequest = Schema.Struct({
+  account: DeployAccountRef,
+  target: DeployTarget,
+});
 export type DeployTargetRequest = typeof DeployTargetRequest.Type;
 
 export const DeployRollbackInput = Schema.Struct({

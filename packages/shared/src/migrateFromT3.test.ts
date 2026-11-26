@@ -466,7 +466,10 @@ describe("migrateFromT3", () => {
 
   it("refuses a source with migrations newer than this build, leaving the destination untouched", async () => {
     const fixture = makeFixture();
-    seedMigrations(fixture.database, [...migrationManifest, [BUILD_MIGRATION_HEAD + 1, "NewerT3Migration"]]);
+    seedMigrations(fixture.database, [
+      ...migrationManifest,
+      [BUILD_MIGRATION_HEAD + 1, "NewerT3Migration"],
+    ]);
     fixture.database.close();
 
     write(NodePath.join(fixture.to, "userdata", "settings.json"), '{"mine":true}');

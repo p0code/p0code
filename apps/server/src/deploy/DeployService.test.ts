@@ -272,7 +272,9 @@ const layerWorkspace = Layer.succeed(
       return Effect.succeed(thread === undefined ? null : { ...thread, projectId: PROJECT });
     },
     projectRoot: (projectId) =>
-      Effect.succeed(projectId === PROJECT ? ROOT : projectId === OTHER_PROJECT ? "/work/two" : null),
+      Effect.succeed(
+        projectId === PROJECT ? ROOT : projectId === OTHER_PROJECT ? "/work/two" : null,
+      ),
   }),
 );
 
@@ -366,7 +368,10 @@ describe("DeployService", () => {
         assert.strictEqual(store?.get(`token:${business.accountId}`), TOKEN);
 
         store?.set(`expired:${business.accountId}`, "1");
-        const states = (yield* deploy.overview).accounts.map((account) => [account.id, account.status.state]);
+        const states = (yield* deploy.overview).accounts.map((account) => [
+          account.id,
+          account.status.state,
+        ]);
         assert.deepInclude(states, [business.accountId, "expired"]);
         assert.deepInclude(states, [personal.accountId, "linked"]);
 
@@ -387,7 +392,10 @@ describe("DeployService", () => {
         assert.notInclude(after, personal.accountId);
         assert.include(after, business.accountId);
         assert.isUndefined(store?.get(`token:${personal.accountId}`));
-        assert.strictEqual(yield* reasonOf(deploy.listProjects(personal.accountId)), "unknown-account");
+        assert.strictEqual(
+          yield* reasonOf(deploy.listProjects(personal.accountId)),
+          "unknown-account",
+        );
       }),
     );
 
@@ -414,7 +422,10 @@ describe("DeployService", () => {
         const linked = yield* linkAccount({ token: `${TOKEN}-noscope` });
         assert.strictEqual(linked.result._tag, "linked");
         if (linked.result._tag !== "linked") return;
-        assert.deepStrictEqual(linked.result.warnings?.map((w) => w.code), ["scope"]);
+        assert.deepStrictEqual(
+          linked.result.warnings?.map((w) => w.code),
+          ["scope"],
+        );
         const account = (yield* (yield* DeployService).overview).accounts.find(
           (a) => a.id === linked.accountId,
         );
@@ -430,9 +441,7 @@ describe("DeployService", () => {
         const { accountId } = yield* linkAccount({ label: "Mapper", teamId: "team_m" });
         const deploy = yield* DeployService;
         assert.include(
-          yield* failureOf(
-            deploy.start({ projectId: PROJECT, accountId, sourceKind: "git" }),
-          ),
+          yield* failureOf(deploy.start({ projectId: PROJECT, accountId, sourceKind: "git" })),
           "Choose a deploy target",
         );
         const projects = yield* deploy.listProjects(accountId);
@@ -476,9 +485,7 @@ describe("DeployService", () => {
         assert.isNull(started.deployment.threadId);
 
         const { deploymentId } = started.deployment;
-        console.log("DEBUG pre-status", yield* failureOf(deploy.listProjects(accountId)));
         const status = yield* deploy.status({ accountId, deploymentId });
-        console.log("DEBUG post-status", yield* failureOf(deploy.listProjects(accountId)));
         assert.strictEqual(status.state, "ready");
         const record = (yield* deploy.overview).deployments.find(
           (entry) => entry.deploymentId === deploymentId,
@@ -488,11 +495,6 @@ describe("DeployService", () => {
 
         const lines = yield* Stream.runCollect(deploy.logs({ accountId, deploymentId }));
         assert.deepStrictEqual(lines, [`building ${deploymentId}`, "done"]);
-        const dbg = yield* DeployStore.DeployStore;
-        const m = yield* dbg.getMapping(PROJECT);
-        console.log("DEBUG rb", yield* failureOf(deploy.rollback({ projectId: PROJECT })));
-        console.log("DEBUG dom", yield* failureOf(deploy.domains(PROJECT)));
-        console.log("DEBUG lp", yield* failureOf(deploy.listProjects(m!.accountId)));
         assert.deepStrictEqual(yield* deploy.rollback({ projectId: PROJECT }), {
           deploymentId: "dpl_previous",
         });
@@ -500,7 +502,9 @@ describe("DeployService", () => {
           account: { accountId, teamId: "team_m" },
           target: { kind: "worker", id: "api" },
         });
-        assert.deepStrictEqual(yield* deploy.domains(PROJECT), [{ name: "acme.app", verified: true }]);
+        assert.deepStrictEqual(yield* deploy.domains(PROJECT), [
+          { name: "acme.app", verified: true },
+        ]);
 
         // A deploy must name the account the project is mapped to.
         const other = yield* linkAccount({ label: "Other" });
@@ -537,7 +541,11 @@ describe("DeployService", () => {
           remove: ["OLD_KEY"],
         });
         yield* deploy.setEnv({ projectId: OTHER_PROJECT, environment: "preview", vars: {} });
-        assert.deepInclude(lastCall("setEnv"), { environment: "preview", secret: false, remove: [] });
+        assert.deepInclude(lastCall("setEnv"), {
+          environment: "preview",
+          secret: false,
+          remove: [],
+        });
       }),
     );
 
@@ -668,7 +676,11 @@ describe("DeployService", () => {
             deploy.link({ pluginId: "fake-deploy", token: `bad-${TOKEN}` }),
           );
           yield* deploy.mapProject({ projectId: PROJECT, mapping: target(linked.accountId) });
-          yield* deploy.start({ projectId: PROJECT, accountId: linked.accountId, sourceKind: "git" });
+          yield* deploy.start({
+            projectId: PROJECT,
+            accountId: linked.accountId,
+            sourceKind: "git",
+          });
           return { linked, rejected, overview: yield* deploy.overview };
         }).pipe(Effect.provide(capture));
         const { linked, rejected, overview } = yield* run;
@@ -701,7 +713,10 @@ describe("DeployService", () => {
         yield* deploy.updateAccount({ accountId: work.accountId, profileIds: [WORK] });
         const everywhere = yield* linkAccount({ label: "Shared" });
         yield* deploy.mapProject({ projectId: PROJECT, mapping: target(work.accountId) });
-        yield* deploy.mapProject({ projectId: OTHER_PROJECT, mapping: target(everywhere.accountId) });
+        yield* deploy.mapProject({
+          projectId: OTHER_PROJECT,
+          mapping: target(everywhere.accountId),
+        });
         yield* deploy.start({ projectId: PROJECT, accountId: work.accountId, sourceKind: "git" });
         const held = yield* deploy.start({
           projectId: PROJECT,
@@ -736,6 +751,8 @@ describe("DeployService", () => {
           deploy.listProjects(work.accountId),
           deploy.decideApproval({ approvalId: held.approval.id, approve: true }),
           deploy.status({ accountId: work.accountId, deploymentId: "dpl_1" }),
+          Stream.runCollect(deploy.logs({ accountId: work.accountId, deploymentId: "dpl_1" })),
+          deploy.domains(PROJECT),
           deploy.rollback({ projectId: PROJECT }),
           deploy.setEnv({ projectId: PROJECT, environment: "preview", vars: {} }),
           deploy.mapProject({ projectId: PROJECT, mapping: null }),
@@ -755,7 +772,9 @@ describe("DeployService", () => {
 
         yield* setActiveProfile(WORK);
         assert.strictEqual((yield* deploy.overview).approvals[0]?.id, held.approval.id);
-        assert.isNotNull(yield* deploy.decideApproval({ approvalId: held.approval.id, approve: true }));
+        assert.isNotNull(
+          yield* deploy.decideApproval({ approvalId: held.approval.id, approve: true }),
+        );
         yield* setActiveProfile(null);
       }),
     );
@@ -768,6 +787,15 @@ describe("DeployService", () => {
         yield* deploy.mapProject({ projectId: OTHER_PROJECT, mapping: target(accountId) });
         for (let index = 0; index < DeployStore.MAX_RECORDS_PER_PROJECT + 5; index++) {
           yield* deploy.start({ projectId: OTHER_PROJECT, accountId, sourceKind: "git" });
+        }
+        for (let index = 0; index < DeployStore.MAX_APPROVALS_PER_PROJECT + 3; index++) {
+          const extra = yield* deploy.start({
+            projectId: OTHER_PROJECT,
+            accountId,
+            sourceKind: "git",
+            threadId: ThreadId.make("thread-persist"),
+          });
+          assert.strictEqual(extra._tag, "approval-required");
         }
         const held = yield* deploy.start({
           projectId: OTHER_PROJECT,
@@ -786,7 +814,10 @@ describe("DeployService", () => {
         assert.strictEqual(kept.length, DeployStore.MAX_RECORDS_PER_PROJECT);
         assert.isTrue(kept.every((record) => record.accountId === accountId));
         assert.strictEqual(overview.mappings[OTHER_PROJECT]?.accountId, accountId);
-        assert.strictEqual(overview.approvals.length, 1);
+        assert.strictEqual(
+          overview.approvals.filter((entry) => entry.projectId === OTHER_PROJECT).length,
+          DeployStore.MAX_APPROVALS_PER_PROJECT,
+        );
         if (held._tag !== "approval-required") return;
         const approved = yield* restarted.decideApproval({
           approvalId: held.approval.id,
