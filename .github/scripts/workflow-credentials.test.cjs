@@ -12,7 +12,6 @@ const { tmpdir } = require("node:os");
 const { join } = require("node:path");
 const { test } = require("node:test");
 
-const { setMobileVersion } = require("./set-mobile-version.cjs");
 const { RELEASE_PACKAGE_FILES, setReleaseVersion } = require("./set-release-version.cjs");
 
 const read = (path) => readFileSync(join(__dirname, "..", path), "utf8");
@@ -51,8 +50,6 @@ test("the web preview gives the Vercel token to the deploy step only, after an i
 const mobileWorkflows = [
   "workflows/mobile-eas-preview.yml",
   "workflows/mobile-eas-preview-build.yml",
-  "workflows/mobile-eas-production.yml",
-  "workflows/mobile-eas-production-build.yml",
 ];
 
 for (const path of mobileWorkflows) {
@@ -69,10 +66,7 @@ for (const path of mobileWorkflows) {
 }
 
 test("the build record is pushed by the record job of each build workflow", () => {
-  for (const path of [
-    "workflows/mobile-eas-preview-build.yml",
-    "workflows/mobile-eas-production-build.yml",
-  ]) {
+  for (const path of ["workflows/mobile-eas-preview-build.yml"]) {
     const { record, ...builds } = jobs(path);
     assert.match(record, /uses: \.\/\.github\/actions\/record-build-tag/);
     assert.match(record, /^ {6}contents: write/m);
@@ -175,20 +169,6 @@ test("the build record tags the named commit only when it is on the workflow's r
     const refused = recordTag(commitOf);
     assert.deepEqual([refused.status, refused.tagged], [1, ""]);
   }
-});
-
-test("the store build record job runs the workflow's own action and passes the built commit as data", () => {
-  const { record } = jobs("workflows/mobile-eas-production-build.yml");
-  assert.doesNotMatch(record, /^ +ref: /m);
-  assert.match(record, /^ {10}commit: \$\{\{ inputs\.sha \}\}$/m);
-});
-
-test("the version override token covers this repository only", () => {
-  const { version, production } = jobs("workflows/mobile-eas-production.yml");
-  const mint = steps(version).find((step) => step.includes("create-github-app-token"));
-  assert.doesNotMatch(mint, /^\s+(?:owner|repositories):/m);
-  assert.match(mint, /^\s+permission-contents: write$/m);
-  assert.doesNotMatch(production, /RELEASE_APP|create-github-app-token/);
 });
 
 test("the release version bump is pushed by a job that installs nothing, with a token for this repository only", () => {
@@ -370,21 +350,6 @@ test("a fork preview request builds nothing for a commit, PR, or repository it m
     assert.deepEqual([refused.outputs, refused.comments], [{}, []]);
     assert.match(refused.failed, message);
   }
-});
-
-test("a version override rewrites only the app version", () => {
-  const config = read("../apps/mobile/app.config.ts");
-  const next = setMobileVersion(config, "9.8.7");
-  assert.match(next, /^ {2}version: repoEnv\.T3CODE_MOBILE_VERSION \?\? "9\.8\.7",$/m);
-  assert.equal(setMobileVersion(next, "9.8.7"), next);
-  assert.deepEqual(
-    next.split("\n").filter((line, index) => line !== config.split("\n")[index]).length,
-    1,
-  );
-  for (const version of ["", "1", "1.2.3.4", "1.2-beta", '1.2", extra: "x']) {
-    assert.throws(() => setMobileVersion(config, version), /two or three dot-separated integers/);
-  }
-  assert.throws(() => setMobileVersion("export default {};", "1.2.3"), /Could not update/);
 });
 
 test("a release version bump rewrites only the version of each release manifest", () => {
