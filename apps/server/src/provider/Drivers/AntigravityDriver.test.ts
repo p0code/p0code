@@ -103,6 +103,12 @@ const makeHarness = Effect.fn("makeAntigravityDriverHarness")(function* (
       executablePath,
       [
         "#!/bin/sh",
+        // `-p "/usage"` answers like the real CLI; without this the ACP mock would wait on stdin.
+        'if [ "$1" = "-p" ] && [ "$2" = "/usage" ]; then',
+        "  printf '%s\\n' 'Gemini Models\tWeekly Limit Remaining\t100%\t2026-12-03T14:49:44Z'",
+        "  printf '%s\\n' 'Claude and GPT models\tFive Hour Limit Remaining\t100%\t1970-01-01T00:00:00Z'",
+        "  exit 0",
+        "fi",
         ...(options.loginRequired
           ? [`printf '%s\\n' ${shellQuote(ANTIGRAVITY_AUTH_STDOUT_PREFIX + authorizationUrl)}`]
           : []),
@@ -139,6 +145,11 @@ const makeHarness = Effect.fn("makeAntigravityDriverHarness")(function* (
   } = { selected: first, failResolution: false, beforeAcquire: Effect.void };
   const acquisitions: Array<{ binaryPath: string | undefined; path: string | undefined }> = [];
   const releases: Array<string | null> = [];
+  const usageReads: Array<{
+    command: string;
+    args: ReadonlyArray<string>;
+    handle: ChildProcessSpawner.ChildProcessHandle;
+  }> = [];
   const launches: Array<{
     command: string;
     args: ReadonlyArray<string>;
@@ -202,9 +213,15 @@ const makeHarness = Effect.fn("makeAntigravityDriverHarness")(function* (
         const value = environment[name];
         return Redacted.isRedacted(value) ? Redacted.value(value) : value;
       };
+      const args = command.args.map(String);
+      // The quota reader asks the same executable for `/usage`; that is not an agent launch.
+      if (args[0] === "-p") {
+        usageReads.push({ command: command.command, args, handle });
+        return handle;
+      }
       launches.push({
         command: command.command,
-        args: command.args.map(String),
+        args,
         cwd: command.options.cwd,
         extendEnv: command.options.extendEnv,
         environment: Object.fromEntries(Object.keys(environment).map((name) => [name, env(name)])),
@@ -274,6 +291,7 @@ const makeHarness = Effect.fn("makeAntigravityDriverHarness")(function* (
     acquisitions,
     releases,
     launches,
+    usageReads,
     readRequests,
     assertClosed,
   };

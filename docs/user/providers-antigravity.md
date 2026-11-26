@@ -154,6 +154,11 @@ T3 does not support Antigravity goal status, pause, resume, or clear commands.
 
 ## Check access and troubleshoot
 
+Open **Usage > Limits** to see the remaining Gemini and shared Claude/GPT allowances
+for Google sign-ins. p0code reads them from the Antigravity CLI's `/usage` prompt,
+which reports the same five-hour and weekly limits and reset times as the agent; a
+reading is kept for five minutes. Limits include usage outside p0code.
+
 A server restart keeps your Google sign-in. The provider shows the saved account
 until a session, a refresh, or a sign-out reports something new.
 
