@@ -6029,8 +6029,13 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       return yield* reject(`cannot move to missing project ${command.projectId}.`);
     }
     // The thread lands where the command says, or stays in its folder when it names none.
+    // A folder that is the project root is not a worktree, so it clears the path.
     const worktreePath =
-      command.worktreePath === undefined ? thread.worktreePath : command.worktreePath;
+      command.worktreePath === undefined
+        ? thread.worktreePath === target.value.workspaceRoot
+          ? null
+          : thread.worktreePath
+        : command.worktreePath;
     const branch = command.branch === undefined ? thread.branch : command.branch;
     const cwd = worktreePath ?? target.value.workspaceRoot;
     const relative = path.relative(target.value.workspaceRoot, cwd);
