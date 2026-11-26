@@ -31,6 +31,13 @@ const write = (file: string, contents: string) => {
   NodeFS.writeFileSync(file, contents);
 };
 
+/** Shaped like the `cloud-link-ed25519-key-pair.bin` both apps store; never used as a real key. */
+const TEST_KEY_PAIR = JSON.stringify({
+  privateKey:
+    "-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIExample\n-----END PRIVATE KEY-----\n",
+  publicKey: "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAExample\n-----END PUBLIC KEY-----\n",
+});
+
 const snapshotTree = (root: string): Record<string, string> => {
   const result: Record<string, string> = {};
   const walk = (directory: string) => {
@@ -300,6 +307,80 @@ describe("migrateFromT3", () => {
     );
     assert.isTrue(NodeFS.existsSync(NodePath.join(userdata, "secrets", "server-signing-key.bin")));
     assert.isTrue(NodeFS.existsSync(NodePath.join(userdata, "secrets", "peer-link-1.bin")));
+  });
+
+  it("carries the environment link key into the bridge when the id is kept", async () => {
+    const fixture = makeFixture();
+    fixture.database.close();
+    const sourceKey = NodePath.join(fixture.userdata, "secrets", "cloud-link-ed25519-key-pair.bin");
+    write(sourceKey, TEST_KEY_PAIR);
+
+    const report = await migrateFromT3({
+      from: fixture.from,
+      to: fixture.to,
+      keepEnvironmentId: true,
+    });
+    assert.equal(report.environmentId, "kept");
+    const bridgeKey = NodePath.join(
+      fixture.to,
+      "userdata",
+      "secrets",
+      "plugin-t3-connect-bridge-signing-key.bin",
+    );
+    assert.equal(NodeFS.readFileSync(bridgeKey, "utf8"), TEST_KEY_PAIR);
+    assert.equal(NodeFS.statSync(bridgeKey).mode & 0o777, 0o600);
+    assert.isTrue(
+      report.copied.some((entry) =>
+        entry.detail.includes("plugin-t3-connect-bridge-signing-key.bin"),
+      ),
+    );
+    // Copied, never moved: the source home keeps its key.
+    assert.equal(NodeFS.readFileSync(sourceKey, "utf8"), TEST_KEY_PAIR);
+    assert.isFalse(
+      NodeFS.existsSync(
+        NodePath.join(fixture.to, "userdata", "secrets", "cloud-link-ed25519-key-pair.bin"),
+      ),
+    );
+  });
+
+  it("leaves the environment link key behind when the id is regenerated", async () => {
+    const fixture = makeFixture();
+    fixture.database.close();
+    const sourceKey = NodePath.join(fixture.userdata, "secrets", "cloud-link-ed25519-key-pair.bin");
+    write(sourceKey, TEST_KEY_PAIR);
+
+    const report = await migrateFromT3({ from: fixture.from, to: fixture.to });
+    assert.equal(report.environmentId, "new");
+    const secrets = NodePath.join(fixture.to, "userdata", "secrets");
+    assert.isFalse(
+      NodeFS.existsSync(NodePath.join(secrets, "plugin-t3-connect-bridge-signing-key.bin")),
+    );
+    assert.isFalse(NodeFS.existsSync(NodePath.join(secrets, "cloud-link-ed25519-key-pair.bin")));
+    assert.equal(NodeFS.readFileSync(sourceKey, "utf8"), TEST_KEY_PAIR);
+  });
+
+  it("seeds the bridge's link key into the keychain when the id is kept", async () => {
+    const fixture = makeFixture();
+    fixture.database.close();
+    const sourceKey = NodePath.join(fixture.userdata, "secrets", "cloud-link-ed25519-key-pair.bin");
+    write(sourceKey, TEST_KEY_PAIR);
+    const keychain = memoryKeychainStore();
+
+    await migrateFromT3({
+      from: fixture.from,
+      to: fixture.to,
+      keepEnvironmentId: true,
+      keychain,
+    });
+    const secretsDir = NodePath.join(fixture.to, "userdata", "secrets");
+    const secrets = keychainSecrets(keychain, await credentialNamespace(secretsDir));
+    assert.equal(
+      new TextDecoder().decode(await secrets.get("plugin-t3-connect-bridge-signing-key")),
+      TEST_KEY_PAIR,
+    );
+    assert.isFalse(
+      NodeFS.existsSync(NodePath.join(secretsDir, "plugin-t3-connect-bridge-signing-key.bin")),
+    );
   });
 
   it("writes nothing on a dry run", async () => {
