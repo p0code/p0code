@@ -181,8 +181,7 @@ Mobile keeps its manual environment selection.
 
 ### Tailscale HTTPS
 
-Join both devices to the same tailnet. In the desktop app, enable **Tailscale
-HTTPS** in **Settings → Sharing & access**. Turn it off there to remove that route.
+Join both devices to a tailnet with [MagicDNS and HTTPS certificates](https://tailscale.com/docs/how-to/set-up-https-certificates) enabled (on Linux, grant [operator permission](https://tailscale.com/docs/reference/troubleshooting/linux/linux-operator-permission)).
 
 Your tailnet needs MagicDNS and HTTPS certificates enabled; see
 [Tailscale's HTTPS setup](https://tailscale.com/docs/how-to/set-up-https-certificates).
@@ -191,7 +190,7 @@ On Linux, p0code also needs permission to manage Tailscale; see
 for non-root users. If any of these is missing, p0code still starts but can't
 add the HTTPS route.
 
-To start a command-line server with Tailscale HTTPS:
+### Balance new threads across machines
 
 ```bash
 p0 serve --tailscale-serve
@@ -270,11 +269,7 @@ For Antigravity's Google callback on a remote host, see
 
 ## Browser on a remote environment
 
-Browser tabs belong to the environment, so you and your agents see the same
-tabs from any device. The desktop app shows its own environment's tabs
-directly. Every other device, and the desktop app for other environments,
-streams them from the host. Agents keep using them while no device is
-connected, and `localhost` addresses reach servers on the host.
+Browser tabs belong to the host environment so you and your agents share them from any device.
 
 A tab you open yourself in the desktop app for another environment loads on
 your computer instead, so the element picker, screenshots, and annotations work
@@ -356,11 +351,7 @@ the background service, and restart it. Script preview URLs still appear.
 
 ### Browser host setup
 
-macOS, Windows, and Linux desktops run the browser as is. Some Linux hosts need
-one-time setup: Ubuntu 23.10 and later block the sandbox the browser runs in,
-and minimal images and containers lack libraries it loads. When that happens,
-the server says so at startup, and browser tabs and HTML previews show the
-command to run on the host:
+The first server browser tab downloads ~120 MB headless Chromium (shared with [HTML renders](./html-renders.md)). On Ubuntu 23.10+ or minimal Linux containers, run the one-time setup command on the host:
 
 ```sh
 sudo p0 browser setup
@@ -400,9 +391,7 @@ threads on an environment through its MCP server. See
 
 ## Link another environment
 
-Link two machines, such as your laptop and a VPS, and agents on one can work on
-the other: launch, message, wait on and stop its threads, answer their
-questions, and manage its queues, projects and scheduled tasks.
+Link two T3 Code machines (beta) so agents on one can launch, message, delegate to, and manage threads on the other.
 
 Linked environments is a beta. Turn it on for both machines in **Settings →
 Labs**; on mobile, **Settings → Labs** lists each connected machine. On a
@@ -555,10 +544,9 @@ When the app connects to more than one environment, choose one at the top of the
 page. A desktop app with **Local environment** off can manage a background
 service on the same machine this way, including its relay link.
 
-A session with an open connection stays listed after its access credential
-expires.
+## Desktop app as a remote only
 
-To choose a token's permissions, pass `--scope` once for each scope you want:
+Switch off **Settings → Environments → Local environment** in the desktop app to run with no local server, WSL backend, or incoming connections while continuing to drive remote hosts (if a local background service uses the same T3 home, **Open in** still works locally).
 
 ```sh
 p0 pair --scope orchestration:read --scope relay:read

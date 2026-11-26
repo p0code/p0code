@@ -10,13 +10,15 @@ launch p0code and configure providers afterwards.
 
 ## Command line
 
+Install the `t3` command to `~/.local/bin`:
+
 ```bash
+# macOS / Linux
 curl -fsSL https://t3.codes/install.sh | sh
 ```
 
-On Windows, in PowerShell:
-
 ```powershell
+# Windows (PowerShell)
 irm https://t3.codes/install.ps1 | iex
 ```
 
@@ -71,8 +73,7 @@ update it with `git pull` and a rebuild.
 
 ## Desktop app
 
-Download a release from [GitHub Releases](https://github.com/pingdotgg/t3code/releases),
-or use a package manager:
+Download from [GitHub Releases](https://github.com/pingdotgg/t3code/releases) or install via a package manager:
 
 | Platform           | Install                                                      |
 | ------------------ | ------------------------------------------------------------ |
@@ -175,25 +176,12 @@ Install p0code from the
 The phone connects to a server on another machine. Follow
 [remote access](./remote-access.md) to connect using a pairing URL over a direct connection or self-hosted relay.
 
-Store links and QR codes are also available in **Settings → About → Mobile app**
-on web and desktop. The store apps work with both stable and Nightly servers. Test builds are optional:
-
-- **iPhone and iPad:** TestFlight is invite-only.
-- **Android:** download an APK from the
-  [Android beta releases](https://github.com/pingdotgg/t3code/releases?q=android-beta-).
-
-If the app crashes during launch, open Settings → Diagnostics on the next launch
-that succeeds. It lists startup crashes from the last 7 days with the error and
-component stack that store crash reports leave out. Copy the report and paste it
-into a GitHub issue. Error messages can quote values from the app, so read it over
-before sharing.
+- Store builds work with both Stable and Nightly servers. Optional Android beta APKs are under [Android beta releases](https://github.com/pingdotgg/t3code/releases?q=android-beta-).
+- If the mobile app crashes on launch, open **Settings → Diagnostics** on the next launch to copy recent startup crash reports.
 
 ## Providers
 
-Open **Settings → Providers** in the web or desktop app, select the environment,
-and enable the provider you want. Installation, login, and configuration belong
-to that environment's machine, even when you connect from a phone or another
-computer.
+Open **Settings → Providers** (web or desktop), select the environment, and enable the providers you use. Installation and sign-in always happen on the **environment's machine**.
 
 | Provider            | Install and authenticate                                                                                                                                  |
 | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -260,41 +248,25 @@ Claude readiness checks 60 seconds:
 T3CODE_CODEX_PROBE_TIMEOUT_MS=60000 T3CODE_CLAUDE_PROBE_TIMEOUT_MS=60000 p0 serve
 ```
 
-For a remote environment, set these on the machine running the T3 server.
-Keep them in your launcher or service configuration to retain them across
-updates, then restart the server. For systemd, add
-`Environment=T3CODE_CODEX_PROBE_TIMEOUT_MS=60000` under `[Service]` in a service
-override, reload systemd, and restart the service. Provider instances can also
-set their own overrides in Settings → Providers.
-
-Each variable extends that provider's readiness-probe deadlines; a phase whose
-default is already longer keeps its default. Providers with several phases can
-take longer than one deadline in total. Values must be whole milliseconds no
-greater than 2147483647; unset or invalid values keep the defaults.
-
-| Provider            | Environment variable                   |
-| ------------------- | -------------------------------------- |
-| Codex               | `T3CODE_CODEX_PROBE_TIMEOUT_MS`        |
-| Claude              | `T3CODE_CLAUDE_PROBE_TIMEOUT_MS`       |
-| Cursor              | `T3CODE_CURSOR_PROBE_TIMEOUT_MS`       |
-| Antigravity         | `T3CODE_ANTIGRAVITY_PROBE_TIMEOUT_MS`  |
-| Grok                | `T3CODE_GROK_PROBE_TIMEOUT_MS`         |
-| Kiro                | `T3CODE_KIRO_PROBE_TIMEOUT_MS`         |
-| fx                  | `T3CODE_FX_PROBE_TIMEOUT_MS`           |
-| Pi                  | `T3CODE_PI_PROBE_TIMEOUT_MS`           |
-| Muse Code           | `T3CODE_MUSE_PROBE_TIMEOUT_MS`         |
-| OpenCode            | `T3CODE_OPENCODE_PROBE_TIMEOUT_MS`     |
-| ACP Registry agents | `T3CODE_ACP_REGISTRY_PROBE_TIMEOUT_MS` |
-
-Longer deadlines also take longer to report a stalled check. These overrides
-cover readiness and discovery, including OpenCode server startup. Usage and
-config enrichment retain their own shorter limits. Turn execution, package
-installation, update checks, and shutdown limits keep their existing behavior.
+| Provider     | Environment variable                   |
+| ------------ | -------------------------------------- |
+| Codex        | `T3CODE_CODEX_PROBE_TIMEOUT_MS`        |
+| Claude       | `T3CODE_CLAUDE_PROBE_TIMEOUT_MS`       |
+| Cursor       | `T3CODE_CURSOR_PROBE_TIMEOUT_MS`       |
+| Antigravity  | `T3CODE_ANTIGRAVITY_PROBE_TIMEOUT_MS`  |
+| Grok         | `T3CODE_GROK_PROBE_TIMEOUT_MS`         |
+| Kiro         | `T3CODE_KIRO_PROBE_TIMEOUT_MS`         |
+| fx           | `T3CODE_FX_PROBE_TIMEOUT_MS`           |
+| Pi           | `T3CODE_PI_PROBE_TIMEOUT_MS`           |
+| Muse Code    | `T3CODE_MUSE_PROBE_TIMEOUT_MS`         |
+| OpenCode     | `T3CODE_OPENCODE_PROBE_TIMEOUT_MS`     |
+| ACP Registry | `T3CODE_ACP_REGISTRY_PROBE_TIMEOUT_MS` |
 
 ## Next steps
 
+- [User guide index](./README.md): overview of how T3 Code works.
 - [Working with threads](./thread-sidebar.md): start tasks and organize parallel work.
-- [Permission modes](./permission-modes.md): choose when agents ask before acting.
+- [Permission modes](./permission-modes.md): control when agents ask before acting.
 - [Remote access](./remote-access.md): connect from another device.
 - [Running in the background](./background-service.md): keep a host available.
 - [Updating p0code](./updating.md): update the app and connected servers.

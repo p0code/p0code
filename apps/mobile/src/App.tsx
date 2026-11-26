@@ -109,6 +109,8 @@ import { NativeLayoutMetricsProvider } from "./native/native-layout-metrics";
 import { SubscriptionUsageCoordinator } from "./widgets/SubscriptionUsageCoordinator";
 import { installSubscriptionUsageRefresh } from "./widgets/useSubscriptionUsage";
 
+import { perfProbe } from "./features/development/perf-probe-hooks";
+
 import "../global.css";
 
 if (process.env.EXPO_PUBLIC_SHOWCASE === "1") {
@@ -299,7 +301,12 @@ function AppContent() {
       <SplashScreenCoordinator />
       <QuickActionsLanguage />
       <SubscriptionUsageCoordinator />
-      <GestureHandlerRootView className="flex-1">
+      <GestureHandlerRootView
+        className="flex-1"
+        onTouchStartCapture={perfProbe?.touchStart}
+        onTouchEndCapture={perfProbe?.touchEnd}
+        onTouchCancelCapture={perfProbe?.touchEnd}
+      >
         <KeyboardProvider statusBarTranslucent>
           <SafeAreaProvider>
             <StatusBar barStyle={themeAppearance === "dark" ? "light-content" : "dark-content"} />

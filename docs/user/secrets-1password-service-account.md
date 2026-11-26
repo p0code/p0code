@@ -25,21 +25,16 @@ For the basics, see [Secrets](./secrets.md). To use a self-hosted Connect server
 6. In **Settings → Secrets**, select **Add provider**. The account is required, but `op` ignores it while
    the token is set, so enter any sign-in address such as `my.1password.com`.
 
-Then use references as usual, for example `op://Automation/provider-token/credential`.
+## Verify
 
-## Check that it works
-
-On the server's machine, set `OP_SERVICE_ACCOUNT_TOKEN` in your shell to the same token the server uses,
-then read a secret with a clean environment so only the token can sign in:
+On the server machine, test with a clean environment:
 
 ```bash
 env -i PATH="$PATH" HOME="$(mktemp -d)" OP_SERVICE_ACCOUNT_TOKEN="$OP_SERVICE_ACCOUNT_TOKEN" \
   op read --no-newline "op://Automation/provider-token/credential" >/dev/null && echo "Secret read"
 ```
 
-If it prints `Secret read`, the token can read the secret. This checks your shell, not the server's own
-environment. To confirm the server can read it, use the reference in a setting and then use the feature
-that needs it. If the server cannot read the secret, that feature shows an error naming the secret provider.
+## Notes
 
 ## Things to know
 

@@ -20,26 +20,23 @@ provider instance's environment overrides to use ACP v1.
 
 ## Add an agent
 
-1. Open **Settings → Providers**.
-2. Select **Add provider**, then **Show more**.
-3. Search the ACP Registry for the agent and select **Add** on its result.
-4. Confirm the name and instance ID, then complete the agent's sign-in step.
+- **From the ACP Registry**: Open **Settings → Providers → Add provider → Show more**, search for an agent compatible with your server, click **Add**, and complete sign-in. Registry agents are third-party code—review an agent's source and license before adding it.
+- **Local ACP command**: Under **Show more → Local ACP command**, enter the executable path/name, literal arguments (one per row—no shell expansion; e.g., `dsh` with `--profile` and `acp`), and a display name.
 
-Search only shows agents that can run on the connected server. Registry agents are third-party
-code; review an agent's source and license before adding it.
+## Installation and updates
 
-## Add a local command
+Registry agents run on your T3 Code server (including when accessed remotely) and install under `<t3-home>/tools/<agent-id>/<version>/` with SHA-256 verification when provided. T3 Code checks for Registry updates in the background and installs them on the next provider refresh. Set **Executable override** to use your own local binary instead.
 
-In **Settings → Providers → Add provider**, select **Show more**, then **Local ACP command**. Enter the executable
-name or path on the selected environment, add one literal argument per row, and choose a display
-name. For DeepSeek Harness, use `dsh` with arguments `--profile` and `acp`.
+## Sign in
 
 Local commands require no registry entry or download. Environment overrides apply to the command;
 credentials and skills remain managed by the installed agent or its wrapper. Models and reasoning
 options come from ACP, including model IDs that contain JSON. p0code launches the executable directly
 without expanding shell expressions.
 
-## Where agents run
+- **Browser sign-in**: Opens the auth URL on your device while the agent runs on the server.
+- **Terminal sign-in**: Runs in an in-app terminal on the server (or uses a response field on mobile).
+- **API keys**: Add required variables in the instance's **Environment** settings.
 
 Registry agents always run on the machine that hosts your p0code server. That stays true when you
 connect through `app.t3.codes` or a relay.
@@ -111,10 +108,7 @@ instead of disappearing.
 
 ## Permissions and terminals
 
-Registry agents read files, edit, and run commands themselves, under their own sandbox and
-approval rules. They start in their own default mode, and their mode picker in the model options
-menu switches it. How far an agent is confined depends on that mode and the agent's own settings,
-so use its sandbox and permission controls when that matters.
+Registry agents enforce their own sandbox and approval rules (switchable via their mode picker in model options). When an agent asks for approval, T3 Code answers according to the thread's [permission mode](./permission-modes.md):
 
 When a registry agent asks for approval, p0code answers by the thread's
 [permission mode](./permission-modes.md): **Supervised** shows the request in the conversation,

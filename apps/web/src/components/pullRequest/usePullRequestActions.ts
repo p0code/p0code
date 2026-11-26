@@ -16,6 +16,7 @@ import type {
 } from "@t3tools/contracts";
 import { msg } from "gt-react";
 import { useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import {
   sourceControlClients,
   type ChangeRequestTerminology,
@@ -34,6 +35,7 @@ import { usePrimaryEnvironmentId } from "~/state/environments";
 import { type DraftId, useComposerDraftStore } from "~/composerDraftStore";
 import { useNewThreadHandler } from "~/hooks/useHandleNewThread";
 import { usePreparePullRequestThreadAction } from "~/state/sourceControlActions";
+import { trackPendingDraftCheckout } from "~/lib/draftWorkspaceDefaults";
 import type { ReviewCommentContext } from "~/reviewCommentContext";
 import { pullRequestEnvironment } from "~/state/pullRequests";
 
@@ -336,6 +338,39 @@ export function writeHandoffToComposer(
   );
   store.setPrompt(target, next.prompt);
   store.setReviewComments(target, next.reviewComments);
+}
+
+type PreparedCheckout = Awaited<
+  ReturnType<ReturnType<typeof usePreparePullRequestThreadAction>["run"]>
+>;
+
+/**
+ * Moves the draft opened for a checkout onto it once it is ready, keeping whatever the user
+ * typed meanwhile. A send from that draft waits for this so it starts in the checkout.
+ */
+export function prepareDraftCheckout(
+  draftId: DraftId,
+  checkout: Promise<PreparedCheckout>,
+  isCancelled: () => boolean = () => false,
+): Promise<PreparedCheckout> {
+  const pointed = checkout.then((prepared) => {
+    if (isCancelled() || prepared._tag === "Failure") return prepared;
+    const { branch, worktreePath, pullRequest } = prepared.value;
+    // A waiting send resumes right after this and must render the checkout first.
+    flushSync(() =>
+      useComposerDraftStore.getState().setDraftThreadContext(draftId, {
+        branch,
+        worktreePath,
+        envMode: worktreePath === null ? "local" : "worktree",
+        workspaceExplicit: true,
+        // The draft carries the pull request until its first send makes it a thread, which links it.
+        checkoutPullRequest: { url: pullRequest.url, branch },
+      }),
+    );
+    return prepared;
+  });
+  trackPendingDraftCheckout(draftId, pointed);
+  return pointed;
 }
 
 export type PullRequestHandoffDetail = Pick<

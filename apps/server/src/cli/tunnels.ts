@@ -62,6 +62,17 @@ const withPublicTunnels = Effect.fn("tunnels.withPublicTunnels")(function* <A, E
     ),
     EnvironmentAuth.layerRuntime,
   ).pipe(
+    Layer.provideMerge(
+      ServerSettings.layer.pipe(
+        Layer.provideMerge(
+          Layer.mergeAll(
+            ServerSecretStore.layer,
+            SqlitePersistence.layerCliConfig,
+            ManagedPolicy.layer,
+          ),
+        ),
+      ),
+    ),
     Layer.provideMerge(ServerConfig.layer(config)),
     Layer.provide(Layer.succeed(References.MinimumLogLevel, "Error")),
   );

@@ -1,65 +1,29 @@
 # Voice input
 
-Dictate into the composer instead of typing. The transcript lands in your draft
-for review, and only sending the message sends anything to an agent. Dictation
-also works in citation comments, diff and file annotations, pull request
-comments, replies, and review summaries, and in the desktop app's browser
-annotation editor.
-
-On iPhone and Android, voice input transcribes on the device by default. To opt in
-to a named environment on that phone, open **Settings → Voice → Transcribe on**. See
-[Voice input on mobile](./composer.md#voice-input-on-mobile).
+Dictate into the composer, citation comments, diff/file annotations, PR comments, and desktop browser annotations. Transcripts land in your draft for review—nothing is sent to an agent until you submit.
 
 ## Choose where audio goes
 
-On web and desktop, you choose where transcription runs.
-Nothing is sent until you choose one: open **Settings → Voice** and set
-**Transcribe with** to the environment that should transcribe for you.
-On a new device, the microphone or dictation shortcut opens that setting from the composer.
-Microphone audio recorded on this device is sent to that environment over your
-authenticated connection, transcribed there, and discarded. The choice is saved
-on this device only, so every computer and browser you use asks for it once.
-Set it back to **Off** at any time; a recording in progress is discarded.
+- **Web and desktop**: Nothing is recorded or sent until you choose a destination in **Settings → Voice → Transcribe with**:
+  - **On this Mac (Apple Speech)** (macOS 26+ desktop): Transcribes locally on your Mac (silence filtering and filler removal unavailable; dictionary applies only with cleanup enabled).
+  - **A connected environment**: Sends audio over your authenticated connection to transcribe locally on that host and discards the audio. Never silently fails over to another host.
+  - **Cloud providers (OpenAI, Grok Voice Transcribe, OpenRouter)**: Configure an API key (or [secret reference](./secrets.md)) on an environment to forward recordings to that provider. OpenRouter lets each user pick a model from its live STT catalog and requests zero data retention.
+- **Mobile (iOS and Android)**: Transcribes on-device by default (iOS 26+ or Android 12+ with compatible Google speech services; first use may download a speech model, then works offline). To transcribe on a paired environment or cloud provider instead, configure **Settings → Voice → Transcribe on**. Keep T3 Code open while dictating on Android.
 
 If the chosen environment goes offline, voice input waits for it. p0code never
 substitutes another environment.
 
-In the desktop app on macOS 26 or later, you can instead choose **Apple Speech**
-under **On this Mac**. Audio stays on the Mac and macOS transcribes it. The first
-recording in a language can take longer while macOS downloads its speech model.
-**Language** set to automatic uses your Mac's language. Silence filtering and
-filler-word removal are not available; the dictionary applies only when transcript
-cleanup is on.
+In **Settings → Voice → Transcription**, filter by language, download a model, and select **Use model** (reuses matching files from Handy or the Hugging Face cache, or link an existing file via **Use existing**—Core ML/ONNX/MLX builds aren't supported).
 
-For cloud dictation, choose **OpenAI** or **Grok Voice Transcribe** via the environment
-you want to use. If it needs a key, enter one and choose **Save and enable**.
-You can also choose a [secret provider](secrets.md) instead of **Value** and enter a
-reference. Unlock the vault on that environment before dictating. Anyone with
-dictation access to the environment can use the key, but only this device opts in.
-If a key is already saved, just confirm the provider. After
-you stop, the environment forwards your recording and any vocabulary hints to
-the selected provider, which bills its API account. No local model download or chat
-subscription is needed. Switch back to **This device** on mobile or **Off** on
-web and desktop to stop sharing. Removing the key stops that provider for everyone
-on the environment.
+- **Advanced**: Configure GPU/CPU (**Auto** falls back to CPU once on GPU error), idle unload timeout, and **Streaming transcription** (disable if live preview lags).
 
-**OpenRouter** works the same way but has no default model: pick one from its live
-speech-to-text catalog when you enable it, or later under **Manage OpenRouter**.
-The model choice is yours alone and needs no settings access, so anyone with
-dictation access can pick a different model without touching the saved key.
-OpenRouter chooses who runs the model. T3 requests zero data retention; your
-OpenRouter account can also allow safety retention. If no endpoint qualifies,
-dictation fails instead of switching models.
-Vocabulary hints are not sent to OpenRouter; dictionary spellings are applied
-after transcription. If OpenRouter stops listing your model, dictation stops
-until you choose another.
+## Dictate and shortcuts
 
-## Set up a model
+- Press the microphone button or `mod+shift+d` to start/stop (`Esc` discards; max recording length: **5 minutes**).
+- Configure tap vs. hold behavior in **Settings → Voice → Dictation shortcut** (**Auto**, **Hold**, or **Toggle**), or remap the chord in [Keybindings](./keybindings.md).
+- Pressing **Send** (or Save/Comment/Submit) while recording finishes transcription and submits automatically.
 
-In **Settings → Voice → Transcription**, download a model and choose **Use model** if it
-isn’t already selected. **Test model** lets you try it without sending a message.
-If you use the composer microphone before a model is installed, it offers to download one.
-The recommendation uses your Voice language, or your system’s preferred languages with **Auto-detect**.
+## Improve recognition and cleanup
 
 If another app already downloaded one of these models, you don’t need a second copy.
 **Download** first looks in Handy’s model folder and the Hugging Face cache on that
@@ -71,12 +35,7 @@ model from its list and then uses it in place. Removing the model in p0code leav
 alone; if the other app deletes it, download or link the model again. Files in another
 format, such as Core ML, ONNX, or MLX builds of the same model, can’t be used.
 
-Select the languages you dictate in to compare models that support all of them.
-Accuracy shows how often the model got words or characters wrong in each
-language; speed is the time to transcribe 30 seconds on a reference CPU or GPU,
-matching the selected environment's transcription backend. Recommendations use
-the same reference tier for every selected language. Choose **All languages** to
-browse without a language preference. Filtering does not switch your model.
+## Microphones and testing
 
 **Advanced** controls GPU or CPU use and when an idle model is unloaded. With hardware set to
 **Auto**, a recording that fails on the GPU is retried once on that same

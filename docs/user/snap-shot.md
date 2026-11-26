@@ -1,25 +1,22 @@
 # SnapShots
 
-A SnapShot captures the window you are working in and attaches it to your current draft. The
-attachment carries the app name and window title, and when available the app icon and the window's
-accessibility data (its controls, text, and their positions in the image). Agents can use that data
-to reason about the screenshot.
+Capture any window on your desktop—along with its app name, window title, and accessibility text/controls—and attach it directly to your current draft so agents can reason about what's on screen.
 
-SnapShots are off by default and available in the desktop app on macOS, Windows, and Linux with
-Wayland. X11 sessions are not supported.
+Available in the desktop app on **macOS**, **Windows**, and **Linux (Wayland)** (X11 is not supported). Off by default.
 
-## Turning it on
+## Setup and usage
 
-Open **Settings** > **SnapShots** and turn the feature on. Setup has two steps: allow capture, then
-choose a shortcut. Each step shows only what your desktop needs. **Finish later** turns capture back
-off but keeps anything you already installed, so you can resume where you left off.
+1. Enable **Settings → SnapShots** and complete the platform permission and shortcut steps.
+   - **macOS**: Requires Screen Recording (and Accessibility only if **Include app text** is enabled).
+   - **Windows**: No extra permissions required.
+   - **Linux (Wayland)**: Uses a compositor-specific helper/extension (see below).
+2. Switch to any window and press the shortcut (default on macOS/Windows: **both Shift keys together**). T3 Code attaches the capture to your active draft (or starts a new draft) and brings itself to the front.
 
-- **macOS** asks for Screen Recording during setup. It asks for Accessibility only when **Include
-  app text** is on.
-- **Windows** needs no setup or permission.
-- **Linux** depends on your desktop. See [Linux desktops](#linux-desktops).
+- **Include app text**: Toggle in **Settings → SnapShots** to include or omit accessibility tree data (not every app exposes document/terminal contents; slow apps fall back to screenshot-only).
+- **Sound, flash, and animation**: Each can be toggled independently in Settings.
+- **Customize shortcut**: Pick a modifier pair (macOS/Windows) or key chord in Settings (Linux uses key chords only).
 
-Turning capture off releases the shortcut. It does not uninstall a helper or extension you installed.
+## Linux Wayland desktops
 
 ## Taking a capture
 

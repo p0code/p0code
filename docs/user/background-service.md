@@ -91,17 +91,9 @@ Linux needs systemd user services. Setup enables lingering so p0code starts at
 boot and keeps running after logout. If this needs administrator permission,
 setup prints a recovery command before changing the service.
 
-macOS starts the service when you log in and stops it when you log out. Keep the
-Mac logged in and awake for unattended remote access. Installing over SSH while
-nobody is logged in at the Mac's screen can fail at the final start step; the
-service is still installed and will start at the next login.
+> Note: Signing out of T3 Connect does not stop or uninstall the background service.
 
-Windows starts the service when you log in and stops it when you sign out. It
-runs without a window as the `t3code-<domain>-<user name>` task in Task Scheduler, and Task
-Scheduler starts it again within a minute if it exits. Lock the screen instead
-of signing out, and keep the PC awake, for unattended remote access. Installing
-over SSH while nobody is signed in at the PC can fail at the final start step;
-the service is still installed and will start at the next sign-in.
+## Keep the server responsive under memory pressure (Linux)
 
 `p0 up` installs the service as part of setting up remote access, but the two
 are managed separately. Unlinking the relay does not stop or uninstall the
@@ -131,8 +123,13 @@ Start with `p0 service status` on the host. It prints the log path and, on Linux
 checks whether the installed service is running, enabled, and allowed to survive
 logout.
 
-If it stops when your SSH session closes, check for `linger-disabled`. An
-administrator can enable lingering with:
+| Status                                 | Fix                                                                                                                                             |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `linger-disabled`                      | Run `sudo loginctl enable-linger "$(id -un)"` (or `ssh -t your-server '...'`), then retry setup as your normal user. Never run T3 Code as root. |
+| `linger-unavailable`                   | Check `loginctl show-user "$(id -un)" --property=Linger` and verify `systemd-logind`.                                                           |
+| `user-manager-unavailable`             | Run `systemctl --user status` in a login session to verify systemd user support.                                                                |
+| `service-disabled` / `service-stopped` | Check the log and `systemctl --user status t3code.service`, then run `t3 service install`.                                                      |
+| `restart-pending`                      | Run `t3 service restart` to switch to the newly installed version.                                                                              |
 
 ```sh
 sudo loginctl enable-linger "$(id -un)"

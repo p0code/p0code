@@ -1,52 +1,30 @@
 # Appearance and themes
 
-On web and desktop, open **Settings → Appearance** to choose a theme and follow the system
-appearance or stay in light or dark mode. To use different themes for light and dark mode, select
-the corresponding preview within each theme. Appearance preferences are saved separately on each
-device or browser.
+Customize T3 Code's theme, light/dark appearance, math rendering, motion, and custom CSS. Appearance settings are saved per device or browser.
 
-On web and desktop, use **Change theme** in the command palette to select a theme without leaving chat.
-Press **Cmd+Option+A** on macOS or **Ctrl+Alt+A** on Windows/Linux to open the theme picker directly.
-Use **Change appearance** in the command palette to choose System, Light, or Dark independently of
-the theme. **Cmd+Option+Shift+A** on macOS or **Ctrl+Alt+Shift+A** on Windows/Linux cycles through
-those modes. Customize these shortcuts under **Settings → Keybindings**.
+## Switch themes and appearance
 
-On mobile, open **Settings → Appearance**. Mobile has its own themes and text,
-code, and terminal preferences. It does not follow environment themes or defaults.
-
-On Android 12 or newer, choose the **Material You** theme in Appearance to use colors from
-your wallpaper. Selecting another theme replaces those colors. Like other themes, Material You
-can be selected separately for light and dark appearances.
-Android uses **Material You Layout** by default unless you have turned it off in Appearance.
-It changes shapes, spacing, and controls independently
-of the selected theme.
+- **Web and desktop**: Open **Settings → Appearance** to choose a theme and light, dark, or system mode. Select the light or dark preview on a theme card to pair different themes with each mode.
+  - Open theme picker from anywhere: `Cmd+Option+A` (macOS) or `Ctrl+Alt+A` (Windows/Linux), or **Change theme** in the command palette.
+  - Cycle System / Light / Dark: `Cmd+Option+Shift+A` (macOS) or `Ctrl+Alt+Shift+A` (Windows/Linux), or **Change appearance** in the command palette.
+- **Mobile**: Open **Settings → Appearance**. Mobile uses its own themes and text/code/terminal preferences and does not follow environment themes.
+  - On Android 12+, **Material You** pulls colors from your wallpaper (configurable separately for light and dark), and **Material You Layout** controls Material You shapes and spacing independently of the theme.
 
 ## Composer context
 
-Git-backed projects show branch and worktree controls below the composer while you create a thread.
-The controls retreat as the composer docks after you send the first message.
-
-Turn on **Composer context** to keep those controls visible after the thread starts. This preference
-applies to the web and desktop clients.
+Git-backed projects show branch and worktree controls below the composer before the first message. Turn on **Settings → Appearance → Composer context** (web and desktop) to keep those controls visible after the thread starts.
 
 ## Math
 
-Turn on **Render math** in **Settings → Appearance** to typeset LaTeX in messages and Markdown
-previews on web, desktop, and mobile. It reads `$…$`, `$$…$$`, `\(…\)`, and `\[…\]`, outside of code.
-Fenced `math` blocks also render. Formulas work in tables, including absolute-value bars.
-Dollar amounts such as `$5 and $10` stay text; write `\$` to keep any other dollar sign literal.
-Wide formulas scroll horizontally while the surrounding text wraps. Copying a formula or
-exporting a table preserves the TeX.
+Turn on **Settings → Appearance → Render math** (per device) to render LaTeX in messages and Markdown previews on web, desktop, and mobile.
 
-The composer keeps TeX source editable, including when rich text is enabled. The Render math
-preference is saved separately on each device.
+- Supports `$…$`, `$$…$$`, `\(…\)`, `\[…\]`, and fenced `math` blocks outside of code.
+- Currency like `$5 and $10` stays plain text; use `\$` to escape other literal dollar signs.
+- Copying a formula or exporting a table preserves the raw TeX. The composer keeps TeX source editable.
 
 ## Motion
 
-The main sidebar, right panel, and terminal drawer open and close immediately by default. Move the
-**Panel animations** slider above 0 ms to add motion, up to 400 ms, unless reduced motion is enabled
-in your operating system. Moving between threads always snaps to the selected thread's panel state
-without replaying its transitions.
+Sidebars, the right panel, and the terminal drawer open immediately by default. Adjust **Settings → Appearance → Panel animations** (0–400 ms) to enable transitions, unless OS reduced motion is enabled.
 
 ## Custom themes
 
@@ -81,17 +59,14 @@ in Full access. Ask the agent to set a built-in theme to undo it.
 
 ## Environment themes
 
-Environment themes and defaults come from the server serving your web app or the desktop app's
-main local environment. With the desktop app's local environment off, they come from the
-[background service](./background-service.md) on the same machine while the app is connected to
-it. app.t3.codes and other connections do not use them.
+Environment themes come from the server serving your web app or the desktop app's local environment (or local [background service](./background-service.md) when the built-in local environment is off). Hosted `app.t3.codes` and remote connections do not apply them.
 
 Select a published theme in **Settings → Appearance** to follow its palette as the server updates
 it. **Duplicate** makes an independent copy you can edit. A saved custom theme with the same ID
 takes precedence. If the server stops publishing the selected theme, p0code falls back to its
 standard theme.
 
-Run this on the server to set a default and switch connected clients to it:
+Manage the server default from the CLI:
 
 ```bash
 p0 theme set nightfall
@@ -111,7 +86,7 @@ directory under your custom state directory. The filename supplies the theme ID:
 can be selected with `p0 theme set nightfall`. Keep the filename stable when updating its colors.
 Do not use `system`, `light`, `dark`, or a built-in theme's ID.
 
-For an integration that generates a palette, this shorter format also works:
+You can also use a minimal palette format—T3 Code generates the remaining tokens:
 
 ```json
 {

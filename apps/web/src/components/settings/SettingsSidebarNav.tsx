@@ -52,6 +52,7 @@ import {
   SidebarMenuItem,
 } from "../ui/sidebar";
 import { scrollToSettingsTarget } from "./settingsLayout";
+import { useSettingsSectionPrefetch } from "./useSettingsSectionPrefetch";
 import {
   revealSettingsSearchTarget,
   searchSettings,
@@ -133,6 +134,7 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
   const m = useMessages();
   const navArea = workspaceAreaProps("settings-nav", 0, gt("Settings sections"));
   const navigate = useNavigate();
+  const preloadSection = useSettingsSectionPrefetch();
   const currentHash = useLocation({ select: (location) => location.hash });
   const activePath = SETTINGS_DETAIL_PAGE_PARENTS[pathname] ?? pathname;
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -243,12 +245,18 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
     if (results.length === 0) return;
     if (event.key === "ArrowDown") {
       event.preventDefault();
-      setActiveResultIndex((activeResultIndex + 1) % results.length);
+      const next = (activeResultIndex + 1) % results.length;
+      setActiveResultIndex(next);
+      const result = results[next];
+      if (result) preloadSection(result.to);
       return;
     }
     if (event.key === "ArrowUp") {
       event.preventDefault();
-      setActiveResultIndex((activeResultIndex - 1 + results.length) % results.length);
+      const next = (activeResultIndex - 1 + results.length) % results.length;
+      setActiveResultIndex(next);
+      const result = results[next];
+      if (result) preloadSection(result.to);
       return;
     }
     if (event.key === "Enter") {
@@ -353,6 +361,7 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
                       isActive={index === activeResultIndex}
                       className="h-auto min-h-10 items-start"
                       onMouseMove={() => setActiveResultIndex(index)}
+                      onPointerEnter={() => preloadSection(item.to)}
                       onClick={() => handleSearchResultClick(item)}
                     >
                       <SettingsSectionIcon to={item.to} />
@@ -415,6 +424,8 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
                                   aria-disabled={disabledReason === null ? undefined : true}
                                   disabled={disabledReason !== null}
                                   isActive={isActive}
+                                  onPointerEnter={() => preloadSection(to)}
+                                  onFocus={() => preloadSection(to)}
                                   onClick={() => handleSectionClick(to)}
                                 >
                                   <Icon />

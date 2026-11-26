@@ -2,30 +2,30 @@
 
 p0code can run [fx](https://fx.sh). fx uses the login on the machine that runs the p0code server.
 
-## Set up fx
+## Set up and update
 
-1. Install fx on that machine:
-
+1. Install fx on the server machine:
    ```bash
    curl -fsSL https://fx.sh/setup.sh | bash
    ```
+2. Run `fx login` on that machine.
+3. Enable **fx** in **Settings → Providers** and refresh (set **Binary path** if `fx` isn't on `PATH`).
 
-2. Run `fx login` in a terminal on that machine.
-3. Open **Settings → Providers**, enable fx, and refresh the provider.
+All fx instances on a machine share that machine's fx login.
 
-If `fx` is not on the server's `PATH`, set **Binary path** to the executable.
+- **Updates**: Click **Update now** in **Settings → Providers** for standalone (`fx upgrade`) or Homebrew (`fx-agent`) installs. Update mise, MacPorts, Nix, or dev-channel installs manually.
 
 p0code supports fx 0.0.13 and later. Use the latest release when you can; macOS needs version 15 or later for fx releases after 0.0.13.
 
 Every fx instance on the same machine shares that machine's fx login. p0code does not keep a separate login per instance.
 
-## Update fx
+## Permission modes and steering
 
 When a newer fx release is out, the fx card in **Settings → Providers** shows it. For standalone installs, **Update now** runs the instance's selected executable with `upgrade`, including one set in **Binary path**. For Homebrew's `fx-agent` formula, it uses the owning Homebrew installation to run `brew upgrade fx-agent` and checks Homebrew's release version. If that ownership cannot be confirmed, update through your package manager yourself. For mise-managed installs, p0code checks stable releases but leaves updates to your mise configuration. MacPorts and Nix installs are also left to their package manager.
 
 To update a standalone install manually, run `fx upgrade` on the server's machine. If **Binary path** is set, run that exact executable instead, for example `"/path/to/fx" upgrade`. Standalone version checks cover stable releases only; use the same manual command to get newer dev builds on fx's dev channel. On macOS 14 or earlier, which newer fx releases do not support, p0code does not offer fx updates.
 
-## Backends, models, and effort
+## Sub-agents and limitations
 
 fx can run models through several backends: Vercel AI Gateway, a Codex subscription, a Grok subscription, and any OpenAI-compatible endpoint you configure in fx's settings. In the model picker, the fx tab lists each backend under its own heading. Open a backend to see the models it offers, then pick one. Search lists every backend's models together.
 

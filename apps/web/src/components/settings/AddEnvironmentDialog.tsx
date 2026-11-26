@@ -56,6 +56,7 @@ import {
 import { Input } from "../ui/input";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+
 import {
   formatDesktopSshConnectionError,
   parseManualDesktopSshTarget,
@@ -510,7 +511,7 @@ export function AddEnvironmentDialog({
                     <T>Loading hosts…</T>
                   </div>
                 ) : filteredDiscoveredSshHosts.length > 0 ? (
-                  <AutocompleteList className="max-h-72">
+                  <AutocompleteList scrollAreaClassName="max-h-72">
                     {filteredDiscoveredSshHosts.map((target, index) => {
                       const address = formatDesktopSshTarget(target);
                       const shortcutCommand = index < 9 ? threadJumpCommandForIndex(index) : null;

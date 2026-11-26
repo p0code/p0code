@@ -12,22 +12,20 @@ your project, and enable Antigravity. Install its runtime there, then choose
 account access and load models before starting a thread. Once the runtime is installed,
 you can also sign in from **Settings > Providers** in the mobile app.
 
-Installation continues if you leave settings or reconnect. Setup requires
-permission to operate the environment; update an older server if it does not offer
-Antigravity setup.
+- **Remote sign-in**: Paste the temporary code (or full URL) from Google's completion page into T3 Code's code field.
+- **Manual binary**: Install [Antigravity CLI](https://antigravity.google/docs/getting-started) and set **Binary path** to `agy`. Leave blank to use the managed runtime (or `PATH`).
+- **Updates**: Click **Update Antigravity** in provider settings. T3 Code requires Antigravity **1.5+** (1.5.12+ recommended); running threads finish on their original runtime.
 
-### Sign in from a remote device
+### Sign-in methods
 
-Google finishes on an Antigravity page that shows a code. Paste that code, or the
-page's full address, into the code field in the client where you started sign-in.
-This works the same from any device.
+Choose **Sign-in method** in the Antigravity instance settings:
 
 The code is temporary. Paste it only into the setup field. The page alone does not
 confirm account access; wait for p0code's confirmation.
 
-### Other sign-in methods
+API keys are stored outside `settings.json`, and ambient `GEMINI_API_KEY` / Google env vars do not override the instance's configured method.
 
-Choose **Sign-in method** in the Antigravity provider settings:
+## Models, planning, and goals
 
 | Method                     | Credentials                                                                                  |
 | -------------------------- | -------------------------------------------------------------------------------------------- |
@@ -107,19 +105,15 @@ on its own; to share a folder like that one, list it in `~/.gemini/config/skills
 (or a project's `.agents/skills.json`), and p0code shows the skills it declares,
 honoring `inherits`, `include_only`, and `exclude`.
 
-Antigravity receives images and audio directly, and reads PDFs and text files as
-documents. Other attachments, including videos, are passed as a saved file path for
-the agent to inspect with its tools.
+Add a separate Antigravity instance in **Settings → Providers** for each Google account (runtimes are shared on disk).
 
-### Subagents
+| Action                              | Effect                                                                  |
+| ----------------------------------- | ----------------------------------------------------------------------- |
+| **Disable**                         | Stops sessions; keeps saved login and history.                          |
+| **Sign out** (or `/logout` in chat) | Stops sessions and removes saved login; keeps history.                  |
+| **Remove downloaded runtime**       | Deletes shared runtime after instances are disabled; keeps credentials. |
 
-Antigravity groups subagent activity into batches. Open a batch and select
-**Subagent work** (**Work** on mobile) to read each child's role, prompt, and recent steps. This view
-is read only: you cannot message or control individual subagents, and an idle
-batch does not confirm that every child succeeded. If Antigravity did not record
-which children a batch started, the view says so. See
-[agent work](./thread-sidebar.md#inspect-agent-work) for where to inspect
-activity.
+## Usage and troubleshooting
 
 ## Accounts and removal
 

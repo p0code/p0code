@@ -77,6 +77,7 @@ import { Switch } from "../ui/switch";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 
 import {
   applyWslEnableSelection,
@@ -1220,25 +1221,25 @@ function ConnectionsSettingsContent({
       control={
         !desktopBridge &&
         (currentAuthPolicy === "remote-reachable" || currentAuthPolicy === "loopback-browser") ? (
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <span className="inline-flex">
-                  <Switch
-                    checked={isLocalBackendNetworkAccessible}
-                    disabled
-                    aria-label={gt("Enable network access")}
-                  />
-                </span>
-              }
-            />
-            <TooltipPopup side="top">
-              <T>
-                Network exposure changes restart the backend and must be controlled where the server
-                process is launched.
-              </T>
-            </TooltipPopup>
-          </Tooltip>
+          <SharedTooltipTrigger
+            render={
+              <span className="inline-flex">
+                <Switch
+                  checked={isLocalBackendNetworkAccessible}
+                  disabled
+                  aria-label={gt("Enable network access")}
+                />
+              </span>
+            }
+            label={
+              <>
+                <T>
+                  Network exposure changes restart the backend and must be controlled where the
+                  server process is launched.
+                </T>
+              </>
+            }
+          />
         ) : undefined
       }
     />

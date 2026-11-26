@@ -3,7 +3,7 @@
 p0code can use your existing Pi coding agent installation while keeping Pi's models, auth,
 extensions, skills, context files, and native session history.
 
-## Set Up Pi
+## Set up Pi
 
 1. Install [Pi](https://pi.dev) on the machine running the p0code server. Pi requires Node.js
    22.19 or newer; its platform installers can install Node if needed. p0code supports Pi
@@ -11,11 +11,10 @@ extensions, skills, context files, and native session history.
 2. Run `pi` in a terminal, then `/login` to connect your model provider or configure its API key.
 3. Open p0code Settings, enable Pi, and refresh the provider.
 
-For an npm installation, use:
+- In **Launch arguments**, `--provider` must be paired with `--model`. Flags that alter Pi's execution mode or session selection are rejected because T3 Code manages them.
+- Update installer-managed Pi with `pi update`, or via your package manager (e.g. `nix profile upgrade pi`).
 
-```sh
-npm install -g --ignore-scripts @earendil-works/pi-coding-agent
-```
+## Features and extensions
 
 If `pi` is not on the server's `PATH`, set Pi's binary path to the executable. Provider environment
 variables and launch arguments are also available for installations that need a custom agent
@@ -23,15 +22,11 @@ directory, endpoint, or model configuration. `--provider` must be paired with `-
 rejects launch arguments that change Pi's execution mode or select a session because T3 owns those
 parts of the process lifecycle.
 
-On a remote or headless server, connect to that machine over SSH and run `pi`, then `/login`.
-Open the authorization URL on your own computer. If the callback cannot reach the server,
-paste the final redirect URL or authorization code back into Pi when prompted. You can also
-set your model provider's API-key environment variable in the Pi instance's settings; mark
-secret values as sensitive.
+## Permission modes
 
-Update installer-managed Pi with `pi update`. If another package manager owns the installation,
-update it through that manager instead. For example, a Nix profile installation uses
-`nix profile upgrade pi`.
+- **Supervised**: Asks before commands, file edits, and extension tools (reads proceed).
+- **Auto-accept edits**: Allows Pi's edit/write tools; asks for commands and extension tools.
+- **Full access**: Allows all tool calls without prompts.
 
 ## Custom providers
 

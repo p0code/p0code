@@ -2199,6 +2199,7 @@ export function PullRequestDetailPanel({
                 ? {
                     host: {
                       url: unavailableHostUrl,
+                      threadRef,
                       openLabel: openOnHostLabel(
                         sourceControlClients.get(repositoryIdentity?.provider),
                         resolve,
