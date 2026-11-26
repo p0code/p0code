@@ -14,6 +14,7 @@ import * as Stream from "effect/Stream";
 import { mFallback, msg } from "gt-i18n";
 import type { MFunctionType } from "gt-i18n/types";
 
+import { threadRuntimeIsActive } from "./state/models.ts";
 import {
   deriveRunlessWorkStartedAt,
   deriveThreadStructureRuntime,
@@ -211,12 +212,11 @@ export function linkedThreadFailure(
   }
 }
 
-const WORKING_STATUSES = new Set(["preparing", "queued", "starting", "running", "waiting"]);
-
 /** Whether the thread has work under way, for the note that stands where its composer would. */
 export function isLinkedThreadWorking(projection: OrchestrationV2ThreadProjection): boolean {
+  const runtime = deriveThreadStructureRuntime(projection);
   return (
-    WORKING_STATUSES.has(deriveThreadStructureRuntime(projection)?.status ?? "") ||
+    (runtime?.status !== "failed" && threadRuntimeIsActive(runtime)) ||
     deriveRunlessWorkStartedAt(projection) !== null
   );
 }
