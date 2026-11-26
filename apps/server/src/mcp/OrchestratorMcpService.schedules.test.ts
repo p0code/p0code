@@ -33,7 +33,7 @@ const dependencies = Layer.mergeAll(
   ServerSettings.layerTest(),
   ManagedPolicy.layerTest(),
   Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({
-    namedProjectsRoot: "/projects",
+    namedProjectsRoot: Effect.succeed("/projects"),
     isScratchProject: () => Effect.succeed(false),
   }),
   Layer.mock(Projects.ProjectService)({}),

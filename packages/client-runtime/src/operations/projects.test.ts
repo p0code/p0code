@@ -11,6 +11,7 @@ import {
   getCloneDirectoryPath,
   getAddProjectInitialQuery,
   getDefaultCloneUrl,
+  getNewProjectPathPreview,
   githubIncompleteOwnerRepositoryMessage,
   normalizePastedCloneUrl,
   sortAddProjectProviderSources,
@@ -237,6 +238,12 @@ describe("add project shared logic", () => {
 
     expect(findExistingAddProject({ projects, environmentId: env, path: "/repo" })?.id).toBe(
       "project",
+    );
+  });
+
+  it("previews a named project inside the configured folder", () => {
+    expect(getNewProjectPathPreview("/srv/code", "My New Project")).toBe(
+      "/srv/code/my-new-project",
     );
   });
 });

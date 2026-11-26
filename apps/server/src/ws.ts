@@ -1915,7 +1915,7 @@ export const layerWsRpc = (
             onNone: () => ({}),
             onSome: (root) => ({ scratchWorkspaceRoot: root }),
           }),
-          newProjectsRoot: managedFolders.namedProjectsRoot,
+          newProjectsRoot: yield* managedFolders.namedProjectsRoot,
           ...(lastEventLoopStall === undefined ? {} : { lastEventLoopStall }),
           serverTime: DateTime.formatIso(yield* DateTime.now),
         };
@@ -3678,14 +3678,19 @@ export const layerWsRpc = (
                     )
                   : Stream.empty;
               const settingsUpdates = settingsChanges.pipe(
-                Stream.map((settings) =>
-                  ServerSettings.redactServerSettingsForClient(settings, settingsClient),
+                Stream.mapEffect((settings) =>
+                  Effect.map(managedFolders.namedProjectsRoot, (newProjectsRoot) => ({
+                    version: 1 as const,
+                    type: "settingsUpdated" as const,
+                    payload: {
+                      settings: ServerSettings.redactServerSettingsForClient(
+                        settings,
+                        settingsClient,
+                      ),
+                      newProjectsRoot,
+                    },
+                  })),
                 ),
-                Stream.map((settings) => ({
-                  version: 1 as const,
-                  type: "settingsUpdated" as const,
-                  payload: { settings },
-                })),
               );
 
               const liveUpdates = Stream.merge(

@@ -359,7 +359,7 @@ it.effect.each(deliveries)(
                 Layer.provide(ManagedPolicy.layerTest()),
                 Layer.provide(
                   Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({
-                    namedProjectsRoot: "/projects",
+                    namedProjectsRoot: Effect.succeed("/projects"),
                     isScratchProject: () => Effect.succeed(false),
                   }),
                 ),

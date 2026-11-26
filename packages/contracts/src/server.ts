@@ -872,6 +872,8 @@ export type ServerConfigProviderStatusDeltasPayload =
 
 export const ServerConfigSettingsUpdatedPayload = Schema.Struct({
   settings: ServerSettings,
+  /** Keeps the add-project preview current when the new-project folder changes. */
+  newProjectsRoot: Schema.optionalKey(TrimmedNonEmptyString),
 });
 export type ServerConfigSettingsUpdatedPayload = typeof ServerConfigSettingsUpdatedPayload.Type;
 

@@ -48,7 +48,7 @@ it.effect("rejects a stale form save after deletion while preserving explicit-id
       ManagedPolicy.layerTest(),
       Layer.mock(ThreadLaunchService.ThreadLaunchService)({}),
       Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({
-        namedProjectsRoot: "/projects",
+        namedProjectsRoot: Effect.succeed("/projects"),
         isScratchProject: () => Effect.succeed(false),
       }),
       Layer.mock(ThreadManagementService.ThreadManagementService)({}),
@@ -103,7 +103,7 @@ it.effect("preserves a due run when a save only pads the scheduled hour", () =>
       ManagedPolicy.layerTest(),
       Layer.mock(ThreadLaunchService.ThreadLaunchService)({}),
       Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({
-        namedProjectsRoot: "/projects",
+        namedProjectsRoot: Effect.succeed("/projects"),
         isScratchProject: () => Effect.succeed(false),
       }),
       Layer.mock(ThreadManagementService.ThreadManagementService)({}),
@@ -165,7 +165,7 @@ it.effect("keeps the task list order when a toggle or edit rewrites updated_at",
       ManagedPolicy.layerTest(),
       Layer.mock(ThreadLaunchService.ThreadLaunchService)({}),
       Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({
-        namedProjectsRoot: "/projects",
+        namedProjectsRoot: Effect.succeed("/projects"),
         isScratchProject: () => Effect.succeed(false),
       }),
       Layer.mock(ThreadManagementService.ThreadManagementService)({}),
@@ -248,7 +248,7 @@ it.effect("keeps one queued occurrence of a recurring task while its bound threa
       }),
       Layer.mock(ThreadLaunchService.ThreadLaunchService)({}),
       Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({
-        namedProjectsRoot: "/projects",
+        namedProjectsRoot: Effect.succeed("/projects"),
         isScratchProject: () => Effect.succeed(false),
       }),
       Layer.mock(ThreadManagementService.ThreadManagementService)({
@@ -434,7 +434,7 @@ it.effect(
             ),
         }),
         Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({
-          namedProjectsRoot: "/projects",
+          namedProjectsRoot: Effect.succeed("/projects"),
           isScratchProject: () => Effect.succeed(false),
         }),
         Layer.mock(ThreadManagementService.ThreadManagementService)({}),
@@ -506,7 +506,7 @@ it.effect("a fixed-time slot missed while the server was off shows on the task",
           ),
       }),
       Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({
-        namedProjectsRoot: "/projects",
+        namedProjectsRoot: Effect.succeed("/projects"),
         isScratchProject: () => Effect.succeed(false),
       }),
       Layer.mock(ThreadManagementService.ThreadManagementService)({}),
@@ -593,7 +593,7 @@ it.effect(
             ).pipe(Effect.as({ threadId: `thread-${input.title}`, resumed: false } as never)),
         }),
         Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({
-          namedProjectsRoot: "/projects",
+          namedProjectsRoot: Effect.succeed("/projects"),
           isScratchProject: () => Effect.succeed(false),
         }),
         Layer.mock(ThreadManagementService.ThreadManagementService)({}),
@@ -686,7 +686,7 @@ it.effect.each([false, true])("schedules only run on allowed environments (bound
           sendToThread: () => Ref.update(dispatched, (n) => n + 1).pipe(Effect.as({} as never)),
         }),
         Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({
-          namedProjectsRoot: "/projects",
+          namedProjectsRoot: Effect.succeed("/projects"),
           isScratchProject: () => Effect.succeed(false),
         }),
         Layer.mock(SecretRequests.SecretRequests)({}),

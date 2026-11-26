@@ -1047,7 +1047,7 @@ it.effect.each([
         }),
         Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({
           scratchRoot: Effect.succeedNone,
-          namedProjectsRoot: process.cwd(),
+          namedProjectsRoot: Effect.succeed(process.cwd()),
         }),
         Layer.mock(ScratchThreadPromotion.ScratchThreadPromotion)({}),
         Layer.mock(ThreadProjectMove.ThreadProjectMove)({}),
@@ -1272,7 +1272,7 @@ it.effect("access changes made while the snapshot loads reach the client after i
               Layer.mock(RemoteOpenTargets.RemoteOpenTargets)({}),
               Layer.mock(DirectEndpoints.DirectEndpoints)({}),
               Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({
-                namedProjectsRoot: "/unused",
+                namedProjectsRoot: Effect.succeed("/unused"),
               }),
               Layer.mock(ScratchThreadPromotion.ScratchThreadPromotion)({}),
               Layer.mock(ThreadProjectMove.ThreadProjectMove)({}),
@@ -1429,7 +1429,7 @@ it.effect("on-demand clients get provider config without workspace snapshots", (
       }),
       Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({
         scratchRoot: Effect.succeedNone,
-        namedProjectsRoot: process.cwd(),
+        namedProjectsRoot: Effect.succeed(process.cwd()),
       }),
       Layer.mock(ScratchThreadPromotion.ScratchThreadPromotion)({}),
       Layer.mock(ThreadProjectMove.ThreadProjectMove)({}),
@@ -1809,7 +1809,7 @@ it.effect("a missing thread worktree gets its project's skills in the cwd snapsh
       Layer.mock(DirectEndpoints.DirectEndpoints)({}),
       Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({
         scratchRoot: Effect.succeedNone,
-        namedProjectsRoot: process.cwd(),
+        namedProjectsRoot: Effect.succeed(process.cwd()),
       }),
       Layer.mock(ScratchThreadPromotion.ScratchThreadPromotion)({}),
       Layer.mock(ThreadProjectMove.ThreadProjectMove)({}),
@@ -1899,7 +1899,9 @@ it.effect(
           Layer.mock(UsageLimitSources.UsageLimitSources)({}),
           Layer.mock(RemoteOpenTargets.RemoteOpenTargets)({}),
           Layer.mock(DirectEndpoints.DirectEndpoints)({}),
-          Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({ namedProjectsRoot: "/unused" }),
+          Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({
+            namedProjectsRoot: Effect.succeed("/unused"),
+          }),
           Layer.mock(ScratchThreadPromotion.ScratchThreadPromotion)({}),
           Layer.mock(ThreadProjectMove.ThreadProjectMove)({}),
           Layer.mock(ServerEnvironment.ServerEnvironment)({}),
@@ -1991,7 +1993,9 @@ it.effect(
           Layer.mock(UsageLimitSources.UsageLimitSources)({}),
           Layer.mock(RemoteOpenTargets.RemoteOpenTargets)({}),
           Layer.mock(DirectEndpoints.DirectEndpoints)({}),
-          Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({ namedProjectsRoot: "/unused" }),
+          Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({
+            namedProjectsRoot: Effect.succeed("/unused"),
+          }),
           Layer.mock(ScratchThreadPromotion.ScratchThreadPromotion)({}),
           Layer.mock(ThreadProjectMove.ThreadProjectMove)({}),
           Layer.mock(ServerEnvironment.ServerEnvironment)({}),
@@ -2076,7 +2080,9 @@ it.effect("a git action that fails partway still refreshes the repository status
       Layer.mock(UsageLimitSources.UsageLimitSources)({}),
       Layer.mock(RemoteOpenTargets.RemoteOpenTargets)({}),
       Layer.mock(DirectEndpoints.DirectEndpoints)({}),
-      Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({ namedProjectsRoot: "/unused" }),
+      Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({
+        namedProjectsRoot: Effect.succeed("/unused"),
+      }),
       Layer.mock(ScratchThreadPromotion.ScratchThreadPromotion)({}),
       Layer.mock(ThreadProjectMove.ThreadProjectMove)({}),
       Layer.mock(ServerEnvironment.ServerEnvironment)({}),
@@ -2157,7 +2163,9 @@ it.effect("a publish whose push fails still refreshes the new remote", () =>
       Layer.mock(UsageLimitSources.UsageLimitSources)({}),
       Layer.mock(RemoteOpenTargets.RemoteOpenTargets)({}),
       Layer.mock(DirectEndpoints.DirectEndpoints)({}),
-      Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({ namedProjectsRoot: "/unused" }),
+      Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({
+        namedProjectsRoot: Effect.succeed("/unused"),
+      }),
       Layer.mock(ScratchThreadPromotion.ScratchThreadPromotion)({}),
       Layer.mock(ThreadProjectMove.ThreadProjectMove)({}),
       Layer.mock(ServerEnvironment.ServerEnvironment)({}),
@@ -2716,7 +2724,9 @@ it.effect("ACP session RPCs list a thread missing its history and repair it on i
       Layer.mock(UsageLimitSources.UsageLimitSources)({}),
       Layer.mock(RemoteOpenTargets.RemoteOpenTargets)({}),
       Layer.mock(DirectEndpoints.DirectEndpoints)({}),
-      Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({ namedProjectsRoot: "/unused" }),
+      Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({
+        namedProjectsRoot: Effect.succeed("/unused"),
+      }),
       Layer.mock(ScratchThreadPromotion.ScratchThreadPromotion)({}),
       Layer.mock(ThreadProjectMove.ThreadProjectMove)({}),
       Layer.mock(ServerEnvironment.ServerEnvironment)({}),
@@ -2891,7 +2901,9 @@ const makeWorkflowClient = Effect.fn("test.makeWorkflowClient")(function* (
     Layer.mock(UsageLimitSources.UsageLimitSources)({}),
     Layer.mock(RemoteOpenTargets.RemoteOpenTargets)({}),
     Layer.mock(DirectEndpoints.DirectEndpoints)({}),
-    Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({ namedProjectsRoot: "/unused" }),
+    Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({
+      namedProjectsRoot: Effect.succeed("/unused"),
+    }),
     Layer.mock(ScratchThreadPromotion.ScratchThreadPromotion)({}),
     Layer.mock(ThreadProjectMove.ThreadProjectMove)({}),
     Layer.mock(ServerEnvironment.ServerEnvironment)({}),
@@ -2957,7 +2969,9 @@ const makeAcpRegistryClient = Effect.fn("test.makeAcpRegistryClient")(function* 
     Layer.mock(UsageLimitSources.UsageLimitSources)({}),
     Layer.mock(RemoteOpenTargets.RemoteOpenTargets)({}),
     Layer.mock(DirectEndpoints.DirectEndpoints)({}),
-    Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({ namedProjectsRoot: "/unused" }),
+    Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({
+      namedProjectsRoot: Effect.succeed("/unused"),
+    }),
     Layer.mock(ScratchThreadPromotion.ScratchThreadPromotion)({}),
     Layer.mock(ThreadProjectMove.ThreadProjectMove)({}),
     Layer.mock(ServerEnvironment.ServerEnvironment)({}),
@@ -3160,7 +3174,7 @@ it.live.each([
         }),
 
         Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({
-          namedProjectsRoot: process.cwd(),
+          namedProjectsRoot: Effect.succeed(process.cwd()),
         }),
         Layer.mock(ScratchThreadPromotion.ScratchThreadPromotion)({}),
         Layer.mock(ThreadProjectMove.ThreadProjectMove)({}),

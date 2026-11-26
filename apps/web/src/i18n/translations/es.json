@@ -9126,6 +9126,13 @@
       "t": "a"
     }
   ],
+  "4f190a09f3d545e9": "Introduce una ruta de carpeta absoluta, como ~/projects.",
+  "7228e97f2ac44fd1": "Los proyectos nuevos van en la carpeta propia de cada entorno seleccionado. Los proyectos existentes se quedan donde están.",
+  "bf5fef5f07d1d55e": "Los proyectos nuevos van en {machine}. Los proyectos existentes se quedan donde están.",
+  "655b11430eb82712": "Los proyectos nuevos van en {path} en {machine}. Los proyectos existentes se quedan donde están.",
+  "1342340f282d6285": "Restablecer la ubicación de proyectos nuevos",
+  "ccb1f72e9b5b9001": "Ubicación de proyectos nuevos",
+  "6e3a2768bc5b9702": "Elegir carpeta…",
   "e7ea609e6fcfa591": "Alertas del sistema cuando un hilo termina, falla o necesita una respuesta o aprobación. Se aplica a este dispositivo mientras p0code está abierto.",
   "24a0ac9e7e55975c": "Las notificaciones requieren un navegador compatible con HTTPS, o la app de escritorio. Solo sonido sigue disponible.",
   "6b0b1dd4d399d3c6": "Las notificaciones no están disponibles en este navegador. Solo sonido sigue disponible.",
@@ -12153,6 +12160,7 @@
   "4a172e139167badc": "worktrees nuevos empiezan remoto origin última rama obtenida local",
   "30aac12099fcaf53": "Añadir proyecto empieza en",
   "70bcb8df9015ae2a": "directorio base carpeta explorador ruta inicio",
+  "cb0baace6102db95": "nueva carpeta de proyecto con nombre crear destino raíz ruta elegir",
   "061cb86367f49363": "ghq clonar destino host propietario repositorio raíz estructura",
   "2bb905a7e7cddff7": "preguntar antes hilo sección fijados",
   "53390c9ebb75f5d3": "preguntar antes hilo segundo clic acción en línea",

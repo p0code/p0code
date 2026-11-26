@@ -9127,6 +9127,13 @@
       "t": "a"
     }
   ],
+  "4f190a09f3d545e9": "Informe um caminho de pasta absoluto, como ~/projects.",
+  "7228e97f2ac44fd1": "Projetos novos vão na pasta própria de cada ambiente selecionado. Projetos existentes ficam onde estão.",
+  "bf5fef5f07d1d55e": "Projetos novos vão em {machine}. Projetos existentes ficam onde estão.",
+  "655b11430eb82712": "Projetos novos vão em {path} em {machine}. Projetos existentes ficam onde estão.",
+  "1342340f282d6285": "Redefinir o local de novos projetos para o padrão",
+  "ccb1f72e9b5b9001": "Local de novos projetos",
+  "6e3a2768bc5b9702": "Escolher pasta…",
   "e7ea609e6fcfa591": "Alertas do sistema quando uma thread termina, falha ou precisa de uma resposta ou aprovação. Vale para este dispositivo enquanto o p0code está aberto.",
   "24a0ac9e7e55975c": "As notificações exigem um navegador compatível via HTTPS ou o app desktop. A opção só som continua disponível.",
   "6b0b1dd4d399d3c6": "As notificações não estão disponíveis neste navegador. A opção só som continua disponível.",
@@ -12158,6 +12165,7 @@
   "4a172e139167badc": "novos worktrees começar remoto origin mais recente branch buscado local",
   "30aac12099fcaf53": "Adicionar projeto começa em",
   "70bcb8df9015ae2a": "diretório base pasta navegador caminho home",
+  "cb0baace6102db95": "nova pasta de projeto nomeada criar destino raiz caminho escolher",
   "061cb86367f49363": "ghq clonar destino host proprietário repositório raiz layout",
   "2bb905a7e7cddff7": "perguntar antes thread seção de fixadas",
   "53390c9ebb75f5d3": "perguntar antes thread segundo clique ação inline",

@@ -78,6 +78,23 @@ describe("applyServerConfigProjection settingsUpdated", () => {
     } as ServerConfigStreamEvent);
     expect(Option.getOrThrow(next).config).toBe(Option.getOrThrow(current).config);
   });
+
+  it("moves the new-project preview when the folder changes", () => {
+    const settings = decodeSettings(encodeSettings(DEFAULT_SERVER_SETTINGS));
+    const current = Option.some({
+      config: {
+        settings,
+        newProjectsRoot: "/t3/projects",
+      } as unknown as ServerConfig,
+      latestEvent: {} as ServerConfigStreamEvent,
+      source: "live" as const,
+    });
+    const next = applyServerConfigProjection(current, {
+      type: "settingsUpdated",
+      payload: { settings, newProjectsRoot: "/home/me/code" },
+    } as ServerConfigStreamEvent);
+    expect(Option.getOrThrow(next).config.newProjectsRoot).toBe("/home/me/code");
+  });
 });
 
 describe("applyServerConfigProjection provider catalogs", () => {

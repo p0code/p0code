@@ -994,6 +994,13 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: [msg("base directory folder browser path home")],
   },
   {
+    id: "new-project-location",
+    title: msg("New project location"),
+    to: "/settings/threads",
+    scope: "environment-defaults",
+    searchTerms: [msg("new named project folder create destination root path choose")],
+  },
+  {
     id: "ghq-clone-layout",
     title: msg("Clone into host folders"),
     to: "/settings/threads",

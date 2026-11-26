@@ -9128,6 +9128,13 @@
       "t": "a"
     }
   ],
+  "4f190a09f3d545e9": "Saisissez un chemin de dossier absolu, par exemple ~/projects.",
+  "7228e97f2ac44fd1": "Les nouveaux projets vont dans le dossier propre à chaque environnement sélectionné. Les projets existants restent où ils sont.",
+  "bf5fef5f07d1d55e": "Les nouveaux projets vont sur {machine}. Les projets existants restent où ils sont.",
+  "655b11430eb82712": "Les nouveaux projets vont dans {path} sur {machine}. Les projets existants restent où ils sont.",
+  "1342340f282d6285": "Rétablir l'emplacement des nouveaux projets par défaut",
+  "ccb1f72e9b5b9001": "Emplacement des nouveaux projets",
+  "6e3a2768bc5b9702": "Choisir un dossier…",
   "e7ea609e6fcfa591": "Alertes système quand un fil se termine, échoue ou attend une réponse ou une approbation. S’applique à cet appareil tant que p0code est ouvert.",
   "24a0ac9e7e55975c": "Les notifications nécessitent un navigateur compatible via HTTPS, ou l’app de bureau. Le son seul reste disponible.",
   "6b0b1dd4d399d3c6": "Les notifications ne sont pas disponibles dans ce navigateur. Le son seul reste disponible.",
@@ -12158,6 +12165,7 @@
   "4a172e139167badc": "nouveaux worktrees démarrer remote origin dernière branche récupérée locale",
   "30aac12099fcaf53": "Dossier de départ d’Ajouter un projet",
   "70bcb8df9015ae2a": "répertoire de base dossier navigateur chemin home",
+  "cb0baace6102db95": "nouveau dossier de projet nommé créer destination racine chemin choisir",
   "061cb86367f49363": "ghq clone destination hôte propriétaire dépôt racine disposition",
   "2bb905a7e7cddff7": "demander avant fil section épinglée",
   "53390c9ebb75f5d3": "demander avant fil second clic action en ligne",
