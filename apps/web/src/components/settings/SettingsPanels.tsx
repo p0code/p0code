@@ -353,7 +353,43 @@ function AboutVersionSection() {
       <SettingsRow
         id={setting("app-version").id}
         title={<AboutVersionTitle />}
-        description={description}
+        description={updateState?.message ?? description}
+        status={
+          <div className="space-y-1">
+            {updateState?.availableVersion ? (
+              <p>{gt("Latest version: {version}", { version: updateState.availableVersion })}</p>
+            ) : null}
+            {updateState?.downloadSize ? (
+              <p>
+                {gt("Download size: {size} MB", {
+                  size: (updateState.downloadSize / 1024 / 1024).toFixed(1),
+                })}
+              </p>
+            ) : null}
+            {updateState?.status === "downloading" ? (
+              <p>
+                {gt("Downloading update ({percent}%)", {
+                  percent: Math.floor(updateState.downloadPercent ?? 0),
+                })}
+              </p>
+            ) : null}
+            {updateState?.releaseUrl ? (
+              <a
+                href={updateState.releaseUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="underline"
+              >
+                <T>Release notes</T>
+              </a>
+            ) : null}
+            {hasDesktopBridge ? (
+              <p>
+                <T>The embedded server updates with the app.</T>
+              </p>
+            ) : null}
+          </div>
+        }
         managed={updatesDenial}
         control={
           <Tooltip>
@@ -475,6 +511,22 @@ function AboutVersionSection() {
                 </SelectItem>
               </SelectPopup>
             </Select>
+          }
+        />
+      ) : null}
+      {hasDesktopBridge ? (
+        <SettingsRow
+          title={gt("Check for updates")}
+          description={gt("Background checks run once a day.")}
+          control={
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!canCheckForUpdate(updateState) || isUpdateActionPending}
+              onClick={() => void window.desktopBridge?.checkForUpdate()}
+            >
+              <T>Check now</T>
+            </Button>
           }
         />
       ) : null}

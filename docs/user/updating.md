@@ -4,6 +4,19 @@ The app you use and the server running your agents can be on different machines.
 When a server is behind your web or desktop app, the update button at the bottom
 of the sidebar and **Settings → Environments** offer to update it.
 
+## Update the desktop app
+
+The desktop app checks for releases on its update track once a day. Open
+**Settings → About** to check now, review the release notes and download size,
+and download an update. **Install** restarts the app and its embedded server;
+finish running tasks first. You can dismiss the sidebar notice and return later.
+
+On macOS, install p0code in a writable Applications folder before updating.
+Downloads are checked against the release checksum, and the new app must use
+the same signing certificate as the installed app. If either check fails, the
+current app stays in place. A changed signing certificate requires a manual
+installation from the release page.
+
 ## Update everything at once
 
 The update button at the bottom of the sidebar updates every connected machine

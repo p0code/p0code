@@ -39,6 +39,7 @@ import {
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { isSidebarUtilityPage, useNavigateToMainApp } from "./mainAppLocation";
 import { SidebarAccountProfileToggle } from "./SidebarAccountProfileMenu";
+import { DesktopUpdateBanner } from "./DesktopUpdateBanner";
 import { SidebarProviderUpdatePill } from "./SidebarProviderUpdatePill";
 import { SidebarThreadUndoNotice } from "./SidebarThreadUndoNotice";
 import { SidebarUpdateArchitectureWarning, SidebarUpdatePill } from "./SidebarUpdatePill";
@@ -281,6 +282,7 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
 export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
   return (
     <SidebarFooter>
+      <DesktopUpdateBanner />
       <SidebarProviderUpdatePill />
       <SidebarUpdateArchitectureWarning />
       <SidebarAccountProfileToggle />
