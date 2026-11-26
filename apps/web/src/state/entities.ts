@@ -35,6 +35,7 @@ import { isThreadInActiveAccountProfile } from "@t3tools/shared/accountProfiles"
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import {
   environmentProjects,
+  profileHiddenEnvironmentIdsAtom,
   profileHiddenProjectKeysAtom,
   profileSeparatingSettingsAtom,
 } from "./projects";
@@ -109,6 +110,19 @@ export function useProjects(): ReadonlyArray<EnvironmentProject> {
   return useAtomValue(environmentProjects.projectsAtom);
 }
 
+/** Machines the active account profile leaves out of lists and pickers. */
+export function useProfileHiddenEnvironmentIds(): ReadonlySet<EnvironmentId> {
+  return useAtomValue(profileHiddenEnvironmentIdsAtom);
+}
+
+/** `items` minus those on machines the active account profile leaves out. */
+export function useProfileEnvironments<T extends { readonly environmentId: EnvironmentId }>(
+  items: ReadonlyArray<T>,
+): ReadonlyArray<T> {
+  const hidden = useProfileHiddenEnvironmentIds();
+  return hidden.size === 0 ? items : items.filter((item) => !hidden.has(item.environmentId));
+}
+
 /** Keys (`environmentId:projectId`) of projects the active account profile hides. */
 export function useProfileHiddenProjectKeys(): ReadonlySet<string> {
   return useAtomValue(profileHiddenProjectKeysAtom);
@@ -157,9 +171,12 @@ export function useProfileThreads<
   T extends Pick<EnvironmentThreadShell, "environmentId" | "id" | "projectId">,
 >(threads: ReadonlyArray<T>): ReadonlyArray<T> {
   const separating = useAtomValue(profileSeparatingSettingsAtom);
-  if (separating.size === 0) return threads;
-  const visible = threads.filter((thread) =>
-    isThreadInActiveAccountProfile(separating.get(thread.environmentId), thread),
+  const hiddenEnvironments = useProfileHiddenEnvironmentIds();
+  if (separating.size === 0 && hiddenEnvironments.size === 0) return threads;
+  const visible = threads.filter(
+    (thread) =>
+      !hiddenEnvironments.has(thread.environmentId) &&
+      isThreadInActiveAccountProfile(separating.get(thread.environmentId), thread),
   );
   return visible.length === threads.length ? threads : visible;
 }

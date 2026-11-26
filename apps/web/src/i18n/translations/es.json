@@ -7049,6 +7049,8 @@
   "f6087a2fedb6b9a2": "Cuando un hilo alcanza un límite de uso, continúalo en la siguiente cuenta de este perfil en lugar de esperar al restablecimiento. Sin esta opción, el hilo ofrece el cambio.",
   "f8b98aa57cfc959a": "No hay cuentas que ordenar",
   "92cebb084de47f06": "Añade una segunda instancia de un proveedor, como otra cuenta de Claude, para dar un orden a este perfil.",
+  "7f99aaba0befc867": "Máquinas",
+  "728a139a8745cb03": "Mientras este perfil esté activo, solo se muestran los proyectos y los hilos de estas máquinas. Si no seleccionas ninguna, se muestran todas.",
   "687a2ab72c58ec21": "Primero la primera cuenta.",
   "1efee63e34c00bb7": "Cuentas de {provider}, la primera opción primero",
   "8101bb8e3c7427bf": "Subir {name}",

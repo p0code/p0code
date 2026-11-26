@@ -11,6 +11,7 @@ import { peerLinkEnvironment, offersLinkedEnvironmentsAtom } from "../state/peer
 import { useEnvironmentQuery } from "../state/query";
 import { useEnvironmentScope } from "../state/session";
 import { useAtomValue } from "@effect/atom-react";
+import { useProfileHiddenEnvironmentIds } from "../state/entities";
 
 export function useEnvironmentSwitcher() {
   const context = useEnvironmentSwitcherStore((state) => state.context);
@@ -27,12 +28,18 @@ export function useEnvironmentSwitcher() {
       : null,
   );
   const resolve = useMessages();
+  const hidden = useProfileHiddenEnvironmentIds();
+  // The current machine stays listed even when the active profile leaves it out.
+  const listed = environments.filter(
+    (environment) =>
+      !hidden.has(environment.environmentId) || environment.environmentId === environmentId,
+  );
   return {
     environments,
     onEnvironmentChange: context?.onEnvironmentChange,
     items: buildEnvironmentSwitcherItems(
       {
-        environments,
+        environments: listed,
         links: links.data?.links ?? [],
         currentEnvironmentId: environmentId,
         availableEnvironments: context?.availableEnvironments ?? [],

@@ -1,6 +1,7 @@
 import {
   type AccountProfile,
   type AccountProfileId,
+  type EnvironmentId,
   isProviderAvailable,
   type ModelSelection,
   type ProjectId,
@@ -11,6 +12,7 @@ import {
   type ServerSettings,
   type ServerSettingsPatch,
   type ThreadId,
+  isEnvironmentAllowedInActiveProfile,
 } from "@t3tools/contracts";
 
 import { isModelSelectionProviderEnabled } from "./serverSettings.ts";
@@ -154,6 +156,59 @@ export function moveProfileInstance(
   next.splice(to, 0, instanceId);
   const others = profile.instanceOrder.filter((id) => !driverOrder.includes(id));
   return { ...profile, instanceOrder: [...others, ...next] };
+}
+
+/** A new profile with every known machine linked, so creating it hides nothing. */
+export function newAccountProfile(
+  id: AccountProfileId,
+  name: string,
+  knownEnvironmentIds: ReadonlyArray<EnvironmentId>,
+): AccountProfile {
+  return {
+    id,
+    name,
+    instanceOrder: [],
+    excludedInstanceIds: [],
+    linkedEnvironmentIds: [...knownEnvironmentIds],
+    autoSwitchOnLimit: false,
+  };
+}
+
+/**
+ * Machines the active profile leaves out. The primary's profiles decide, since they sync to the
+ * other machines; without a primary, each machine's own synced copy does.
+ */
+export function profileHiddenEnvironmentIds(
+  settingsByEnvironment: ReadonlyMap<
+    EnvironmentId,
+    Pick<ServerSettings, "accountProfiles" | "activeAccountProfileId">
+  >,
+  primaryEnvironmentId: EnvironmentId | null,
+): ReadonlySet<EnvironmentId> {
+  const primary =
+    primaryEnvironmentId === null ? undefined : settingsByEnvironment.get(primaryEnvironmentId);
+  const hidden = new Set<EnvironmentId>();
+  for (const [environmentId, settings] of settingsByEnvironment) {
+    if (!isEnvironmentAllowedInActiveProfile(primary ?? settings, environmentId)) {
+      hidden.add(environmentId);
+    }
+  }
+  return hidden;
+}
+
+/**
+ * Links or unlinks one machine. An empty list means every machine, so the first change starts
+ * from all `known` machines; unlinking the last one returns to every machine.
+ */
+export function setProfileEnvironmentLinked(
+  profile: AccountProfile,
+  known: ReadonlyArray<EnvironmentId>,
+  environmentId: EnvironmentId,
+  linked: boolean,
+): AccountProfile {
+  const current = profile.linkedEnvironmentIds.length === 0 ? known : profile.linkedEnvironmentIds;
+  const others = current.filter((id) => id !== environmentId);
+  return { ...profile, linkedEnvironmentIds: linked ? [...others, environmentId] : others };
 }
 
 /** The profile after the active one, wrapping around, for a quick-switch shortcut. */

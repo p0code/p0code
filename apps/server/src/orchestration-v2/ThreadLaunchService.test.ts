@@ -18,6 +18,7 @@ import {
   type ChatAttachment,
   CommandId,
   DEFAULT_SERVER_SETTINGS,
+  AccountProfileId,
   EnvironmentId,
   GitCommandError,
   MessageId,
@@ -57,6 +58,7 @@ import * as ProjectSetupScriptRunner from "../project/ProjectSetupScriptRunner.t
 import * as ManagedProjectFolders from "../project/ManagedProjectFolders.ts";
 import * as ProviderRegistryMock from "../provider/testUtils/providerRegistryMock.ts";
 import * as ServerSettings from "../serverSettings.ts";
+import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import * as ScheduledTasks from "../scheduledTasks/ScheduledTaskService.ts";
 import * as ManagedPolicy from "../policy/ManagedPolicy.ts";
 import * as SecretRequests from "../secrets/SecretRequests.ts";
@@ -160,6 +162,9 @@ interface HarnessOptions {
   ) => ReturnType<ThreadManagement.ThreadManagementService["Service"]["dispatch"]>;
   readonly isGitRepository?: CheckpointStore.CheckpointStore["Service"]["isGitRepository"];
 }
+
+/** The machine the harness's server runs as; profiles link or leave it out by this id. */
+const launchEnvironmentId = EnvironmentId.make("environment:launch");
 
 function makeHarness(options: HarnessOptions = {}) {
   const layerDatabase = SqlitePersistence.layerMemory;
@@ -291,6 +296,9 @@ function makeHarness(options: HarnessOptions = {}) {
         layerReceipts,
         layerOrchestrator,
         IdAllocator.layer,
+        Layer.succeed(ServerEnvironment.ServerEnvironmentIdentity, {
+          getEnvironmentId: Effect.succeed(launchEnvironmentId),
+        }),
         options.getLaunchSettings === undefined
           ? Layer.empty
           : Layer.mock(ServerSettings.ServerSettingsService)({
@@ -2285,6 +2293,64 @@ it.effect("replays an accepted launch after the project disables the instance", 
     }
   }).pipe(Effect.provide(harness.layer));
 });
+
+it.effect(
+  "refuses new threads on a machine the active profile leaves out, but not running work",
+  () => {
+    const harness = makeHarness();
+    return Effect.gen(function* () {
+      const launches = yield* ThreadLaunch.ThreadLaunchService;
+      const settings = yield* ServerSettings.ServerSettingsService;
+      const input = launchInput({
+        command: "command:launch:before-profile-switch",
+        thread: "thread:launch:before-profile-switch",
+        message: "Hello",
+      });
+      const first = yield* launches.launch(input);
+      const elsewhere = EnvironmentId.make("environment:elsewhere");
+      const personalProfile = {
+        id: AccountProfileId.make("personal"),
+        name: "Personal",
+        instanceOrder: [],
+        excludedInstanceIds: [],
+        autoSwitchOnLimit: false,
+      };
+      yield* settings.updateSettings({
+        accountProfiles: [{ ...personalProfile, linkedEnvironmentIds: [elsewhere] }],
+        activeAccountProfileId: AccountProfileId.make("personal"),
+      });
+
+      const fresh = yield* launches
+        .launch(
+          launchInput({
+            command: "command:launch:after-switch",
+            thread: "thread:launch:after-switch",
+          }),
+        )
+        .pipe(Effect.flip);
+      assert.equal(fresh._tag, "ThreadLaunchEnvironmentNotInProfileError");
+
+      // An accepted launch replays, and a running thread's delegated task still starts.
+      assert.isTrue((yield* launches.launch(input)).resumed);
+      yield* launches.launch({
+        ...launchInput({ command: "command:launch:delegated", thread: "thread:launch:delegated" }),
+        createdBy: "agent",
+        creationSource: "mcp",
+        delegatedFrom: { environmentId: elsewhere, threadId: first.threadId, title: "Parent" },
+      });
+
+      // Linking the machine again lets new threads start.
+      yield* settings.updateSettings({
+        accountProfiles: [
+          { ...personalProfile, linkedEnvironmentIds: [elsewhere, launchEnvironmentId] },
+        ],
+      });
+      yield* launches.launch(
+        launchInput({ command: "command:launch:relinked", thread: "thread:launch:relinked" }),
+      );
+    }).pipe(Effect.provide(harness.layer));
+  },
+);
 
 it.effect("an agent's launch never starts work above the modes it asks for", () => {
   const harness = makeHarness();

@@ -2265,6 +2265,13 @@ export const layerWsRpc = (
                         message: cause.message,
                         cause,
                       }),
+                    ThreadLaunchEnvironmentNotInProfileError: (cause) =>
+                      new OrchestrationV2ThreadLaunchError({
+                        commandId: input.commandId,
+                        projectId: input.projectId,
+                        message: cause.message,
+                        cause,
+                      }),
                     ThreadLaunchBaseRefError: (cause) =>
                       new OrchestrationV2ThreadLaunchError({
                         commandId: input.commandId,

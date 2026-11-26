@@ -7054,6 +7054,8 @@
   "f6087a2fedb6b9a2": "När en tråd når en användningsgräns fortsätter du den på nästa konto i den här profilen i stället för att vänta på återställningen. Utan detta erbjuder tråden bytet.",
   "f8b98aa57cfc959a": "Inga konton att ordna",
   "92cebb084de47f06": "Lägg till ytterligare en instans av en leverantör, till exempel ett annat Claude-konto, för att ge den här profilen en ordning.",
+  "7f99aaba0befc867": "Datorer",
+  "728a139a8745cb03": "Medan den här profilen är aktiv visas bara projekt och trådar från de här datorerna. Inget valt betyder alla datorer.",
   "687a2ab72c58ec21": "Första kontot först.",
   "1efee63e34c00bb7": "{provider}-konton, första valet först",
   "8101bb8e3c7427bf": "Flytta upp {name}",

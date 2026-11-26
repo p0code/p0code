@@ -10,7 +10,12 @@ import {
 } from "@t3tools/contracts";
 import { useEffect, useState } from "react";
 
-import { useAllEnvironmentShellsBootstrapped, useProjects } from "~/state/entities";
+import {
+  useAllEnvironmentShellsBootstrapped,
+  useProfileEnvironments,
+  useProfileProjects,
+  useProjects,
+} from "~/state/entities";
 import { useEnvironments } from "~/state/environments";
 import {
   applyPullRequestOverrides,
@@ -67,8 +72,9 @@ export function usePullRequestScope(
   search: PullRequestsSearch,
   hostAvailability: PullRequestHostAvailability,
 ) {
-  const { environments } = useEnvironments();
-  const allProjects = useProjects();
+  // Machines and projects outside the active account profile are left out.
+  const environments = useProfileEnvironments(useEnvironments().environments);
+  const allProjects = useProfileProjects(useProjects());
   const projectsKnown = useAllEnvironmentShellsBootstrapped();
   const capableEnvironments = environments
     .filter((environment) => environment.serverConfig !== null)

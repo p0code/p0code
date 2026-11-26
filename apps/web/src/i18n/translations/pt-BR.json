@@ -7049,6 +7049,8 @@
   "f6087a2fedb6b9a2": "Quando um thread atingir um limite de uso, continue-o na próxima conta deste perfil em vez de esperar o reset. Sem isso, o thread oferece a troca.",
   "f8b98aa57cfc959a": "Nenhuma conta para ordenar",
   "92cebb084de47f06": "Adicione uma segunda instância de um provedor, como outra conta Claude, para dar uma ordem a este perfil.",
+  "7f99aaba0befc867": "Máquinas",
+  "728a139a8745cb03": "Enquanto este perfil estiver ativo, só aparecem os projetos e threads destas máquinas. Nenhuma seleção significa todas as máquinas.",
   "687a2ab72c58ec21": "Primeira conta primeiro.",
   "1efee63e34c00bb7": "Contas {provider}, primeira escolha primeiro",
   "8101bb8e3c7427bf": "Mover {name} para cima",

@@ -23,7 +23,9 @@ import {
   isListedProfileAccount,
   listedProfileDrivers,
   moveProfileInstance,
+  newAccountProfile,
   orderInstancesForDriver,
+  setProfileEnvironmentLinked,
 } from "@t3tools/shared/accountProfiles";
 import { exhaustedUsageWindow } from "@t3tools/shared/usageLimits";
 import { T, useGT } from "gt-react";
@@ -31,6 +33,7 @@ import { ArrowDownIcon, ArrowUpIcon, GripVerticalIcon, PlusIcon, Trash2Icon } fr
 import { useState } from "react";
 
 import { useEnvironmentSettings, useUpdateEnvironmentSettings } from "../../hooks/useSettings";
+import { useEnvironments } from "../../state/environments";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { useNowMinute } from "../../hooks/useNowMinute";
@@ -39,6 +42,7 @@ import { cn } from "../../lib/utils";
 import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
 import { runtimeModeConfig, runtimeModeOptions } from "../chat/runtimeModeConfig";
 import { Button } from "../ui/button";
+import { Checkbox } from "../ui/checkbox";
 import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Switch } from "../ui/switch";
@@ -73,6 +77,7 @@ export function AccountProfilesSettings({
     profiles.find((profile) => profile.id === (editingId ?? settings.activeAccountProfileId)) ??
     profiles[0];
   const drivers = listedProfileDrivers(providers);
+  const machines = useEnvironments().environments;
   const now = Date.parse(`${nowMinute}:00Z`);
 
   const saveProfiles = (next: ReadonlyArray<AccountProfile>) =>
@@ -85,13 +90,11 @@ export function AccountProfilesSettings({
     const id = AccountProfileId.make(`profile-${index}`);
     const nextProfiles = [
       ...profiles,
-      {
+      newAccountProfile(
         id,
-        name: gt("Profile {index}", { index }),
-        instanceOrder: [],
-        excludedInstanceIds: [],
-        autoSwitchOnLimit: false,
-      },
+        gt("Profile {index}", { index }),
+        machines.map((machine) => machine.environmentId),
+      ),
     ];
     const hasActive = profiles.some((profile) => profile.id === settings.activeAccountProfileId);
     updateSettings({
@@ -250,6 +253,12 @@ export function AccountProfilesSettings({
               />
             }
           />
+          <ProfileMachines
+            profile={editing}
+            machines={machines}
+            readOnly={readOnly}
+            onChange={saveProfile}
+          />
           {drivers.length === 0 ? (
             <SettingsRow
               title={gt("No accounts to order")}
@@ -279,6 +288,50 @@ export function AccountProfilesSettings({
         </>
       ) : null}
     </SettingsSection>
+  );
+}
+
+function ProfileMachines(props: {
+  readonly profile: AccountProfile;
+  readonly machines: ReadonlyArray<{
+    readonly environmentId: EnvironmentId;
+    readonly label: string;
+  }>;
+  readonly readOnly: boolean;
+  readonly onChange: (profile: AccountProfile) => void;
+}) {
+  const gt = useGT();
+  const known = props.machines.map((machine) => machine.environmentId);
+  const linked = props.profile.linkedEnvironmentIds;
+  return (
+    <SettingsRow
+      title={gt("Machines")}
+      description={gt(
+        "Only these machines' projects and threads show while this profile is active. None selected means all machines.",
+      )}
+    >
+      <div className="mt-2 grid gap-1 rounded-lg border border-border/60 p-2">
+        {props.machines.map((machine) => (
+          <label key={machine.environmentId} className="flex items-center gap-2 text-sm">
+            <Checkbox
+              checked={linked.length === 0 || linked.includes(machine.environmentId)}
+              disabled={props.readOnly}
+              onCheckedChange={(checked) =>
+                props.onChange(
+                  setProfileEnvironmentLinked(
+                    props.profile,
+                    known,
+                    machine.environmentId,
+                    checked === true,
+                  ),
+                )
+              }
+            />
+            <span className="truncate">{machine.label}</span>
+          </label>
+        ))}
+      </div>
+    </SettingsRow>
   );
 }
 

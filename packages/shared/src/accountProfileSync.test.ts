@@ -2,6 +2,7 @@ import {
   type AccountProfile,
   AccountProfileId,
   DEFAULT_SERVER_SETTINGS,
+  EnvironmentId,
   ProjectId,
   ProviderInstanceId,
   type ServerSettings,
@@ -22,6 +23,7 @@ function profile(id: AccountProfileId, name: string, extra: Partial<AccountProfi
     name,
     instanceOrder: [],
     excludedInstanceIds: [],
+    linkedEnvironmentIds: [],
     autoSwitchOnLimit: false,
     ...extra,
   } satisfies AccountProfile;
@@ -44,6 +46,7 @@ describe("syncedAccountProfilesPatch", () => {
     const reversed = (entry: AccountProfile): AccountProfile => ({
       autoSwitchOnLimit: entry.autoSwitchOnLimit,
       excludedInstanceIds: entry.excludedInstanceIds,
+      linkedEnvironmentIds: entry.linkedEnvironmentIds,
       instanceOrder: entry.instanceOrder,
       name: entry.name,
       id: entry.id,
@@ -155,6 +158,17 @@ describe("syncedAccountProfilesPatch", () => {
     expect(
       syncedAccountProfilesPatch(withModel, settings({ ...source, accountProfiles: [personal] })),
     ).toEqual({ accountProfiles: [profile(personalId, "Personal", { defaultModelSelection })] });
+  });
+
+  it("shares a profile's linked machines with every environment", () => {
+    const laptop = EnvironmentId.make("environment:laptop");
+    const linked = settings({
+      accountProfiles: [profile(personalId, "Personal", { linkedEnvironmentIds: [laptop] }), work],
+      activeAccountProfileId: personalId,
+    });
+    expect(syncedAccountProfilesPatch(linked, source)).toEqual({
+      accountProfiles: [profile(personalId, "Personal", { linkedEnvironmentIds: [laptop] }), work],
+    });
   });
 
   it("never wipes a target from a source without profiles", () => {

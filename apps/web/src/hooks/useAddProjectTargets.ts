@@ -4,6 +4,7 @@ import { AuthSourceControlWriteScope, resolveEnvironmentMachineKind } from "@t3t
 
 import type { EnvironmentOption } from "../components/BranchToolbar.logic";
 import { useEnvironments } from "../state/environments";
+import { useProfileEnvironments } from "../state/entities";
 import { useEnvironmentsWithScope } from "../state/session";
 
 export type AddProjectTarget = Pick<EnvironmentOption, "environmentId" | "label" | "machine">;
@@ -17,7 +18,7 @@ export function useAddProjectTargets(
   project: EnvironmentProject | null,
   projectEnvironments: readonly Pick<EnvironmentOption, "environmentId">[] | undefined,
 ): readonly AddProjectTarget[] {
-  const { environments } = useEnvironments();
+  const environments = useProfileEnvironments(useEnvironments().environments);
   const canClone = useEnvironmentsWithScope(environments, AuthSourceControlWriteScope);
   if (!project?.repositoryIdentity?.locator.remoteUrl) return [];
   const hasProject = new Set([
