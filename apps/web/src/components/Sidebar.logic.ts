@@ -2,7 +2,6 @@ import type { EnvironmentServerConfig } from "@t3tools/client-runtime/connection
 import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { resolveThreadWorkingStartedAt } from "@t3tools/client-runtime/state/models";
 import { isShownUnderParent } from "@t3tools/client-runtime/state/threads";
-import { backgroundWorkHoldsCompletion } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
 import { threadPullRequestSearchTerms } from "@t3tools/shared/threadPullRequests";
 import * as React from "react";
 import { msg } from "gt-react";
@@ -1267,16 +1266,18 @@ export function resolveThreadStatusPill(input: {
     };
   }
 
+  const working = {
+    label: msg("Working"),
+    colorClass: "text-sky-600 dark:text-sky-300/80",
+    dotClass: "bg-sky-500 dark:bg-sky-300/80",
+    pulse: true,
+  };
+
   if (
     (thread.runtime?.status === "running" && thread.blockedOnThreadWait !== true) ||
     thread.runtime?.status === "waiting"
   ) {
-    return {
-      label: msg("Working"),
-      colorClass: "text-sky-600 dark:text-sky-300/80",
-      dotClass: "bg-sky-500 dark:bg-sky-300/80",
-      pulse: true,
-    };
+    return working;
   }
 
   if (
@@ -1310,7 +1311,8 @@ export function resolveThreadStatusPill(input: {
     };
   }
 
-  if (backgroundWorkHoldsCompletion(thread.pendingBackgroundTasks ?? [])) return waiting;
+  // Background work is work: the thread is not waiting for anything, it is still running.
+  if ((thread.pendingBackgroundTasks ?? []).length > 0) return working;
 
   const hasPlanReadyPrompt =
     !thread.hasPendingUserInput &&

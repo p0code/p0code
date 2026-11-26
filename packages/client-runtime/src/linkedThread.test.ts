@@ -3,6 +3,10 @@ import * as NodeTimersPromises from "node:timers/promises";
 import {
   EnvironmentId,
   EventId,
+  MessageId,
+  ProviderDriverKind,
+  ProviderThreadId,
+  RunId,
   type OrchestrationV2ThreadHistoryPage,
   type OrchestrationV2ThreadStreamItem,
   type PeerLinkClientPairingResult,
@@ -18,6 +22,7 @@ import { TestClock } from "effect/testing";
 import {
   connectLinkedEnvironment,
   followLinkedThread,
+  isLinkedThreadWorking,
   keepLinkedThreadView,
   LINKED_THREAD_RETRY_MS,
   type LinkedThreadView,
@@ -351,5 +356,74 @@ describe("connectLinkedEnvironment", () => {
       label: "VM",
       host: lan,
     });
+  });
+});
+
+describe("isLinkedThreadWorking", () => {
+  it("counts live background work as working unless the latest run failed", () => {
+    const completedRun = {
+      id: RunId.make("run-bg"),
+      threadId: v2Projection.thread.id,
+      ordinal: 1,
+      providerInstanceId: v2Projection.thread.providerInstanceId,
+      modelSelection: v2Projection.thread.modelSelection,
+      providerThreadId: null,
+      userMessageId: MessageId.make("message-bg"),
+      rootNodeId: null,
+      activeAttemptId: null,
+      status: "completed" as const,
+      requestedAt: v2Now,
+      startedAt: v2Now,
+      completedAt: v2Now,
+      checkpointId: null,
+      contextHandoffId: null,
+    };
+    const withTasks = (
+      status: "completed" | "failed",
+      pendingBackgroundTasks: ReadonlyArray<
+        | { readonly taskId: string; readonly kind: "command"; readonly awaited?: true }
+        | { readonly taskId: string; readonly kind: "background_task" }
+      >,
+    ) => ({
+      ...v2Projection,
+      runs: [{ ...completedRun, status }],
+      providerThreads: [
+        {
+          id: ProviderThreadId.make("pt-bg"),
+          driver: ProviderDriverKind.make("claudeCode"),
+          providerInstanceId: v2Projection.thread.providerInstanceId,
+          providerSessionId: null,
+          appThreadId: v2Projection.thread.id,
+          ownerNodeId: null,
+          nativeThreadRef: null,
+          nativeConversationHeadRef: null,
+          status: "idle" as const,
+          firstRunOrdinal: 1,
+          lastRunOrdinal: 1,
+          handoffIds: [],
+          forkedFrom: null,
+          pendingBackgroundTasks,
+          createdAt: v2Now,
+          updatedAt: v2Now,
+        },
+      ],
+    });
+
+    expect(
+      isLinkedThreadWorking(withTasks("completed", [{ taskId: "dev", kind: "command" }])),
+    ).toBe(true);
+    expect(
+      isLinkedThreadWorking(
+        withTasks("completed", [{ taskId: "build", kind: "command", awaited: true }]),
+      ),
+    ).toBe(true);
+    expect(
+      isLinkedThreadWorking(withTasks("completed", [{ taskId: "task", kind: "background_task" }])),
+    ).toBe(true);
+    expect(
+      isLinkedThreadWorking(
+        withTasks("failed", [{ taskId: "build", kind: "command", awaited: true }]),
+      ),
+    ).toBe(false);
   });
 });

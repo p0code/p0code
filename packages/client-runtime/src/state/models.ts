@@ -115,6 +115,7 @@ export interface ThreadRuntimeSummary {
   readonly status: OrchestrationV2RunStatus | "idle";
   readonly activeRunId: RunId | null;
   readonly activityStartedAt?: string | null | undefined;
+  readonly pendingBackgroundWork?: boolean;
   readonly providerInstanceId: ProviderInstanceId;
   readonly providerName: string | null;
   readonly lastError: string | null;
@@ -130,10 +131,15 @@ export interface ThreadRuntimeSummary {
 export type ThreadStructureRuntime = Omit<ThreadRuntimeSummary, "updatedAt">;
 
 export function threadRuntimeIsActive(runtime: ThreadStructureRuntime | null | undefined): boolean {
-  return runtime !== null && runtime !== undefined && threadRunStatusIsActive(runtime.status);
+  return (
+    runtime !== null &&
+    runtime !== undefined &&
+    (threadRunStatusIsActive(runtime.status) || runtime.pendingBackgroundWork === true)
+  );
 }
 
 export function threadRuntimeCanArchive(runtime: ThreadRuntimeSummary | null | undefined): boolean {
+  if (runtime?.pendingBackgroundWork === true) return false;
   if (runtime?.status === "queued") return runtime.activeRunId === null;
   return (
     runtime?.status !== "preparing" &&
@@ -246,9 +252,12 @@ function terminalRunStatus(status: OrchestrationV2RunStatus): boolean {
 // server suppresses the roster while an interruptible activity run exists, so a
 // remaining roster is stronger than checkpoint-oriented waiting.
 function shellRuntime(thread: OrchestrationV2ThreadShell): ThreadRuntimeSummary | null {
+  const pendingBackgroundTasks = thread.pendingBackgroundTasks ?? [];
+  // Any pending background task means the thread is still doing something; awaits only decide
+  // whether completion is held, not whether the process is alive.
+  const pendingBackgroundWork = pendingBackgroundTasks.length > 0;
   const parkAtIdle =
-    backgroundWorkHoldsCompletion(thread.pendingBackgroundTasks ?? []) &&
-    thread.status !== "failed";
+    backgroundWorkHoldsCompletion(pendingBackgroundTasks) && thread.status !== "failed";
   if (thread.latestRunId === null && !parkAtIdle) {
     return null;
   }
@@ -260,6 +269,7 @@ function shellRuntime(thread: OrchestrationV2ThreadShell): ThreadRuntimeSummary 
       thread.activityRunStartedAt === undefined
         ? undefined
         : nullableIso(thread.activityRunStartedAt),
+    pendingBackgroundWork,
     providerInstanceId: thread.providerInstanceId,
     providerName: null,
     lastError: thread.lastError ?? null,

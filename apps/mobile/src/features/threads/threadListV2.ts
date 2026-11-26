@@ -306,11 +306,14 @@ export function resolveThreadListV2Status(
   ) {
     return "working";
   }
-  if (thread.runtime?.status === "idle") {
-    return "waiting";
-  }
   if (thread.runtime?.status === "failed") {
     return thread.runtime.lastErrorClass === "usage_limit" ? "limited" : "failed";
+  }
+  if (thread.runtime?.pendingBackgroundWork === true) {
+    return "working";
+  }
+  if (thread.runtime?.status === "idle") {
+    return "waiting";
   }
   return "ready";
 }

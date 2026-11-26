@@ -17,6 +17,8 @@ type WorkingThreadInput = Pick<
 export function isThreadWorking(thread: WorkingThreadInput): boolean {
   if (thread.hasPendingApprovals || thread.hasPendingUserInput) return false;
   if (thread.pendingSubagentRequest != null) return false;
+  // A failed run returns to the inbox even while background work holds the thread.
+  if (thread.runtime?.status === "failed") return false;
   if (!threadRuntimeIsActive(thread.runtime) && thread.runtime?.status !== "idle") return false;
   const run = thread.latestRun;
   const runSettled =

@@ -205,9 +205,9 @@ describe("resolveThreadListV2Status", () => {
   });
 
   it.each([
-    { roster: "dev server", task: { kind: "command" }, status: "ready" },
-    { roster: "dev server watchdog", task: { kind: "monitor" }, status: "ready" },
-    { roster: "awaited command", task: { kind: "command", awaited: true }, status: "waiting" },
+    { roster: "dev server", task: { kind: "command" }, status: "working" },
+    { roster: "dev server watchdog", task: { kind: "monitor" }, status: "working" },
+    { roster: "awaited command", task: { kind: "command", awaited: true }, status: "working" },
   ] as const)(
     "presents an unseen completion with a $roster roster as $status",
     ({ task, status }) => {
@@ -226,6 +226,43 @@ describe("resolveThreadListV2Status", () => {
       expect(threadHasUnseenCompletion(thread)).toBe(true);
     },
   );
+
+  it("reports pending background work on an idle runtime as working, below requests and failures", () => {
+    const background = makeThread({
+      id: ThreadId.make("bg-idle"),
+      title: "Background build",
+      runtime: {
+        status: "idle",
+        activeRunId: null,
+        pendingBackgroundWork: true,
+        providerInstanceId: ProviderInstanceId.make("codex"),
+        providerName: null,
+        lastError: null,
+        updatedAt: NOW,
+      },
+    });
+
+    expect(resolveThreadListV2Status(background)).toBe("working");
+    expect(resolveThreadListV2Status({ ...background, hasPendingApprovals: true })).toBe(
+      "approval",
+    );
+    expect(resolveThreadListV2Status({ ...background, hasPendingUserInput: true })).toBe("input");
+    expect(resolveThreadListV2Status({ ...background, pendingGuestMessageCount: 1 })).toBe(
+      "request",
+    );
+    expect(
+      resolveThreadListV2Status({
+        ...background,
+        runtime: { ...background.runtime!, status: "failed" },
+      }),
+    ).toBe("failed");
+    expect(
+      resolveThreadListV2Status({
+        ...background,
+        runtime: { ...background.runtime!, pendingBackgroundWork: false },
+      }),
+    ).toBe("waiting");
+  });
 
   it.each(["interrupted", "cancelled"] as const)(
     "does not present a %s run as an unseen completion",
