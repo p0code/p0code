@@ -1,4 +1,5 @@
 import {
+  KeybindingCommand,
   KeybindingRule,
   KeybindingsConfigError,
   KeybindingShortcut,
@@ -292,8 +293,69 @@ const make = Effect.gen(function* () {
     ),
   );
 
-  // Entries this build cannot decode, such as a typo or a command from a newer
-  // build, are written back unchanged so editing another shortcut keeps them.
+  const writeConfigAtomically = (entries: ReadonlyArray<unknown>) => {
+    return encodeRawKeybindingsEntriesPrettyJson(entries).pipe(
+      Effect.map((encoded) => `${encoded}\n`),
+      Effect.flatMap((encoded) =>
+        writeFileStringAtomically({
+          filePath: keybindingsConfigPath,
+          contents: encoded,
+        }).pipe(
+          Effect.provideService(FileSystem.FileSystem, fs),
+          Effect.provideService(Path.Path, path),
+        ),
+      ),
+      Effect.mapError(
+        (cause) =>
+          new KeybindingsConfigError({
+            configPath: keybindingsConfigPath,
+            detail: "failed to write keybindings config",
+            cause,
+          }),
+      ),
+    );
+  };
+
+  const decodeKeybindingCommandExit = Schema.decodeUnknownExit(KeybindingCommand);
+
+  const unknownKeybindingCommand = (entry: unknown): string | null => {
+    if (!Predicate.isObject(entry)) return null;
+    const command = entry["command"];
+    // A missing or non-string command is an invalid entry, not an unknown command.
+    if (typeof command !== "string") return null;
+    return decodeKeybindingCommandExit(command)._tag === "Failure" ? command : null;
+  };
+
+  // A command can disappear between releases while its shortcut stays behind in
+  // keybindings.json. Drop those entries so the rest of the file keeps syncing.
+  const pruneUnknownCommandKeybindings = Effect.fn("keybindings.pruneUnknownCommandKeybindings")(
+    function* (
+      entries: ReadonlyArray<unknown>,
+    ): Effect.fn.Return<ReadonlyArray<unknown>, KeybindingsConfigError> {
+      const retained: unknown[] = [];
+      const droppedCommands: string[] = [];
+      for (const entry of entries) {
+        const command = unknownKeybindingCommand(entry);
+        if (command === null) {
+          retained.push(entry);
+        } else {
+          droppedCommands.push(command);
+        }
+      }
+      if (droppedCommands.length === 0) return entries;
+
+      yield* writeConfigAtomically(retained);
+      const commands = [...new Set(droppedCommands)];
+      yield* Effect.logInfo(
+        `dropped ${droppedCommands.length} keybinding ${droppedCommands.length === 1 ? "entry" : "entries"} for unknown commands: ${commands.join(", ")}`,
+        { path: keybindingsConfigPath, count: droppedCommands.length, commands },
+      );
+      return retained;
+    },
+  );
+
+  // Entries this build cannot decode, such as a typo or an invalid shortcut, are
+  // written back unchanged so editing another shortcut keeps them.
   const loadWritableCustomKeybindingsConfig = Effect.fn(function* (): Effect.fn.Return<
     ReadonlyArray<{ readonly value: unknown; readonly rule: KeybindingRule | null }>,
     KeybindingsConfigError
@@ -349,7 +411,8 @@ const make = Effect.gen(function* () {
 
     const keybindings: KeybindingRule[] = [];
     const issues: ServerConfigIssue[] = [];
-    for (const [index, entry] of decodedEntries.value.entries()) {
+    const cleanedEntries = yield* pruneUnknownCommandKeybindings(decodedEntries.value);
+    for (const [index, entry] of cleanedEntries.entries()) {
       const decodedRule = decodeKeybindingRuleExit(entry);
       if (decodedRule._tag === "Failure") {
         const detail = Cause.pretty(decodedRule.cause);
@@ -405,29 +468,6 @@ const make = Effect.gen(function* () {
           }),
       ),
     );
-
-  const writeConfigAtomically = (entries: ReadonlyArray<unknown>) => {
-    return encodeRawKeybindingsEntriesPrettyJson(entries).pipe(
-      Effect.map((encoded) => `${encoded}\n`),
-      Effect.flatMap((encoded) =>
-        writeFileStringAtomically({
-          filePath: keybindingsConfigPath,
-          contents: encoded,
-        }).pipe(
-          Effect.provideService(FileSystem.FileSystem, fs),
-          Effect.provideService(Path.Path, path),
-        ),
-      ),
-      Effect.mapError(
-        (cause) =>
-          new KeybindingsConfigError({
-            configPath: keybindingsConfigPath,
-            detail: "failed to write keybindings config",
-            cause,
-          }),
-      ),
-    );
-  };
 
   const loadConfigStateFromDisk = loadRuntimeCustomKeybindingsConfig().pipe(
     Effect.map(({ keybindings, issues }) => ({

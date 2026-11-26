@@ -381,7 +381,6 @@ import {
 import { ThreadNow } from "./chat/ThreadNow";
 import { ThreadTimeline } from "./chat/ThreadTimeline";
 import { ThreadVisitWatermark } from "./chat/ThreadVisitWatermark";
-import { useRegisterEnvironmentSwitcher } from "../environmentSwitcherStore";
 import { useDraftEnvironmentRouting } from "./chat/useDraftEnvironmentRouting";
 import { useDraftHeroLayoutTransition } from "./chat/useDraftHeroLayoutTransition";
 import { useLocalDispatchState } from "./chat/useLocalDispatchState";
@@ -1988,13 +1987,6 @@ export default function ChatView(props: ChatViewProps) {
     projectGroupingSettings,
     sendInFlightRef,
   });
-
-  useRegisterEnvironmentSwitcher(
-    !embedded,
-    environmentId,
-    logicalProjectEnvironments,
-    canChangeEnvironment ? onEnvironmentChangeStable : undefined,
-  );
 
   const { focusComposer: focusComposerStable, scheduleComposerFocus: scheduleComposerFocusStable } =
     useComposerFocus(composerRef);
