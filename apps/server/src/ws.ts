@@ -1,3 +1,4 @@
+import * as PluginInstaller from "./plugins/installer.ts";
 import { DataBackup } from "./persistence/DataBackup.ts";
 import { PublicOrigin } from "./selfRelay/PublicOrigin.ts";
 import { ServerSettingsError } from "@t3tools/contracts";
@@ -1551,6 +1552,7 @@ export const layerWsRpc = (
       const resourceTelemetry = yield* ResourceTelemetry.ResourceTelemetry;
       const relay = yield* SelfRelay.SelfRelay;
       const pluginHost = yield* PluginHost;
+      const pluginInstaller = yield* PluginInstaller.PluginInstaller;
       const dataBackup = yield* DataBackup;
       const readPublicOrigin = yield* PublicOrigin;
       const relayError = (cause: SelfRelay.SelfRelayError) =>
@@ -2890,6 +2892,12 @@ export const layerWsRpc = (
         [WS_METHODS.dataRestoreApprove]: ({ id }) => dataBackup.approve(id),
         [WS_METHODS.dataRestoreCancel]: () => dataBackup.cancel,
         [WS_METHODS.pluginsSetEnabled]: (input) => pluginHost.setEnabled(input),
+        [WS_METHODS.pluginsInstalledList]: () => pluginInstaller.list,
+        [WS_METHODS.pluginsInstall]: (input) => pluginInstaller.install(input),
+        [WS_METHODS.pluginsConsent]: (input) => pluginInstaller.consent(input),
+        [WS_METHODS.pluginsUpdate]: (input) => pluginInstaller.update(input),
+        [WS_METHODS.pluginsRemove]: (input) => pluginInstaller.remove(input),
+        [WS_METHODS.pluginsRollback]: (input) => pluginInstaller.rollback(input),
         [WS_METHODS.pluginsInvoke]: (input) => pluginHost.invoke(input),
         [WS_METHODS.pullRequestsList]: (input) => pullRequests.list(input),
         [WS_METHODS.pullRequestsListStats]: (input) => pullRequests.listStats(input),

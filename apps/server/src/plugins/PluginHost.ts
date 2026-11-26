@@ -85,12 +85,14 @@ export class PluginHost extends Context.Service<
   PluginHost,
   {
     readonly changes: Stream.Stream<PluginsSnapshot>;
+    readonly snapshot: Effect.Effect<PluginsSnapshot>;
+    readonly replace: (id: string, plugin: Plugin | null) => Effect.Effect<void>;
     readonly setEnabled: (
       input: PluginSetEnabledInput,
     ) => Effect.Effect<PluginsSnapshot, PluginOperationError>;
     readonly invoke: (input: PluginInvokeInput) => Effect.Effect<unknown, PluginOperationError>;
     /** The handler a running plugin serves at `path`, if any. */
-    readonly route: (path: string) => Effect.Effect<PluginRouteHandler | null>;
+    readonly route: (path: string, pluginId?: string) => Effect.Effect<PluginRouteHandler | null>;
     /** Instruction blocks from running plugins that declared `agent:instructions`. */
     readonly agentInstructions: Effect.Effect<ReadonlyArray<string>>;
   }
@@ -115,7 +117,7 @@ const failureMessage = (cause: Cause.Cause<{ readonly message: string }>) => {
 
 const make = Effect.gen(function* () {
   const hosted = yield* BundledPlugins;
-  const plugins = hosted.plugins;
+  const plugins = [...hosted.plugins];
   const bindings = yield* PluginHostBindings;
   const settingsService = yield* ServerSettings.ServerSettingsService;
   const platform = bindings.platform;
@@ -286,9 +288,10 @@ const make = Effect.gen(function* () {
       );
   });
 
-  const route: PluginHost["Service"]["route"] = (path) =>
+  const route: PluginHost["Service"]["route"] = (path, pluginId) =>
     Effect.sync(() => {
       for (const { plugin, started } of running.values()) {
+        if (pluginId !== undefined && plugin.manifest.id !== pluginId) continue;
         if (!plugin.manifest.capabilities.includes("http:routes")) continue;
         if (!plugin.manifest.httpRoutes.includes(path)) continue;
         const handler = started.routes.get(path);
@@ -371,6 +374,34 @@ const make = Effect.gen(function* () {
 
   return PluginHost.of({
     changes: SubscriptionRef.changes(snapshotRef),
+    snapshot: SubscriptionRef.get(snapshotRef),
+    replace: Effect.fn("PluginHost.replace")((id, plugin) =>
+      lock.withPermits(1)(
+        Effect.gen(function* () {
+          const index = plugins.findIndex((candidate) => candidate.manifest.id === id);
+          const current = plugins[index];
+          if (current) {
+            yield* stop(current);
+            plugins.splice(index, 1);
+          }
+          infos.delete(id);
+          if (plugin) {
+            plugins.push(plugin);
+            infos.set(id, {
+              manifest: plugin.manifest,
+              origin: "installed",
+              enabled: false,
+              state: "disabled",
+              message: null,
+            });
+          }
+          yield* settingsService
+            .updateSettings({ plugins: { [id]: { enabled: false } } })
+            .pipe(Effect.orDie);
+          yield* publish;
+        }),
+      ),
+    ),
     setEnabled,
     invoke,
     route,

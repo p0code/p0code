@@ -1,3 +1,4 @@
+import { pluginCommand } from "./cli/plugin.ts";
 import { relayCommand } from "./cli/relay.ts";
 import { doctorCommand } from "./cli/doctor.ts";
 import { policyCommand } from "./cli/policy.ts";
@@ -92,6 +93,7 @@ export const makeCli = (_options: { cloudEnabled?: boolean } = {}) =>
 
       servicePreflightCommand,
       themeCommand,
+      pluginCommand,
       traceCommand,
       doctorCommand,
       policyCommand,

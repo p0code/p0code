@@ -1,4 +1,13 @@
 import {
+  PluginInstallInput,
+  PluginConsentInput,
+  PluginUpdateInput,
+  PluginRemoveInput,
+  PluginRollbackInput,
+  PluginInstallationResult,
+  PluginsInstalledList,
+} from "./pluginInstallation.ts";
+import {
   ListCustomProviderModelsInput,
   ListUserModelProvidersInput,
   ListUserModelProvidersResult,
@@ -705,6 +714,13 @@ export const WS_METHODS = {
   dataRestoreApprove: "dataRestore.approve",
   dataRestoreCancel: "dataRestore.cancel",
   pluginsSubscribe: "plugins.subscribe",
+  pluginsInstalledList: "plugins.installedList",
+  pluginsInstall: "plugins.install",
+  pluginsConsent: "plugins.consent",
+  pluginsUpdate: "plugins.update",
+  pluginsRemove: "plugins.remove",
+  pluginsRollback: "plugins.rollback",
+
   pluginsSetEnabled: "plugins.setEnabled",
   pluginsInvoke: "plugins.invoke",
 
@@ -1328,6 +1344,37 @@ const WsDataRestoreCancelRpc = Rpc.make(WS_METHODS.dataRestoreCancel, {
   success: Schema.Void,
   error: Schema.Union([DataRestoreError, EnvironmentAuthorizationError]),
 });
+const WsPluginsInstalledListRpc = Rpc.make(WS_METHODS.pluginsInstalledList, {
+  payload: Schema.Struct({}),
+  success: PluginsInstalledList,
+  error: Schema.Union([PluginOperationError, EnvironmentAuthorizationError]),
+});
+const WsPluginsInstallRpc = Rpc.make(WS_METHODS.pluginsInstall, {
+  payload: PluginInstallInput,
+  success: PluginInstallationResult,
+  error: Schema.Union([PluginOperationError, EnvironmentAuthorizationError]),
+});
+const WsPluginsConsentRpc = Rpc.make(WS_METHODS.pluginsConsent, {
+  payload: PluginConsentInput,
+  success: PluginInstallationResult,
+  error: Schema.Union([PluginOperationError, EnvironmentAuthorizationError]),
+});
+const WsPluginsUpdateRpc = Rpc.make(WS_METHODS.pluginsUpdate, {
+  payload: PluginUpdateInput,
+  success: PluginInstallationResult,
+  error: Schema.Union([PluginOperationError, EnvironmentAuthorizationError]),
+});
+const WsPluginsRemoveRpc = Rpc.make(WS_METHODS.pluginsRemove, {
+  payload: PluginRemoveInput,
+  success: PluginInstallationResult,
+  error: Schema.Union([PluginOperationError, EnvironmentAuthorizationError]),
+});
+const WsPluginsRollbackRpc = Rpc.make(WS_METHODS.pluginsRollback, {
+  payload: PluginRollbackInput,
+  success: PluginInstallationResult,
+  error: Schema.Union([PluginOperationError, EnvironmentAuthorizationError]),
+});
+
 const WsPluginsSubscribeRpc = Rpc.make(WS_METHODS.pluginsSubscribe, {
   payload: Schema.Struct({}),
   success: PluginsSnapshot,
@@ -2727,6 +2774,13 @@ export const WsRpcGroup = RpcGroup.make(
   WsDataRestoreApproveRpc,
   WsDataRestoreCancelRpc,
   WsPluginsSubscribeRpc,
+  WsPluginsInstalledListRpc,
+  WsPluginsInstallRpc,
+  WsPluginsConsentRpc,
+  WsPluginsUpdateRpc,
+  WsPluginsRemoveRpc,
+  WsPluginsRollbackRpc,
+
   WsPluginsSetEnabledRpc,
   WsPluginsInvokeRpc,
   WsPullRequestsListRpc,

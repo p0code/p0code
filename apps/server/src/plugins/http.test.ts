@@ -8,7 +8,7 @@ import * as Stream from "effect/Stream";
 import * as Etag from "effect/http/Etag";
 import * as HttpPlatform from "effect/http/HttpPlatform";
 import { HttpRouter } from "effect/http";
-import { afterEach, describe, expect, it } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { PluginHost } from "./PluginHost.ts";
 import { layerSecretRedaction, makeLayer } from "./http.ts";
@@ -33,6 +33,8 @@ const manifest = (
 
 const host = PluginHost.of({
   changes: Stream.empty,
+  snapshot: Effect.succeed({ plugins: [] }),
+  replace: () => Effect.void,
   setEnabled: () => Effect.die("unused"),
   invoke: () => Effect.die("unused"),
   route: (path) =>
@@ -154,6 +156,7 @@ describe("plugin routes", () => {
         await handler(
           new Request(`http://127.0.0.1/api/other/ping?p0_route=${SECRET}`, {
             method: "POST",
+            headers: { "content-type": "application/json" },
             body: "{}",
           }),
         )
@@ -164,6 +167,7 @@ describe("plugin routes", () => {
         await handler(
           new Request("http://127.0.0.1/api/other/ping?p0_route=other-secret", {
             method: "POST",
+            headers: { "content-type": "application/json" },
             body: "{}",
           }),
         )
@@ -174,6 +178,7 @@ describe("plugin routes", () => {
         await handler(
           new Request(`http://127.0.0.1/api/no-capability/ping?p0_route=${SECRET}`, {
             method: "POST",
+            headers: { "content-type": "application/json" },
             body: "{}",
           }),
         )
@@ -203,6 +208,26 @@ describe("plugin routes", () => {
   it("caps the body before a plugin handler sees it", async () => {
     const response = await post(server(), sameOrigin, "x".repeat(1024 * 1024 + 1));
     expect(response.status).toBe(413);
+  });
+
+  it("refuses unknown paths and methods without asking a plugin for a handler", async () => {
+    using calls = vi.spyOn(host, "route");
+    const handler = server();
+    for (const path of ["/api", "/api/", "/api/not-declared", "/api/no-capability/ping"]) {
+      expect(
+        (await handler(new Request(`http://127.0.0.1${path}`, { method: "POST" }))).status,
+      ).toBe(404);
+    }
+    for (const method of ["GET", "PUT", "PATCH", "DELETE", "OPTIONS", "BREW"]) {
+      expect((await handler(new Request(`http://127.0.0.1${ROUTE}`, { method }))).status).toBe(404);
+    }
+    expect(calls).not.toHaveBeenCalled();
+  });
+
+  it("refuses non-JSON content and malformed JSON", async () => {
+    const handler = server();
+    expect((await post(handler, { ...sameOrigin, "content-type": "text/plain" })).status).toBe(415);
+    expect((await post(handler, sameOrigin, "{broken")).status).toBe(400);
   });
 
   it("still answers 404 for a route whose plugin is off", async () => {

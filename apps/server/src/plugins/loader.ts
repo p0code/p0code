@@ -7,7 +7,9 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
-import * as NodeURL from "node:url";
+import { importInstalledBundle } from "./bundle.ts";
+
+import { readInstallRecord, writeInstallRecord } from "./installRecords.ts";
 
 import * as ServerConfig from "../config.ts";
 import * as ServerSettings from "../serverSettings.ts";
@@ -67,10 +69,8 @@ const unreadableManifest = (id: string, version: string | undefined): PluginMani
 });
 
 /**
- * Loads the plugins a person installed into `<stateDir>/installed-plugins/`, one folder per
- * version. A broken install is logged and surfaced as failed without blocking the others. Of
- * each plugin the newest consented version runs; if it does not load, the previous one does.
- * `bundledIds` refuses an installed copy of a plugin this build ships.
+ * Recorded installs use the active version, with a consented previous version as recovery.
+ * Legacy folders retain newest-consented discovery. Broken installs never block other plugins.
  */
 export const layerWith = (bundledIds: ReadonlyArray<string>) =>
   Layer.effect(
@@ -90,45 +90,22 @@ export const layerWith = (bundledIds: ReadonlyArray<string>) =>
         id: string,
         version: string,
         manifest: PluginManifest,
+        expectedSha256?: string,
       ) {
         const dir = installedPluginVersionDir(path, config.stateDir, id, version);
         if (dir === undefined) {
           return yield* Effect.fail("The install folder name is not safe.");
         }
-        const file = path.join(dir, "plugin.mjs");
-        if (!(yield* fileSystem.exists(file).pipe(Effect.orElseSucceed(() => false)))) {
+        if (
+          !(yield* fileSystem
+            .exists(path.join(dir, "plugin.mjs"))
+            .pipe(Effect.mapError(describeCause)))
+        )
           return yield* Effect.fail("plugin.mjs is missing.");
-        }
-        // The version is the cache-buster: Node keeps a module by its URL, so re-importing a
-        // version loads fresh code. The folder-name pattern keeps the query free of `?` and `/`.
-        const module = yield* Effect.tryPromise({
-          try: () => import(`${NodeURL.pathToFileURL(file).href}?v=${version}`),
+        return yield* Effect.tryPromise({
+          try: () => importInstalledBundle(dir, manifest, expectedSha256),
           catch: (cause) => `plugin.mjs failed to load: ${describeCause(cause)}`,
         });
-        const exported = (module as { default?: unknown }).default;
-        if (
-          typeof exported !== "object" ||
-          exported === null ||
-          !("manifest" in exported) ||
-          !("start" in exported)
-        ) {
-          return yield* Effect.fail(
-            "The default export is not a plugin. Export what definePlugin(…) returned.",
-          );
-        }
-        const exportedManifest = (exported as { manifest?: unknown }).manifest;
-        if (
-          typeof exportedManifest !== "object" ||
-          exportedManifest === null ||
-          (exportedManifest as { id?: unknown }).id !== id
-        ) {
-          return yield* Effect.fail("manifest.json and plugin.mjs disagree about the plugin id.");
-        }
-        return {
-          manifest,
-          origin: "installed" as const,
-          start: (exported as { start: Plugin["start"] }).start,
-        } satisfies Plugin;
       });
 
       /** Scans one plugin folder. Loaded plugins come back; failures land in `failures`. */
@@ -137,11 +114,22 @@ export const layerWith = (bundledIds: ReadonlyArray<string>) =>
         consentedCapabilities: ReadonlyArray<PluginCapability>,
         failures: Array<FailedInstallation>,
       ) {
-        const versions = (yield* fileSystem
+        const record = yield* Effect.tryPromise({
+          try: () => readInstallRecord(config.stateDir, id),
+          catch: describeCause,
+        });
+        if (record !== null && record.id !== id)
+          return yield* Effect.fail("Install record id mismatch.");
+        if (record !== null && record.activeVersion === null) return Option.none();
+        const discovered = (yield* fileSystem
           .readDirectory(path.join(installedPluginsRoot(path, config.stateDir), id))
           .pipe(Effect.orElseSucceed(() => [] as Array<string>)))
           .filter(isValidVersionSegment)
           .sort((a, b) => compareVersions(b, a));
+        const versions =
+          record === null
+            ? discovered
+            : [record.activeVersion!, ...(record.previousVersion ? [record.previousVersion] : [])];
         if (versions.length === 0) {
           yield* Effect.logWarning(`Skipping plugin folder "${id}": it holds no version folder.`);
           return Option.none();
@@ -190,8 +178,14 @@ export const layerWith = (bundledIds: ReadonlyArray<string>) =>
             );
             continue;
           }
+          const installed = record?.versions.find((item) => item.version === version);
+          if (record && !installed?.consented) {
+            refuse("This version has not been consented to.", true);
+            continue;
+          }
+          const allowed = installed?.consentedCapabilities ?? consentedCapabilities;
           const unconsented = read.manifest.capabilities.filter(
-            (capability) => !consentedCapabilities.includes(capability),
+            (capability) => !allowed.includes(capability),
           );
           if (unconsented.length > 0) {
             const message = refuse(
@@ -203,7 +197,12 @@ export const layerWith = (bundledIds: ReadonlyArray<string>) =>
             );
             continue;
           }
-          const load = yield* importPlugin(id, version, read.manifest).pipe(
+          const load = yield* importPlugin(
+            id,
+            version,
+            read.manifest,
+            installed?.bundleSha256,
+          ).pipe(
             Effect.match({
               onFailure: (message) => ({ ok: false as const, message }),
               onSuccess: (plugin) => ({ ok: true as const, plugin }),
@@ -218,6 +217,17 @@ export const layerWith = (bundledIds: ReadonlyArray<string>) =>
             yield* Effect.logWarning(
               `Plugin "${id}": version ${failed.version} did not load (${failed.message}); running version ${version} instead.`,
             );
+          }
+          if (record && version !== record.activeVersion) {
+            yield* Effect.tryPromise({
+              try: () =>
+                writeInstallRecord(config.stateDir, {
+                  ...record,
+                  activeVersion: version,
+                  previousVersion: null,
+                }),
+              catch: describeCause,
+            });
           }
           return Option.some(load.plugin);
         }
@@ -268,9 +278,14 @@ export const layerWith = (bundledIds: ReadonlyArray<string>) =>
           failures,
         ).pipe(
           Effect.catchCause((cause) =>
-            Effect.logWarning(`Scanning installed plugin "${id}" failed`, { cause }).pipe(
-              Effect.as(Option.none<Plugin>()),
-            ),
+            Effect.gen(function* () {
+              failures.push({
+                manifest: unreadableManifest(id, undefined),
+                message: `Install record could not be read: ${describeCause(cause)}`,
+              });
+              yield* Effect.logWarning(`Scanning installed plugin "${id}" failed`, { cause });
+              return Option.none<Plugin>();
+            }),
           ),
         );
         if (Option.isSome(loaded)) plugins.push(loaded.value);

@@ -1,7 +1,7 @@
 # Plugins
 
-Plugins are first-party workspace packages under [`plugins/`](../../plugins) that the server runs
-in-process, off by default. Each plugin lives in its own repository and is mounted as a git
+Plugins run in-process, off by default. First-party workspace packages live under
+[`plugins/`](../../plugins); external bundles can be installed explicitly with `p0 plugin add`. Each plugin lives in its own repository and is mounted as a git
 submodule (`plugins/t3-connect-bridge` from `p0code/t3-connect-bridge`,
 `plugins/obsidian-shared-memory` from `p0code/obsidian-sync`), so clone with
 `git clone --recurse-submodules=plugins` (or run `git submodule update --init plugins/` in an existing checkout)
@@ -10,11 +10,12 @@ plugins depend only on [`@t3tools/plugin-api`](../../packages/plugin-api), never
 
 ## Shape
 
-- **Bundled only.** [`registry.ts`](../../apps/server/src/plugins/registry.ts) lists what a build
-  ships; nothing is loaded from disk. Capabilities are declarations shown before enabling. The
-  host enforces the ones it brokers (device credentials, agent activity, declared HTTP routes,
-  agent turn instructions); outbound network and helper processes cannot be enforced in-process,
-  which is why third-party loading would need a separate process boundary first.
+- **Bundled and installed.** [`registry.ts`](../../apps/server/src/plugins/registry.ts) merges bundled
+  plugins with installed bundles. Code lives in `<stateDir>/installed-plugins/<id>/<version>`;
+  `installed.json` selects the active and previous versions and records consent per version.
+  Install/update stages code without importing it; explicit consent activates it disabled. Rollback
+  uses the previous version's consent. Removal retains runtime data and secrets unless purged.
+  Plugins run in-process with the server's OS privileges; capabilities do not sandbox third-party code.
 - **One scope per plugin.** Enabling runs `plugin.start` in a fresh scope; disabling closes it, so
   every fiber, child process, and finalizer the plugin owns ends with it. A failed start closes
   the scope and shows the error as the plugin's status; nothing a plugin does can stop the server.
@@ -27,9 +28,11 @@ plugins depend only on [`@t3tools/plugin-api`](../../packages/plugin-api), never
   host revokes that subject's sessions and pairing links whenever the plugin is disabled, and at
   startup for plugins that are off, so a plugin cannot leave devices signed in after it is gone.
   This is separate from the retired `cloud-connect` subject, which startup still always revokes.
-- **Routes are fixed paths.** A plugin's HTTP routes are declared in its manifest and mounted at
-  startup; they answer 404 while the plugin is off. Paths are absolute because an external
-  service may call them (the bridge's are upstream T3 Connect's).
+- **Routes are fixed paths.** A plugin's HTTP routes are declared in its manifest and resolved against
+  the running plugins; they answer 404 while the plugin is off. Paths are absolute because an external
+  service may call them (the bridge's are upstream T3 Connect's). The host resolves current running
+  manifests for each request and requires a same-origin caller or the per-plugin route secret.
+  Unknown paths/methods return 404; JSON bodies are capped at 1 MiB.
 - **Agent instructions are opt-in.** A plugin declaring `agent:instructions` may expose an
   `agentInstructions` effect returning a block appended to every agent turn while the plugin runs.
   `PluginHost` feeds those blocks into the runtime policy (`pluginInstructions`) through

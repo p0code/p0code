@@ -18,7 +18,7 @@ export const isValidPluginId = Schema.is(PluginId);
 const versionSegmentPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 
 export const isValidVersionSegment = (segment: string): boolean =>
-  versionSegmentPattern.test(segment);
+  segment !== "installed.json" && versionSegmentPattern.test(segment);
 
 export const installedPluginsRoot = (path: Path.Path, stateDir: string): string =>
   path.join(stateDir, "installed-plugins");
