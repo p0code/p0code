@@ -1,5 +1,12 @@
 import type { AnyRouter } from "@tanstack/react-router";
-import { EnvironmentId } from "@t3tools/contracts";
+import {
+  AccountProfileId,
+  DEFAULT_SERVER_SETTINGS,
+  EnvironmentId,
+  ProjectId,
+  ThreadId,
+} from "@t3tools/contracts";
+import { newAccountProfile } from "@t3tools/shared/accountProfiles";
 import * as DateTime from "effect/DateTime";
 import * as Option from "effect/Option";
 import { Atom, AtomRegistry } from "effect/reactivity";
@@ -69,9 +76,17 @@ vi.mock(import("../state/threads"), async (original) => {
 });
 vi.mock(import("../state/projects"), async (original) => {
   const { Atom } = await import("effect/reactivity");
+  const actual = await original();
   return {
-    ...(await original()),
+    ...actual,
     profileHiddenEnvironmentIdsAtom: Atom.make(new Set<EnvironmentId>()),
+    activeProfileThreadVisibilityAtom: Atom.make({
+      hiddenEnvironments: new Set<EnvironmentId>(),
+      hiddenProjectKeys: new Set<string>(),
+      projectScratchByKey: new Map<string, boolean>(),
+      separatingByEnvironment: new Map(),
+      primarySeparating: null,
+    }),
   };
 });
 vi.mock(import("../hooks/useSettings"), async (original) => ({
@@ -93,11 +108,24 @@ vi.mock(import("../threadNotifications"), async (original) => ({
 }));
 
 import { startThreadNotifications } from "./ThreadNotificationCoordinator";
-import { profileHiddenEnvironmentIdsAtom } from "../state/projects";
+import {
+  activeProfileThreadVisibilityAtom,
+  profileHiddenEnvironmentIdsAtom,
+  type ActiveProfileThreadVisibility,
+} from "../state/projects";
 
 const hiddenEnvironmentsAtom = profileHiddenEnvironmentIdsAtom as Atom.Writable<
   ReadonlySet<EnvironmentId>
 >;
+const profileVisibilityAtom =
+  activeProfileThreadVisibilityAtom as Atom.Writable<ActiveProfileThreadVisibility>;
+const emptyProfileVisibility: ActiveProfileThreadVisibility = {
+  hiddenEnvironments: new Set(),
+  hiddenProjectKeys: new Set(),
+  projectScratchByKey: new Map(),
+  separatingByEnvironment: new Map(),
+  primarySeparating: null,
+};
 
 let registry: AtomRegistry.AtomRegistry;
 const shellAtom = Atom.family((_id: string) => Atom.make<unknown>(null));
@@ -214,6 +242,7 @@ function setup() {
   state.settingsListeners.clear();
   registry.set(environmentIdsAtom, ["one", "two"]);
   registry.set(hiddenEnvironmentsAtom, new Set());
+  registry.set(profileVisibilityAtom, emptyProfileVisibility);
   state.shells.set("one", shell());
   state.shells.set("two", shell());
   focused = false;
@@ -245,6 +274,8 @@ function setup() {
     setEnvironmentIds: (ids: ReadonlyArray<string>) => testRegistry.set(environmentIdsAtom, ids),
     setHiddenEnvironmentIds: (ids: ReadonlyArray<string>) =>
       testRegistry.set(hiddenEnvironmentsAtom, new Set(ids.map((id) => EnvironmentId.make(id)))),
+    setProfileVisibility: (visibility: ActiveProfileThreadVisibility) =>
+      testRegistry.set(profileVisibilityAtom, visibility),
     openThread: (environmentId: string, threadId: string) => {
       route.params = { environmentId, threadId };
       for (const listener of routeListeners) listener();
@@ -291,6 +322,67 @@ it("drops notifications from machines the profile switches away from, and stays 
   app.setHiddenEnvironmentIds([]);
   expect(TestNotification.sent).toHaveLength(1);
   state.shells.set("one", shell({ hasPendingApprovals: true, pendingRequestId: "request-2" }));
+  expect(TestNotification.sent).toHaveLength(2);
+});
+
+it("suppresses and closes notifications for threads outside the active profile on the same machine", async () => {
+  await using app = setup();
+  const personal = AccountProfileId.make("personal");
+  const school = AccountProfileId.make("school");
+  const envOne = EnvironmentId.make("one");
+  const project = ProjectId.make("project");
+  const schoolThread = ThreadId.make("school-thread");
+  const profiles = [
+    newAccountProfile(personal, "Personal", []),
+    newAccountProfile(school, "School", []),
+  ];
+  const visibilityFor = (active: AccountProfileId): ActiveProfileThreadVisibility => ({
+    hiddenEnvironments: new Set(),
+    hiddenProjectKeys: new Set(),
+    projectScratchByKey: new Map([[`${envOne}:${project}`, true]]),
+    separatingByEnvironment: new Map([
+      [
+        envOne,
+        {
+          ...DEFAULT_SERVER_SETTINGS,
+          accountProfiles: profiles,
+          activeAccountProfileId: active,
+          threadAccountProfileIds: { [schoolThread]: school },
+        },
+      ],
+    ]),
+    primarySeparating: { accountProfiles: profiles, activeAccountProfileId: active },
+  });
+
+  state.shells.set("one", shell({}, { id: schoolThread }));
+  app.setProfileVisibility(visibilityFor(personal));
+  app.start();
+
+  // Legacy thread belongs to Personal, so it notifies while Personal is active.
+  state.shells.set("one", shell({ hasPendingApprovals: true }, { id: schoolThread }));
+  expect(TestNotification.sent).toHaveLength(1);
+  expect(state.badge).toHaveBeenLastCalledWith(1);
+
+  // Switching to School immediately closes Personal's pending notification and clears the badge.
+  app.setProfileVisibility(visibilityFor(school));
+  expect(TestNotification.sent[0]!.close).toHaveBeenCalled();
+  expect(state.badge).toHaveBeenLastCalledWith(0);
+
+  // New events on Personal's legacy thread stay silent while School is active.
+  state.shells.set(
+    "one",
+    shell({ hasPendingApprovals: true, pendingRequestId: "request-2" }, { id: schoolThread }),
+  );
+  expect(TestNotification.sent).toHaveLength(1);
+
+  // Explicit School thread still notifies while School is active.
+  state.shells.set(
+    "one",
+    shell(
+      { hasPendingApprovals: true, pendingRequestId: "request-2" },
+      { id: schoolThread, hasPendingApprovals: true, pendingRequestId: "request-3" },
+    ),
+  );
   expect(TestNotification.sent).toHaveLength(2);
 });
 

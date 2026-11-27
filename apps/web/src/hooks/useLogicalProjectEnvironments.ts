@@ -12,7 +12,11 @@ import {
   deriveLogicalProjectKeyFromSettings,
   selectProjectGroupingSettings,
 } from "@t3tools/client-runtime/state/project-grouping";
-import { useProfileHiddenEnvironmentIds, useProjects } from "../state/entities";
+import {
+  useProfileHiddenEnvironmentIds,
+  useProfileHiddenProjectKeys,
+  useProjects,
+} from "../state/entities";
 import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
 import { useClientSettings } from "./useSettings";
 
@@ -25,6 +29,7 @@ export function useLogicalProjectEnvironments(
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
   const hiddenEnvironments = useProfileHiddenEnvironmentIds();
+  const hiddenProjectKeys = useProfileHiddenProjectKeys();
 
   if (!activeProject) return [];
   const environmentById = new Map(
@@ -32,9 +37,11 @@ export function useLogicalProjectEnvironments(
   );
   const envs: EnvironmentOption[] = [];
   const pushEnvironment = (environmentId: EnvironmentId, projectId: ProjectId | null) => {
-    // Machines outside the active profile are not offered; the open one stays so it can show.
-    if (hiddenEnvironments.has(environmentId) && environmentId !== activeProject.environmentId)
-      return;
+    // Machines and projects outside the active profile are not offered; the open one stays so it can show.
+    if (environmentId !== activeProject.environmentId) {
+      if (hiddenEnvironments.has(environmentId)) return;
+      if (projectId !== null && hiddenProjectKeys.has(`${environmentId}:${projectId}`)) return;
+    }
     const environment = environmentById.get(environmentId) ?? null;
     envs.push({
       environmentId,

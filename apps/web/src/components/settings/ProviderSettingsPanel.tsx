@@ -58,7 +58,7 @@ import { useStableCallback } from "../../hooks/useStableCallback";
 import { cn } from "../../lib/utils";
 import { ensureLocalApi } from "../../localApi";
 import { resolveAppModelSelectionState } from "../../modelSelection";
-import { useProjects } from "../../state/entities";
+import { useProfileProjects, useProjects } from "../../state/entities";
 import {
   useEnvironments,
   usePrimaryEnvironmentId,
@@ -1342,7 +1342,7 @@ function ProviderInstanceRow({
   readonly actions: ProviderInstanceRowActions;
 }) {
   const gt = useGT();
-  const allProjects = useProjects();
+  const allProjects = useProfileProjects(useProjects());
   const secretSources = useSecretSources(environmentId);
   const serverProviders = useAtomValue(providersIgnoringCheckedAtAtom(environmentId));
   const defaultBadge = resolveProviderInstanceBadges(

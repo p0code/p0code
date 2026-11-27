@@ -8,7 +8,12 @@ import {
 import { isShownUnderParent } from "@t3tools/client-runtime/state/threads";
 import type { AnyRouter } from "@tanstack/react-router";
 import { parseThreadKey, threadKey } from "@t3tools/client-runtime/state/entities";
-import type { EnvironmentId, OrchestrationV2ThreadShell, ThreadId } from "@t3tools/contracts";
+import type {
+  EnvironmentId,
+  OrchestrationV2ThreadShell,
+  ProjectId,
+  ThreadId,
+} from "@t3tools/contracts";
 import { monitorHoldsWakeCompletion } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
 import { withoutHiddenEnvironmentIds } from "@t3tools/shared/accountProfiles";
 import type { ClientSettings } from "@t3tools/contracts/settings";
@@ -24,7 +29,11 @@ import {
 import { getClientSettings, subscribeClientSettings } from "../hooks/useSettings";
 import { isWindowsPlatform } from "../lib/utils";
 import { environmentSummaries } from "../state/presentation";
-import { profileHiddenEnvironmentIdsAtom } from "../state/projects";
+import {
+  activeProfileThreadVisibilityAtom,
+  isThreadVisibleInActiveProfile,
+  profileHiddenEnvironmentIdsAtom,
+} from "../state/projects";
 import { environmentShell } from "../state/shell";
 import { environmentThreadShells } from "../state/threads";
 import {
@@ -71,7 +80,12 @@ export function startThreadNotifications(
 ): () => void {
   const pending = new Map<
     string,
-    { environmentId: EnvironmentId; threadId: ThreadId; notification: Notification }
+    {
+      environmentId: EnvironmentId;
+      threadId: ThreadId;
+      projectId: ProjectId;
+      notification: Notification;
+    }
   >();
   const watched = new Map<EnvironmentId, WatchedEnvironment>();
 
@@ -84,26 +98,40 @@ export function startThreadNotifications(
     );
   };
 
+  const isHiddenByActiveProfile = (
+    environmentId: EnvironmentId,
+    threadId: ThreadId,
+    projectId: ProjectId,
+  ) =>
+    registry.get(profileHiddenEnvironmentIdsAtom).has(environmentId) ||
+    !isThreadVisibleInActiveProfile(
+      { environmentId, id: threadId, projectId },
+      registry.get(activeProfileThreadVisibilityAtom),
+    );
+
   const trackNotification = (
     environmentId: EnvironmentId,
     threadId: ThreadId,
+    projectId: ProjectId,
     notification: Notification,
   ) => {
     pending.get(notification.tag)?.notification.close();
-    pending.set(notification.tag, { environmentId, threadId, notification });
+    pending.set(notification.tag, { environmentId, threadId, projectId, notification });
     setNotificationBadge(pending.size);
   };
-  // Toast ids by thread key, so hiding or opening a thread, or removing its environment, closes them.
-  const openToasts = new Map<string, Array<ToastId>>();
+  // Toast ids by thread key, so hiding or opening a thread, switching profiles, or removing its environment closes them.
+  const openToasts = new Map<string, { projectId: ProjectId; toastIds: Array<ToastId> }>();
   const forgetToast = (key: string, toastId: ToastId) => {
-    const remaining = (openToasts.get(key) ?? []).filter((id) => id !== toastId);
+    const entry = openToasts.get(key);
+    if (!entry) return;
+    const remaining = entry.toastIds.filter((id) => id !== toastId);
     if (remaining.length === 0) openToasts.delete(key);
-    else openToasts.set(key, remaining);
+    else openToasts.set(key, { projectId: entry.projectId, toastIds: remaining });
   };
-  const closeToasts = (shouldClose: (key: string) => boolean) => {
-    for (const [key, toastIds] of openToasts) {
-      if (!shouldClose(key)) continue;
-      for (const toastId of toastIds) toastManager.close(toastId);
+  const closeToasts = (shouldClose: (key: string, projectId: ProjectId) => boolean) => {
+    for (const [key, entry] of openToasts) {
+      if (!shouldClose(key, entry.projectId)) continue;
+      for (const toastId of entry.toastIds) toastManager.close(toastId);
       openToasts.delete(key);
     }
   };
@@ -117,6 +145,19 @@ export function startThreadNotifications(
     if (environmentId === undefined || threadId === undefined) return;
     const opened = threadKey({ environmentId, threadId });
     closeToasts((key) => key === opened);
+  };
+  const closeProfileHiddenPending = () => {
+    closeToasts((key, projectId) => {
+      const ref = parseThreadKey(key);
+      return isHiddenByActiveProfile(ref.environmentId, ref.threadId, projectId);
+    });
+    const count = pending.size;
+    for (const [tag, entry] of pending) {
+      if (!isHiddenByActiveProfile(entry.environmentId, entry.threadId, entry.projectId)) continue;
+      entry.notification.close();
+      pending.delete(tag);
+    }
+    if (count !== pending.size) setNotificationBadge(pending.size);
   };
   // A notification shown before the tag filter turned on must not stay on screen. While hiding,
   // one whose thread left the live list (archived) cannot be judged, so it closes too.
@@ -148,7 +189,7 @@ export function startThreadNotifications(
   ) => {
     const { thread, status } = state;
     if (
-      registry.get(profileHiddenEnvironmentIdsAtom).has(environmentId) ||
+      isHiddenByActiveProfile(environmentId, thread.id, thread.projectId) ||
       registry
         .get(environmentThreadShells.hiddenThreadKeysAtom)
         .has(threadKey({ environmentId, threadId: thread.id }))
@@ -211,7 +252,11 @@ export function startThreadNotifications(
           },
         },
       });
-      openToasts.set(toastKey, [...(openToasts.get(toastKey) ?? []), toastId]);
+      const existingToasts = openToasts.get(toastKey);
+      openToasts.set(toastKey, {
+        projectId: thread.projectId,
+        toastIds: [...(existingToasts?.toastIds ?? []), toastId],
+      });
       return;
     }
     if (
@@ -229,7 +274,7 @@ export function startThreadNotifications(
         // Windows drops clicks after a toast moves into Notification Center.
         requireInteraction: kind === "completion" && isWindowsPlatform(navigator.platform),
       });
-      trackNotification(environmentId, thread.id, notification);
+      trackNotification(environmentId, thread.id, thread.projectId, notification);
       notification.addEventListener("click", () => {
         notification.close();
         window.focus();
@@ -446,11 +491,15 @@ export function startThreadNotifications(
       syncEnvironments();
     },
   );
-  // Switching profiles hides machines; their pending notifications and toasts go with them.
+  // Switching profiles hides machines and threads; their pending notifications and toasts go with them.
   const unsubscribeHiddenEnvironments = registry.subscribe(profileHiddenEnvironmentIdsAtom, () => {
     pruneRemovedEnvironments();
     syncEnvironments();
   });
+  const unsubscribeProfileVisibility = registry.subscribe(
+    activeProfileThreadVisibilityAtom,
+    closeProfileHiddenPending,
+  );
   const unsubscribeHidden = [
     registry.subscribe(environmentThreadShells.hiddenThreadKeysAtom, closeHiddenPending),
     registry.subscribe(environmentThreadShells.anyEnvironmentHidingAtom, closeHiddenPending),
@@ -463,6 +512,7 @@ export function startThreadNotifications(
     unsubscribeSettings();
     unsubscribeEnvironmentIds();
     unsubscribeHiddenEnvironments();
+    unsubscribeProfileVisibility();
     for (const unsubscribe of unsubscribeHidden) unsubscribe();
     unsubscribeRoute();
     for (const entry of watched.values()) entry.unsubscribe();

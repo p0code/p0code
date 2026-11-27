@@ -21,7 +21,7 @@ import type {
 
 import { useEnvironmentQuery } from "../../state/query";
 import { issueTrackerEnvironment } from "../../state/issueTrackers";
-import { useProjects, useServerConfigs } from "../../state/entities";
+import { useProfileProjects, useProjects, useServerConfigs } from "../../state/entities";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { LinearIcon } from "../Icons";
 import { cn } from "~/lib/utils";
@@ -287,7 +287,9 @@ function ProjectBindings({
   readonly refreshFailed: boolean;
 }) {
   const gt = useGT();
-  const projects = useProjects().filter((project) => project.environmentId === environmentId);
+  const projects = useProfileProjects(useProjects()).filter(
+    (project) => project.environmentId === environmentId,
+  );
   const bind = useAtomCommand(issueTrackerEnvironment.bindProject, {
     label: `bind project to ${tracker.displayName}`,
   });

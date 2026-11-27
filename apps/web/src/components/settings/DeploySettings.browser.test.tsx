@@ -150,6 +150,7 @@ vi.mock("./SettingsScopeContext", () => ({
 }));
 
 vi.mock("../../state/entities", () => ({
+  useProfileProjects: <T,>(projects: ReadonlyArray<T>) => projects,
   useProjects: () => [
     {
       id: PROJECT,

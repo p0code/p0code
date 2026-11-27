@@ -10,6 +10,8 @@ import {
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  activeProfileUnloadedScratchLimit,
+  effectiveAccountProfileSettings,
   explicitProjectAccountProfile,
   isListedProfileAccount,
   isProjectInActiveAccountProfile,
@@ -427,5 +429,108 @@ describe("project separation", () => {
     expect(
       newThreadAccountProfilePatch(projectSettings("work"), { id: thread, projectId: workProject }),
     ).toBeUndefined();
+  });
+
+  it("locks non-scratch legacy project threads to the home profile even with a thread override", () => {
+    const thread = ThreadId.make("thread-legacy-project");
+    const withOverride = {
+      ...projectSettings("work"),
+      threadAccountProfileIds: { [thread]: work },
+    };
+    expect(
+      threadAccountProfile(withOverride, {
+        id: thread,
+        projectId: unassignedProject,
+        isScratchProject: false,
+      })?.id,
+    ).toBe(personalProfile);
+    expect(
+      isThreadInActiveAccountProfile(withOverride, {
+        id: thread,
+        projectId: unassignedProject,
+        isScratchProject: false,
+      }),
+    ).toBe(false);
+    expect(
+      isThreadInActiveAccountProfile(
+        { ...withOverride, activeAccountProfileId: personalProfile },
+        { id: thread, projectId: unassignedProject, isScratchProject: false },
+      ),
+    ).toBe(true);
+  });
+
+  it("overlays primary profiles onto remote settings while keeping remote filing", () => {
+    const remoteThread = ThreadId.make("remote-work-thread");
+    const legacyRemoteThread = ThreadId.make("remote-legacy-thread");
+    const primary = settings("work");
+    const unsyncedRemote = {
+      ...DEFAULT_SERVER_SETTINGS,
+      projectAccountProfileIds: { [workProject]: work },
+      threadAccountProfileIds: { [remoteThread]: work },
+    };
+    const effective = effectiveAccountProfileSettings(unsyncedRemote, primary);
+    expect(effective?.activeAccountProfileId).toBe(work);
+    expect(isProjectInActiveAccountProfile(effective, workProject)).toBe(true);
+    expect(isProjectInActiveAccountProfile(effective, unassignedProject)).toBe(false);
+    expect(
+      isThreadInActiveAccountProfile(effective, {
+        id: remoteThread,
+        projectId: scratchProject,
+        isScratchProject: true,
+      }),
+    ).toBe(true);
+    expect(
+      isThreadInActiveAccountProfile(effective, {
+        id: legacyRemoteThread,
+        projectId: scratchProject,
+        isScratchProject: true,
+      }),
+    ).toBe(false);
+
+    // Offline/unloaded remote still isolates legacy items to the home profile.
+    const offline = effectiveAccountProfileSettings(null, primary);
+    expect(
+      isThreadInActiveAccountProfile(offline, {
+        id: legacyRemoteThread,
+        projectId: scratchProject,
+        isScratchProject: true,
+      }),
+    ).toBe(false);
+
+    // Without a primary (or when primary has no profiles), falls back to the target's own settings.
+    expect(effectiveAccountProfileSettings(projectSettings("work"), null)).toEqual(
+      projectSettings("work"),
+    );
+    expect(
+      effectiveAccountProfileSettings(projectSettings("work"), DEFAULT_SERVER_SETTINGS),
+    ).toEqual(projectSettings("work"));
+  });
+
+  it("bounds unloaded scratch settled counts under non-home profiles to explicit unloaded threads", () => {
+    const loadedWork = ThreadId.make("work-loaded");
+    const unloadedWork = ThreadId.make("work-unloaded");
+    const personalThread = ThreadId.make("personal-thread");
+    const loaded = new Set<ThreadId>([loadedWork]);
+
+    // No limit when home profile is active or fewer than two profiles exist.
+    expect(activeProfileUnloadedScratchLimit(DEFAULT_SERVER_SETTINGS, loaded)).toBeNull();
+    expect(activeProfileUnloadedScratchLimit(projectSettings("personal"), loaded)).toBeNull();
+
+    // Under a non-home profile with no explicit threads, limit is 0 (legacy threads never count).
+    expect(activeProfileUnloadedScratchLimit(projectSettings("work"), loaded)).toBe(0);
+
+    // Counts only unloaded threads explicitly assigned to the active non-home profile.
+    const withThreads = {
+      ...projectSettings("work"),
+      threadAccountProfileIds: {
+        [loadedWork]: work,
+        [unloadedWork]: work,
+        [personalThread]: personalProfile,
+      },
+    };
+    expect(activeProfileUnloadedScratchLimit(withThreads, loaded)).toBe(1);
+    expect(
+      activeProfileUnloadedScratchLimit(withThreads, new Set([loadedWork, unloadedWork])),
+    ).toBe(0);
   });
 });

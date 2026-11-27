@@ -23,6 +23,10 @@ import {
   useThreadShell,
 } from "~/state/entities";
 import { issueEnvironment } from "~/state/issues";
+import {
+  activeProfileThreadVisibilityAtom,
+  isThreadVisibleInActiveProfile,
+} from "~/state/projects";
 import { useEnvironmentQuery } from "~/state/query";
 import { useEnvironmentScope } from "~/state/session";
 import { environmentThreadShells, threadEnvironment } from "~/state/threads";
@@ -110,12 +114,18 @@ export function IssueThreadLinks({
     setPickerOpen(false);
   };
 
+  const profileVisibility = useAtomValue(activeProfileThreadVisibilityAtom);
   const linkedThreads = visibleLinkedThreads(
     (relations.data ?? lastRelations)?.threads ?? [],
     environmentId,
     loadedThreadRefs,
     hiddenKeys,
     hidingAnywhere,
+  ).filter((linked) =>
+    isThreadVisibleInActiveProfile(
+      { environmentId, id: linked.id, projectId: linked.projectId },
+      profileVisibility,
+    ),
   );
   const linkedThreadsLabel =
     linkedThreads.length > 0

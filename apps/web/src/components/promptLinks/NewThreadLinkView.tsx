@@ -34,7 +34,14 @@ import { isElectron } from "~/env";
 import { useNewThreadHandler } from "~/hooks/useHandleNewThread";
 import { useScratchProject } from "~/hooks/useScratchProject";
 import { newProjectId } from "~/lib/utils";
-import { useProjects, useThreadShells, waitForProject } from "~/state/entities";
+import {
+  useProfileEnvironments,
+  useProfileProjects,
+  useProfileThreads,
+  useProjects,
+  useThreadShells,
+  waitForProject,
+} from "~/state/entities";
 import { appAtomRegistry } from "~/rpc/atomRegistry";
 import { useEnvironments, usePrimaryEnvironmentId } from "~/state/environments";
 import { environmentPresentations } from "~/state/presentation";
@@ -109,9 +116,9 @@ export function NewThreadLinkView({ link }: { readonly link: NewThreadLink }) {
   const gt = useGT();
   const navigate = useNavigate();
   const ready = useAtomValue(allReachableShellsLiveAtom);
-  const projects = useProjects();
-  const threads = useThreadShells();
-  const { environments } = useEnvironments();
+  const projects = useProfileProjects(useProjects());
+  const threads = useProfileThreads(useThreadShells());
+  const environments = useProfileEnvironments(useEnvironments().environments);
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const handleNewThread = useNewThreadHandler();
   const { scratchEnvironmentId, openScratchProject } = useScratchProject();

@@ -17,9 +17,10 @@ import { useSettingsScope } from "./SettingsScopeContext";
 import { useThreadActions } from "../../hooks/useThreadActions";
 import { readLocalApi } from "../../localApi";
 import { useArchivedThreadSnapshots } from "../../lib/archivedThreadsState";
-import { useProfileHiddenProjectKeys } from "../../state/entities";
-import { profileSeparatingSettingsAtom } from "../../state/projects";
-import { isThreadInActiveAccountProfile } from "@t3tools/shared/accountProfiles";
+import {
+  activeProfileThreadVisibilityAtom,
+  isThreadVisibleInActiveProfile,
+} from "../../state/projects";
 import { useAtomValue } from "@effect/atom-react";
 import { RelativeTime } from "../RelativeTime";
 import { Button } from "../ui/button";
@@ -93,8 +94,8 @@ export function ArchivedThreadsPanel() {
   const gt = useGT();
   const m = useMessages();
   const { scope, groups: projectGroups, environments } = useSettingsScope();
-  const hiddenProjects = useProfileHiddenProjectKeys();
-  const separatingSettings = useAtomValue(profileSeparatingSettingsAtom);
+  const profileVisibility = useAtomValue(activeProfileThreadVisibilityAtom);
+  const hiddenProjects = profileVisibility.hiddenProjectKeys;
   const { unarchiveThread, confirmAndDeleteThread } = useThreadActions();
   const pendingActionsRef = useRef(new Set<string>());
   const [pendingKeys, setPendingKeys] = useState<ReadonlySet<string>>(() => new Set());
@@ -133,10 +134,10 @@ export function ArchivedThreadsPanel() {
     const threads = archivedSnapshots.flatMap(({ environmentId, snapshot }) =>
       snapshot.threads
         .filter((thread) =>
-          isThreadInActiveAccountProfile(separatingSettings.get(environmentId) ?? null, {
-            id: thread.id,
-            projectId: thread.projectId,
-          }),
+          isThreadVisibleInActiveProfile(
+            { environmentId, id: thread.id, projectId: thread.projectId },
+            profileVisibility,
+          ),
         )
         .map((thread) => ({
           ...presentThreadShell(environmentId, thread),

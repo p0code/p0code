@@ -20,6 +20,7 @@ import {
   useEnvironments,
   usePrimaryEnvironmentId,
 } from "~/state/environments";
+import { useProfileHiddenEnvironmentIds } from "~/state/entities";
 import { projectEnvironment } from "~/state/projects";
 import { type NewThreadHandler, useNewThreadHandler } from "./useHandleNewThread";
 
@@ -40,9 +41,13 @@ type ScratchEnvironment = Pick<EnvironmentPresentation, "connection" | "serverCo
 export function createScratchProjectActions(input: {
   readonly environments: () => Iterable<ScratchEnvironment>;
   readonly primaryEnvironmentId: () => EnvironmentId | null;
+  readonly hiddenEnvironmentIds?: () => ReadonlySet<EnvironmentId>;
   readonly registry: AtomRegistry.AtomRegistry;
   readonly handleNewThread: NewThreadHandler;
 }) {
+  const isHidden = (environmentId: EnvironmentId) =>
+    input.hiddenEnvironmentIds?.().has(environmentId) === true;
+
   const scratchWorkspaceRootFor = (environmentId: EnvironmentId | null): string | null => {
     let environment: ScratchEnvironment | undefined;
     for (const entry of input.environments()) {
@@ -54,10 +59,13 @@ export function createScratchProjectActions(input: {
   // The primary (local) environment wins; `fallback` only applies when it offers no scratch root.
   const scratchEnvironmentId = (fallback: EnvironmentId | null): EnvironmentId | null => {
     const primary = input.primaryEnvironmentId();
-    if (primary !== null && scratchWorkspaceRootFor(primary) !== null) return primary;
-    if (fallback !== null && scratchWorkspaceRootFor(fallback) !== null) return fallback;
+    if (primary !== null && !isHidden(primary) && scratchWorkspaceRootFor(primary) !== null)
+      return primary;
+    if (fallback !== null && !isHidden(fallback) && scratchWorkspaceRootFor(fallback) !== null)
+      return fallback;
     const offering = [...input.environments()].filter(
-      (entry) => scratchWorkspaceRootFor(entry.environmentId) !== null,
+      (entry) =>
+        !isHidden(entry.environmentId) && scratchWorkspaceRootFor(entry.environmentId) !== null,
     );
     return offering.length === 1 ? (offering[0]?.environmentId ?? null) : null;
   };
@@ -97,11 +105,13 @@ export function createScratchProjectActions(input: {
 export function useScratchProject() {
   const { environments } = useEnvironments();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
+  const hiddenEnvironmentIds = useProfileHiddenEnvironmentIds();
   const registry = useContext(RegistryContext);
   const handleNewThread = useNewThreadHandler();
   return createScratchProjectActions({
     environments: () => environments,
     primaryEnvironmentId: () => primaryEnvironmentId,
+    hiddenEnvironmentIds: () => hiddenEnvironmentIds,
     registry,
     handleNewThread,
   });

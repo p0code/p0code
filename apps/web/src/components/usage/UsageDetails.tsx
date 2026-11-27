@@ -11,7 +11,11 @@ import { formatCount, formatTokens, formatUsd } from "@t3tools/shared/usageForma
 import { msg, T, useGT, useLocale, useMessages } from "gt-react";
 import { useAtomValue } from "@effect/atom-react";
 import { useState } from "react";
-import { profileSeparatingSettingsAtom } from "../../state/projects";
+import {
+  primarySeparatingAccountProfileSettingsAtom,
+  profileSeparatingSettingsAtom,
+  resolveEffectiveProfileSettings,
+} from "../../state/projects";
 import { serverEnvironment } from "../../state/server";
 import { useEnvironmentQuery } from "../../state/query";
 import type { EnvironmentUsageStatus } from "../../state/usage";
@@ -190,13 +194,18 @@ function UsageDetailsQuery({
   });
   const [selected, setSelected] = useState<UsageDetailsRow | null>(null);
   const separatingSettings = useAtomValue(profileSeparatingSettingsAtom);
+  const primarySeparating = useAtomValue(primarySeparatingAccountProfileSettingsAtom);
   const query = useEnvironmentQuery(
     serverEnvironment.usageDetails({ environmentId, input: { ...filters, ...paging, limit: 50 } }),
   );
   const data =
     query.data === null
       ? null
-      : usageDetailsInActiveProfile(query.data, separatingSettings.get(environmentId) ?? null);
+      : usageDetailsInActiveProfile(
+          query.data,
+          resolveEffectiveProfileSettings(environmentId, separatingSettings, primarySeparating) ??
+            null,
+        );
   return (
     <>
       {query.error ? (

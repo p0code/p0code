@@ -10,6 +10,7 @@ import { useEnvironmentIdentities, usePrimaryEnvironmentId } from "../state/envi
 import {
   useDelegatedUnderParent,
   useProfileProjects,
+  useProfileThreads,
   useProjects,
   useQuietThreadShells,
 } from "../state/entities";
@@ -20,7 +21,7 @@ export function useSidebarProjectGroups() {
   const projects = useProfileProjects(useProjects());
   // Activity order lags a running thread's streaming ticks until its next
   // real change; reading every tick re-rendered the whole sidebar with it.
-  const threads = useQuietThreadShells();
+  const threads = useProfileThreads(useQuietThreadShells());
   const delegatedUnderParent = useDelegatedUnderParent();
   const projectOrder = useUiStateStore((store) => store.projectOrder);
   const sortOrder = useClientSettings((s) => s.sidebarProjectSortOrder);
