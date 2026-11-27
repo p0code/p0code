@@ -1,3 +1,4 @@
+import type { AnyRouter } from "@tanstack/react-router";
 import {
   buildRemoteOpenUrl,
   type EditorId,
@@ -16,29 +17,38 @@ import { openRemoteEditorUrl, useRemoteCapableEditors, useRemoteOpenState } from
 import { registerCommands } from "../../shortcuts/dispatcher";
 import { shellEnvironment } from "../../state/shell";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { isAppModalOpen } from "../sidebar/mainAppLocation";
 
 /** Marks an OpenInPicker's primary button as the target of `editor.openFavorite`. */
 export const OPEN_FAVORITE_EDITOR_ATTRIBUTE = "data-open-favorite-editor";
+
+const BLOCKING_DIALOG_SELECTOR = '[role="dialog"], [aria-modal="true"], [data-app-modal]';
+
+function hasBlockingDialog(router?: Pick<AnyRouter, "state">): boolean {
+  return isAppModalOpen(router) || document.querySelector(BLOCKING_DIALOG_SELECTOR) !== null;
+}
 
 /**
  * `editor.openFavorite` presses the marked OpenInPicker primary button, so the shortcut opens
  * exactly what the button on screen would. A missing or disabled button leaves the chord to the
  * bubble-phase fallback below. Capture phase, so a focused terminal does not swallow the chord.
  */
-export function registerOpenFavoriteEditorCommand(): () => void {
+export function registerOpenFavoriteEditorCommand(router?: Pick<AnyRouter, "state">): () => void {
   return registerCommands(
     {
       "editor.openFavorite": (event) => {
         if (event.repeat) return false;
         const button = [
           ...document.querySelectorAll<HTMLButtonElement>(`[${OPEN_FAVORITE_EDITOR_ATTRIBUTE}]`),
-        ].at(-1);
+        ]
+          .filter((candidate) => candidate.closest("[inert]") === null)
+          .at(-1);
         if (button === undefined || button.disabled) return false;
         event.preventDefault();
         button.click();
       },
     },
-    { capture: true },
+    { capture: true, when: () => !hasBlockingDialog(router) },
   );
 }
 
@@ -70,6 +80,7 @@ export function useOpenFavoriteEditorShortcut({
       if (
         event.repeat ||
         event.defaultPrevented ||
+        hasBlockingDialog() ||
         !isOpenFavoriteEditorShortcut(event, keybindings)
       )
         return;

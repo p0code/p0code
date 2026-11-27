@@ -9,6 +9,18 @@ export function isAppModalPage(pathname: string) {
   return pathname === "/settings" || pathname.startsWith("/settings/") || pathname === "/usage";
 }
 
+/** Whether a modal app route (Settings or Usage) is active in the router or mounted in the DOM. */
+export function isAppModalOpen(router?: Pick<AnyRouter, "state">): boolean {
+  if (
+    router &&
+    (isAppModalPage(router.state.location.pathname) ||
+      router.state.matches.some((match) => isAppModalPage(match.pathname)))
+  ) {
+    return true;
+  }
+  return typeof document !== "undefined" && document.querySelector("[data-app-modal]") !== null;
+}
+
 export function isSidebarUtilityPage(pathname: string) {
   return (
     pathname.startsWith("/projects/") ||

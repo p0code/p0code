@@ -288,7 +288,7 @@ export function startAppServices(): AppRouter {
   startBrowserProfileReporting();
   installChatRouteCommands(router);
   installCommandPaletteCommands(router);
-  registerOpenFavoriteEditorCommand();
+  registerOpenFavoriteEditorCommand(router);
   startThreadOverlayRetention(router);
   // Drafts promote as their server threads arrive, wherever the user is.
   subscribeDraftThreadPromotion({
