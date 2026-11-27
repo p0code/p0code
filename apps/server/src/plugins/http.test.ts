@@ -2,7 +2,7 @@ import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
   AuthAdministrativeClientScopes,
-  AuthRelayConfigureScope,
+  AuthPluginsManageScope,
   AuthStandardClientScopes,
   guestSessionCookieName,
   type PluginManifest,
@@ -279,7 +279,7 @@ describe("plugin routes", () => {
     expect(nonOwnerCookie.status).toBe(403);
     expect(await nonOwnerCookie.json()).toMatchObject({
       code: "insufficient_scope",
-      requiredPermission: AuthRelayConfigureScope,
+      requiredPermission: AuthPluginsManageScope,
     });
 
     const nonOwnerBearer = await post(handler, {
@@ -288,7 +288,7 @@ describe("plugin routes", () => {
     expect(nonOwnerBearer.status).toBe(403);
     expect(await nonOwnerBearer.json()).toMatchObject({
       code: "insufficient_scope",
-      requiredPermission: AuthRelayConfigureScope,
+      requiredPermission: AuthPluginsManageScope,
     });
 
     const guestCookie = await post(handler, {

@@ -1,5 +1,5 @@
 import {
-  AuthRelayConfigureScope,
+  AuthPluginsManageScope,
   pluginHttpRouteAuth,
   pluginHttpRoutePath,
   type PluginHttpRouteAuth,
@@ -35,7 +35,7 @@ import { removeObsoleteRouteSecrets, routeSecret } from "./routeSecret.ts";
 
 const NO_STORE = { "cache-control": "no-store", pragma: "no-cache" };
 const ROUTE_SECRET_HEADER = "x-p0code-plugin-route-secret";
-const PLUGIN_HTTP_REQUIRED_SCOPE = AuthRelayConfigureScope;
+const PLUGIN_HTTP_REQUIRED_SCOPE = AuthPluginsManageScope;
 
 // Provide outside HttpRouter.serve so its logger and root request spans share these names.
 export const layerSecretRedaction = Layer.mergeAll(
