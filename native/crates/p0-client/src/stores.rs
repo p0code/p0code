@@ -87,7 +87,7 @@ impl ShellStore {
             }
             ShellStreamItem::ProjectUpdated { sequence, project } => {
                 state.last_sequence = state.last_sequence.max(sequence);
-                upsert_by_id(&mut state.projects, project, |p| p.id.as_str());
+                upsert_by_id(&mut state.projects, *project, |p| p.id.as_str());
             }
             ShellStreamItem::ProjectRemoved {
                 sequence,

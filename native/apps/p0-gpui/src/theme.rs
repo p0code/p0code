@@ -4,7 +4,6 @@ use gpui_kit::{Hsla, WindowAppearance, rgba};
 
 #[derive(Debug, Clone, Copy)]
 pub struct AppPalette {
-    pub is_dark: bool,
     pub background: Hsla,
     pub sidebar: Hsla,
     pub card: Hsla,
@@ -36,7 +35,6 @@ impl AppPalette {
 
     pub fn light() -> Self {
         Self {
-            is_dark: false,
             // --color-zinc-25
             background: rgba(0xfcfcfcff).into(),
             // --color-zinc-50
@@ -75,7 +73,6 @@ impl AppPalette {
 
     pub fn dark() -> Self {
         Self {
-            is_dark: true,
             // --background: #000
             background: rgba(0x000000ff).into(),
             // --sidebar: color-mix(neutral-950 97%, white)

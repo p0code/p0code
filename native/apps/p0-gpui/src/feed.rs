@@ -42,7 +42,7 @@ pub fn estimate_turn_item_height(
         }
         TurnItem::Reasoning { text, .. } => {
             if expanded {
-                let lines = text.lines().count().max(1).min(24);
+                let lines = text.lines().count().clamp(1, 24);
                 44.0 + (lines as f32) * 18.0
             } else {
                 40.0
@@ -60,7 +60,7 @@ pub fn estimate_turn_item_height(
         TurnItem::TodoList { steps, .. } => 48.0 + (steps.len().min(20) as f32) * 22.0,
         TurnItem::CommandExecution { input, output, .. } => {
             if expanded {
-                let in_lines = input.lines().count().max(1).min(6);
+                let in_lines = input.lines().count().clamp(1, 6);
                 let out_lines = output
                     .as_deref()
                     .map(|o| o.lines().count().min(18))

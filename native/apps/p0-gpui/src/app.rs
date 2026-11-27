@@ -5,18 +5,19 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
-use gpui_kit::component::VirtualListScrollHandle;
-use gpui_kit::component::v_virtual_list;
+use gpui_kit::component::input::{InputEvent, TextareaState};
+use gpui_kit::component::{VirtualListScrollHandle, v_virtual_list};
 use gpui_kit::{
-    App, AppContext as _, Context, FontWeight, InteractiveElement as _, IntoElement,
+    App, AppContext as _, Context, Entity, FontWeight, InteractiveElement as _, IntoElement,
     ParentElement as _, Render, SharedString, Size, StatefulInteractiveElement as _, Styled as _,
-    Window, div, px, size,
+    Subscription, Window, div, px, size,
 };
 use p0_client::ConnectionState;
 use p0_i18n::{Catalog, Key};
-use p0_protocol::{ApprovalDecision, ThreadStatus};
+use p0_protocol::{ApprovalDecision, ModelSelection, RuntimeMode, ThreadStatus};
 
 use crate::bridge::AppBridge;
+use crate::composer::render_composer;
 use crate::feed::{estimate_turn_item_height, render_turn_item};
 use crate::markdown::MarkdownCache;
 use crate::theme::AppPalette;
@@ -28,6 +29,11 @@ pub struct P0App {
     collapsed_projects: HashSet<String>,
     expanded_items: HashSet<String>,
     selected_thread_id: Option<String>,
+    selected_model: Option<ModelSelection>,
+    selected_runtime_mode: Option<RuntimeMode>,
+    model_picker_open: bool,
+    composer_input: Entity<TextareaState>,
+    _composer_sub: Subscription,
     feed_scroll: VirtualListScrollHandle,
     last_rendered_thread_rev: u64,
     stick_to_bottom: bool,
@@ -35,7 +41,26 @@ pub struct P0App {
 }
 
 impl P0App {
-    pub fn new(bridge: Arc<AppBridge>, cx: &mut Context<Self>) -> Self {
+    pub fn new(bridge: Arc<AppBridge>, window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let i18n = Catalog::for_system();
+        let placeholder = i18n.get(Key::AskAnything).to_owned();
+        let composer_input = cx.new(|cx| {
+            TextareaState::new(window, cx)
+                .placeholder(placeholder)
+                .auto_grow(2, 8)
+        });
+        let composer_sub = cx.subscribe_in(
+            &composer_input,
+            window,
+            |this, _, event: &InputEvent, window, cx| {
+                if let InputEvent::PressEnter { shift, .. } = event
+                    && !shift
+                {
+                    this.submit_composer(window, cx);
+                }
+            },
+        );
+
         let last_seen_version = bridge.version();
 
         // Coalesce streaming & state notifications to <=60 Hz (~16ms), zero idle repaints.
@@ -67,16 +92,107 @@ impl P0App {
 
         Self {
             bridge,
-            i18n: Catalog::for_system(),
+            i18n,
             last_seen_version,
             collapsed_projects: HashSet::new(),
             expanded_items: HashSet::new(),
             selected_thread_id: None,
+            selected_model: None,
+            selected_runtime_mode: None,
+            model_picker_open: false,
+            composer_input,
+            _composer_sub: composer_sub,
             feed_scroll: VirtualListScrollHandle::new(),
             last_rendered_thread_rev: 0,
             stick_to_bottom: true,
             md_cache: MarkdownCache::new(),
         }
+    }
+
+    pub fn bridge(&self) -> &Arc<AppBridge> {
+        &self.bridge
+    }
+
+    pub fn i18n(&self) -> &Catalog {
+        &self.i18n
+    }
+
+    pub fn selected_thread_id(&self) -> Option<&str> {
+        self.selected_thread_id.as_deref()
+    }
+
+    pub fn selected_model(&self) -> Option<&ModelSelection> {
+        self.selected_model.as_ref()
+    }
+
+    pub fn selected_runtime_mode(&self) -> Option<RuntimeMode> {
+        self.selected_runtime_mode
+    }
+
+    pub fn model_picker_open(&self) -> bool {
+        self.model_picker_open
+    }
+
+    pub fn composer_input(&self) -> &Entity<TextareaState> {
+        &self.composer_input
+    }
+
+    pub fn toggle_model_picker(&mut self, cx: &mut Context<Self>) {
+        self.model_picker_open = !self.model_picker_open;
+        cx.notify();
+    }
+
+    pub fn pick_model(&mut self, selection: ModelSelection, cx: &mut Context<Self>) {
+        self.selected_model = Some(selection.clone());
+        self.model_picker_open = false;
+        if let Some(tid) = &self.selected_thread_id {
+            self.bridge.set_model_selection(tid.clone(), selection);
+        }
+        cx.notify();
+    }
+
+    pub fn cycle_runtime_mode(&mut self, current: RuntimeMode, cx: &mut Context<Self>) {
+        let next = current.next_cycle();
+        self.selected_runtime_mode = Some(next);
+        if let Some(tid) = &self.selected_thread_id {
+            self.bridge.set_runtime_mode(tid.clone(), next);
+        }
+        cx.notify();
+    }
+
+    pub fn stop_active_thread(&mut self, cx: &mut Context<Self>) {
+        if let Some(tid) = self.selected_thread_id.clone() {
+            let active_run = self
+                .bridge
+                .thread_state()
+                .active_run_id()
+                .map(ToOwned::to_owned);
+            self.bridge.stop_thread(tid, active_run);
+            cx.notify();
+        }
+    }
+
+    pub fn submit_composer(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let raw = self.composer_input.read(cx).value().to_string();
+        let text = raw.trim().to_owned();
+        if text.is_empty() {
+            return;
+        }
+        let Some(tid) = self.selected_thread_id.clone() else {
+            return;
+        };
+        let active_run = self
+            .bridge
+            .thread_state()
+            .active_run_id()
+            .map(ToOwned::to_owned);
+        let model = self.selected_model.clone();
+        self.composer_input.update(cx, |state, cx| {
+            state.set_value("", window, cx);
+        });
+        self.stick_to_bottom = true;
+        self.bridge.send_message(tid, text, model, active_run);
+        cx.notify();
     }
 
     fn auto_select_first_thread(&mut self) {
@@ -105,11 +221,7 @@ impl P0App {
         let max_y = base.max_offset().y;
         let cur_y = -base.offset().y;
         // Stick to bottom unless the user deliberately scrolled more than 48px above bottom.
-        if max_y <= px(0.0) || (max_y - cur_y) <= px(48.0) {
-            self.stick_to_bottom = true;
-        } else {
-            self.stick_to_bottom = false;
-        }
+        self.stick_to_bottom = max_y <= px(0.0) || (max_y - cur_y) <= px(48.0);
         if self.stick_to_bottom {
             self.feed_scroll.scroll_to_bottom();
         }
@@ -145,6 +257,9 @@ impl P0App {
             return;
         }
         self.selected_thread_id = Some(thread_id.clone());
+        self.selected_model = None;
+        self.selected_runtime_mode = None;
+        self.model_picker_open = false;
         self.expanded_items.clear();
         self.stick_to_bottom = true;
         self.bridge.select_thread(thread_id);
@@ -581,6 +696,7 @@ impl P0App {
         }
 
         pane.child(div().flex_1().min_h_0().w_full().child(feed_body))
+            .child(render_composer(self, &palette, cx))
     }
 }
 
@@ -626,7 +742,7 @@ pub fn run_gui(bridge: Arc<AppBridge>) {
         let bridge_w = bridge.clone();
         gpui_kit::open_window(window_opts, cx, move |window, cx| {
             gpui_kit::component::Theme::sync_system_appearance(Some(window), cx);
-            let view = cx.new(|cx| P0App::new(bridge_w.clone(), cx));
+            let view = cx.new(|cx| P0App::new(bridge_w.clone(), window, cx));
             cx.new(|cx| gpui_kit::component::Root::new(view, window, cx))
         })
         .expect("failed to open p0-gpui window");

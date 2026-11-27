@@ -1,6 +1,7 @@
 mod app;
 mod bridge;
 mod cli;
+mod composer;
 mod feed;
 mod markdown;
 mod theme;

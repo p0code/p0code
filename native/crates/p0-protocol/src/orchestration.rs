@@ -211,7 +211,10 @@ pub enum ShellStreamItem {
     #[serde(rename = "snapshot")]
     Snapshot { snapshot: ShellSnapshot },
     #[serde(rename = "project.updated")]
-    ProjectUpdated { sequence: u64, project: ProjectShell },
+    ProjectUpdated {
+        sequence: u64,
+        project: Box<ProjectShell>,
+    },
     #[serde(rename = "project.removed")]
     ProjectRemoved {
         sequence: u64,
