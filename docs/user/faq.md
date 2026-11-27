@@ -75,6 +75,10 @@ Enable automatic cleanup or run **Delete now** in **Settings → Worktrees → C
 
 Yes—on-device speech on iOS, Android, and macOS 26+ desktop, or via a paired environment on web/desktop/mobile. See [Voice input](./voice-input.md).
 
+## What backend does the desktop app run?
+
+`p0d`, the native backend, ships inside the app and starts with it. It starts the older Node server only for features it hasn't taken over yet, and stops it when it sits unused. If p0d can't start, the app says why and offers **Retry** or **Use legacy Node backend this once**. Running the Node server directly is deprecated; you can still pick it in **Settings → Environments → Backend**, and **Settings → About** shows when you are on it.
+
 ## Does it work on Windows, Mac, and Linux?
 
 Yes, all three. Desktop app, CLI, the works. One catch: there is no `p0` binary for Intel Macs, so use the desktop app there. Windows folks can also run agents inside WSL. [Install](./install.md)

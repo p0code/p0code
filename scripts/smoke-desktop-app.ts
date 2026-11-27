@@ -1,7 +1,7 @@
-// @effect-diagnostics nodeBuiltinImport:off globalConsole:off globalTimers:off
+// @effect-diagnostics nodeBuiltinImport:off globalConsole:off globalTimers:off globalFetch:off
 // Launches a packaged desktop app against a seeded T3 home, opens a thread, and checks its
-// messages render. Release jobs run it so a build whose backend or bundle cannot start fails
-// before it is published.
+// messages render, then checks the app is served by the native p0d backend. Release jobs run it
+// so a build whose backend or bundle cannot start fails before it is published.
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
@@ -64,6 +64,47 @@ const waitForDevToolsEndpoint = (child: NodeChildProcess.ChildProcess) =>
     child.once("exit", onExit);
   });
 
+// The desktop runs p0d by default; p0d writes this file once it listens and removes it on exit.
+const assertP0dBackend = async (readyFile: string) => {
+  if (!NodeFS.existsSync(readyFile)) {
+    throw new Error(`The app is not running p0d: ${readyFile} does not exist.`);
+  }
+  const ready = JSON.parse(NodeFS.readFileSync(readyFile, "utf8")) as {
+    readonly pid?: unknown;
+    readonly url?: unknown;
+  };
+  if (typeof ready.pid !== "number" || typeof ready.url !== "string") {
+    throw new Error(`${readyFile} has no pid or url: ${JSON.stringify(ready)}`);
+  }
+  try {
+    process.kill(ready.pid, 0);
+  } catch (error) {
+    // EPERM still means the process exists.
+    if ((error as NodeJS.ErrnoException).code !== "EPERM") {
+      throw new Error(`p0d (pid ${ready.pid} from ${readyFile}) is not running.`, {
+        cause: error,
+      });
+    }
+  }
+  const healthUrl = new URL("/healthz", ready.url);
+  const response = await fetch(healthUrl, { signal: AbortSignal.timeout(10_000) });
+  const body = await response.text();
+  if (response.status !== 200 || body.trim() !== "ok") {
+    throw new Error(
+      `p0d at ${healthUrl} answered ${response.status} ${JSON.stringify(body)}, expected 200 "ok".`,
+    );
+  }
+};
+
+const findP0dLogs = (dir: string, depth = 2): string[] => {
+  if (!NodeFS.existsSync(dir)) return [];
+  return NodeFS.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const entryPath = NodePath.join(dir, entry.name);
+    if (entry.isDirectory()) return depth > 0 ? findP0dLogs(entryPath, depth - 1) : [];
+    return /p0d.*\.log$/i.test(entry.name) ? [entryPath] : [];
+  });
+};
+
 let step = "launching the app";
 let child: NodeChildProcess.ChildProcess | undefined;
 let browser: Browser | undefined;
@@ -105,6 +146,8 @@ try {
     step = "opening the thread";
     await thread.click();
     await page.getByText(THREAD_MESSAGE).waitFor({ timeout: STEP_TIMEOUT_MS });
+    step = "checking the p0d backend";
+    await assertP0dBackend(NodePath.join(t3Home, "userdata/p0d-ready.json"));
   } catch (error) {
     NodeFS.mkdirSync(artifactsDir, { recursive: true });
     await page
@@ -112,7 +155,9 @@ try {
       .catch(() => {});
     throw error;
   }
-  console.log("Desktop launch check passed: the app opened and showed the seeded thread.");
+  console.log(
+    "Desktop launch check passed: the app opened, showed the seeded thread, and runs on p0d.",
+  );
 } catch (error) {
   console.error(`Desktop launch check failed while ${step}.`);
   NodeFS.mkdirSync(artifactsDir, { recursive: true });
@@ -125,6 +170,12 @@ try {
       console.error("\nLast backend output (server-child.log):");
       console.error(NodeFS.readFileSync(serverLog, "utf8").split("\n").slice(-20).join("\n"));
     }
+  }
+  for (const p0dLog of findP0dLogs(NodePath.join(t3Home, "userdata"))) {
+    const relative = NodePath.relative(NodePath.join(t3Home, "userdata"), p0dLog);
+    NodeFS.cpSync(p0dLog, NodePath.join(artifactsDir, "p0d-logs", relative));
+    console.error(`\nLast p0d output (${relative}):`);
+    console.error(NodeFS.readFileSync(p0dLog, "utf8").split("\n").slice(-20).join("\n"));
   }
   process.exitCode = 1;
 } finally {

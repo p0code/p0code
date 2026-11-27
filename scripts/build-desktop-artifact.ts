@@ -461,6 +461,18 @@ export class ResourceMonitorBuildOutputMissingError extends Schema.TaggedError<R
   }
 }
 
+export class P0dBuildOutputMissingError extends Schema.TaggedError<P0dBuildOutputMissingError>()(
+  "P0dBuildOutputMissingError",
+  {
+    binaryPath: Schema.String,
+    goTarget: Schema.String,
+  },
+) {
+  override get message(): string {
+    return `p0d build for ${this.goTarget} did not produce ${this.binaryPath}.`;
+  }
+}
+
 const desktopIconPlatformNames = {
   mac: "macOS",
   linux: "Linux",
@@ -735,6 +747,7 @@ const WindowsPackagedPayloadValidationReason = Schema.Literals([
   "sidecar-invalid",
   "unpacked-native-missing",
   "resource-monitor-missing",
+  "p0d-missing",
   "wsl-runtime-missing",
   "wsl-runtime-invalid",
   "file-limit-exceeded",
@@ -760,6 +773,9 @@ export class WindowsPackagedPayloadValidationError extends Schema.TaggedError<Wi
     }
     if (this.reason === "resource-monitor-missing") {
       return "Windows packaged payload is missing the resource monitor executable.";
+    }
+    if (this.reason === "p0d-missing") {
+      return "Windows packaged payload is missing the p0d backend executable.";
     }
     if (this.reason === "wsl-runtime-missing") {
       return "Windows packaged payload is missing the WSL runtime archive or SHA-256 sidecar.";
@@ -997,7 +1013,7 @@ export const DESKTOP_FILE_EXCLUSIONS = [
   "!apps/desktop/prod-resources/wsl-runtime.tar.gz.sha256",
   "!apps/desktop/gnome-extension",
   "!apps/desktop/gnome-extension/**/*",
-  // Install-time inputs and build-only resources; resource-monitor ships via extraResources.
+  // Install-time inputs and build-only resources; resource-monitor and p0d ship via extraResources.
   "!patches",
   "!patches/**/*",
   "!pnpm-workspace.yaml",
@@ -1005,6 +1021,8 @@ export const DESKTOP_FILE_EXCLUSIONS = [
   "!apps/desktop/prod-resources/dmg/**/*",
   "!apps/desktop/prod-resources/resource-monitor",
   "!apps/desktop/prod-resources/resource-monitor/**/*",
+  "!apps/desktop/prod-resources/p0d",
+  "!apps/desktop/prod-resources/p0d/**/*",
   ...UNUSED_PACKAGE_SOURCE_EXCLUSIONS.map((glob) => `!${glob}`),
 ] as const;
 // Windows terminal helpers cannot run on macOS and slow signing and notarization.
@@ -1105,6 +1123,10 @@ export const DESKTOP_EXTRA_RESOURCES = [
   {
     from: "apps/desktop/prod-resources/resource-monitor",
     to: "resource-monitor",
+  },
+  {
+    from: "apps/desktop/prod-resources/p0d",
+    to: "p0d",
   },
 ] as const;
 export const LINUX_CAPTURE_EXTRA_RESOURCES = [
@@ -3437,6 +3459,14 @@ export const validateWindowsPackagedPayload = Effect.fn(
     });
   }
 
+  if (!(yield* isFile(path.join(resourcesDir, "p0d", p0dArtifactExecutableName("win"))))) {
+    return yield* new WindowsPackagedPayloadValidationError({
+      reason: "p0d-missing",
+      packagedAppDir,
+      missingFiles: ["p0d/p0d.exe"],
+    });
+  }
+
   const wslArchivePath = path.join(resourcesDir, WSL_RUNTIME_ARCHIVE_NAME);
   const wslArchiveHashPath = path.join(resourcesDir, WSL_RUNTIME_ARCHIVE_HASH_NAME);
   const [hasWslArchive, hasWslArchiveHash] = yield* Effect.all([
@@ -3732,6 +3762,84 @@ export const findP0dBinary = Effect.fn("findP0dBinary")(function* (
     }
   }
   return Option.none<string>();
+});
+
+export function resolveP0dGoTargets(
+  platform: typeof BuildPlatform.Type,
+  arch: typeof BuildArch.Type,
+): ReadonlyArray<string> {
+  const goos = platform === "mac" ? "darwin" : platform === "win" ? "windows" : "linux";
+  const goarches = arch === "universal" ? ["arm64", "amd64"] : [arch === "x64" ? "amd64" : "arm64"];
+  return goarches.map((goarch) => `${goos}/${goarch}`);
+}
+
+// The desktop runs p0d from resources/p0d by default, so the GUI bundle ships it beside the
+// Node server that p0d starts as its legacy sidecar.
+export const stageP0d = Effect.fn("stageP0d")(function* (input: {
+  readonly repoRoot: string;
+  readonly stageResourcesDir: string;
+  readonly platform: typeof BuildPlatform.Type;
+  readonly arch: typeof BuildArch.Type;
+  readonly appVersion: string;
+  readonly verbose: boolean;
+}) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const executableName = p0dArtifactExecutableName(input.platform);
+  const reuseP0d = yield* Config.Boolean("T3CODE_DESKTOP_REUSE_P0D").pipe(
+    Config.withDefault(false),
+  );
+  const builtBinaries: string[] = [];
+
+  for (const goTarget of resolveP0dGoTargets(input.platform, input.arch)) {
+    const binaryPath = path.join(
+      input.repoRoot,
+      "apps/p0d/dist",
+      goTarget.replace("/", "-"),
+      executableName,
+    );
+    if (!reuseP0d) {
+      const spawnCommand = yield* resolveSpawnCommand("bash", [
+        path.join(input.repoRoot, "apps/p0d/scripts/build.sh"),
+        goTarget,
+      ]);
+      yield* runCommand(
+        ChildProcess.make(spawnCommand.command, spawnCommand.args, {
+          cwd: input.repoRoot,
+          shell: spawnCommand.shell,
+          env: { P0D_VERSION: input.appVersion },
+          extendEnv: true,
+        }),
+        { label: `apps/p0d/scripts/build.sh ${goTarget}`, verbose: input.verbose },
+      );
+    }
+    if (!(yield* fs.exists(binaryPath))) {
+      return yield* new P0dBuildOutputMissingError({ binaryPath, goTarget });
+    }
+    if (reuseP0d) {
+      yield* Effect.log(`[desktop-artifact] Reusing built p0d (${goTarget}).`);
+    }
+    builtBinaries.push(binaryPath);
+  }
+
+  const destinationDirectory = path.join(input.stageResourcesDir, "p0d");
+  const destinationPath = path.join(destinationDirectory, executableName);
+  yield* fs.remove(destinationDirectory, { recursive: true, force: true }).pipe(Effect.ignore);
+  yield* fs.makeDirectory(destinationDirectory, { recursive: true });
+
+  if (builtBinaries.length === 1) {
+    yield* fs.copyFile(builtBinaries[0]!, destinationPath);
+  } else {
+    yield* runCommand(
+      ChildProcess.make("lipo", ["-create", ...builtBinaries, "-output", destinationPath]),
+      { label: "lipo p0d universal binary", verbose: input.verbose },
+    );
+  }
+
+  if (input.platform !== "win") {
+    yield* fs.chmod(destinationPath, 0o755);
+  }
+  return destinationPath;
 });
 
 export function backendArchiveStem(
@@ -4275,8 +4383,7 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
   yield* Effect.log(`[desktop-artifact] Applied ${webAssetBrand} web client branding.`);
   yield* validateBundledClientAssets(path.dirname(bundledClientEntry));
 
-  // A separately built p0d is a backend archive input, never a reason to omit the GUI's server.
-  yield* Effect.log("[desktop-artifact] GUI artifact always bundles the embedded Node server.");
+  // The GUI ships both p0d and the Node server; the desktop runs p0d, which starts the server as its sidecar.
 
   yield* fs.makeDirectory(path.join(stageAppDir, "apps/desktop"), { recursive: true });
   if (options.platform !== "win") {
@@ -4311,6 +4418,14 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
     stageResourcesDir,
     platform: options.platform,
     arch: options.arch,
+    verbose: options.verbose,
+  });
+  const stagedP0dPath = yield* stageP0d({
+    repoRoot,
+    stageResourcesDir,
+    platform: options.platform,
+    arch: options.arch,
+    appVersion,
     verbose: options.verbose,
   });
   if (options.platform === "linux") {
@@ -4653,7 +4768,7 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
     arch: options.arch,
     appVersion,
     outputDir: options.outputDir,
-    p0dBinaryPath: yield* findP0dBinary(repoRoot, options.platform, options.arch),
+    p0dBinaryPath: Option.some(stagedP0dPath),
     verbose: options.verbose,
   });
 

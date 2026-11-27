@@ -301,23 +301,34 @@ const startLocalBackend = Effect.gen(function* () {
   const primaryBackend = yield* (yield* DesktopBackendPool.DesktopBackendPool).primary;
   const serverExposure = yield* DesktopServerExposure.DesktopServerExposure;
   if (yield* offerT3Import()) return false;
-  // Before any window: an external backend the app can't use would only show a dead-end error.
-  // The saved choice stays on disk; the user can retry it or explicitly switch for good.
+  // Before any window: a backend the app can't use would only show a dead-end error. Nothing
+  // falls back silently; the user retries or picks the deprecated Node backend for this launch.
   const electronDialog = yield* ElectronDialog.ElectronDialog;
+  if ((yield* backendService.resolveEffectiveMode) === "local-service") {
+    // p0d's Node sidecar inherits this process's environment, so it needs the login-shell PATH
+    // and the exposure settings before p0d starts.
+    yield* (yield* DesktopShellEnvironment.DesktopShellEnvironment).installIntoProcess;
+    yield* serverExposure.configureFromSettings({
+      port: Option.getOrElse(environment.configuredBackendPort, () => DEFAULT_DESKTOP_BACKEND_PORT),
+    });
+  }
   let selectedBackend = yield* backendService.prepareSelectedBackend;
-  while (selectedBackend.fallbackReason !== null) {
+  while (selectedBackend.failure !== null) {
     const choice = yield* electronDialog
       .showMessageBox({
         type: "error",
-        title: m(msg("The selected backend couldn't start")),
-        message: m(msg("p0code couldn't start the backend you selected.")),
+        title: m(msg("p0code's backend couldn't start")),
+        message:
+          selectedBackend.mode === "local-service"
+            ? m(msg("p0d, the p0code backend, couldn't start."))
+            : m(msg("p0code couldn't start the backend you selected.")),
         detail: m(
           msg(
-            "{reason}\n\np0code is using the in-app backend for now. Your saved choice is unchanged, so you can retry it now or switch to the in-app backend.",
-            { reason: selectedBackend.fallbackReason },
+            "{reason}\n\nRetry, or run the deprecated Node backend until you quit. Your saved choice stays the same.",
+            { reason: selectedBackend.failure },
           ),
         ),
-        buttons: [m(msg("Retry")), m(msg("Use the in-app backend")), m(msg("Quit"))],
+        buttons: [m(msg("Retry")), m(msg("Use legacy Node backend this once")), m(msg("Quit"))],
         defaultId: 0,
         cancelId: 2,
         noLink: true,
@@ -326,7 +337,7 @@ const startLocalBackend = Effect.gen(function* () {
         Effect.catch((error) =>
           logBootstrapWarning("failed to show the backend failure notice", {
             error: error.message,
-          }).pipe(Effect.as({ response: 1 })),
+          }).pipe(Effect.as({ response: 2 })),
         ),
       );
     if (choice.response === 0) {
@@ -337,15 +348,8 @@ const startLocalBackend = Effect.gen(function* () {
       yield* (yield* ElectronApp.ElectronApp).quit;
       return false;
     }
-    yield* desktopSettings.setBackendConfig({ mode: "embedded", modeConfiguredByUser: true }).pipe(
-      Effect.tap(() => logBootstrapInfo("switched to the in-app backend at the user's request")),
-      Effect.catch((error) =>
-        logBootstrapWarning("failed to save the in-app backend choice", {
-          error: error.message,
-        }),
-      ),
-    );
-    selectedBackend = { mode: "embedded", requestedMode: "embedded", fallbackReason: null };
+    yield* backendService.useLegacyBackendForThisLaunch;
+    selectedBackend = { mode: "embedded", failure: null };
   }
   const effectiveBackendMode = selectedBackend.mode;
   const isExternalMode = DesktopBackendService.isExternalBackendMode(effectiveBackendMode);
@@ -415,12 +419,7 @@ const startLocalBackend = Effect.gen(function* () {
       );
     }
   } else if (effectiveBackendMode === "local-service") {
-    const servicePort = Option.getOrElse(
-      environment.configuredBackendPort,
-      () => DEFAULT_DESKTOP_BACKEND_PORT,
-    );
-    yield* serverExposure.configureFromSettings({ port: servicePort });
-    yield* logBootstrapInfo("bootstrap using local-service backend mode", { port: servicePort });
+    yield* logBootstrapInfo("bootstrap using p0d");
   } else {
     yield* logBootstrapInfo("bootstrap using remote backend mode", {
       remoteUrl: settings.backendRemoteUrl ?? null,

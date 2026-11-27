@@ -93,7 +93,11 @@ interface StubbedDesktop {
     readonly title?: string;
     readonly message: string;
     readonly detail?: string;
+    readonly buttons?: ReadonlyArray<string>;
   }>;
+  /** Buttons the user clicks in each message box, in order; the first button otherwise. */
+  readonly messageResponses?: Array<number>;
+  readonly backendService?: Partial<DesktopBackendService.DesktopBackendService["Service"]>;
 }
 
 const runStubbedDesktop = (stub: StubbedDesktop) =>
@@ -112,10 +116,15 @@ const runStubbedDesktop = (stub: StubbedDesktop) =>
         } as unknown as ElectronApp.ElectronApp["Service"]),
         Effect.provideService(ElectronDialog.ElectronDialog, {
           showErrorBox: () => Effect.die("unexpected fatal startup error"),
-          showMessageBox: (options: { title?: string; message: string; detail?: string }) =>
+          showMessageBox: (options: {
+            title?: string;
+            message: string;
+            detail?: string;
+            buttons?: ReadonlyArray<string>;
+          }) =>
             Effect.sync(() => {
               stub.messages?.push(options);
-              return { response: 0, checkboxChecked: false };
+              return { response: stub.messageResponses?.shift() ?? 0, checkboxChecked: false };
             }),
         } as unknown as ElectronDialog.ElectronDialog["Service"]),
         Effect.provideService(DesktopEnvironment.DesktopEnvironment, {
@@ -219,6 +228,7 @@ const runStubbedDesktop = (stub: StubbedDesktop) =>
           Layer.mock(DesktopBackendConfiguration.DesktopBackendConfiguration, {}),
           DesktopBackendService.layerTest({
             reattachLocalEnvironment: Effect.succeed(stub.reattachedLocalEnvironment ?? false),
+            ...stub.backendService,
           }),
           Layer.mock(DesktopCliCommand.DesktopCliCommand, {}),
           Layer.mock(DesktopClientSettings.DesktopClientSettings, {}),
@@ -443,4 +453,54 @@ it.effect(
         "startup left the p0 <dir> control socket closed",
       );
     }).pipe(Effect.provide(Layer.mergeAll(DesktopShutdown.layer, NodeServices.layer))),
+);
+
+it.effect.each([
+  { button: 0, expected: ["prepare", "prepare", "backend"] },
+  { button: 1, expected: ["prepare", "legacy", "backend"] },
+])(
+  "shows a p0d start failure instead of falling back, then follows the user's choice (button $button)",
+  ({ button, expected }) =>
+    Effect.gen(function* () {
+      const windowStarted = yield* Deferred.make<void>();
+      const messages: NonNullable<StubbedDesktop["messages"]> = [];
+      const events: string[] = [];
+      const failures = ["p0d exited with code 1.\n\np0d: listen tcp: address already in use"];
+      const app = yield* runStubbedDesktop({
+        localEnvironmentEnabled: true,
+        environment: {},
+        fileSystem: FileSystem.layerNoop({}),
+        record: (event) =>
+          Effect.sync(() => {
+            if (event === "backend") events.push(event);
+          }),
+        windowStarted,
+        registerLinuxUrlHandler: Effect.void,
+        messages,
+        messageResponses: [button],
+        backendService: {
+          resolveEffectiveMode: Effect.succeed("local-service"),
+          prepareSelectedBackend: Effect.sync(() => {
+            events.push("prepare");
+            return { mode: "local-service" as const, failure: failures.shift() ?? null };
+          }),
+          useLegacyBackendForThisLaunch: Effect.sync(() => {
+            events.push("legacy");
+          }),
+        },
+      });
+      yield* Deferred.await(windowStarted);
+      yield* (yield* DesktopShutdown.DesktopShutdown).request;
+      yield* Fiber.join(app);
+
+      assert.deepEqual(events, expected);
+      assert.equal(messages.length, 1);
+      assert.equal(messages[0]?.message, "p0d, the p0code backend, couldn't start.");
+      assert.include(messages[0]?.detail ?? "", "address already in use");
+      assert.deepEqual(messages[0]?.buttons, [
+        "Retry",
+        "Use legacy Node backend this once",
+        "Quit",
+      ]);
+    }).pipe(Effect.provide(DesktopShutdown.layer)),
 );

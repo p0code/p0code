@@ -41,7 +41,7 @@ p0code is a fork of [T3 Code](https://github.com/pingdotgg/t3code), so most of w
 
 **Runtime and data**
 
-- The CLI is `p0`. The native backend is `p0d`, written in Go, and the desktop app can run it as a separate local service.
+- The CLI is `p0`. The native backend is `p0d`, written in Go. The desktop app runs it by default; p0d starts the Node server only for what it hasn't taken over yet.
 - Data lives in `~/.p0code`. An old `~/.hhh` folder is migrated on first launch.
 - Importing from T3 Code refuses a database from a newer p0code or an unknown migration instead of risking it. See [Moving over from T3 Code](./docs/user/migrating-from-t3-code.md).
 - There's a plugin host, off by default. The T3 Connect bridge ships as an unofficial plugin for people who want those notifications back.

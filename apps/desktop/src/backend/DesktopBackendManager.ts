@@ -1069,9 +1069,9 @@ export const makeBackendInstance = Effect.fn("makeBackendInstance")(function* (
                 }
                 const resolvedUrl = info.value.url ?? config.value.httpBaseUrl;
                 yield* markRunReady(resolvedUrl, info.value.pid);
-                // Keep the attached run alive until GUI quit/stop interrupts it;
-                // stopping this fiber detaches without killing the user service.
-                return yield* Effect.never;
+                // Stopping this fiber detaches; only a backend this app started ends the run.
+                yield* finalizeRun(yield* driver.exited);
+                return;
               }
 
               const reachable = yield* DesktopBackendService.probeBackendHealth(

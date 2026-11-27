@@ -224,7 +224,7 @@ describe("DesktopSettings", () => {
 
         assert.deepEqual(yield* settings.load, {
           backendBinaryPath: null,
-          backendMode: "embedded",
+          backendMode: "local-service",
           backendModeConfiguredByUser: false,
           backendRemoteUrl: null,
           linuxPasswordStore: "auto",
@@ -244,7 +244,7 @@ describe("DesktopSettings", () => {
     ),
   );
 
-  it.effect("treats a recorded backend mode as the default unless the user flag is set", () =>
+  it.effect("moves every install that never chose a backend to p0d", () =>
     withSettings(
       Effect.gen(function* () {
         const environment = yield* DesktopEnvironment.DesktopEnvironment;
@@ -256,8 +256,9 @@ describe("DesktopSettings", () => {
           environment.desktopSettingsPath,
           `{ "backendMode": "embedded" }\n`,
         );
+        // The old default was recorded as "embedded"; without the flag it was never a choice.
         const legacyDefault = yield* settings.load;
-        assert.equal(legacyDefault.backendMode, "embedded");
+        assert.equal(legacyDefault.backendMode, "local-service");
         assert.isFalse(legacyDefault.backendModeConfiguredByUser);
 
         yield* fileSystem.writeFileString(
@@ -280,7 +281,7 @@ describe("DesktopSettings", () => {
     ),
   );
 
-  it.effect("reads a document with the old legacy-embedded id as the embedded mode", () =>
+  it.effect("moves a document with the old legacy-embedded default id to p0d", () =>
     withSettings(
       Effect.gen(function* () {
         const environment = yield* DesktopEnvironment.DesktopEnvironment;
@@ -291,8 +292,14 @@ describe("DesktopSettings", () => {
         yield* fileSystem.writeFileString(environment.desktopSettingsPath, document);
 
         const loaded = yield* settings.load;
-        assert.equal(loaded.backendMode, "embedded");
+        assert.equal(loaded.backendMode, "local-service");
         assert.isFalse(loaded.backendModeConfiguredByUser);
+        yield* fileSystem.writeFileString(
+          environment.desktopSettingsPath,
+          `{ "backendMode": "legacy-embedded", "backendModeConfiguredByUser": true }\n`,
+        );
+        assert.equal((yield* settings.load).backendMode, "embedded");
+        yield* fileSystem.writeFileString(environment.desktopSettingsPath, document);
         // Reading normalises in memory without rewriting the file.
         assert.equal(yield* fileSystem.readFileString(environment.desktopSettingsPath), document);
       }),
@@ -436,7 +443,7 @@ describe("DesktopSettings", () => {
 
         assert.deepEqual(yield* settings.load, {
           backendBinaryPath: null,
-          backendMode: "embedded",
+          backendMode: "local-service",
           backendModeConfiguredByUser: false,
           backendRemoteUrl: null,
           linuxPasswordStore: "auto",
@@ -469,7 +476,7 @@ describe("DesktopSettings", () => {
 
         assert.deepEqual(yield* settings.load, {
           backendBinaryPath: null,
-          backendMode: "embedded",
+          backendMode: "local-service",
           backendModeConfiguredByUser: false,
           backendRemoteUrl: null,
           linuxPasswordStore: "auto",
@@ -570,7 +577,7 @@ describe("DesktopSettings", () => {
       Effect.gen(function* () {
         const settings = yield* DesktopAppSettings.DesktopAppSettings;
         const initial = yield* settings.get;
-        assert.equal(initial.backendMode, "embedded");
+        assert.equal(initial.backendMode, "local-service");
         assert.equal(initial.backendModeConfiguredByUser, false);
         assert.equal(initial.backendRemoteUrl, null);
         assert.equal(initial.backendBinaryPath, null);

@@ -4,18 +4,22 @@ import {
   DESKTOP_READINESS_PROOF_PATH,
   desktopReadinessProof,
 } from "@t3tools/shared/desktopReadinessProof";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as NetService from "@t3tools/shared/Net";
 import * as Mac from "effect/crypto/Mac";
 import * as SecureRandom from "effect/crypto/SecureRandom";
+import * as Deferred from "effect/Deferred";
 import * as Duration from "effect/Duration";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeHttpClient from "@effect/platform-node/NodeHttpClient";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
 import * as Ref from "effect/Ref";
 import * as Sink from "effect/Sink";
 import * as Stream from "effect/Stream";
@@ -57,20 +61,17 @@ function makeProcessHandle(options: {
 }
 
 describe("DesktopBackendService helpers", () => {
-  it("keeps the in-app backend as the default even when a p0d binary resolves", () => {
-    const autoSettings = {
-      backendMode: DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS.backendMode,
-      backendModeConfiguredByUser: false,
-    };
-
-    assert.equal(DesktopBackendService.resolveEffectiveBackendMode(autoSettings), "embedded");
-    assert.equal(
-      DesktopBackendService.resolveEffectiveBackendMode({
-        backendMode: "local-service",
-        backendModeConfiguredByUser: false,
-      }),
-      "embedded",
-    );
+  it("runs p0d for every install that did not explicitly pick another backend", () => {
+    assert.equal(DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS.backendMode, "local-service");
+    for (const backendMode of ["embedded", "local-service", "remote"] as const) {
+      assert.equal(
+        DesktopBackendService.resolveEffectiveBackendMode({
+          backendMode,
+          backendModeConfiguredByUser: false,
+        }),
+        "local-service",
+      );
+    }
   });
 
   it.effect("adopts a local service that answers for this home", () =>
@@ -80,6 +81,8 @@ describe("DesktopBackendService helpers", () => {
         kind: "legacy-node",
         binaryPath: "/app/server.mjs",
         desktopBootstrapSecret: "secret",
+        unavailableReason: null,
+        exited: Effect.never,
         status: Effect.succeed({
           running: true,
           installed: true,
@@ -118,6 +121,8 @@ describe("DesktopBackendService helpers", () => {
         kind: "legacy-node",
         binaryPath: "/app/server.mjs",
         desktopBootstrapSecret: "secret",
+        unavailableReason: null,
+        exited: Effect.never,
         status: Effect.succeed({
           running: false,
           installed: false,
@@ -173,7 +178,7 @@ describe("DesktopBackendService helpers", () => {
     );
   });
 
-  it("only considers the explicit override and the packaged p0d", () => {
+  it("looks for the bundled p0d first, then the override, ~/.p0code/bin, the dev build and PATH", () => {
     const posixPath = { join: (...parts: string[]) => parts.join("/") };
     const candidates = DesktopBackendService.p0dBinaryCandidates({
       path: posixPath,
@@ -183,37 +188,38 @@ describe("DesktopBackendService helpers", () => {
       resourcesPath: "/App/Contents/Resources",
       rootDir: "/repo",
       homeDirectory: "/Users/test",
-      baseDir: "/Users/test/.p0code",
-      appDataDirectory: "/Users/test/Library/Application Support",
       configuredBinaryPath: "/custom/bin/p0d",
+      pathEnv: "/opt/homebrew/bin::/usr/local/bin",
     });
 
-    assert.deepEqual(candidates, ["/custom/bin/p0d", "/App/Contents/Resources/p0d/p0d"]);
-    assert.notInclude(candidates, "/Users/test/.p0code/bin/p0d");
-    assert.notInclude(candidates, "/opt/homebrew/bin/p0d");
-    assert.notInclude(candidates, "/usr/local/bin/p0d");
-    assert.notInclude(candidates, "/repo/apps/p0d/dist/darwin-arm64/p0d");
+    assert.deepEqual(candidates, [
+      "/App/Contents/Resources/p0d/p0d",
+      "/custom/bin/p0d",
+      "/Users/test/.p0code/bin/p0d",
+      "/repo/apps/p0d/dist/darwin-arm64/p0d",
+      "/opt/homebrew/bin/p0d",
+      "/usr/local/bin/p0d",
+    ]);
   });
 
-  it("ignores a p0d installed outside the app when packaged", () => {
+  it("skips the repo's dev build when packaged", () => {
     const posixPath = { join: (...parts: string[]) => parts.join("/") };
     const candidates = DesktopBackendService.p0dBinaryCandidates({
       path: posixPath,
-      platform: "darwin",
-      arch: "arm64",
+      platform: "linux",
+      arch: "x64",
       isPackaged: true,
-      resourcesPath: "/App/Contents/Resources",
+      resourcesPath: "/opt/p0code/resources",
       rootDir: "/repo",
-      homeDirectory: "/Users/test",
-      baseDir: "/Users/test/.p0code",
-      appDataDirectory: "/Users/test/Library/Application Support",
+      homeDirectory: "/home/test",
       configuredBinaryPath: null,
+      pathEnv: undefined,
     });
 
-    assert.deepEqual(candidates, ["/App/Contents/Resources/p0d/p0d"]);
+    assert.deepEqual(candidates, ["/opt/p0code/resources/p0d/p0d", "/home/test/.p0code/bin/p0d"]);
   });
 
-  it("uses p0d.exe on Windows", () => {
+  it("uses p0d.exe and the Go target names on Windows", () => {
     const winPath = { join: (...parts: string[]) => parts.join("\\") };
     const candidates = DesktopBackendService.p0dBinaryCandidates({
       path: winPath,
@@ -223,13 +229,55 @@ describe("DesktopBackendService helpers", () => {
       resourcesPath: "C:\\App\\resources",
       rootDir: "C:\\repo",
       homeDirectory: "C:\\Users\\test",
-      baseDir: "C:\\Users\\test\\.p0code",
-      appDataDirectory: "C:\\Users\\test\\AppData\\Roaming",
       configuredBinaryPath: null,
+      pathEnv: "C:\\tools;C:\\bin",
     });
 
-    assert.include(candidates, "C:\\App\\resources\\p0d\\p0d.exe");
-    assert.equal(candidates.length, 1);
+    assert.deepEqual(candidates, [
+      "C:\\App\\resources\\p0d\\p0d.exe",
+      "C:\\Users\\test\\.p0code\\bin\\p0d.exe",
+      "C:\\repo\\apps\\p0d\\dist\\windows-amd64\\p0d.exe",
+      "C:\\tools\\p0d.exe",
+      "C:\\bin\\p0d.exe",
+    ]);
+  });
+
+  it("starts p0d with the desktop secret file and a sidecar command that p0d can split", () => {
+    const legacyServerCommand = DesktopBackendService.p0dLegacyServerCommand({
+      executablePath: "/Applications/p0code.app/Contents/MacOS/p0code",
+      isPackaged: true,
+      compileCachePath: "/app/compile cache.cjs",
+      entryPath: 'C:\\odd "dir"\\bin.mjs',
+    });
+    assert.equal(
+      legacyServerCommand,
+      '"/Applications/p0code.app/Contents/MacOS/p0code" "--title=p0code-backend" "--require" "/app/compile cache.cjs" "C:\\\\odd \\"dir\\"\\\\bin.mjs" "--mode" "web" "--no-browser"',
+    );
+    const secret = "ab".repeat(32);
+    const args = DesktopBackendService.p0dServeArgs({
+      home: "/home/test/.p0code/userdata",
+      host: "127.0.0.1",
+      port: 0,
+      readyFilePath: "/home/test/.p0code/userdata/p0d-ready.json",
+      desktopSecretFilePath: "/home/test/.p0code/userdata/secrets/desktop-bootstrap-secret",
+      legacyServerCommand,
+    });
+    assert.deepEqual(args, [
+      "serve",
+      "--home",
+      "/home/test/.p0code/userdata",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "0",
+      "--ready-file",
+      "/home/test/.p0code/userdata/p0d-ready.json",
+      "--desktop-bootstrap-secret-file",
+      "/home/test/.p0code/userdata/secrets/desktop-bootstrap-secret",
+      "--legacy-server",
+      legacyServerCommand,
+    ]);
+    assert.notInclude(args.join(" "), secret);
   });
 
   it("parses ready-file JSON and p0d service status in JSON or text formats", () => {
@@ -321,6 +369,8 @@ describe("makeP0dServiceDriver", () => {
         stateDir: "/tmp/p0code/userdata",
         readyFilePath: "/tmp/p0code/userdata/p0d-ready.json",
         legacyServerCommand: null,
+        desktopSecretFilePath: "/tmp/p0code/userdata/secrets/desktop-bootstrap-secret",
+        desktopBootstrapSecret: "ab".repeat(32),
         host: "127.0.0.1",
         defaultPort: 3773,
         fileSystem,
@@ -402,6 +452,8 @@ describe("makeP0dServiceDriver", () => {
         stateDir: "/tmp/p0code/userdata",
         readyFilePath: "/tmp/p0code/userdata/p0d-ready.json",
         legacyServerCommand: "/electron /server/bin.mjs",
+        desktopSecretFilePath: "/tmp/p0code/userdata/secrets/desktop-bootstrap-secret",
+        desktopBootstrapSecret: "ab".repeat(32),
         host: "127.0.0.1",
         defaultPort: 3773,
         fileSystem,
@@ -420,6 +472,9 @@ describe("makeP0dServiceDriver", () => {
         invokedCommands.some(
           (cmd) =>
             cmd.includes("service install") &&
+            cmd.includes(
+              "--desktop-bootstrap-secret-file /tmp/p0code/userdata/secrets/desktop-bootstrap-secret",
+            ) &&
             cmd.includes("--legacy-server /electron /server/bin.mjs"),
         ),
       );
@@ -430,6 +485,230 @@ describe("makeP0dServiceDriver", () => {
       const afterStop = yield* driver.status;
       assert.equal(afterStop.running, false);
     }),
+  );
+});
+
+const P0D_HOME = "/tmp/p0code/userdata";
+const P0D_READY_FILE = `${P0D_HOME}/p0d-ready.json`;
+const P0D_SECRET = "ab".repeat(32);
+
+/** A loopback where p0d answers /healthz on the port it wrote to its ready file. */
+function makeP0dWorld() {
+  const files = new Map<string, string>();
+  const healthyPorts = new Set<number>();
+  const fileSystem = FileSystem.makeNoop({
+    exists: () => Effect.succeed(true),
+    makeDirectory: () => Effect.void,
+    stat: () => Effect.fail(new Error("missing") as never),
+    sink: () => Sink.drain,
+    readFileString: (path) => {
+      const content = files.get(path);
+      return content === undefined
+        ? Effect.fail(new Error("missing") as never)
+        : Effect.succeed(content);
+    },
+    remove: (path) =>
+      Effect.sync(() => {
+        files.delete(path);
+      }),
+  });
+  const httpClient = HttpClient.make((request) => {
+    const url = new URL(request.url);
+    return healthyPorts.has(Number(url.port)) && url.pathname === "/healthz"
+      ? Effect.succeed(HttpClientResponse.fromWeb(request, new Response("ok\n")))
+      : Effect.fail(new Error("connection refused") as never);
+  });
+  const listen = (port: number, pid: number) => {
+    files.set(P0D_READY_FILE, JSON.stringify({ pid, port, url: `http://127.0.0.1:${port}` }));
+    healthyPorts.add(port);
+  };
+  return { files, fileSystem, httpClient, healthyPorts, listen };
+}
+
+const p0dChildDriverInput = {
+  binaryPath: "/app/resources/p0d/p0d",
+  home: P0D_HOME,
+  readyFilePath: P0D_READY_FILE,
+  desktopSecretFilePath: `${P0D_HOME}/secrets/desktop-bootstrap-secret`,
+  desktopBootstrapSecret: P0D_SECRET,
+  legacyServerCommand: '"/electron" "/app/apps/server/dist/bin.mjs" "--mode" "web"',
+  host: "127.0.0.1",
+  port: 0,
+  cwd: "/app",
+  env: Effect.succeed({ ELECTRON_RUN_AS_NODE: "1", T3CODE_CLI_PATH: "/home/test/.local/bin/p0" }),
+  logFilePath: `${P0D_HOME}/logs/p0d.log`,
+  path: {
+    basename: (value: string) => value.split("/").at(-1) ?? "",
+    dirname: (value: string) => value.split("/").slice(0, -1).join("/"),
+  },
+  waitTimeout: Duration.seconds(2),
+  pollInterval: Duration.millis(10),
+};
+
+describe("makeP0dChildDriver", () => {
+  it.effect("attaches to a p0d already serving this home without starting another", () =>
+    Effect.gen(function* () {
+      const world = makeP0dWorld();
+      world.listen(41_000, 3131);
+      const driver = DesktopBackendService.makeP0dChildDriver({
+        ...p0dChildDriverInput,
+        fileSystem: world.fileSystem,
+        spawner: ChildProcessSpawner.make(() => Effect.die("must attach, not spawn")),
+        httpClient: world.httpClient,
+        child: yield* DesktopBackendService.makeP0dChildState(yield* Effect.scope),
+      });
+
+      const info = yield* driver.ensureRunning;
+      assert.equal(info.url?.href, "http://127.0.0.1:41000/");
+      assert.equal(info.pid, 3131);
+      assert.equal(driver.desktopBootstrapSecret, P0D_SECRET);
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect(
+    "starts p0d without handing the secret to it or its sidecar, then reports its exit",
+    () =>
+      Effect.gen(function* () {
+        const world = makeP0dWorld();
+        world.files.set(P0D_READY_FILE, JSON.stringify({ pid: 1, port: 40_999 }));
+        const exitCode = yield* Deferred.make<ChildProcessSpawner.ExitCode>();
+        const launches: Array<{
+          readonly command: string;
+          readonly args: ReadonlyArray<string>;
+          readonly env: Record<string, unknown>;
+          readonly extendEnv: boolean | undefined;
+        }> = [];
+        const spawner = ChildProcessSpawner.make((command) =>
+          Effect.gen(function* () {
+            if (command._tag !== "StandardCommand") {
+              return yield* Effect.die("expected StandardCommand");
+            }
+            launches.push({
+              command: command.command,
+              args: command.args.map(String),
+              env: (command.options.env ?? {}) as Record<string, unknown>,
+              extendEnv: command.options.extendEnv,
+            });
+            world.listen(41_001, 5150);
+            return ChildProcessSpawner.makeHandle({
+              ...makeProcessHandle({ pid: 5150, running: true }),
+              exitCode: Deferred.await(exitCode),
+            });
+          }),
+        );
+        const driver = DesktopBackendService.makeP0dChildDriver({
+          ...p0dChildDriverInput,
+          fileSystem: world.fileSystem,
+          spawner,
+          httpClient: world.httpClient,
+          child: yield* DesktopBackendService.makeP0dChildState(yield* Effect.scope),
+        });
+
+        const info = yield* driver.ensureRunning;
+        assert.equal(info.url?.href, "http://127.0.0.1:41001/");
+        assert.equal(launches.length, 1);
+        const launch = launches[0]!;
+        assert.equal(launch.command, p0dChildDriverInput.binaryPath);
+        assert.deepEqual(launch.args, [...DesktopBackendService.p0dServeArgs(p0dChildDriverInput)]);
+        assert.equal(launch.extendEnv, true);
+        assert.notInclude(JSON.stringify(launch), P0D_SECRET);
+        assert.equal(launch.env.ELECTRON_RUN_AS_NODE, "1");
+
+        const exited = yield* Effect.forkChild(driver.exited);
+        world.healthyPorts.clear();
+        yield* Deferred.succeed(exitCode, ChildProcessSpawner.ExitCode(2));
+        assert.include(yield* Fiber.join(exited), "p0d exited with code 2.");
+      }).pipe(Effect.scoped),
+  );
+
+  it.effect("fails with p0d's own output when it exits before it is ready", () =>
+    Effect.gen(function* () {
+      const world = makeP0dWorld();
+      const encoder = new TextEncoder();
+      const driver = DesktopBackendService.makeP0dChildDriver({
+        ...p0dChildDriverInput,
+        fileSystem: world.fileSystem,
+        spawner: ChildProcessSpawner.make(() =>
+          Effect.succeed(
+            ChildProcessSpawner.makeHandle({
+              ...makeProcessHandle({ exitCode: 1 }),
+              all: Stream.make(encoder.encode("p0d: desktop bootstrap secret: file is empty\n")),
+            }),
+          ),
+        ),
+        httpClient: world.httpClient,
+        child: yield* DesktopBackendService.makeP0dChildState(yield* Effect.scope),
+      });
+
+      const error = yield* driver.ensureRunning.pipe(Effect.flip);
+      assert.include(error.message, "p0d exited with code 1.");
+      assert.include(error.message, "desktop bootstrap secret: file is empty");
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("explains why a home p0d's sidecar cannot share is refused", () =>
+    Effect.gen(function* () {
+      const world = makeP0dWorld();
+      const driver = DesktopBackendService.makeP0dChildDriver({
+        ...p0dChildDriverInput,
+        home: "/home/test/.p0code/dev",
+        fileSystem: world.fileSystem,
+        spawner: ChildProcessSpawner.make(() => Effect.die("must not spawn")),
+        httpClient: world.httpClient,
+        child: yield* DesktopBackendService.makeP0dChildState(yield* Effect.scope),
+      });
+
+      const error = yield* driver.ensureRunning.pipe(Effect.flip);
+      assert.include(error.message, "/home/test/.p0code/dev");
+      assert.include(error.message, "legacy Node backend");
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("reports an unavailable p0d with the same reason everywhere", () =>
+    Effect.gen(function* () {
+      const driver = DesktopBackendService.makeUnavailableP0dDriver("p0d is missing.");
+      assert.equal(driver.unavailableReason, "p0d is missing.");
+      assert.equal((yield* driver.ensureRunning.pipe(Effect.flip)).message, "p0d is missing.");
+      assert.equal((yield* driver.status).running, false);
+    }),
+  );
+});
+
+describe("readOrCreateDesktopSecretFile", () => {
+  it.effect("writes a private secret once and keeps it across launches", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const random = yield* SecureRandom.SecureRandom;
+      const dir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "p0d-secret-" });
+      const secretPath = path.join(dir, "userdata", "secrets", "desktop-bootstrap-secret");
+
+      const first = yield* DesktopBackendService.readOrCreateDesktopSecretFile({
+        fileSystem,
+        path,
+        random,
+        secretPath,
+      });
+      assert.match(first, /^[0-9a-f]{64}$/);
+      assert.equal((yield* fileSystem.readFileString(secretPath)).trim(), first);
+      const posix = (yield* HostProcess.Platform) !== "win32";
+      if (posix) {
+        assert.equal((yield* fileSystem.stat(secretPath)).mode & 0o777, 0o600);
+        // p0d refuses a secret others can read, so a widened mode is repaired, not rotated.
+        yield* fileSystem.chmod(secretPath, 0o644);
+      }
+      const second = yield* DesktopBackendService.readOrCreateDesktopSecretFile({
+        fileSystem,
+        path,
+        random,
+        secretPath,
+      });
+      assert.equal(second, first);
+      if (posix) {
+        assert.equal((yield* fileSystem.stat(secretPath)).mode & 0o777, 0o600);
+      }
+      assert.isFalse(yield* fileSystem.exists(`${secretPath}.tmp`));
+    }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
   );
 });
 
@@ -680,9 +959,13 @@ const layerService = (baseDir: string, settings: DesktopAppSettings.DesktopSetti
         NodeCrypto.layer,
         NetService.layer,
         NodeHttpClient.layerUndici,
+        // The host's PATH must not decide which p0d these tests find.
+        Layer.succeed(HostProcess.Environment, { PATH: "" }),
       ),
     ),
   );
+
+const FAILING_P0D = "#!/bin/sh\necho 'p0d: listen tcp: address already in use' >&2\nexit 1\n";
 
 describe("DesktopBackendService.layer", () => {
   it.effect("answers the backend mode synchronously for sync IPC handlers", () =>
@@ -692,77 +975,58 @@ describe("DesktopBackendService.layer", () => {
       const service = yield* DesktopBackendService.DesktopBackendService.pipe(
         Effect.provide(layerService(baseDir, DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS)),
       );
-      assert.deepEqual(runLikeSyncIpc(service.resolveEffectiveMode), Exit.succeed("embedded"));
-    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
-  );
-
-  it.effect("re-resolves a p0d override that disappeared before starting the backend", () =>
-    Effect.gen(function* () {
-      const fileSystem = yield* FileSystem.FileSystem;
-      const baseDir = yield* fileSystem.makeTempDirectoryScoped();
-      yield* fileSystem.makeDirectory(`${baseDir}/bin`, { recursive: true });
-      yield* fileSystem.writeFileString(`${baseDir}/bin/p0d`, "#!/bin/sh\nexit 0\n");
-      yield* fileSystem.chmod(`${baseDir}/bin/p0d`, 0o700);
-      const service = yield* DesktopBackendService.DesktopBackendService.pipe(
-        Effect.provide(
-          layerService(baseDir, {
-            ...DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS,
-            backendMode: "local-service",
-            backendModeConfiguredByUser: true,
-            backendBinaryPath: `${baseDir}/bin/p0d`,
-          }),
-        ),
-      );
       assert.deepEqual(runLikeSyncIpc(service.resolveEffectiveMode), Exit.succeed("local-service"));
-      yield* fileSystem.remove(`${baseDir}/bin/p0d`);
-      const result = yield* service.prepareSelectedBackend;
-      assert.equal(result.mode, "embedded");
-      assert.equal(result.requestedMode, "local-service");
-      assert.include(result.fallbackReason ?? "", "Legacy server bundle not found");
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
 
-  it.effect("ignores an unrelated home/bin p0d", () =>
+  it.effect("says where it looked when no p0d binary exists, without falling back", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const baseDir = yield* fileSystem.makeTempDirectoryScoped();
-      yield* fileSystem.makeDirectory(`${baseDir}/bin`, { recursive: true });
-      yield* fileSystem.writeFileString(`${baseDir}/bin/p0d`, "#!/bin/sh\nexit 0\n");
-      const { service, result, binary } = yield* Effect.gen(function* () {
+      const { result, status } = yield* Effect.gen(function* () {
         const service = yield* DesktopBackendService.DesktopBackendService;
         const result = yield* service.prepareSelectedBackend;
-        const binary = yield* service.findP0dBinary;
-        return { service, result, binary };
-      }).pipe(
-        Effect.provide(
-          layerService(baseDir, {
-            ...DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS,
-            backendMode: "local-service",
-            backendModeConfiguredByUser: false,
-          }),
-        ),
-      );
-      assert.deepEqual(runLikeSyncIpc(service.resolveEffectiveMode), Exit.succeed("embedded"));
-      assert.deepEqual(binary, Option.none());
-      assert.deepEqual(result, {
-        mode: "embedded",
-        requestedMode: "embedded",
-        fallbackReason: null,
-      });
+        const status = yield* service.getStatus({
+          embeddedReady: false,
+          embeddedDesiredRunning: false,
+          embeddedPid: null,
+          embeddedUrl: null,
+        });
+        return { result, status };
+      }).pipe(Effect.provide(layerService(baseDir, DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS)));
+      assert.equal(result.mode, "local-service");
+      assert.include(result.failure ?? "", "couldn't find its p0d backend");
+      assert.include(result.failure ?? "", "/missing/resources/p0d/p0d");
+      assert.include(result.failure ?? "", `${baseDir}/.p0code/bin/p0d`);
+      assert.equal(status.driverKind, "p0d");
+      assert.equal(status.error, result.failure);
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
 
-  it.effect("keeps an explicit embedded choice even when a p0d override resolves", () =>
+  it.effect("finds a p0d installed in ~/.p0code/bin", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const baseDir = yield* fileSystem.makeTempDirectoryScoped();
+      const p0dPath = `${baseDir}/.p0code/bin/p0d`;
+      yield* fileSystem.makeDirectory(`${baseDir}/.p0code/bin`, { recursive: true });
+      yield* fileSystem.writeFileString(p0dPath, FAILING_P0D, { mode: 0o755 });
+      const binary = yield* Effect.gen(function* () {
+        return yield* (yield* DesktopBackendService.DesktopBackendService).findP0dBinary;
+      }).pipe(Effect.provide(layerService(baseDir, DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS)));
+      assert.deepEqual(binary, Option.some(p0dPath));
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("keeps an explicit legacy Node choice even when p0d resolves", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const baseDir = yield* fileSystem.makeTempDirectoryScoped();
       const p0dPath = `${baseDir}/custom-p0d`;
-      yield* fileSystem.writeFileString(p0dPath, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
-      const { service, result, binary } = yield* Effect.gen(function* () {
+      yield* fileSystem.writeFileString(p0dPath, FAILING_P0D, { mode: 0o755 });
+      const { service, result } = yield* Effect.gen(function* () {
         const service = yield* DesktopBackendService.DesktopBackendService;
         const result = yield* service.prepareSelectedBackend;
-        const binary = yield* service.findP0dBinary;
-        return { service, result, binary };
+        return { service, result };
       }).pipe(
         Effect.provide(
           layerService(baseDir, {
@@ -774,50 +1038,64 @@ describe("DesktopBackendService.layer", () => {
         ),
       );
       assert.deepEqual(runLikeSyncIpc(service.resolveEffectiveMode), Exit.succeed("embedded"));
-      assert.deepEqual(binary, Option.some(p0dPath));
-      assert.deepEqual(result, {
-        mode: "embedded",
-        requestedMode: "embedded",
-        fallbackReason: null,
-      });
+      assert.deepEqual(result, { mode: "embedded", failure: null });
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
 
-  it.effect("keeps a saved local-service choice when p0d cannot prove its identity", () =>
+  it.effect("reports p0d's own error and keeps p0d as the saved choice when it fails", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const baseDir = yield* fileSystem.makeTempDirectoryScoped();
       const p0dPath = `${baseDir}/custom-p0d`;
-      yield* fileSystem.writeFileString(p0dPath, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
-      const { result, settings } = yield* Effect.gen(function* () {
+      yield* fileSystem.writeFileString(p0dPath, FAILING_P0D, { mode: 0o755 });
+      const { result, settings, secretMode } = yield* Effect.gen(function* () {
         const service = yield* DesktopBackendService.DesktopBackendService;
         const result = yield* service.prepareSelectedBackend;
         const settings = yield* (yield* DesktopAppSettings.DesktopAppSettings).get;
-        return { result, settings };
+        const secretMode = (yield* fileSystem.stat(
+          `${baseDir}/userdata/secrets/desktop-bootstrap-secret`,
+        )).mode;
+        return { result, settings, secretMode };
       }).pipe(
         Effect.provide(
           layerService(baseDir, {
             ...DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS,
-            backendMode: "local-service",
-            backendModeConfiguredByUser: true,
             backendBinaryPath: p0dPath,
           }),
         ),
       );
-      assert.equal(result.mode, "embedded");
-      assert.equal(result.requestedMode, "local-service");
-      assert.include(result.fallbackReason ?? "", "can't prove its identity");
+      assert.equal(result.mode, "local-service");
+      assert.include(result.failure ?? "", "p0d exited with code 1.");
+      assert.include(result.failure ?? "", "address already in use");
+      assert.equal(secretMode & 0o777, 0o600);
       assert.equal(settings.backendMode, "local-service");
-      assert.isTrue(settings.backendModeConfiguredByUser);
+      assert.isFalse(settings.backendModeConfiguredByUser);
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
 
-  it.effect("refuses to save local-service when p0d cannot prove its identity", () =>
+  it.effect("runs the legacy Node backend for this launch only", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const baseDir = yield* fileSystem.makeTempDirectoryScoped();
+      const { mode, settings } = yield* Effect.gen(function* () {
+        const service = yield* DesktopBackendService.DesktopBackendService;
+        yield* service.useLegacyBackendForThisLaunch;
+        const mode = yield* service.resolveEffectiveMode;
+        const settings = yield* (yield* DesktopAppSettings.DesktopAppSettings).get;
+        return { mode, settings };
+      }).pipe(Effect.provide(layerService(baseDir, DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS)));
+      assert.equal(mode, "embedded");
+      assert.equal(settings.backendMode, "local-service");
+      assert.isFalse(settings.backendModeConfiguredByUser);
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("refuses to save p0d when it cannot start", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const baseDir = yield* fileSystem.makeTempDirectoryScoped();
       const p0dPath = `${baseDir}/custom-p0d`;
-      yield* fileSystem.writeFileString(p0dPath, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+      yield* fileSystem.writeFileString(p0dPath, FAILING_P0D, { mode: 0o755 });
       const { result, settings } = yield* Effect.gen(function* () {
         const service = yield* DesktopBackendService.DesktopBackendService;
         const result = yield* service.updateConfig({ mode: "local-service" });
@@ -834,7 +1112,7 @@ describe("DesktopBackendService.layer", () => {
         ),
       );
       assert.isFalse(result.changed);
-      assert.include(result.error ?? "", "can't prove its identity");
+      assert.include(result.error ?? "", "p0d exited with code 1.");
       assert.equal(settings.backendMode, "embedded");
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
@@ -863,32 +1141,6 @@ describe("DesktopBackendService.layer", () => {
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
 
-  it.effect("falls back in memory without rewriting a stored local-service choice", () =>
-    Effect.gen(function* () {
-      const fileSystem = yield* FileSystem.FileSystem;
-      const baseDir = yield* fileSystem.makeTempDirectoryScoped();
-      const { result, settings } = yield* Effect.gen(function* () {
-        const service = yield* DesktopBackendService.DesktopBackendService;
-        const result = yield* service.prepareSelectedBackend;
-        const settings = yield* (yield* DesktopAppSettings.DesktopAppSettings).get;
-        return { result, settings };
-      }).pipe(
-        Effect.provide(
-          layerService(baseDir, {
-            ...DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS,
-            backendMode: "local-service",
-            backendModeConfiguredByUser: true,
-          }),
-        ),
-      );
-      // No server bundle in this environment, so the service can never come up.
-      assert.equal(result.mode, "embedded");
-      assert.equal(result.requestedMode, "local-service");
-      assert.include(result.fallbackReason ?? "", "Legacy server bundle not found");
-      assert.equal(settings.backendMode, "local-service");
-    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
-  );
-
   it.effect("reports remote mode as unsupported rather than reachable", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
@@ -913,21 +1165,6 @@ describe("DesktopBackendService.layer", () => {
       assert.equal(status.mode, "remote");
       assert.isFalse(status.running);
       assert.include(status.error ?? "", "experimental");
-    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
-  );
-
-  it.effect("keeps embedded without touching any service", () =>
-    Effect.gen(function* () {
-      const fileSystem = yield* FileSystem.FileSystem;
-      const baseDir = yield* fileSystem.makeTempDirectoryScoped();
-      const result = yield* Effect.gen(function* () {
-        return yield* (yield* DesktopBackendService.DesktopBackendService).prepareSelectedBackend;
-      }).pipe(Effect.provide(layerService(baseDir, DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS)));
-      assert.deepEqual(result, {
-        mode: "embedded",
-        requestedMode: "embedded",
-        fallbackReason: null,
-      });
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
 });

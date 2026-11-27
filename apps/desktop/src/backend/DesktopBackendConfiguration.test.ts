@@ -260,6 +260,8 @@ describe("DesktopBackendConfiguration", () => {
           kind: "legacy-node",
           binaryPath: "/server/bin.mjs",
           desktopBootstrapSecret: serviceSecret,
+          unavailableReason: null,
+          exited: Effect.never,
           status: Effect.succeed(serviceInfo),
           ensureRunning: Effect.succeed(serviceInfo),
           start: Effect.succeed(serviceInfo),

@@ -31,6 +31,10 @@ import { isValidDistroName } from "../wsl/wslPathParsing.ts";
 
 export interface DesktopSettings {
   readonly backendBinaryPath: string | null;
+  /**
+   * "local-service" is p0d, the default. "embedded" is the deprecated Node backend, kept only as
+   * an escape hatch the user picks explicitly.
+   */
   readonly backendMode: DesktopBackendMode;
   readonly backendModeConfiguredByUser: boolean;
   readonly backendRemoteUrl: string | null;
@@ -76,7 +80,7 @@ export const DEFAULT_MAIN_WINDOW_SIZE = {
 
 export const DEFAULT_DESKTOP_SETTINGS: DesktopSettings = {
   backendBinaryPath: null,
-  backendMode: "embedded",
+  backendMode: "local-service",
   backendModeConfiguredByUser: false,
   backendRemoteUrl: null,
   localEnvironmentEnabled: true,
@@ -275,14 +279,17 @@ function normalizeDesktopSettingsDocument(
   const parsedBackendMode =
     parsed.backendMode === "legacy-embedded" ? "embedded" : parsed.backendMode;
   // A recorded mode is not an explicit choice on its own: older documents stored the
-  // default, and only the flag distinguishes that from a mode the user picked.
+  // default, and only the flag distinguishes that from a mode the user picked. Every install
+  // that never chose moves to p0d, including ones that recorded the old "embedded" default.
   const backendModeConfiguredByUser =
     parsed.backendModeConfiguredByUser === true ||
     (parsed.backendModeConfiguredByUser === undefined && parsedBackendMode === "remote");
 
   return {
     backendBinaryPath: normalizeBackendBinaryPath(parsed.backendBinaryPath),
-    backendMode: parsedBackendMode ?? defaultSettings.backendMode,
+    backendMode: backendModeConfiguredByUser
+      ? (parsedBackendMode ?? defaultSettings.backendMode)
+      : defaultSettings.backendMode,
     backendModeConfiguredByUser,
     backendRemoteUrl: normalizeBackendRemoteUrl(parsed.backendRemoteUrl),
     localEnvironmentEnabled: parsed.localEnvironmentEnabled !== false,

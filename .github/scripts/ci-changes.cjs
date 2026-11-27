@@ -64,6 +64,7 @@ const DESKTOP_LAUNCH = [
   /^apps\/server\/src\/orchestration-v2\/((ThreadSettlementService|ProjectionStore)\.ts$|legacy\/)/,
   /^packages\/contracts\/src\/settings\.ts$/,
   /^scripts\/(smoke-desktop-app\.ts|fixtures\/desktop-launch\/)/,
+  /^apps\/p0d\/(?!.*_test\.go$)/,
 ];
 
 const OWN_TEST_JOB = new Set(["p0", "@t3tools/web", "@t3tools/monorepo"]);

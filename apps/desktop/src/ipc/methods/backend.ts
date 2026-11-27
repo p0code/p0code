@@ -66,14 +66,13 @@ export const controlBackend = makeIpcMethod({
     const mode = yield* backendService.resolveEffectiveMode;
 
     if (mode === "local-service") {
+      // Detach first, so the run does not treat the stop it asked for as a crash to restart.
+      yield* primary.stop();
       const errorMessage = yield* backendService.controlService(action).pipe(
         Effect.as(null as string | null),
         Effect.catch((error) => Effect.succeed(error.message)),
       );
-      if (action === "stop") {
-        yield* primary.stop();
-      } else {
-        yield* primary.stop();
+      if (action !== "stop") {
         yield* primary.start;
       }
       const status = yield* readCurrentBackendStatus;

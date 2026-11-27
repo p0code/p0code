@@ -78,6 +78,7 @@ import {
   renderMacLaunchdPlist,
   renderWindowsBackendInstallScript,
   resolveP0dDistCandidates,
+  resolveP0dGoTargets,
 } from "./build-desktop-artifact.ts";
 import {
   ReleasePackageManifestError,
@@ -186,6 +187,8 @@ const makeWindowsPayloadFixture = Effect.fn("test.makeWindowsPayloadFixture")(fu
     path.join(resourcesDir, "resource-monitor/t3-resource-monitor.exe"),
     "monitor",
   );
+  yield* fs.makeDirectory(path.join(resourcesDir, "p0d"), { recursive: true });
+  yield* fs.writeFileString(path.join(resourcesDir, "p0d/p0d.exe"), "p0d");
   const appExecutableName = "t3code.exe";
   yield* fs.writeFileString(path.join(packagedAppDir, appExecutableName), "electron");
   yield* fs.writeFileString(path.join(packagedAppDir, "chrome_crashpad_handler.exe"), "crashpad");
@@ -1441,6 +1444,21 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         assert.deepStrictEqual(resourceMonitorError.missingFiles, [
           "resource-monitor/t3-resource-monitor.exe",
         ]);
+
+        yield* fs.remove(resourceMonitorPath, { recursive: true });
+        yield* fs.writeFileString(resourceMonitorPath, "monitor");
+        const p0dPath = path.join(fixture.packagedAppDir, "resources/p0d/p0d.exe");
+        yield* fs.remove(p0dPath);
+
+        const p0dError = yield* validateWindowsPackagedPayload({
+          stageDistDir: fixture.stageDistDir,
+          appExecutableName: fixture.appExecutableName,
+          targetArch: "x64",
+          appVersion: WINDOWS_PAYLOAD_FIXTURE_VERSION,
+        }).pipe(Effect.flip);
+        assert.instanceOf(p0dError, WindowsPackagedPayloadValidationError);
+        assert.equal(p0dError.reason, "p0d-missing");
+        assert.deepStrictEqual(p0dError.missingFiles, ["p0d/p0d.exe"]);
       }),
     ),
   );
@@ -2178,6 +2196,13 @@ it.effect("renders OS service manifests and install scripts for p0d backend pack
     assert.include(macCandidates, "/repo/apps/p0d/dist/darwin-arm64/p0d");
     const winCandidates = resolveP0dDistCandidates("/repo", "win", "x64");
     assert.include(winCandidates, "/repo/apps/p0d/dist/windows-amd64/p0d.exe");
+
+    assert.deepStrictEqual(resolveP0dGoTargets("mac", "universal"), [
+      "darwin/arm64",
+      "darwin/amd64",
+    ]);
+    assert.deepStrictEqual(resolveP0dGoTargets("linux", "x64"), ["linux/amd64"]);
+    assert.deepStrictEqual(resolveP0dGoTargets("win", "arm64"), ["windows/arm64"]);
   }),
 );
 
@@ -2295,5 +2320,34 @@ it.effect("always includes Windows server.asar and the server compile-cache hook
     assert.isTrue(
       extraResources.some((entry) => entry.from === "apps/desktop/prod-resources/windows-server"),
     );
+  }).pipe(Effect.provide(NodeServices.layer)),
+);
+
+it.effect("ships p0d from resources/p0d on every platform, outside app.asar", () =>
+  Effect.gen(function* () {
+    for (const platform of ["mac", "linux", "win"] as const) {
+      const config = yield* createBuildConfig(
+        platform,
+        platform === "mac" ? "dmg" : platform === "win" ? "nsis" : "AppImage",
+        "0.2.0",
+        false,
+        false,
+        undefined,
+        undefined,
+        false,
+        "x64",
+      );
+      const extraResources = config.extraResources as ReadonlyArray<{
+        readonly from?: string;
+        readonly to?: string;
+      }>;
+      assert.isTrue(
+        extraResources.some(
+          (entry) => entry.from === "apps/desktop/prod-resources/p0d" && entry.to === "p0d",
+        ),
+        `${platform} build config should stage resources/p0d`,
+      );
+    }
+    assert.include(DESKTOP_FILE_EXCLUSIONS, "!apps/desktop/prod-resources/p0d/**/*");
   }).pipe(Effect.provide(NodeServices.layer)),
 );
