@@ -20,8 +20,9 @@ const defaultIsExecutable = (candidate: string): boolean => {
 };
 
 /**
- * Uses the macOS Electron Helper (`LSUIElement`) for `ELECTRON_RUN_AS_NODE=1` children so they do
- * not register as foreground apps in the Dock; falls back to `execPath` when unavailable.
+ * Uses the macOS Electron Helper (`LSUIElement`) for `ELECTRON_RUN_AS_NODE=1` children so they stay
+ * out of the Dock. Resolves from the bundle layout without gating on `isPackaged` so dev runs and
+ * non-Effect callers (like recovery) always agree on the same executable.
  */
 export function resolveHeadlessNodeExecutable(
   options: ResolveHeadlessNodeExecutableOptions = {},

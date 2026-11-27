@@ -52,6 +52,7 @@ const makeRecovery = Effect.gen(function* () {
   return DesktopBackendRecoveryProcess.make({
     appDataDirectory: environment.appDataDirectory,
     stateDir: environment.stateDir,
+    platform: environment.platform,
     onRecovery: (pid) =>
       runFork(logBackendPoolInfo("recovering a backend left by a previous desktop", { pid })),
     onError: (operation) =>

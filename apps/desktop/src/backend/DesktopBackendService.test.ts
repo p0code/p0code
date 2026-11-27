@@ -1,4 +1,5 @@
 import { assert, describe, it } from "@effect/vitest";
+import { vi } from "vite-plus/test";
 import {
   DESKTOP_READINESS_CHALLENGE_PARAM,
   DESKTOP_READINESS_PROOF_PATH,
@@ -950,5 +951,150 @@ describe("DesktopBackendService.layer", () => {
         fallbackReason: null,
       });
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect(
+    "uses the macOS Helper executable for both legacy-node and p0d --legacy-server on a packaged bundle layout",
+    () =>
+      Effect.gen(function* () {
+        const fileSystem = yield* FileSystem.FileSystem;
+        const baseDir = yield* fileSystem.makeTempDirectoryScoped();
+        const mainExecPath = `${baseDir}/p0code.app/Contents/MacOS/p0code`;
+        const helperExecPath = `${baseDir}/p0code.app/Contents/Frameworks/p0code Helper.app/Contents/MacOS/p0code Helper`;
+        const appPath = `${baseDir}/p0code.app/Contents/Resources/app.asar`;
+        const backendEntryPath = `${appPath}/apps/server/dist/bin.mjs`;
+        for (const filePath of [mainExecPath, helperExecPath]) {
+          yield* fileSystem.makeDirectory(filePath.slice(0, filePath.lastIndexOf("/")), {
+            recursive: true,
+          });
+          yield* fileSystem.writeFileString(filePath, "#!/bin/sh\n");
+          yield* fileSystem.chmod(filePath, 0o755);
+        }
+        yield* fileSystem.makeDirectory(
+          backendEntryPath.slice(0, backendEntryPath.lastIndexOf("/")),
+          { recursive: true },
+        );
+        yield* fileSystem.writeFileString(backendEntryPath, "// stub\n");
+
+        const execPathSpy = vi.spyOn(process, "execPath", "get").mockReturnValue(mainExecPath);
+        try {
+          const legacyCalls: Array<{ readonly command: string; readonly args: readonly string[] }> =
+            [];
+          const legacySpawner = ChildProcessSpawner.make((command) => {
+            if (command._tag === "StandardCommand") {
+              legacyCalls.push({
+                command: command.command,
+                args: command.args.map((arg) => String(arg)),
+              });
+            }
+            return Effect.succeed(makeProcessHandle({ exitCode: 1 }));
+          });
+          const makePackagedLayer = (
+            settings: DesktopAppSettings.DesktopSettings,
+            spawner: ChildProcessSpawner.ChildProcessSpawner["Service"],
+          ) =>
+            DesktopBackendService.layer.pipe(
+              Layer.provideMerge(
+                Layer.mergeAll(
+                  NodeServices.layer,
+                  DesktopEnvironment.layer({
+                    dirname: `${appPath}/apps/desktop/dist-electron`,
+                    homeDirectory: baseDir,
+                    platform: "darwin",
+                    processArch: "arm64",
+                    appVersion: "1.2.3",
+                    appPath,
+                    isPackaged: true,
+                    resourcesPath: `${baseDir}/p0code.app/Contents/Resources`,
+                    runningUnderArm64Translation: false,
+                  }).pipe(
+                    Layer.provide(
+                      Layer.mergeAll(
+                        NodeServices.layer,
+                        NodeCrypto.layer,
+                        DesktopConfig.layerTest({ T3CODE_HOME: baseDir }),
+                      ),
+                    ),
+                  ),
+                  DesktopAppSettings.layerTest(settings),
+                  Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, spawner),
+                  NodeCrypto.layer,
+                  NetService.layer,
+                  NodeHttpClient.layerUndici,
+                ),
+              ),
+            );
+
+          // Without p0d: legacy-node service driver spawns the Helper directly.
+          yield* Effect.gen(function* () {
+            const service = yield* DesktopBackendService.DesktopBackendService;
+            yield* service.prepareSelectedBackend;
+          }).pipe(
+            Effect.provide(
+              makePackagedLayer(
+                {
+                  ...DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS,
+                  backendMode: "local-service",
+                  backendModeConfiguredByUser: true,
+                },
+                legacySpawner,
+              ),
+            ),
+          );
+          assert.isTrue(
+            legacyCalls.some((call) => call.command === helperExecPath),
+            `Expected legacy-node driver to spawn ${helperExecPath}, got ${JSON.stringify(legacyCalls)}`,
+          );
+
+          // With p0d: `p0d service install` receives `--legacy-server` with the quoted Helper path.
+          const p0dPath = `${baseDir}/bin/p0d`;
+          yield* fileSystem.makeDirectory(`${baseDir}/bin`, { recursive: true });
+          yield* fileSystem.writeFileString(p0dPath, "#!/bin/sh\nexit 0\n");
+          yield* fileSystem.chmod(p0dPath, 0o755);
+          const p0dCalls: Array<readonly string[]> = [];
+          const p0dSpawner = ChildProcessSpawner.make((command) => {
+            if (command._tag === "StandardCommand") {
+              const args = command.args.map((arg) => String(arg));
+              p0dCalls.push(args);
+              if (args[0] === "service" && args[1] === "status") {
+                return Effect.succeed(
+                  makeProcessHandle({
+                    stdout: JSON.stringify({ running: false, installed: false }),
+                  }),
+                );
+              }
+            }
+            return Effect.succeed(makeProcessHandle({ exitCode: 1 }));
+          });
+          yield* Effect.gen(function* () {
+            const service = yield* DesktopBackendService.DesktopBackendService;
+            yield* service.controlService("start").pipe(Effect.ignore);
+          }).pipe(
+            Effect.provide(
+              makePackagedLayer(
+                {
+                  ...DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS,
+                  backendMode: "local-service",
+                  backendModeConfiguredByUser: true,
+                  backendBinaryPath: p0dPath,
+                },
+                p0dSpawner,
+              ),
+            ),
+          );
+          const installArgs = p0dCalls.find(
+            (args) => args[0] === "service" && args[1] === "install",
+          );
+          assert.isDefined(installArgs);
+          const legacyServerFlagIndex = installArgs.indexOf("--legacy-server");
+          assert.isAbove(legacyServerFlagIndex, -1);
+          assert.equal(
+            installArgs[legacyServerFlagIndex + 1],
+            DesktopBackendService.formatLegacyServerCommand(helperExecPath, backendEntryPath),
+          );
+        } finally {
+          execPathSpy.mockRestore();
+        }
+      }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
 });

@@ -868,7 +868,13 @@ export const make = Effect.gen(function* () {
   ) =>
     environment.platform === "darwin"
       ? startMacModifierPairShortcutProcess(modifier, onTrigger, onFailure)
-      : startGlobalShiftShortcutProcess(shiftShortcutWorkerPath, modifier, onTrigger, onFailure);
+      : startGlobalShiftShortcutProcess(
+          shiftShortcutWorkerPath,
+          modifier,
+          onTrigger,
+          onFailure,
+          environment.platform,
+        );
 
   const releaseShortcut = () => {
     shortcutGeneration++;

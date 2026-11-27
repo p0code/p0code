@@ -1,6 +1,7 @@
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
+import { vi } from "vite-plus/test";
 import { currentDesktopBootstrapToken } from "@t3tools/shared/desktopBootstrapToken";
 import {
   DESKTOP_READINESS_CHALLENGE_PARAM,
@@ -1190,4 +1191,51 @@ describe("DesktopBackendConfiguration", () => {
       await runtime.dispose();
     }
   });
+
+  it.effect("selects the macOS Helper executable for a packaged macOS bundle layout", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const baseDir = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "t3-desktop-backend-helper-test-",
+      });
+      const mainExecPath = path.join(baseDir, "p0code.app", "Contents", "MacOS", "p0code");
+      const helperExecPath = path.join(
+        baseDir,
+        "p0code.app",
+        "Contents",
+        "Frameworks",
+        "p0code Helper.app",
+        "Contents",
+        "MacOS",
+        "p0code Helper",
+      );
+      for (const filePath of [mainExecPath, helperExecPath]) {
+        yield* fileSystem.makeDirectory(path.dirname(filePath), { recursive: true });
+        yield* fileSystem.writeFileString(filePath, "#!/bin/sh\n");
+        yield* fileSystem.chmod(filePath, 0o755);
+      }
+
+      const execPathSpy = vi.spyOn(process, "execPath", "get").mockReturnValue(mainExecPath);
+      try {
+        const config = yield* Effect.gen(function* () {
+          const configuration = yield* DesktopBackendConfiguration.DesktopBackendConfiguration;
+          return yield* configuration.resolvePrimary;
+        }).pipe(
+          Effect.provide(
+            layerBackendConfiguration().pipe(
+              Layer.provideMerge(layerServerExposure),
+              Layer.provideMerge(DesktopAppSettings.layerTest()),
+              Layer.provideMerge(DesktopWslServerTree.layerTest()),
+              Layer.provideMerge(DesktopWslEnvironment.layerTest()),
+              Layer.provideMerge(layerEnvironment(baseDir, { platform: "darwin" })),
+            ),
+          ),
+        );
+        assert.equal(config.executablePath, helperExecPath);
+      } finally {
+        execPathSpy.mockRestore();
+      }
+    }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
+  );
 });

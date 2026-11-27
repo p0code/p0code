@@ -31,9 +31,13 @@ export type RegionSnapShotChild = {
   readonly kill: () => void;
 };
 
-function forkRegionSnapShotChild(workerPath: string): RegionSnapShotChild {
+function forkRegionSnapShotChild(
+  workerPath: string,
+  // oxlint-disable-next-line t3code/no-global-process-runtime -- Synchronous default for non-Effect callers.
+  platform: NodeJS.Platform = process.platform,
+): RegionSnapShotChild {
   const child = NodeChildProcess.fork(workerPath, [], {
-    execPath: resolveHeadlessNodeExecutable(),
+    execPath: resolveHeadlessNodeExecutable({ platform }),
     env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
     execArgv: [],
     stdio: ["ignore", "ignore", "inherit", "ipc"],
