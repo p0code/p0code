@@ -21,7 +21,7 @@ import {
   formatSessionList,
 } from "../cliAuthFormat.ts";
 import * as ServerConfig from "../config.ts";
-import { authScopesFlag } from "./authScopes.ts";
+import { authScopesFlag, localSessionScopesFlag } from "./authScopes.ts";
 import {
   authLocationFlags,
   type CliAuthLocationFlags,
@@ -190,7 +190,7 @@ const pairingCommand = Command.make("pairing").pipe(
 
 const sessionIssueCommand = Command.make("issue", {
   ...authLocationFlags,
-  scopes: authScopesFlag(AuthStandardClientScopes),
+  scopes: localSessionScopesFlag(AuthStandardClientScopes),
   ttl: ttlFlag,
   label: labelFlag,
   subject: subjectFlag,
