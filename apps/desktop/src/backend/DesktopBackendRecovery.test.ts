@@ -11,7 +11,7 @@ import * as NodeProcess from "node:process";
 
 import { assert, describe, expect, it } from "@effect/vitest";
 
-import { make } from "./DesktopBackendRecovery.ts";
+import { make, resolveLegacyMainExecutableFromHelper } from "./DesktopBackendRecovery.ts";
 import { linuxProcessIdentity } from "./LinuxProcessIdentity.ts";
 import { loadMacProcessAuditToken } from "./MacProcessAuditToken.ts";
 
@@ -255,6 +255,127 @@ describe.runIf(NodeProcess.platform === "darwin" || NodeProcess.platform === "li
         assert.deepEqual(errors, []);
         assert.deepEqual(recovered, [orphan.pid]);
         assert.isUndefined(native.read(orphan.pid));
+      },
+    );
+
+    it("derives the legacy main executable path from a macOS Helper executable", () => {
+      assert.equal(
+        resolveLegacyMainExecutableFromHelper(
+          "/Applications/p0code.app/Contents/Frameworks/p0code Helper.app/Contents/MacOS/p0code Helper",
+          "darwin",
+        ),
+        "/Applications/p0code.app/Contents/MacOS/p0code",
+      );
+      assert.equal(
+        resolveLegacyMainExecutableFromHelper(
+          "/Applications/p0code (Nightly).app/Contents/Frameworks/p0code (Nightly) Helper.app/Contents/MacOS/p0code (Nightly) Helper",
+          "darwin",
+        ),
+        "/Applications/p0code (Nightly).app/Contents/MacOS/p0code (Nightly)",
+      );
+      assert.isUndefined(
+        resolveLegacyMainExecutableFromHelper(
+          "/Applications/p0code.app/Contents/MacOS/p0code",
+          "darwin",
+        ),
+      );
+      assert.isUndefined(
+        resolveLegacyMainExecutableFromHelper(
+          "/Applications/p0code.app/Contents/Frameworks/p0code Helper.app/Contents/MacOS/p0code Helper",
+          "linux",
+        ),
+      );
+      assert.isUndefined(
+        resolveLegacyMainExecutableFromHelper(
+          "/Applications/p0code.app/Contents/Frameworks/Other Helper.app/Contents/MacOS/p0code Helper",
+          "darwin",
+        ),
+      );
+    });
+
+    it.runIf(NodeProcess.platform === "darwin")(
+      "recovers an orphan recorded by the pre-upgrade main binary when running as the macOS Helper",
+      async () => {
+        await using cleanup = new AsyncDisposableStack();
+        const appDataDirectory = await NodeFSP.realpath(
+          await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-helper-upgrade-recovery-")),
+        );
+        cleanup.defer(() => NodeFSP.rm(appDataDirectory, { recursive: true, force: true }));
+        const stateDir = NodePath.join(appDataDirectory, "home");
+        const linkOrCopyExecutable = async (destination: string) => {
+          await NodeFSP.mkdir(NodePath.dirname(destination), { recursive: true });
+          await NodeFSP.link(NodeProcess.execPath, destination).catch(() =>
+            NodeFSP.copyFile(NodeProcess.execPath, destination),
+          );
+          return destination;
+        };
+
+        const mainExec = await linkOrCopyExecutable(
+          NodePath.join(appDataDirectory, "p0code.app", "Contents", "MacOS", "p0code"),
+        );
+        const helperExec = await linkOrCopyExecutable(
+          NodePath.join(
+            appDataDirectory,
+            "p0code.app",
+            "Contents",
+            "Frameworks",
+            "p0code Helper.app",
+            "Contents",
+            "MacOS",
+            "p0code Helper",
+          ),
+        );
+        const unrelatedExec = await linkOrCopyExecutable(
+          NodePath.join(appDataDirectory, "other.app", "Contents", "MacOS", "other"),
+        );
+
+        const preUpgradeOrphan = await spawnTrackedBackend(appDataDirectory, stateDir, cleanup, {
+          execPath: mainExec,
+        });
+        const unrelatedOrphan = await spawnTrackedBackend(appDataDirectory, stateDir, cleanup, {
+          execPath: unrelatedExec,
+        });
+        const native = await loadNative();
+        NodeProcess.kill(preUpgradeOrphan.pid, "SIGSTOP");
+        NodeProcess.kill(unrelatedOrphan.pid, "SIGSTOP");
+        await preUpgradeOrphan.stopLauncher();
+        await unrelatedOrphan.stopLauncher();
+
+        const moduleUrl = new URL("./DesktopBackendRecovery.ts", import.meta.url).href;
+        const recoverCode = `
+          const [moduleUrl, appDataDirectory, stateDir] = process.argv.slice(1);
+          const { make } = await import(moduleUrl);
+          const recovered = [];
+          const errors = [];
+          await make({
+            appDataDirectory,
+            stateDir,
+            launcherPid: process.pid,
+            onRecovery: (pid) => recovered.push(pid),
+            onError: (operation, error) => errors.push({ operation, message: String(error) }),
+          }).recover();
+          process.send({ recovered, errors });
+        `;
+        const worker = NodeChildProcess.spawn(
+          helperExec,
+          ["--input-type=module", "-e", recoverCode, moduleUrl, appDataDirectory, stateDir],
+          { stdio: ["ignore", "ignore", "inherit", "ipc"] },
+        );
+        const [result] = (await NodeEvents.EventEmitter.once(worker, "message")) as [
+          { recovered: number[]; errors: unknown[] },
+        ];
+        await NodeEvents.EventEmitter.once(worker, "exit");
+
+        assert.deepEqual(result.errors, []);
+        assert.deepEqual(result.recovered, [preUpgradeOrphan.pid]);
+        assert.isUndefined(native.read(preUpgradeOrphan.pid));
+        await checkPortIsFree(preUpgradeOrphan.port);
+        // An orphan owned by a different app installation must stay untouched.
+        assert.equal(native.read(unrelatedOrphan.pid), unrelatedOrphan.token);
+        const remainingRecords = await NodeFSP.readdir(
+          NodePath.join(appDataDirectory, "t3code-backend-recovery"),
+        );
+        assert.lengthOf(remainingRecords, 1);
       },
     );
   },

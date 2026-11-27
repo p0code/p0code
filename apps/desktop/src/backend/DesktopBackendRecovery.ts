@@ -187,6 +187,39 @@ async function canonicalHome(path: string): Promise<string> {
   }
 }
 
+/**
+ * Given a macOS Helper executable inside `*.app/Contents/Frameworks/<Name> Helper.app/Contents/MacOS/<Name> Helper`,
+ * derives the enclosing app's main executable (`*.app/Contents/MacOS/<Name>`) so recovery can
+ * still clean up orphans recorded before the backend moved onto the Helper binary.
+ */
+export function resolveLegacyMainExecutableFromHelper(
+  execPath: string,
+  platform: NodeJS.Platform = NodeProcess.platform,
+): string | undefined {
+  if (platform !== "darwin") return undefined;
+  const macOsDir = NodePath.posix.dirname(execPath);
+  if (NodePath.posix.basename(macOsDir) !== "MacOS") return undefined;
+  const helperContentsDir = NodePath.posix.dirname(macOsDir);
+  if (NodePath.posix.basename(helperContentsDir) !== "Contents") return undefined;
+  const helperName = NodePath.posix.basename(execPath);
+  if (!helperName.endsWith(" Helper")) return undefined;
+  const mainName = helperName.slice(0, -" Helper".length);
+  if (!mainName) return undefined;
+  const helperAppDir = NodePath.posix.dirname(helperContentsDir);
+  if (NodePath.posix.basename(helperAppDir) !== `${helperName}.app`) return undefined;
+  const frameworksDir = NodePath.posix.dirname(helperAppDir);
+  if (NodePath.posix.basename(frameworksDir) !== "Frameworks") return undefined;
+  const appContentsDir = NodePath.posix.dirname(frameworksDir);
+  if (NodePath.posix.basename(appContentsDir) !== "Contents") return undefined;
+  return NodePath.posix.join(appContentsDir, "MacOS", mainName);
+}
+
+function scopePrefix(home: string, executable: string): string {
+  return NodeCrypto.createHash("sha256")
+    .update(JSON.stringify([home, executable]))
+    .digest("hex");
+}
+
 export function make(input: {
   readonly appDataDirectory: string;
   readonly stateDir: string;
@@ -205,10 +238,16 @@ export function make(input: {
       // An AppImage runs from a new mount path each launch; its file path is the stable install.
       appImage ? NodeFSP.realpath(appImage) : undefined,
     ]);
-    const prefix = NodeCrypto.createHash("sha256")
-      .update(JSON.stringify([home, installation ?? executable]))
-      .digest("hex");
-    return { prefix, executable };
+    const prefix = scopePrefix(home, installation ?? executable);
+    const recoverPrefixes = new Set<string>([prefix]);
+    const legacyMainCandidate = resolveLegacyMainExecutableFromHelper(executable);
+    if (legacyMainCandidate !== undefined) {
+      const legacyMainExecutable = await NodeFSP.realpath(legacyMainCandidate).catch(
+        () => legacyMainCandidate,
+      );
+      recoverPrefixes.add(scopePrefix(home, legacyMainExecutable));
+    }
+    return { prefix, recoverPrefixes, executable };
   };
   const privateDirectory = async () => {
     const info = await NodeFSP.lstat(directory);
@@ -268,9 +307,9 @@ export function make(input: {
     async recover(signal: AbortSignal = new AbortController().signal): Promise<void> {
       try {
         await privateDirectory();
-        const { prefix } = await scope();
+        const { recoverPrefixes } = await scope();
         const records = (await NodeFSP.readdir(directory)).filter(
-          (name) => name.startsWith(`${prefix}.`) && observedFileName.test(name),
+          (name) => observedFileName.test(name) && recoverPrefixes.has(name.slice(0, 64)),
         );
         if (records.length === 0) return;
 
@@ -278,12 +317,13 @@ export function make(input: {
         await Promise.all(
           records.map(async (name) => {
             const path = NodePath.join(directory, name);
+            const expectedScope = name.slice(0, 64);
             try {
               const record = await readRecord(path);
               if (
                 record === "incomplete" ||
                 (record !== undefined &&
-                  record.scope === prefix &&
+                  record.scope === expectedScope &&
                   (record.bootId !== bootId ||
                     (await recoverRecord(native, record, {
                       launcherPid: input.launcherPid,

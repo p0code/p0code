@@ -84,3 +84,22 @@ it("replaces a warm helper that exits before capture", async () => {
   assert.deepEqual(captureWorker.send.mock.calls[0]?.[0], request);
   pool.close();
 });
+
+it("spawns on demand without keeping a standby when warmStandby is disabled", async () => {
+  const captureWorker = makeWorker();
+  forkMock.mockReset().mockReturnValueOnce(captureWorker);
+  const pool = makeSnapShotAccessibilityProcessPool("accessibility.cjs", { warmStandby: false });
+
+  pool.warm();
+  assert.lengthOf(forkMock.mock.calls, 0);
+
+  const read = pool.read(request);
+  assert.lengthOf(forkMock.mock.calls, 1);
+  captureWorker.emit("message", "ready");
+  captureWorker.emit("message", "started");
+  captureWorker.emit("message", { type: "result", context: { accessibleText: "OnDemand" } });
+
+  assert.deepEqual(await read.result, { accessibleText: "OnDemand" });
+  assert.lengthOf(forkMock.mock.calls, 1);
+  pool.close();
+});

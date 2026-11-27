@@ -49,7 +49,10 @@ export function startSnapShotAccessibilityProcess(workerPath: string): Accessibi
   let worker: NodeChildProcess.ChildProcess;
   try {
     worker = NodeChildProcess.fork(workerPath, ["read"], {
-      // Electron's default macOS Helper executable lacks the main app's Accessibility grant.
+      // Must stay on the main binary on macOS so Accessibility TCC applies (p0code Helper lacks
+      // the main app's Accessibility grant). On macOS the pool spawns this on demand with
+      // `warmStandby: false` so no idle standby lingers in the Dock; a short-lived worker still
+      // runs during capture.
       execPath: process.execPath,
       env: {
         ...process.env,
@@ -132,13 +135,17 @@ export function startSnapShotAccessibilityProcess(workerPath: string): Accessibi
   };
 }
 
-export function makeSnapShotAccessibilityProcessPool(workerPath: string): AccessibilityProcessPool {
+export function makeSnapShotAccessibilityProcessPool(
+  workerPath: string,
+  options?: { readonly warmStandby?: boolean },
+): AccessibilityProcessPool {
+  const warmStandby = options?.warmStandby ?? true;
   let standby: AccessibilityProcess | undefined;
   const active = new Set<AccessibilityProcess>();
   let closed = false;
 
   const warm = () => {
-    if (closed || standby?.alive) return;
+    if (!warmStandby || closed || standby?.alive) return;
     standby = startSnapShotAccessibilityProcess(workerPath);
   };
   const cool = () => {
