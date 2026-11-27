@@ -357,7 +357,11 @@ export const createVercelDeployProvider = Effect.fn("createVercelDeployProvider"
           'Local-build deploy requires source.directory (for example "dist" or ".vercel/output").',
       });
     }
-    const bundle = yield* collectLocalBuildFiles(input.source.directory, { fs, path });
+    const bundle = yield* collectLocalBuildFiles(input.source.directory, {
+      fs,
+      path,
+      ...(input.source.projectRoot !== undefined ? { projectRoot: input.source.projectRoot } : {}),
+    });
     yield* Effect.forEach(
       bundle.files,
       (entry) =>

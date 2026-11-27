@@ -1,3 +1,8 @@
+// @effect-diagnostics nodeBuiltinImport:off -- Symlink containment tests create real temp directories.
+import * as NodeFSP from "node:fs/promises";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
+
 import {
   AccountProfileId,
   AuthOrchestrationOperateScope,
@@ -623,6 +628,75 @@ describe("DeployService", () => {
           "unknown-project",
         );
       }),
+    );
+
+    it.effect("refuses a symlinked directory inside projectRoot that resolves outside it", () =>
+      Effect.gen(function* () {
+        const tmpBase = yield* Effect.promise(() =>
+          NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "p0-deploy-symlink-")),
+        );
+        yield* Effect.addFinalizer(() =>
+          Effect.promise(() => NodeFSP.rm(tmpBase, { recursive: true, force: true })),
+        );
+        const realProject = NodePath.join(tmpBase, "project");
+        const outside = NodePath.join(tmpBase, "outside");
+        yield* Effect.promise(async () => {
+          await NodeFSP.mkdir(realProject, { recursive: true });
+          await NodeFSP.mkdir(outside, { recursive: true });
+          await NodeFSP.symlink(outside, NodePath.join(realProject, "dist"));
+        });
+
+        const symProjectId = ProjectId.make("project-symlink");
+        const customWorkspace = Layer.succeed(
+          DeployWorkspace,
+          DeployWorkspace.of({
+            thread: () => Effect.succeed(null),
+            projectRoot: (projectId) =>
+              Effect.succeed(projectId === symProjectId ? realProject : null),
+          }),
+        );
+        const scopedDeploy = yield* Layer.build(
+          Layer.fresh(deployLayer).pipe(
+            Layer.provide(customWorkspace),
+            Layer.provide(
+              Layer.mergeAll(
+                Layer.succeed(BuiltinDeployProviders, []),
+                Layer.succeed(DeployStore.DeployStore, yield* DeployStore.DeployStore),
+                Layer.succeed(PluginHost, yield* PluginHost),
+                Layer.succeed(
+                  ServerSettings.ServerSettingsService,
+                  yield* ServerSettings.ServerSettingsService,
+                ),
+                NodeCrypto.layer,
+                NodeServices.layer,
+              ),
+            ),
+          ),
+        ).pipe(Effect.map((ctx) => Context.get(ctx, DeployService)));
+
+        const { accountId } = yield* linkAccount();
+        yield* scopedDeploy.mapProject({
+          projectId: symProjectId,
+          mapping: target(accountId, { directory: "dist" }),
+        });
+        assert.strictEqual(
+          yield* reasonOf(
+            scopedDeploy.start({
+              projectId: symProjectId,
+              accountId,
+              sourceKind: "local-build",
+            }),
+          ),
+          "outside-project",
+        );
+        const allowed = yield* scopedDeploy.start({
+          projectId: symProjectId,
+          accountId,
+          sourceKind: "local-build",
+          allowOutsideProject: true,
+        });
+        assert.strictEqual(allowed._tag, "started");
+      }).pipe(Effect.scoped),
     );
 
     it.effect("holds a deploy from a thread below Full access until someone approves it", () =>

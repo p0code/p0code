@@ -595,6 +595,74 @@ describe("Pages", () => {
         );
       }),
   );
+
+  it.effect(
+    "refuses a symlinked Pages build directory escaping projectRoot and skips symlinked files",
+    () =>
+      Effect.gen(function* () {
+        const tmpBase = yield* Effect.promise(() =>
+          NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "cf-pages-symlink-")),
+        );
+        yield* Effect.addFinalizer(() =>
+          Effect.promise(() => NodeFSP.rm(tmpBase, { recursive: true, force: true })),
+        );
+        const projectDir = NodePath.join(tmpBase, "project");
+        const outsideDir = NodePath.join(tmpBase, "outside");
+        const distDir = NodePath.join(projectDir, "dist");
+        yield* Effect.promise(async () => {
+          await NodeFSP.mkdir(distDir, { recursive: true });
+          await NodeFSP.mkdir(outsideDir, { recursive: true });
+          await NodeFSP.writeFile(NodePath.join(outsideDir, "secret.txt"), "top-secret");
+          await NodeFSP.symlink(outsideDir, NodePath.join(projectDir, "escaped-dist"));
+          await NodeFSP.writeFile(NodePath.join(distDir, "index.html"), "<h1>Safe</h1>");
+          await NodeFSP.symlink(
+            NodePath.join(outsideDir, "secret.txt"),
+            NodePath.join(distDir, "leaked.txt"),
+          );
+        });
+
+        let manifest: Record<string, string> = {};
+        const provider = yield* startWithHandler((req) => {
+          if (req.url.endsWith("/upload-token")) return cfSuccess({ jwt: "jwt-1" });
+          if (req.url.endsWith("/pages/assets/check-missing")) return cfSuccess([]);
+          if (req.url.endsWith("/pages/assets/upsert-hashes")) return cfSuccess(null);
+          if (req.method === "POST" && req.url.endsWith("/deployments")) {
+            if (req.body._tag === "FormData") {
+              const raw = req.body.formData.get("manifest");
+              if (typeof raw === "string") manifest = JSON.parse(raw) as Record<string, string>;
+            }
+            return cfSuccess({ ...FIXTURE_PAGES_DEPLOYMENT_READY, id: "dep-safe" });
+          }
+          return cfError([{ code: 404, message: `unmatched ${req.url}` }], 404);
+        }, linkedStorage()).start;
+
+        // Symlinked directory escaping projectRoot is refused.
+        assert.include(
+          yield* failureOf(
+            provider.deploy({
+              account: TEST_ACCOUNT,
+              target: { kind: "pages", id: "pages:marketing-site" },
+              environment: "production",
+              source: {
+                kind: "local-build",
+                projectRoot: projectDir,
+                directory: NodePath.join(projectDir, "escaped-dist"),
+              },
+            }),
+          ),
+          "outside project root",
+        );
+
+        // Symlinked files inside a valid build directory are skipped.
+        yield* provider.deploy({
+          account: TEST_ACCOUNT,
+          target: { kind: "pages", id: "pages:marketing-site" },
+          environment: "production",
+          source: { kind: "local-build", projectRoot: projectDir, directory: distDir },
+        });
+        assert.deepStrictEqual(Object.keys(manifest), ["/index.html"]);
+      }).pipe(Effect.scoped),
+  );
 });
 
 describe("Workers", () => {
@@ -791,6 +859,100 @@ describe("Workers", () => {
         "not a Cloudflare deployment id",
       );
     }),
+  );
+
+  it.effect(
+    "enforces realPath containment on Worker entrypoints, wrangler configs, and parent-dir lookup",
+    () =>
+      Effect.gen(function* () {
+        const tmpBase = yield* Effect.promise(() =>
+          NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "cf-worker-escape-")),
+        );
+        yield* Effect.addFinalizer(() =>
+          Effect.promise(() => NodeFSP.rm(tmpBase, { recursive: true, force: true })),
+        );
+        const outsideDir = NodePath.join(tmpBase, "outside");
+        const secretFile = NodePath.join(outsideDir, "secret.js");
+        const projA = NodePath.join(tmpBase, "proj-a");
+        const projB = NodePath.join(tmpBase, "proj-b");
+        const projC = NodePath.join(tmpBase, "proj-c");
+        const projD = NodePath.join(tmpBase, "proj-d");
+        const projDDist = NodePath.join(projD, "dist");
+
+        yield* Effect.promise(async () => {
+          await NodeFSP.mkdir(outsideDir, { recursive: true });
+          await NodeFSP.writeFile(secretFile, "export default { secret: true };");
+
+          // projA: wrangler.toml points main at a symlink escaping outside.
+          await NodeFSP.mkdir(projA, { recursive: true });
+          await NodeFSP.writeFile(
+            NodePath.join(projA, "wrangler.toml"),
+            'name = "a"\nmain = "entry.js"\n',
+          );
+          await NodeFSP.symlink(secretFile, NodePath.join(projA, "entry.js"));
+
+          // projB: no wrangler.toml, default entry index.js is a symlink escaping outside.
+          await NodeFSP.mkdir(projB, { recursive: true });
+          await NodeFSP.symlink(secretFile, NodePath.join(projB, "index.js"));
+
+          // projC: no wrangler.toml inside projC, hostile wrangler.toml in parent (tmpBase).
+          await NodeFSP.mkdir(projC, { recursive: true });
+          await NodeFSP.writeFile(
+            NodePath.join(tmpBase, "wrangler.toml"),
+            'name = "parent"\nmain = "outside/secret.js"\n',
+          );
+          await NodeFSP.writeFile(
+            NodePath.join(projC, "index.js"),
+            "export default { ok: 'projC' };",
+          );
+
+          // projD: wrangler.toml in projectRoot, deploying from projectRoot/dist (allowed climb).
+          await NodeFSP.mkdir(projDDist, { recursive: true });
+          await NodeFSP.writeFile(
+            NodePath.join(projD, "wrangler.toml"),
+            'name = "d"\nmain = "dist/worker.js"\n',
+          );
+          await NodeFSP.writeFile(
+            NodePath.join(projDDist, "worker.js"),
+            "export default { ok: 'projD' };",
+          );
+        });
+
+        const uploadedModules: Array<string> = [];
+        const provider = yield* startWithHandler((req) => {
+          if (req.method === "PUT" && req.url.includes("/workers/scripts/edge-api")) {
+            if (req.body._tag === "FormData") {
+              for (const key of req.body.formData.keys()) {
+                if (key !== "metadata") uploadedModules.push(key);
+              }
+            }
+            return cfSuccess({ id: "edge-api", etag: "etag-1" });
+          }
+          if (req.url.endsWith("/versions")) return cfSuccess(FIXTURE_WORKER_VERSIONS);
+          if (req.url.includes("/workers/domains")) return cfSuccess([]);
+          if (req.url.endsWith("/workers/subdomain")) return cfSuccess({ subdomain: "acme-eng" });
+          return cfError([{ code: 404, message: `unmatched ${req.url}` }], 404);
+        }, linkedStorage()).start;
+
+        const deployWorkerAt = (projectRoot: string, directory: string) =>
+          provider.deploy({
+            account: TEST_ACCOUNT,
+            target: { kind: "worker", id: "worker:edge-api" },
+            environment: "production",
+            source: { kind: "local-build", projectRoot, directory },
+          });
+
+        assert.include(yield* failureOf(deployWorkerAt(projA, projA)), "outside project directory");
+        assert.include(yield* failureOf(deployWorkerAt(projB, projB)), "outside project directory");
+
+        // projC must NOT climb to tmpBase/wrangler.toml outside projectRoot; it uses projC/index.js.
+        yield* deployWorkerAt(projC, projC);
+        assert.deepStrictEqual(uploadedModules, ["index.js"]);
+
+        // projD/dist MAY read projD/wrangler.toml because projD is inside projectRoot.
+        yield* deployWorkerAt(projD, projDDist);
+        assert.deepStrictEqual(uploadedModules, ["index.js", "worker.js"]);
+      }).pipe(Effect.scoped),
   );
 });
 

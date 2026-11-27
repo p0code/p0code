@@ -74,18 +74,49 @@ export interface CollectedPageAsset {
   readonly contentType: string;
 }
 
+const isInsideDir = (path: Path.Path, baseDir: string, candidate: string): boolean => {
+  const rel = path.relative(baseDir, candidate);
+  return rel !== ".." && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel);
+};
+
 /**
  * Recursively collects regular files inside a local build directory for Cloudflare Pages
- * Direct Upload. Skips `.git` and `node_modules` and ignores symbolic links.
+ * Direct Upload. Enforces realPath containment and skips symbolic links.
  */
 export const collectPagesAssets = Effect.fn("deployFiles.collectPagesAssets")(function* (
   directory: string,
+  options?: { readonly projectRoot?: string },
 ) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const digest = yield* Digest.Digest;
 
-  const rootDir = path.resolve(directory);
+  const resolvedRoot = path.resolve(directory);
+  const rootDir = yield* fs
+    .realPath(resolvedRoot)
+    .pipe(
+      Effect.mapError(
+        () => new PluginError({ message: `Build directory does not exist: ${directory}` }),
+      ),
+    );
+  if (options?.projectRoot !== undefined) {
+    const projectRootResolved = path.resolve(options.projectRoot);
+    const projectRootReal = yield* fs
+      .realPath(projectRootResolved)
+      .pipe(
+        Effect.mapError(
+          () => new PluginError({ message: `Project root does not exist: ${options.projectRoot}` }),
+        ),
+      );
+    if (
+      isInsideDir(path, projectRootResolved, resolvedRoot) &&
+      !isInsideDir(path, projectRootReal, rootDir)
+    ) {
+      return yield* new PluginError({
+        message: `Refusing to upload build directory outside project root: ${directory}`,
+      });
+    }
+  }
   const rootStat = yield* fs
     .stat(rootDir)
     .pipe(
@@ -99,6 +130,7 @@ export const collectPagesAssets = Effect.fn("deployFiles.collectPagesAssets")(fu
 
   const assets: Array<CollectedPageAsset> = [];
   const queue: Array<string> = [rootDir];
+  const visitedDirs = new Set<string>([rootDir]);
 
   while (queue.length > 0) {
     const current = queue.shift()!;
@@ -121,19 +153,34 @@ export const collectPagesAssets = Effect.fn("deployFiles.collectPagesAssets")(fu
           ),
         );
       if (info.type === "SymbolicLink") continue;
+      const entryReal = yield* fs
+        .realPath(fullPath)
+        .pipe(
+          Effect.mapError(
+            () =>
+              new PluginError({ message: `Could not resolve file in build directory: ${entry}` }),
+          ),
+        );
+      if (!isInsideDir(path, rootDir, entryReal)) {
+        return yield* new PluginError({
+          message: `Refusing to upload path outside build directory: ${entry}`,
+        });
+      }
       if (info.type === "Directory") {
-        queue.push(fullPath);
+        if (visitedDirs.has(entryReal)) continue;
+        visitedDirs.add(entryReal);
+        queue.push(entryReal);
         continue;
       }
       if (info.type !== "File") continue;
       const bytes = yield* fs
-        .readFile(fullPath)
+        .readFile(entryReal)
         .pipe(
           Effect.mapError(
             () => new PluginError({ message: `Could not read asset file: ${entry}` }),
           ),
         );
-      const rel = path.relative(rootDir, fullPath).split(path.sep).join("/");
+      const rel = path.relative(rootDir, entryReal).split(path.sep).join("/");
       const routePath = `/${rel}`;
       const base64 = encodeBase64(bytes);
       const ext = path.extname(rel).replace(/^\./, "");
@@ -175,13 +222,9 @@ export interface LoadedWorkerBundle {
   readonly routes: ReadonlyArray<string>;
 }
 
-const isInsideDir = (path: Path.Path, baseDir: string, candidate: string): boolean => {
-  const rel = path.relative(baseDir, candidate);
-  return rel !== ".." && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel);
-};
-
 const readOptionalWranglerConfig = Effect.fn("deployFiles.readOptionalWranglerConfig")(function* (
   baseDir: string,
+  allowedRoot: string,
   envName?: string,
 ) {
   const fs = yield* FileSystem.FileSystem;
@@ -189,10 +232,25 @@ const readOptionalWranglerConfig = Effect.fn("deployFiles.readOptionalWranglerCo
 
   for (const filename of WRANGLER_FILENAMES) {
     const candidate = path.join(baseDir, filename);
-    const exists = yield* fs.exists(candidate).pipe(Effect.orElseSucceed(() => false));
+    const exists = yield* fs.lstat(candidate).pipe(
+      Effect.as(true),
+      Effect.orElseSucceed(() => false),
+    );
     if (!exists) continue;
+    const candidateReal = yield* fs
+      .realPath(candidate)
+      .pipe(
+        Effect.mapError(
+          () => new PluginError({ message: `Could not resolve ${filename} in ${baseDir}.` }),
+        ),
+      );
+    if (!isInsideDir(path, allowedRoot, candidateReal)) {
+      return yield* new PluginError({
+        message: `Refusing to read ${filename} outside project directory.`,
+      });
+    }
     const raw = yield* fs
-      .readFileString(candidate)
+      .readFileString(candidateReal)
       .pipe(
         Effect.mapError(
           () => new PluginError({ message: `Could not read ${filename} in ${baseDir}.` }),
@@ -216,13 +274,41 @@ const readOptionalWranglerConfig = Effect.fn("deployFiles.readOptionalWranglerCo
  */
 export const loadWorkerBundle = Effect.fn("deployFiles.loadWorkerBundle")(function* (options: {
   readonly directory: string;
+  readonly projectRoot?: string;
   readonly envName?: string;
   readonly envVars?: Readonly<Record<string, string>>;
 }) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
 
-  const rootDir = path.resolve(options.directory);
+  const resolvedRoot = path.resolve(options.directory);
+  const rootDir = yield* fs.realPath(resolvedRoot).pipe(
+    Effect.mapError(
+      () =>
+        new PluginError({
+          message: `Worker build directory does not exist: ${options.directory}`,
+        }),
+    ),
+  );
+  let projectRootReal: string | undefined;
+  if (options.projectRoot !== undefined) {
+    const projectRootResolved = path.resolve(options.projectRoot);
+    projectRootReal = yield* fs
+      .realPath(projectRootResolved)
+      .pipe(
+        Effect.mapError(
+          () => new PluginError({ message: `Project root does not exist: ${options.projectRoot}` }),
+        ),
+      );
+    if (
+      isInsideDir(path, projectRootResolved, resolvedRoot) &&
+      !isInsideDir(path, projectRootReal, rootDir)
+    ) {
+      return yield* new PluginError({
+        message: `Refusing to read Worker build directory outside project root: ${options.directory}`,
+      });
+    }
+  }
   const rootStat = yield* fs.stat(rootDir).pipe(
     Effect.mapError(
       () =>
@@ -237,33 +323,75 @@ export const loadWorkerBundle = Effect.fn("deployFiles.loadWorkerBundle")(functi
     });
   }
 
+  const allowedRoot =
+    projectRootReal !== undefined && isInsideDir(path, projectRootReal, rootDir)
+      ? projectRootReal
+      : rootDir;
+
   let config: ParsedWranglerConfig | undefined = yield* readOptionalWranglerConfig(
     rootDir,
+    allowedRoot,
     options.envName,
   );
   let configBaseDir = rootDir;
-  if (config === undefined) {
+  if (config === undefined && projectRootReal !== undefined) {
     const parentDir = path.dirname(rootDir);
-    if (parentDir !== rootDir) {
-      config = yield* readOptionalWranglerConfig(parentDir, options.envName);
+    if (parentDir !== rootDir && isInsideDir(path, projectRootReal, parentDir)) {
+      config = yield* readOptionalWranglerConfig(parentDir, allowedRoot, options.envName);
       if (config !== undefined) configBaseDir = parentDir;
     }
   }
 
+  const resolveContainedEntry = Effect.fn("deployFiles.resolveContainedEntry")(function* (
+    candidate: string,
+    containmentBase: string,
+    label: string,
+  ) {
+    const real = yield* fs.realPath(candidate).pipe(
+      Effect.mapError(
+        () =>
+          new PluginError({
+            message: `Refusing to read Worker entrypoint outside project directory: ${label}`,
+          }),
+      ),
+    );
+    if (!isInsideDir(path, containmentBase, real)) {
+      return yield* new PluginError({
+        message: `Refusing to read Worker entrypoint outside project directory: ${label}`,
+      });
+    }
+    const stat = yield* fs
+      .stat(real)
+      .pipe(
+        Effect.mapError(
+          () => new PluginError({ message: `Could not inspect Worker entrypoint: ${label}` }),
+        ),
+      );
+    if (stat.type !== "File") {
+      return yield* new PluginError({
+        message: `Worker entrypoint is not a regular file: ${label}`,
+      });
+    }
+    return real;
+  });
+
+  const entryExists = (candidate: string) =>
+    fs.lstat(candidate).pipe(
+      Effect.as(true),
+      Effect.orElseSucceed(() => false),
+    );
+
   let entryPath: string | undefined;
+  let mainModule: string | undefined;
   if (config?.main) {
     const fromConfig = path.resolve(configBaseDir, config.main);
     const fromRoot = path.resolve(rootDir, config.main);
-    if (
-      isInsideDir(path, rootDir, fromRoot) &&
-      (yield* fs.exists(fromRoot).pipe(Effect.orElseSucceed(() => false)))
-    ) {
-      entryPath = fromRoot;
-    } else if (
-      isInsideDir(path, configBaseDir, fromConfig) &&
-      (yield* fs.exists(fromConfig).pipe(Effect.orElseSucceed(() => false)))
-    ) {
-      entryPath = fromConfig;
+    if (isInsideDir(path, rootDir, fromRoot) && (yield* entryExists(fromRoot))) {
+      entryPath = yield* resolveContainedEntry(fromRoot, rootDir, config.main);
+      mainModule = path.basename(fromRoot);
+    } else if (isInsideDir(path, configBaseDir, fromConfig) && (yield* entryExists(fromConfig))) {
+      entryPath = yield* resolveContainedEntry(fromConfig, configBaseDir, config.main);
+      mainModule = path.basename(fromConfig);
     } else if (
       !isInsideDir(path, rootDir, fromRoot) &&
       !isInsideDir(path, configBaseDir, fromConfig)
@@ -279,14 +407,15 @@ export const loadWorkerBundle = Effect.fn("deployFiles.loadWorkerBundle")(functi
   } else {
     for (const candidate of DEFAULT_WORKER_ENTRIES) {
       const full = path.join(rootDir, candidate);
-      if (yield* fs.exists(full).pipe(Effect.orElseSucceed(() => false))) {
-        entryPath = full;
+      if (yield* entryExists(full)) {
+        entryPath = yield* resolveContainedEntry(full, rootDir, candidate);
+        mainModule = path.basename(full);
         break;
       }
     }
   }
 
-  if (entryPath === undefined) {
+  if (entryPath === undefined || mainModule === undefined) {
     return yield* new PluginError({
       message: `No Worker script entrypoint found in "${options.directory}". Set "main" in wrangler.toml/wrangler.jsonc or build an index.js / worker.js module.`,
     });
@@ -308,7 +437,6 @@ export const loadWorkerBundle = Effect.fn("deployFiles.loadWorkerBundle")(functi
     bindingsByName.set(key, { name: key, type: "plain_text", text: value });
   }
 
-  const mainModule = path.basename(entryPath);
   return {
     mainModule,
     scriptContent,

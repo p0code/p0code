@@ -894,4 +894,88 @@ describe("account isolation and env targets", () => {
       yield* provider.setEnv({ ...base, vars: {}, secret: false, remove: ["ONLY"] });
     }),
   );
+
+  it.effect(
+    "blocks symlink escapes in local-build uploads and avoids duplicating files on self-symlinks",
+    () =>
+      Effect.gen(function* () {
+        const fixture = makeStandardFixture();
+        const http = makeFakeHttpLayer(fixture.handler);
+        const { storage } = fakeStorage();
+        const provider = yield* createVercelDeployProvider({ storage }).pipe(
+          Effect.provide(makeTestPlatform(http.layer)),
+        );
+        yield* provider.link({ account: TEST_ACCOUNT, token: TEST_TOKEN });
+
+        const tmpBase = yield* Effect.promise(() =>
+          NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "p0-vercel-symlink-")),
+        );
+        yield* Effect.addFinalizer(() =>
+          Effect.promise(() => NodeFSP.rm(tmpBase, { recursive: true, force: true })),
+        );
+        const outside = NodePath.join(tmpBase, "outside");
+        const project = NodePath.join(tmpBase, "project");
+        const escapeFileDir = NodePath.join(project, "escape-file");
+        const escapeOutputDir = NodePath.join(project, "escape-output");
+        const selfLoopDir = NodePath.join(project, "self-loop");
+
+        yield* Effect.promise(async () => {
+          await NodeFSP.mkdir(outside, { recursive: true });
+          await NodeFSP.writeFile(NodePath.join(outside, "secret.txt"), "top-secret");
+          await NodeFSP.writeFile(NodePath.join(outside, "config.json"), '{"version":3}');
+
+          await NodeFSP.mkdir(project, { recursive: true });
+          await NodeFSP.symlink(outside, NodePath.join(project, "escaped-dir"));
+
+          await NodeFSP.mkdir(escapeFileDir, { recursive: true });
+          await NodeFSP.symlink(
+            NodePath.join(outside, "secret.txt"),
+            NodePath.join(escapeFileDir, "leak.txt"),
+          );
+
+          await NodeFSP.mkdir(NodePath.join(escapeOutputDir, ".vercel"), { recursive: true });
+          await NodeFSP.symlink(outside, NodePath.join(escapeOutputDir, ".vercel", "output"));
+
+          await NodeFSP.mkdir(selfLoopDir, { recursive: true });
+          await NodeFSP.writeFile(NodePath.join(selfLoopDir, "index.html"), "<h1>Once</h1>");
+          await NodeFSP.symlink(".", NodePath.join(selfLoopDir, "loop"));
+        });
+
+        const deployDir = (directory: string) =>
+          provider.deploy({
+            account: TEST_ACCOUNT,
+            target: { kind: "vercel-project", id: "prj_static_2" },
+            source: { kind: "local-build", projectRoot: project, directory },
+            environment: "production",
+          });
+
+        assert.include(
+          extractFailureMessage(
+            yield* Effect.exit(deployDir(NodePath.join(project, "escaped-dir"))),
+          ),
+          "outside project root",
+        );
+        assert.include(
+          extractFailureMessage(yield* Effect.exit(deployDir(escapeFileDir))),
+          "outside build directory",
+        );
+        assert.include(
+          extractFailureMessage(yield* Effect.exit(deployDir(escapeOutputDir))),
+          "outside build directory",
+        );
+
+        // Self-symlink pointing to `.` must not duplicate files or loop.
+        yield* deployDir(selfLoopDir);
+        const createReq = http.requests.find(
+          (req) => req.method === "POST" && req.url.pathname === "/v13/deployments",
+        );
+        const payload = JSON.parse(createReq?.bodyText ?? "{}") as {
+          readonly files?: ReadonlyArray<{ readonly file: string }>;
+        };
+        assert.deepStrictEqual(
+          payload.files?.map((file) => file.file),
+          ["index.html"],
+        );
+      }).pipe(Effect.scoped),
+  );
 });

@@ -448,7 +448,12 @@ export const makeCloudflareProvider = Effect.fn("CloudflareProvider.make")(funct
     let manifest: Record<string, string> | undefined;
     if (input.source.kind === "local-build") {
       const directory = yield* requireBuildDirectory(input, "A Cloudflare Pages Direct Upload");
-      const assets = yield* collectPagesAssets(directory);
+      const assets = yield* collectPagesAssets(
+        directory,
+        input.source.projectRoot !== undefined
+          ? { projectRoot: input.source.projectRoot }
+          : undefined,
+      );
       const hashes = assets.map((asset) => asset.hash);
       const upload = yield* Cf.getPagesUploadToken(token, meta.accountId, project).pipe(
         Effect.mapError(cfError),
@@ -497,6 +502,7 @@ export const makeCloudflareProvider = Effect.fn("CloudflareProvider.make")(funct
     const directory = yield* requireBuildDirectory(input, "A Cloudflare Workers upload");
     const bundle = yield* loadWorkerBundle({
       directory,
+      ...(input.source.projectRoot !== undefined ? { projectRoot: input.source.projectRoot } : {}),
       ...(input.environment === "preview" ? { envName: "preview" } : {}),
       ...(input.envVars ? { envVars: input.envVars } : {}),
     });

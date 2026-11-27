@@ -42,6 +42,7 @@ import * as Context from "effect/Context";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
@@ -115,7 +116,28 @@ const make = Effect.gen(function* () {
   const workspace = yield* DeployWorkspace;
   const store = yield* DeployStore;
   const random = yield* SecureRandom.SecureRandom;
+  const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
+
+  const isContained = (baseDir: string, candidate: string): boolean => {
+    const relative = path.relative(baseDir, candidate);
+    return relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+  };
+
+  /** Resolves symlinks on the deepest existing ancestor so missing targets still catch escapes. */
+  const realPathLoose = (target: string): Effect.Effect<string> =>
+    Effect.suspend(function loop() {
+      const resolved = path.resolve(target);
+      return fs.realPath(resolved).pipe(
+        Effect.catch(() => {
+          const parent = path.dirname(resolved);
+          if (parent === resolved) return Effect.succeed(resolved);
+          return realPathLoose(parent).pipe(
+            Effect.map((realParent) => path.join(realParent, path.basename(resolved))),
+          );
+        }),
+      );
+    });
 
   const fail = (reason: DeployError["reason"], message: string) =>
     Effect.fail(new DeployError({ reason, message }));
@@ -215,11 +237,13 @@ const make = Effect.gen(function* () {
     if (projectRoot === null) {
       return yield* fail("unknown-project", "This project's folder is not known on this server.");
     }
+    const resolvedRoot = path.resolve(projectRoot);
     const requested = Object.hasOwn(input, "directory") ? input.directory : mapping.directory;
-    const directory = requested === undefined ? projectRoot : path.resolve(projectRoot, requested);
-    const relative = path.relative(projectRoot, directory);
-    const outside =
-      relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative);
+    const directory =
+      requested === undefined ? resolvedRoot : path.resolve(resolvedRoot, requested);
+    const realRoot = yield* realPathLoose(resolvedRoot);
+    const realDirectory = yield* realPathLoose(directory);
+    const outside = !isContained(resolvedRoot, directory) || !isContained(realRoot, realDirectory);
     const allowOutsideProject =
       Object.hasOwn(input, "allowOutsideProject") && input.allowOutsideProject === true;
     if (outside && !allowOutsideProject) {
@@ -228,7 +252,7 @@ const make = Effect.gen(function* () {
         `${directory} is outside the project folder. Allow deploying from outside the project to use it.`,
       );
     }
-    return { projectRoot, directory, thread };
+    return { projectRoot: realRoot, directory: realDirectory, thread };
   });
 
   const builtinSummaries: ReadonlyArray<DeployProviderSummary> = builtins.map(({ info }) => ({

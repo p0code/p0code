@@ -48,12 +48,17 @@ const sha1Hex = (bytes: Uint8Array) =>
 export interface LocalBuildFsDeps {
   readonly fs: FileSystem.FileSystem;
   readonly path: Path.Path;
+  readonly projectRoot?: string;
 }
+
+const isInsideDir = (path: Path.Path, baseDir: string, candidate: string): boolean => {
+  const rel = path.relative(baseDir, candidate);
+  return rel !== ".." && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel);
+};
 
 /**
  * Collects files from a local build output directory for Vercel `/v2/files` + `/v13/deployments`.
- * Detects Vercel Build Output API v3 directories (`.vercel/output/config.json` or `config.json`
- * + `static/` / `functions/`) so prebuilt bundles are marked `prebuilt: true`.
+ * Detects Build Output API v3 directories and enforces realPath containment on every upload.
  */
 export const collectLocalBuildFiles = Effect.fn("vercel.localBuild.collect")(function* (
   directory: string,
@@ -77,6 +82,26 @@ export const collectLocalBuildFiles = Effect.fn("vercel.localBuild.collect")(fun
         }),
     ),
   );
+  if (deps.projectRoot !== undefined) {
+    const projectRootResolved = path.resolve(deps.projectRoot);
+    const projectRootReal = yield* fs.realPath(projectRootResolved).pipe(
+      Effect.mapError(
+        (cause) =>
+          new PluginError({
+            message: `Project root does not exist: ${deps.projectRoot}`,
+            cause,
+          }),
+      ),
+    );
+    if (
+      isInsideDir(path, projectRootResolved, resolvedRoot) &&
+      !isInsideDir(path, projectRootReal, rootReal)
+    ) {
+      return yield* new PluginError({
+        message: `Refusing to upload path outside project root: ${trimmed}`,
+      });
+    }
+  }
   const rootStat = yield* fs.stat(rootReal).pipe(
     Effect.mapError(
       (cause) =>
@@ -93,12 +118,42 @@ export const collectLocalBuildFiles = Effect.fn("vercel.localBuild.collect")(fun
   }
 
   // If the caller points at a project root that already contains `.vercel/output/config.json`,
-  // upload `.vercel/output` as a prebuilt Build Output API bundle.
+  // upload `.vercel/output` as a prebuilt Build Output API bundle after verifying containment.
   const nestedOutput = path.join(rootReal, ".vercel", "output");
+  const nestedConfigPath = path.join(nestedOutput, "config.json");
   const nestedConfigExists = yield* fs
-    .exists(path.join(nestedOutput, "config.json"))
+    .exists(nestedConfigPath)
     .pipe(Effect.orElseSucceed(() => false));
-  const scanRoot = nestedConfigExists ? nestedOutput : rootReal;
+  let scanRoot = rootReal;
+  if (nestedConfigExists) {
+    const nestedOutputReal = yield* fs.realPath(nestedOutput).pipe(
+      Effect.mapError(
+        (cause) =>
+          new PluginError({
+            message: "Could not resolve .vercel/output directory.",
+            cause,
+          }),
+      ),
+    );
+    const nestedConfigReal = yield* fs.realPath(nestedConfigPath).pipe(
+      Effect.mapError(
+        (cause) =>
+          new PluginError({
+            message: "Could not resolve .vercel/output/config.json.",
+            cause,
+          }),
+      ),
+    );
+    if (
+      !isInsideDir(path, rootReal, nestedOutputReal) ||
+      !isInsideDir(path, nestedOutputReal, nestedConfigReal)
+    ) {
+      return yield* new PluginError({
+        message: "Refusing to upload path outside build directory: .vercel/output",
+      });
+    }
+    scanRoot = nestedOutputReal;
+  }
   const rootConfigExists =
     nestedConfigExists ||
     (yield* fs.exists(path.join(scanRoot, "config.json")).pipe(Effect.orElseSucceed(() => false)));
@@ -111,8 +166,8 @@ export const collectLocalBuildFiles = Effect.fn("vercel.localBuild.collect")(fun
   const files: Array<LocalBuildFile> = [];
   let totalBytes = 0;
 
-  // Symlinked directories can loop back inside the build; visit each real directory once.
-  const visitedDirs = new Set<string>();
+  // Seed with scanRoot so symlinks pointing back to `.` do not duplicate files.
+  const visitedDirs = new Set<string>([scanRoot]);
   const walk = Effect.fn("VercelLocalBuild.walk")(function* (
     dir: string,
     relPrefix: string,
@@ -128,13 +183,6 @@ export const collectLocalBuildFiles = Effect.fn("vercel.localBuild.collect")(fun
       if (IGNORED_SEGMENTS.has(name)) continue;
       const fullPath = path.join(dir, name);
       const relPath = relPrefix.length > 0 ? `${relPrefix}/${name}` : name;
-      const linkStat = yield* fs
-        .stat(fullPath)
-        .pipe(
-          Effect.mapError(
-            (cause) => new PluginError({ message: `Could not inspect ${relPath}.`, cause }),
-          ),
-        );
       const entryReal = yield* fs
         .realPath(fullPath)
         .pipe(
@@ -142,20 +190,22 @@ export const collectLocalBuildFiles = Effect.fn("vercel.localBuild.collect")(fun
             (cause) => new PluginError({ message: `Could not resolve ${relPath}.`, cause }),
           ),
         );
-      const relativeFromRoot = path.relative(scanRoot, entryReal);
-      if (
-        relativeFromRoot === ".." ||
-        relativeFromRoot.startsWith(`..${path.sep}`) ||
-        path.isAbsolute(relativeFromRoot)
-      ) {
+      if (!isInsideDir(path, scanRoot, entryReal)) {
         return yield* new PluginError({
           message: `Refusing to upload path outside build directory: ${relPath}`,
         });
       }
+      const linkStat = yield* fs
+        .stat(entryReal)
+        .pipe(
+          Effect.mapError(
+            (cause) => new PluginError({ message: `Could not inspect ${relPath}.`, cause }),
+          ),
+        );
       if (linkStat.type === "Directory") {
         if (visitedDirs.has(entryReal)) continue;
         visitedDirs.add(entryReal);
-        yield* walk(fullPath, relPath);
+        yield* walk(entryReal, relPath);
         continue;
       }
       if (linkStat.type !== "File") continue;
@@ -165,7 +215,7 @@ export const collectLocalBuildFiles = Effect.fn("vercel.localBuild.collect")(fun
         });
       }
       const bytes = yield* fs
-        .readFile(fullPath)
+        .readFile(entryReal)
         .pipe(
           Effect.mapError(
             (cause) => new PluginError({ message: `Could not read ${relPath}.`, cause }),
