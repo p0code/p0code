@@ -12,6 +12,7 @@ import type {
   PullRequestMergeMethod,
   PullRequestRef,
   PullRequestSummary,
+  ScopedProjectRef,
   ScopedThreadRef,
 } from "@t3tools/contracts";
 import { msg } from "gt-react";
@@ -343,6 +344,7 @@ export function writeHandoffToComposer(
 type PreparedCheckout = Awaited<
   ReturnType<ReturnType<typeof usePreparePullRequestThreadAction>["run"]>
 >;
+type DraftCheckoutResult = PreparedCheckout | { readonly _tag: "Cancelled" };
 
 /**
  * Moves the draft opened for a checkout onto it once it is ready, keeping whatever the user
@@ -350,11 +352,13 @@ type PreparedCheckout = Awaited<
  */
 export function prepareDraftCheckout(
   draftId: DraftId,
+  projectRef: ScopedProjectRef,
   checkout: Promise<PreparedCheckout>,
   isCancelled: () => boolean = () => false,
-): Promise<PreparedCheckout> {
-  const pointed = checkout.then((prepared) => {
-    if (isCancelled() || prepared._tag === "Failure") return prepared;
+): Promise<DraftCheckoutResult> {
+  const result = checkout.then((prepared): DraftCheckoutResult => {
+    if (!isCurrent() || isCancelled()) return { _tag: "Cancelled" };
+    if (prepared._tag === "Failure") return prepared;
     const { branch, worktreePath, pullRequest } = prepared.value;
     // A waiting send resumes right after this and must render the checkout first.
     flushSync(() =>
@@ -369,8 +373,12 @@ export function prepareDraftCheckout(
     );
     return prepared;
   });
-  trackPendingDraftCheckout(draftId, pointed);
-  return pointed;
+  const isCurrent = trackPendingDraftCheckout(
+    draftId,
+    projectRef,
+    result.then((prepared) => prepared._tag === "Success"),
+  );
+  return result;
 }
 
 export type PullRequestHandoffDetail = Pick<
@@ -433,17 +441,22 @@ export async function executePullRequestHandoff({
     });
     return;
   }
-  const prepared = await prepareThread.run({
-    reference: detail.url,
-    mode,
-    threadId: opened.threadId,
-  });
-  if (cancelled) {
-    onSettle?.();
+  const prepared = await prepareDraftCheckout(
+    opened.draftId,
+    projectRef,
+    prepareThread.run({
+      reference: detail.url,
+      mode,
+      threadId: opened.threadId,
+    }),
+    () => cancelled,
+  );
+  onSettle?.();
+  if (cancelled || prepared._tag === "Cancelled") {
+    if (!cancelled) toastManager.close(toastId);
     return;
   }
   if (prepared._tag === "Failure") {
-    onSettle?.();
     toastManager.update(toastId, {
       type: "error",
       title: m(
@@ -458,40 +471,6 @@ export async function executePullRequestHandoff({
     });
     return;
   }
-  const pointed = await newThread(projectRef, {
-    branch: prepared.value.branch,
-    worktreePath: prepared.value.worktreePath,
-    envMode: prepared.value.worktreePath === null ? "local" : "worktree",
-  }).then(
-    (session) => session,
-    () => null,
-  );
-  if (cancelled) {
-    onSettle?.();
-    return;
-  }
-  if (pointed === null) {
-    onSettle?.();
-    toastManager.update(toastId, {
-      type: "error",
-      title: m(msg("Checked out, but the thread stayed where it was")),
-      description: m(
-        msg(
-          "The checkout is ready on `{branch}`. Point a thread at it from the branch picker, then ask again.",
-          { branch: prepared.value.branch },
-        ),
-      ),
-    });
-    return;
-  }
-  // The draft carries the pull request until its first send makes it a thread, which links it.
-  useComposerDraftStore.getState().setDraftThreadContext(pointed.draftId, {
-    checkoutPullRequest: {
-      url: prepared.value.pullRequest.url,
-      branch: prepared.value.branch,
-    },
-  });
-  onSettle?.();
   if (task === null) {
     toastManager.update(
       toastId,
@@ -522,9 +501,7 @@ export async function executePullRequestHandoff({
     );
     return;
   }
-  // The task goes on the checkout draft: if the user typed into `opened` while the
-  // checkout ran, that is no longer the draft the user is looking at.
-  writeHandoffToComposer(pointed.draftId, task);
+  writeHandoffToComposer(opened.draftId, task);
   toastManager.update(
     toastId,
     prepared.value.isOnPullRequestHead

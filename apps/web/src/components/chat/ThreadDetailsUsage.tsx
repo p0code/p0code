@@ -382,6 +382,11 @@ function PoolRow({ window, now }: { readonly window: LimitPoolWindow; readonly n
       label={window.label}
       fill={displayed}
       tone={limitTone(left)}
+      tick={
+        window.paceRemainingPercent === null || usageDisplayMode !== "used"
+          ? window.paceRemainingPercent
+          : 100 - window.paceRemainingPercent
+      }
       value={usageText}
       ariaValue={usageText}
       opensUsage

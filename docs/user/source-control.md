@@ -1,7 +1,8 @@
 # Source control
 
-p0code integrates with GitHub, GitLab, Forgejo, Gitea, Bitbucket, Azure DevOps, GitCafe, and Cursor
-Origin to clone and publish repositories, create pull requests, and review changes.
+p0code integrates with GitHub, GitLab, Forgejo, Gitea, Bitbucket, Azure DevOps, GitCafe, Cursor
+Origin, Linear, and Jira Cloud to clone and publish repositories, create pull requests, review
+changes, and manage issues.
 
 ## Review turn changes
 
@@ -44,7 +45,7 @@ and choose **Rescan**.
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **GitHub**                         | 1) Save a token in **Settings → Source control & issues → GitHub**, 2) set `GH_TOKEN` (`GH_ENTERPRISE_TOKEN` + `GH_HOST` for Enterprise), or 3) sign in with [GitHub CLI](https://cli.github.com/) 2.81.0+ (`gh auth login`; use `--hostname` for Enterprise). Pick accounts or disable hosts in Settings when multiple `gh` logins exist.                                                                                |
 | **GitLab**                         | Install [GitLab CLI](https://gitlab.com/gitlab-org/cli) and run `glab auth login`.                                                                                                                                                                                                                                                                                                                                        |
-| **Forgejo / Gitea**                | Install [`fj`](https://codeberg.org/forgejo-contrib/forgejo-cli) (`fj --host https://your-server auth add-token`) or [`tea`](https://gitea.com/gitea/tea) 0.16+ (`tea login add`). Prefers `fj`, falls back to `tea` (use `tea` for subpath-hosted servers). Use full URLs when multiple servers exist.                                                                                                                   |
+| **Forgejo / Gitea**                | Install [`fj`](https://codeberg.org/forgejo-contrib/forgejo-cli) (`fj --host https://your-server auth add-token`) or [`gt`](https://gitea.com/gitea/cli) 2.0+ (`gt auth login --host https://your-server`; it replaces the archived `tea`, so sign in again). Prefers `fj`, falls back to `gt` (use `gt` for subpath-hosted servers). Use full URLs when multiple servers exist.                                          |
 | **Bitbucket**                      | Save a repo/project/workspace **Access token** or **Atlassian email + API token** (with repo/PR read-write, `read:user:bitbucket`, `read:workspace:bitbucket`) in **Settings → Source control & issues → Bitbucket**, or set `T3CODE_BITBUCKET_ACCESS_TOKEN` / `T3CODE_BITBUCKET_EMAIL` + `T3CODE_BITBUCKET_API_TOKEN` in the server env (or [`service.env`](./background-service.md#configure-the-service-environment)). |
 | **Azure DevOps**                   | Install [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/), run `az extension add --name azure-devops`, then `az login`.                                                                                                                                                                                                                                                                                           |
 | **GitCafe**                        | Save a token in Settings, set `CAFE_TOKEN` (+ `CAFE_HOST`), or install `@gitcafe/cli` and run `cafe auth login --host https://git.cafe/api`. Line comments are not yet supported; stack merges/updates are native.                                                                                                                                                                                                        |
@@ -70,22 +71,24 @@ custom server name as GitHub once it has a credential for that host.
 ### Forgejo and Gitea
 
 Install [Forgejo CLI (`fj`)](https://codeberg.org/forgejo-contrib/forgejo-cli) or
-[Gitea CLI (`tea`)](https://gitea.com/gitea/tea) 0.16 or later on your p0code server.
-Sign in with `fj --host https://your-server auth add-token` or `tea login add`.
-Repeat for each server you use, including Codeberg.
+[Gitea CLI (`gt`)](https://gitea.com/gitea/cli) 2.0 or later on your p0code server.
+Sign in with `fj --host https://your-server auth add-token` or
+`gt auth login --host https://your-server`. `gt` replaces the archived `tea`, so sign in again
+if you used `tea`. Repeat for each server you use, including Codeberg.
 
-p0code prefers a matching `fj` login and falls back to `tea` when `fj` is unavailable
+p0code prefers a matching `fj` login and falls back to `gt` when `fj` is unavailable
 or has no login for that server. Once an account is selected, failed actions stay on that
 account. Settings shows the detected CLI. Forgejo and Gitea share one integration entry.
-Servers hosted under a URL subpath, such as `https://example.com/forgejo`, use `tea` because
+Servers hosted under a URL subpath, such as `https://example.com/forgejo`, use `gt` because
 fj does not preserve the subpath when checking its account.
 
 When cloning or publishing, use a full repository URL to select a specific server.
-You can use `owner/repo` when only one fj server is configured, or with your default `tea`
-login when fj is unavailable or unconfigured. With multiple fj servers, use the full URL.
-If you have multiple `tea` accounts on one server, select one with
-`tea login default <login-name>`. Git push and clone also need Git credentials or an SSH key
-for that server.
+You can use `owner/repo` when only one fj server is configured, or with `gt`'s default server
+(`gt config set default_host https://your-server`) when fj is unavailable or unconfigured. With
+multiple fj servers, use the full URL. If you have multiple `gt` accounts on one server, select
+one with `gt auth switch <user> --host https://your-server`. If an SSH remote uses a different
+host name than the server's web address, run `gt config set ssh_host <ssh-host> --host https://your-server`.
+Git push and clone also need Git credentials or an SSH key for that server.
 
 ### GitLab
 
@@ -187,6 +190,8 @@ origin auth login
 If cloning or pushing asks for a username, run `origin auth setup-git` to point Git at the CLI's
 credentials again. Origin repositories use HTTPS and are published privately. Repositories mirrored
 from GitHub keep their pull requests on GitHub; open those from the GitHub remote.
+
+> Note: With several `gt` servers and no `fj` login, `owner/repo` and newly published repositories go to `gt`'s default server (`gt config set default_host https://your-server`). With several `gt` accounts on one server, pick one with `gt auth switch <user> --host https://your-server`. If an SSH remote uses a different host name than the server's web address, run `gt config set ssh_host <ssh-host> --host https://your-server`.
 
 ## Start, clone, or publish a project
 
@@ -441,9 +446,10 @@ The Pull requests page displays stack layer positions and navigation:
 
 ## Issues
 
-Open **Issues** from the sidebar utility row or **Open issues** in the command palette to browse, filter, search, save views, comment, edit, and transition issues across GitHub, GitLab, Azure DevOps, Forgejo, and Linear.
+Open **Issues** from the sidebar utility row or **Open issues** in the command palette to browse, filter, search, save views, comment, edit, and transition issues across GitHub, GitLab, Azure DevOps, Forgejo, Linear, and Jira Cloud.
 
 - **Linear**: Connect an API key in **Settings → Source control & issues** and bind one or more teams per project (supports multiple Linear accounts). Agents file new issues in the first bound team unless another is named.
+- **Jira Cloud**: Connect your site (`yourteam.atlassian.net`), account email, and an [API token](https://id.atlassian.com/manage-profile/security/api-tokens) in **Settings → Source control & issues**, then bind Jira projects (supports multiple Jira sites and accounts). Issues move along their workflow's transitions; reactions and linked pull requests are not available, and new issues are filed as a Task.
 - **Link to threads**: Click **Link to this thread** on an issue beside a thread (or let agents call `link_issue`) to track it in **Linked items**.
 - Remote issue writes require the `source-control:write` scope.
 

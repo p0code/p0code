@@ -12,9 +12,9 @@ your project, and enable Antigravity. Install its runtime there, then choose
 account access and load models before starting a thread. Once the runtime is installed,
 you can also sign in from **Settings > Providers** in the mobile app.
 
-- **Remote sign-in**: Paste the temporary code (or full URL) from Google's completion page into T3 Code's code field.
+- **Remote sign-in**: Paste the temporary code (or full URL) from Google's completion page into p0code's code field.
 - **Manual binary**: Install [Antigravity CLI](https://antigravity.google/docs/getting-started) and set **Binary path** to `agy`. Leave blank to use the managed runtime (or `PATH`).
-- **Updates**: Click **Update Antigravity** in provider settings. T3 Code requires Antigravity **1.5+** (1.5.12+ recommended); running threads finish on their original runtime.
+- **Updates**: Click **Update Antigravity** in provider settings. p0code requires Antigravity **1.5.1+** (1.5.12+ recommended); running threads finish on their original runtime.
 
 ### Sign-in methods
 
@@ -60,7 +60,7 @@ is available. T3 checks Google's CLI release channel while provider update check
 are enabled. Installing or reinstalling also checks that channel. Updates keep
 your profile and existing runtime available if the new release fails validation.
 
-T3 needs Antigravity 1.5 or newer and recommends 1.5.12 or newer. Sessions do not
+T3 needs Antigravity 1.5.1 or newer and recommends 1.5.12 or newer. Sessions do not
 start on an older runtime: update the managed runtime here, or update the executable
 a custom binary path or `PATH` points at. You may need to sign in again after
 updating from a runtime older than 1.5. Threads already running finish with their

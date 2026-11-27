@@ -273,6 +273,7 @@ export const resolveServerConfig = Effect.fn("config.resolveServerConfig")(funct
     readonly startupPresentation?: ServerConfig.StartupPresentation;
     readonly forceAutoBootstrapProjectFromCwd?: boolean;
     readonly rejectRunningServer?: boolean;
+    readonly prepareDirectories?: boolean;
     readonly selectAutomaticPort?: (
       preferred: number,
       host: string | undefined,
@@ -359,26 +360,28 @@ export const resolveServerConfig = Effect.fn("config.resolveServerConfig")(funct
       });
     }
   }
-  yield* fs.makeDirectory(cwd, { recursive: true });
-  if (
-    mode === "web" &&
-    devUrl === undefined &&
-    Option.isNone(explicitBaseDir) &&
-    bootstrap?.t3Home === undefined
-  ) {
-    const stockHome = path.join(yield* HostProcess.HomeDirectory, STOCK_T3_HOME_DIRECTORY_NAME);
-    if (yield* Effect.promise(() => shouldOfferT3Import({ appHome: baseDir, stockHome }))) {
-      yield* Effect.logWarning(
-        `Found T3 Code data in ${stockHome}. p0code keeps its own data in ${baseDir} and has not imported anything. To bring threads, settings and providers over, stop this server and run \`p0 migrate from-t3 --force\` (the new, empty ${baseDir} is moved aside, not deleted).`,
-      );
+  const serverTracePath = env.traceFile ?? derivedPaths.serverTracePath;
+  if (options?.prepareDirectories !== false) {
+    yield* fs.makeDirectory(cwd, { recursive: true });
+    if (
+      mode === "web" &&
+      devUrl === undefined &&
+      Option.isNone(explicitBaseDir) &&
+      bootstrap?.t3Home === undefined
+    ) {
+      const stockHome = path.join(yield* HostProcess.HomeDirectory, STOCK_T3_HOME_DIRECTORY_NAME);
+      if (yield* Effect.promise(() => shouldOfferT3Import({ appHome: baseDir, stockHome }))) {
+        yield* Effect.logWarning(
+          `Found T3 Code data in ${stockHome}. p0code keeps its own data in ${baseDir} and has not imported anything. To bring threads, settings and providers over, stop this server and run \`p0 migrate from-t3 --force\` (the new, empty ${baseDir} is moved aside, not deleted).`,
+        );
+      }
     }
+    yield* ServerConfig.ensureServerDirectories(derivedPaths);
+    yield* fs.makeDirectory(path.dirname(serverTracePath), { recursive: true });
   }
-  yield* ServerConfig.ensureServerDirectories(derivedPaths);
   const persistedObservabilitySettings = yield* loadPersistedObservabilitySettings(
     derivedPaths.settingsPath,
   );
-  const serverTracePath = env.traceFile ?? derivedPaths.serverTracePath;
-  yield* fs.makeDirectory(path.dirname(serverTracePath), { recursive: true });
   const startupPresentation = options?.startupPresentation ?? "browser";
   const isHeadlessStartup = startupPresentation === "headless";
   const noBrowser = Option.getOrElse(
@@ -563,7 +566,7 @@ export const resolveServerConfig = Effect.fn("config.resolveServerConfig")(funct
 export const resolveCliAuthConfig = (
   flags: CliAuthLocationFlags,
   cliLogLevel: Option.Option<LogLevel.LogLevel>,
-  options?: { readonly quietLogs?: boolean },
+  options?: { readonly quietLogs?: boolean; readonly prepareDirectories?: boolean },
 ) => {
   const resolved = resolveServerConfig(
     {
@@ -582,6 +585,7 @@ export const resolveCliAuthConfig = (
       lan: Option.none(),
     },
     cliLogLevel,
+    options,
   );
   // Logs go to stdout, where --json and --token-only print, and resolving can
   // log, for example when it sweeps abandoned attachment uploads.

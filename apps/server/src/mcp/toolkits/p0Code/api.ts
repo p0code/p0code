@@ -114,8 +114,13 @@ export const declarationsFor = <R>(
       ...namespace.methods.flatMap((entry) => [entry.name, entry.doc]),
     ]
       .join(" ")
-      .toLowerCase();
-    return terms.some((term) => words.includes(term) || words.includes(term.replace(/s$/, "")));
+      .toLowerCase()
+      .split(/[^a-z0-9_]+/u);
+    // Whole-word prefixes of 3+ letters, so "me" in "remind me tomorrow" matches nothing.
+    return terms.some((term) => {
+      const stem = term.replace(/s$/, "");
+      return stem.length >= 3 && words.some((word) => word.startsWith(stem));
+    });
   });
   return matching.length === 0 ? undefined : matching.map(declareNamespace).join("\n\n");
 };

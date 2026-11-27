@@ -42,6 +42,7 @@
     "@ff-labs/fff-node": "0.11.0",
     "@muse-code/sdk": "1.4.6",
     "@napi-rs/keyring": "^2.1.2",
+    "@t3tools/issue-tracker-jira": "workspace:*",
     "@t3tools/issue-tracker-linear": "workspace:*",
     "@t3tools/plugin-api": "workspace:*",
     "@t3tools/plugin-backup": "workspace:*",
