@@ -120,3 +120,28 @@ rustup target add x86_64-pc-windows-msvc   # or aarch64-pc-windows-msvc
 ```
 
 WSL support also requires passing the Linux CLI archive via `--wsl-runtime`; see [release runbook](./03_release.md#windows-payload-topology-and-update-validation). For signing and macOS passkeys, see [release](./03_release.md) and [Relay setup](./02_relay-setup.md#desktop-passkeys).
+
+## Native GPUI client (`native/`)
+
+The Rust workspace under `native/` (`p0-protocol`, `p0-i18n`, `p0-client`, `apps/p0-gpui`) pins its toolchain in `native/rust-toolchain.toml` (`1.100.0`, required by `gpui-pre 0.3.14`) and caps Cargo concurrency in `native/.cargo/config.toml` (`jobs = 3`, `clang` + `mold` on Linux) to keep peak RAM under ~6.5 GiB.
+
+### Linux GPUI build prerequisites
+
+```sh
+# Debian 13 / Ubuntu 24.04
+sudo apt-get install build-essential clang mold pkg-config cmake \
+  libfontconfig1-dev libfreetype6-dev \
+  libwayland-dev libxkbcommon-dev libxkbcommon-x11-dev \
+  libx11-xcb-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+  libxcursor-dev libxi-dev libasound2-dev libvulkan1 mesa-vulkan-drivers
+```
+
+Run tests and clippy from `native/`:
+
+```sh
+cd native
+cargo test --workspace
+cargo clippy --workspace -- -D warnings
+# Headless connectivity smoke test against p0d (never point at ~/.p0code/userdata):
+cargo run -p p0-gpui -- --home /tmp/p0-gpui-smoke --smoke
+```

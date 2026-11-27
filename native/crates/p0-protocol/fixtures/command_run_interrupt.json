@@ -1,0 +1,7 @@
+{
+  "type": "run.interrupt",
+  "commandId": "cmd-3",
+  "threadId": "thread-1",
+  "runId": "run-1",
+  "reason": "user_stop"
+}

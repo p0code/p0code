@@ -1,0 +1,26 @@
+{
+  "id": "evt-1",
+  "threadId": "thread-1",
+  "occurredAt": "2026-11-27T12:00:00.000Z",
+  "type": "turn-item.updated",
+  "payload": {
+    "id": "item-2",
+    "threadId": "thread-1",
+    "runId": "run-1",
+    "nodeId": "node-2",
+    "providerThreadId": null,
+    "providerTurnId": null,
+    "nativeItemRef": null,
+    "parentItemId": null,
+    "ordinal": 1,
+    "status": "completed",
+    "title": null,
+    "startedAt": "2026-11-27T12:00:00.000Z",
+    "completedAt": "2026-11-27T12:00:00.000Z",
+    "updatedAt": "2026-11-27T12:00:00.000Z",
+    "type": "assistant_message",
+    "messageId": "msg-2",
+    "text": "Hello from **Replay**!\n\n```rust\nfn main() {}\n```",
+    "streaming": false
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "type": "message.dispatch",
+  "createdBy": "user",
+  "creationSource": "web",
+  "commandId": "cmd-1",
+  "threadId": "thread-1",
+  "messageId": "msg-3",
+  "text": "Ship it",
+  "attachments": [],
+  "modelSelection": {
+    "instanceId": "replay",
+    "model": "replay-default"
+  },
+  "dispatchMode": {
+    "type": "start_immediately"
+  }
+}
