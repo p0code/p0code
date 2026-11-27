@@ -435,6 +435,19 @@ const parseUrlOrNull = (value: string | null): URL | null => {
   }
 };
 
+// Matches p0d's splitCommand: whitespace splits unquoted tokens, and inside double quotes
+// only `\"` and `\\` are escapes so Windows and spaced macOS paths round-trip cleanly.
+function quoteLegacyServerCommandArg(arg: string): string {
+  if (arg.length > 0 && !/[\s"']/.test(arg)) {
+    return arg;
+  }
+  return `"${arg.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
+}
+
+export function formatLegacyServerCommand(executablePath: string, entryPath: string): string {
+  return `${quoteLegacyServerCommandArg(executablePath)} ${quoteLegacyServerCommandArg(entryPath)}`;
+}
+
 export interface MakeP0dServiceDriverInput {
   readonly binaryPath: string;
   readonly stateDir: string;
@@ -1094,7 +1107,10 @@ export const make = Effect.gen(function* () {
       .pipe(Effect.orElseSucceed(() => false));
     if (Option.isSome(p0dBinary)) {
       const legacyServerCommand = legacyEntryExists
-        ? `${process.execPath} ${environment.backendEntryPath}`
+        ? formatLegacyServerCommand(
+            resolveHeadlessNodeExecutable({ platform: environment.platform }),
+            environment.backendEntryPath,
+          )
         : null;
       return makeP0dServiceDriver({
         binaryPath: p0dBinary.value,

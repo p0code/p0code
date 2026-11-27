@@ -431,6 +431,27 @@ describe("makeP0dServiceDriver", () => {
       assert.equal(afterStop.running, false);
     }),
   );
+
+  it("quotes legacy server command arguments containing spaces, quotes, or backslashes", () => {
+    assert.equal(
+      DesktopBackendService.formatLegacyServerCommand("/electron", "/server/bin.mjs"),
+      "/electron /server/bin.mjs",
+    );
+    assert.equal(
+      DesktopBackendService.formatLegacyServerCommand(
+        "/Applications/p0code (Nightly).app/Contents/Frameworks/p0code (Nightly) Helper.app/Contents/MacOS/p0code (Nightly) Helper",
+        "/Applications/p0code (Nightly).app/Contents/Resources/app.asar/apps/server/dist/bin.mjs",
+      ),
+      '"/Applications/p0code (Nightly).app/Contents/Frameworks/p0code (Nightly) Helper.app/Contents/MacOS/p0code (Nightly) Helper" "/Applications/p0code (Nightly).app/Contents/Resources/app.asar/apps/server/dist/bin.mjs"',
+    );
+    assert.equal(
+      DesktopBackendService.formatLegacyServerCommand(
+        "C:\\Program Files\\p0code\\p0code.exe",
+        'C:\\Users\\O\'Neil\\my "app"\\bin.mjs',
+      ),
+      '"C:\\\\Program Files\\\\p0code\\\\p0code.exe" "C:\\\\Users\\\\O\'Neil\\\\my \\"app\\"\\\\bin.mjs"',
+    );
+  });
 });
 
 const SERVICE_SECRETS: DesktopBackendService.LocalServiceSecrets = {
