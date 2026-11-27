@@ -32,6 +32,7 @@ export default Effect.gen(function* () {
     WHERE subject IN (
       'desktop-bootstrap', 'administrative-bootstrap', 'reusable-dev-token', 'reusable-dev-token-child'
     )
+      AND revoked_at IS NULL
       AND CASE WHEN json_valid(scopes) THEN
         json(scopes) = ${legacyOwnerGrant}
         OR (subject = 'desktop-bootstrap' AND json(scopes) = ${legacyStandardGrant})
@@ -41,6 +42,8 @@ export default Effect.gen(function* () {
     UPDATE auth_pairing_links
     SET scopes = json_insert(scopes, '$[#]', 'plugins:manage')
     WHERE subject IN ('desktop-bootstrap', 'administrative-bootstrap')
+      AND revoked_at IS NULL
+      AND consumed_at IS NULL
       AND CASE WHEN json_valid(scopes) THEN
         json(scopes) = ${legacyOwnerGrant}
       ELSE 0 END

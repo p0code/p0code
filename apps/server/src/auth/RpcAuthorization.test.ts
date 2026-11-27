@@ -1140,6 +1140,16 @@ it.effect(
     }),
 );
 
+it("requires plugins:manage for backup restore RPCs", () => {
+  for (const method of [
+    WS_METHODS.dataRestorePending,
+    WS_METHODS.dataRestoreApprove,
+    WS_METHODS.dataRestoreCancel,
+  ]) {
+    expect(RpcAuthorization.requiredScopesForRpcCall(method, {})).toEqual([AuthPluginsManageScope]);
+  }
+});
+
 it("requires relay configuration and access scopes consistently on WS RPC", () => {
   for (const method of [WS_METHODS.serverRelayLink, WS_METHODS.serverRelayUnlink])
     expect(RpcAuthorization.requiredScopesForRpcCall(method, {})).toEqual([
