@@ -1,9 +1,12 @@
 mod app;
 mod bridge;
+mod cards;
 mod cli;
 mod composer;
 mod feed;
 mod markdown;
+mod palette;
+mod settings;
 mod theme;
 
 use clap::Parser as _;

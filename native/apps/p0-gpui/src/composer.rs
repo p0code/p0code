@@ -71,18 +71,22 @@ pub fn render_composer(
     cx: &mut Context<P0App>,
 ) -> impl IntoElement {
     let thread_id = app.selected_thread_id();
-    let tstate = app.bridge().thread_state();
-    let shell = app.bridge().shell_state();
+    let tstate = &app.thread;
+    let shell = &app.shell;
     let cfg = app.bridge().server_config();
     let choices = available_models(cfg.as_ref());
 
     let current_model = app
         .selected_model()
         .cloned()
-        .or_else(|| tstate.projection.as_ref().map(|p| p.thread.model_selection.clone()))
         .or_else(|| {
-            thread_id
-                .and_then(|id| shell.thread_by_id(id).map(|t| t.model_selection.clone()))
+            tstate
+                .projection
+                .as_ref()
+                .map(|p| p.thread.model_selection.clone())
+        })
+        .or_else(|| {
+            thread_id.and_then(|id| shell.thread_by_id(id).map(|t| t.model_selection.clone()))
         })
         .or_else(|| choices.first().map(ModelChoice::to_selection));
 

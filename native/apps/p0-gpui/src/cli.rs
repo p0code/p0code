@@ -21,6 +21,11 @@ pub struct Cli {
     #[arg(long, env = "P0D_BIN", value_name = "PATH")]
     pub p0d_bin: Option<PathBuf>,
 
+    /// Command p0d runs for its Node sidecar (`--legacy-server`). Defaults to `node` with this
+    /// checkout's built `apps/server/dist/bin.mjs`, as the Electron dev app does.
+    #[arg(long, env = "P0D_LEGACY_SERVER", value_name = "CMD")]
+    pub legacy_server: Option<String>,
+
     /// Run headless connectivity smoke check: connect, fetch shell snapshot, print counts, exit.
     #[arg(long)]
     pub smoke: bool,

@@ -1,214 +1,275 @@
-//! Markdown parser (`pulldown-cmark`) and `(item_id, revision)` render cache.
+//! Markdown (`pulldown-cmark`) to blocks of styled runs, cached per turn item by content hash.
+//!
+//! A paragraph is one string plus style runs, so it lays out as one `StyledText` and wraps like
+//! text instead of like a row of boxes. The cache key is the item id and a hash of the source:
+//! streaming updates can keep `updatedAt`, so a timestamp key would serve stale text.
 
 use std::collections::HashMap;
+use std::hash::{Hash as _, Hasher as _};
+use std::ops::Range;
 use std::sync::Arc;
 
 use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct RunStyle {
+    pub strong: bool,
+    pub emphasis: bool,
+    pub strike: bool,
+    pub code: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum InlineSpan {
-    Text(String),
-    Strong(String),
-    Emphasis(String),
-    Code(String),
-    Link { label: String, url: String },
+pub struct Run {
+    pub range: Range<usize>,
+    pub style: RunStyle,
+    pub link: Option<String>,
+}
+
+/// Text of one block plus the runs that style parts of it (plain text has no run).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Inline {
+    pub text: String,
+    pub runs: Vec<Run>,
+}
+
+impl Inline {
+    fn push(&mut self, text: &str, style: RunStyle, link: Option<&str>) {
+        if text.is_empty() {
+            return;
+        }
+        let start = self.text.len();
+        self.text.push_str(text);
+        if style != RunStyle::default() || link.is_some() {
+            self.runs.push(Run {
+                range: start..self.text.len(),
+                style,
+                link: link.map(ToOwned::to_owned),
+            });
+        }
+    }
+
+    fn is_blank(&self) -> bool {
+        self.text.trim().is_empty()
+    }
+
+    #[cfg(test)]
+    pub fn link_at(&self, ix: usize) -> Option<&str> {
+        self.runs
+            .iter()
+            .find(|r| r.range.contains(&ix))
+            .and_then(|r| r.link.as_deref())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ListMarker {
+    Bullet,
+    Number(u64),
+    /// A later paragraph of the same item: indented, no marker.
+    Continuation,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MdBlock {
     Heading {
         level: u8,
-        spans: Vec<InlineSpan>,
+        inline: Inline,
     },
-    Paragraph(Vec<InlineSpan>),
+    Paragraph(Inline),
     ListItem {
-        ordered_index: Option<u64>,
-        spans: Vec<InlineSpan>,
+        depth: usize,
+        marker: ListMarker,
+        inline: Inline,
     },
-    BlockQuote(Vec<InlineSpan>),
-    CodeBlock {
+    Quote(Inline),
+    Code {
         language: Option<String>,
         code: String,
     },
-    ThematicBreak,
+    Rule,
+}
+
+struct ItemFrame {
+    marker: ListMarker,
+    emitted: bool,
+}
+
+#[derive(Default)]
+struct Builder {
+    blocks: Vec<MdBlock>,
+    inline: Inline,
+    style: (u32, u32, u32),
+    links: Vec<String>,
+    lists: Vec<Option<u64>>,
+    items: Vec<ItemFrame>,
+    quote_depth: u32,
+    heading: Option<u8>,
+    code: Option<(Option<String>, String)>,
+}
+
+impl Builder {
+    fn run_style(&self) -> RunStyle {
+        RunStyle {
+            strong: self.style.0 > 0,
+            emphasis: self.style.1 > 0,
+            strike: self.style.2 > 0,
+            code: false,
+        }
+    }
+
+    fn text(&mut self, text: &str) {
+        if let Some((_, code)) = self.code.as_mut() {
+            code.push_str(text);
+            return;
+        }
+        let style = self.run_style();
+        let link = self.links.last().cloned();
+        self.inline.push(text, style, link.as_deref());
+    }
+
+    fn inline_code(&mut self, text: &str) {
+        let style = RunStyle {
+            code: true,
+            ..self.run_style()
+        };
+        let link = self.links.last().cloned();
+        self.inline.push(text, style, link.as_deref());
+    }
+
+    fn flush(&mut self) {
+        if self.inline.is_blank() {
+            self.inline = Inline::default();
+            return;
+        }
+        let inline = std::mem::take(&mut self.inline);
+        let block = if let Some(level) = self.heading {
+            MdBlock::Heading { level, inline }
+        } else if let Some(item) = self.items.last_mut() {
+            let marker = if item.emitted {
+                ListMarker::Continuation
+            } else {
+                item.marker
+            };
+            item.emitted = true;
+            MdBlock::ListItem {
+                depth: self.items.len() - 1,
+                marker,
+                inline,
+            }
+        } else if self.quote_depth > 0 {
+            MdBlock::Quote(inline)
+        } else {
+            MdBlock::Paragraph(inline)
+        };
+        self.blocks.push(block);
+    }
 }
 
 pub fn parse_markdown(input: &str) -> Vec<MdBlock> {
     let mut opts = Options::empty();
     opts.insert(Options::ENABLE_STRIKETHROUGH);
     opts.insert(Options::ENABLE_TASKLISTS);
+    opts.insert(Options::ENABLE_TABLES);
 
-    let parser = Parser::new_ext(input, opts);
-    let mut blocks = Vec::new();
-    let mut current_spans: Vec<InlineSpan> = Vec::new();
-    let mut in_heading: Option<u8> = None;
-    let mut in_blockquote = false;
-    let mut list_stack: Vec<Option<u64>> = Vec::new();
-    let mut in_list_item: Option<Option<u64>> = None;
-    let mut in_code_block: Option<(Option<String>, String)> = None;
-    let mut in_strong = false;
-    let mut in_emphasis = false;
-    let mut in_link: Option<(String, String)> = None;
-
-    let flush_inline = |blocks: &mut Vec<MdBlock>,
-                        spans: &mut Vec<InlineSpan>,
-                        in_heading: Option<u8>,
-                        in_list_item: Option<Option<u64>>,
-                        in_blockquote: bool| {
-        if spans.is_empty() {
-            return;
-        }
-        let taken = std::mem::take(spans);
-        if let Some(level) = in_heading {
-            blocks.push(MdBlock::Heading { level, spans: taken });
-        } else if let Some(ord) = in_list_item {
-            blocks.push(MdBlock::ListItem {
-                ordered_index: ord,
-                spans: taken,
-            });
-        } else if in_blockquote {
-            blocks.push(MdBlock::BlockQuote(taken));
-        } else {
-            blocks.push(MdBlock::Paragraph(taken));
-        }
-    };
-
-    for event in parser {
+    let mut b = Builder::default();
+    for event in Parser::new_ext(input, opts) {
         match event {
             Event::Start(Tag::Heading { level, .. }) => {
-                flush_inline(&mut blocks, &mut current_spans, None, in_list_item, in_blockquote);
-                in_heading = Some(heading_level_num(level));
+                b.flush();
+                b.heading = Some(heading_level_num(level));
             }
             Event::End(TagEnd::Heading(_)) => {
-                flush_inline(
-                    &mut blocks,
-                    &mut current_spans,
-                    in_heading.take(),
-                    None,
-                    false,
-                );
+                b.flush();
+                b.heading = None;
             }
-            Event::Start(Tag::Paragraph) => {}
-            Event::End(TagEnd::Paragraph) => {
-                flush_inline(
-                    &mut blocks,
-                    &mut current_spans,
-                    in_heading,
-                    in_list_item,
-                    in_blockquote,
-                );
-            }
+            Event::End(TagEnd::Paragraph) => b.flush(),
             Event::Start(Tag::BlockQuote(_)) => {
-                in_blockquote = true;
+                b.flush();
+                b.quote_depth += 1;
             }
             Event::End(TagEnd::BlockQuote(_)) => {
-                flush_inline(&mut blocks, &mut current_spans, None, None, true);
-                in_blockquote = false;
+                b.flush();
+                b.quote_depth = b.quote_depth.saturating_sub(1);
             }
             Event::Start(Tag::List(start)) => {
-                list_stack.push(start);
+                // Text of a tight outer item ends where its nested list starts.
+                b.flush();
+                b.lists.push(start);
             }
             Event::End(TagEnd::List(_)) => {
-                list_stack.pop();
+                b.flush();
+                b.lists.pop();
             }
             Event::Start(Tag::Item) => {
-                let ord = list_stack.last_mut().and_then(|slot| {
-                    let current = *slot;
-                    if let Some(n) = slot.as_mut() {
+                b.flush();
+                let marker = match b.lists.last_mut() {
+                    Some(Some(n)) => {
+                        let current = *n;
                         *n += 1;
+                        ListMarker::Number(current)
                     }
-                    current
+                    _ => ListMarker::Bullet,
+                };
+                b.items.push(ItemFrame {
+                    marker,
+                    emitted: false,
                 });
-                in_list_item = Some(ord);
             }
             Event::End(TagEnd::Item) => {
-                flush_inline(
-                    &mut blocks,
-                    &mut current_spans,
-                    None,
-                    in_list_item.take(),
-                    false,
-                );
+                b.flush();
+                b.items.pop();
             }
             Event::Start(Tag::CodeBlock(kind)) => {
-                flush_inline(&mut blocks, &mut current_spans, None, in_list_item, in_blockquote);
+                b.flush();
                 let lang = match kind {
                     CodeBlockKind::Fenced(l) => {
-                        let trimmed = l.trim();
-                        (!trimmed.is_empty()).then(|| trimmed.to_owned())
+                        let first = l.split_whitespace().next().unwrap_or("");
+                        (!first.is_empty()).then(|| first.to_owned())
                     }
                     CodeBlockKind::Indented => None,
                 };
-                in_code_block = Some((lang, String::new()));
+                b.code = Some((lang, String::new()));
             }
             Event::End(TagEnd::CodeBlock) => {
-                if let Some((language, code)) = in_code_block.take() {
-                    blocks.push(MdBlock::CodeBlock {
+                if let Some((language, code)) = b.code.take() {
+                    b.blocks.push(MdBlock::Code {
                         language,
                         code: code.trim_end_matches('\n').to_owned(),
                     });
                 }
             }
-            Event::Start(Tag::Strong) => in_strong = true,
-            Event::End(TagEnd::Strong) => in_strong = false,
-            Event::Start(Tag::Emphasis) => in_emphasis = true,
-            Event::End(TagEnd::Emphasis) => in_emphasis = false,
-            Event::Start(Tag::Link { dest_url, .. }) => {
-                in_link = Some((dest_url.into_string(), String::new()));
-            }
+            Event::Start(Tag::Strong) => b.style.0 += 1,
+            Event::End(TagEnd::Strong) => b.style.0 = b.style.0.saturating_sub(1),
+            Event::Start(Tag::Emphasis) => b.style.1 += 1,
+            Event::End(TagEnd::Emphasis) => b.style.1 = b.style.1.saturating_sub(1),
+            Event::Start(Tag::Strikethrough) => b.style.2 += 1,
+            Event::End(TagEnd::Strikethrough) => b.style.2 = b.style.2.saturating_sub(1),
+            Event::Start(Tag::Link { dest_url, .. }) => b.links.push(dest_url.into_string()),
             Event::End(TagEnd::Link) => {
-                if let Some((url, label)) = in_link.take() {
-                    let label = if label.is_empty() { url.clone() } else { label };
-                    current_spans.push(InlineSpan::Link { label, url });
-                }
+                b.links.pop();
             }
-            Event::Text(text) => {
-                if let Some((_, code)) = in_code_block.as_mut() {
-                    code.push_str(&text);
-                } else if let Some((_, label)) = in_link.as_mut() {
-                    label.push_str(&text);
-                } else if in_strong {
-                    current_spans.push(InlineSpan::Strong(text.into_string()));
-                } else if in_emphasis {
-                    current_spans.push(InlineSpan::Emphasis(text.into_string()));
-                } else {
-                    current_spans.push(InlineSpan::Text(text.into_string()));
-                }
-            }
-            Event::Code(code) => {
-                if let Some((_, label)) = in_link.as_mut() {
-                    label.push_str(&code);
-                } else {
-                    current_spans.push(InlineSpan::Code(code.into_string()));
-                }
-            }
-            Event::SoftBreak | Event::HardBreak => {
-                if let Some((_, code)) = in_code_block.as_mut() {
-                    code.push('\n');
-                } else {
-                    current_spans.push(InlineSpan::Text(" ".to_owned()));
-                }
-            }
+            // Tables render as their rows' text; cells are separated so they stay readable.
+            Event::End(TagEnd::TableCell) => b.text("  "),
+            Event::End(TagEnd::TableRow | TagEnd::TableHead) => b.flush(),
+            Event::Text(text) | Event::Html(text) | Event::InlineHtml(text) => b.text(&text),
+            Event::Code(code) => b.inline_code(&code),
+            Event::SoftBreak => b.text(if b.code.is_some() { "\n" } else { " " }),
+            Event::HardBreak => b.text("\n"),
             Event::Rule => {
-                flush_inline(&mut blocks, &mut current_spans, None, in_list_item, in_blockquote);
-                blocks.push(MdBlock::ThematicBreak);
+                b.flush();
+                b.blocks.push(MdBlock::Rule);
             }
-            Event::TaskListMarker(checked) => {
-                current_spans.push(InlineSpan::Text(if checked { "[x] " } else { "[ ] " }.to_owned()));
-            }
+            Event::TaskListMarker(checked) => b.text(if checked { "☑ " } else { "☐ " }),
             _ => {}
         }
     }
-
-    flush_inline(
-        &mut blocks,
-        &mut current_spans,
-        in_heading,
-        in_list_item,
-        in_blockquote,
-    );
-
-    blocks
+    if let Some((language, code)) = b.code.take() {
+        // An unterminated fence while the message is still streaming.
+        b.blocks.push(MdBlock::Code { language, code });
+    }
+    b.flush();
+    b.blocks
 }
 
 fn heading_level_num(level: HeadingLevel) -> u8 {
@@ -222,81 +283,39 @@ fn heading_level_num(level: HeadingLevel) -> u8 {
     }
 }
 
-/// Estimates vertical pixel height of parsed Markdown blocks for `v_virtual_list`.
-pub fn estimate_markdown_height(blocks: &[MdBlock], chars_per_line: usize) -> f32 {
-    let cols = chars_per_line.max(32);
-    let mut total = 0.0f32;
-    for block in blocks {
-        total += match block {
-            MdBlock::Heading { level, spans } => {
-                let chars = spans_char_len(spans);
-                let lines = (chars / cols.saturating_sub(8).max(20)) + 1;
-                let line_h = if *level <= 2 { 26.0 } else { 22.0 };
-                (lines as f32) * line_h + 10.0
-            }
-            MdBlock::Paragraph(spans) | MdBlock::BlockQuote(spans) => {
-                let chars = spans_char_len(spans);
-                let lines = (chars / cols) + 1;
-                (lines as f32) * 20.0 + 8.0
-            }
-            MdBlock::ListItem { spans, .. } => {
-                let chars = spans_char_len(spans) + 4;
-                let lines = (chars / cols) + 1;
-                (lines as f32) * 20.0 + 4.0
-            }
-            MdBlock::CodeBlock { code, .. } => {
-                let line_count = code.lines().count().max(1);
-                (line_count as f32) * 18.0 + 36.0
-            }
-            MdBlock::ThematicBreak => 16.0,
-        };
-    }
-    total.max(24.0)
+fn content_hash(source: &str) -> u64 {
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    source.hash(&mut h);
+    h.finish()
 }
 
-fn spans_char_len(spans: &[InlineSpan]) -> usize {
-    spans
-        .iter()
-        .map(|s| match s {
-            InlineSpan::Text(t)
-            | InlineSpan::Strong(t)
-            | InlineSpan::Emphasis(t)
-            | InlineSpan::Code(t) => t.chars().count(),
-            InlineSpan::Link { label, .. } => label.chars().count(),
-        })
-        .sum()
-}
-
-/// Caches parsed Markdown AST per `(item_id, revision)` to avoid re-parsing on scroll or
-/// unrelated streaming ticks.
+/// Parsed blocks per turn item. One entry per item: a changed source replaces it, so the cache
+/// holds at most the open thread's items.
 #[derive(Debug, Default)]
 pub struct MarkdownCache {
-    entries: HashMap<(String, String), Arc<Vec<MdBlock>>>,
+    entries: HashMap<String, (u64, Arc<Vec<MdBlock>>)>,
 }
 
 impl MarkdownCache {
-    const MAX_ENTRIES: usize = 512;
-
     pub fn new() -> Self {
         Self::default()
     }
 
-    pub fn get_or_parse(
-        &mut self,
-        item_id: &str,
-        revision: &str,
-        source: &str,
-    ) -> Arc<Vec<MdBlock>> {
-        let key = (item_id.to_owned(), revision.to_owned());
-        if let Some(existing) = self.entries.get(&key) {
-            return existing.clone();
-        }
-        if self.entries.len() >= Self::MAX_ENTRIES {
-            self.entries.clear();
+    pub fn get_or_parse(&mut self, item_id: &str, source: &str) -> Arc<Vec<MdBlock>> {
+        let hash = content_hash(source);
+        if let Some((cached, blocks)) = self.entries.get(item_id)
+            && *cached == hash
+        {
+            return blocks.clone();
         }
         let parsed = Arc::new(parse_markdown(source));
-        self.entries.insert(key, parsed.clone());
+        self.entries
+            .insert(item_id.to_owned(), (hash, parsed.clone()));
         parsed
+    }
+
+    pub fn clear(&mut self) {
+        self.entries.clear();
     }
 }
 
@@ -304,38 +323,106 @@ impl MarkdownCache {
 mod tests {
     use super::*;
 
-    #[test]
-    fn parses_headings_lists_emphasis_code_links() {
-        let md = "# Title\n\nHello **bold** *italic* `code` [docs](https://example.com).\n\n- one\n- two\n\n```rust\nfn main() {}\n```\n";
-        let blocks = parse_markdown(md);
-        assert!(matches!(blocks[0], MdBlock::Heading { level: 1, .. }));
-        assert!(matches!(blocks[1], MdBlock::Paragraph(_)));
-        if let MdBlock::Paragraph(spans) = &blocks[1] {
-            assert!(spans.iter().any(|s| matches!(s, InlineSpan::Strong(t) if t == "bold")));
-            assert!(spans.iter().any(|s| matches!(s, InlineSpan::Emphasis(t) if t == "italic")));
-            assert!(spans.iter().any(|s| matches!(s, InlineSpan::Code(t) if t == "code")));
-            assert!(spans.iter().any(|s| matches!(s, InlineSpan::Link { label, url } if label == "docs" && url == "https://example.com")));
+    fn inline_text(block: &MdBlock) -> &str {
+        match block {
+            MdBlock::Heading { inline, .. }
+            | MdBlock::Paragraph(inline)
+            | MdBlock::ListItem { inline, .. }
+            | MdBlock::Quote(inline) => &inline.text,
+            MdBlock::Code { code, .. } => code,
+            MdBlock::Rule => "",
         }
-        assert!(matches!(blocks[2], MdBlock::ListItem { ordered_index: None, .. }));
-        assert!(matches!(blocks[3], MdBlock::ListItem { ordered_index: None, .. }));
+    }
+
+    #[test]
+    fn paragraph_is_one_string_with_style_runs() {
+        let blocks = parse_markdown("Hello **bold *both*** and `code` [docs](https://x.dev).");
+        let [MdBlock::Paragraph(p)] = blocks.as_slice() else {
+            panic!("{blocks:?}");
+        };
+        assert_eq!(p.text, "Hello bold both and code docs.");
+        let both = p
+            .runs
+            .iter()
+            .find(|r| &p.text[r.range.clone()] == "both")
+            .unwrap();
+        assert!(both.style.strong && both.style.emphasis);
+        let code = p.runs.iter().find(|r| r.style.code).unwrap();
+        assert_eq!(&p.text[code.range.clone()], "code");
+        let docs_at = p.text.find("docs").unwrap();
+        assert_eq!(p.link_at(docs_at), Some("https://x.dev"));
+        assert_eq!(p.link_at(0), None);
+    }
+
+    #[test]
+    fn nested_tight_lists_keep_their_own_items() {
+        let blocks = parse_markdown("- a\n  - b\n  - c\n- d\n\n1. one\n2. two\n");
+        let items: Vec<_> = blocks
+            .iter()
+            .map(|b| match b {
+                MdBlock::ListItem {
+                    depth,
+                    marker,
+                    inline,
+                } => (*depth, *marker, inline.text.as_str()),
+                other => panic!("{other:?}"),
+            })
+            .collect();
+        assert_eq!(
+            items,
+            [
+                (0, ListMarker::Bullet, "a"),
+                (1, ListMarker::Bullet, "b"),
+                (1, ListMarker::Bullet, "c"),
+                (0, ListMarker::Bullet, "d"),
+                (0, ListMarker::Number(1), "one"),
+                (0, ListMarker::Number(2), "two"),
+            ]
+        );
+    }
+
+    #[test]
+    fn loose_item_paragraphs_continue_the_item() {
+        let blocks = parse_markdown("- first\n\n  second\n");
         assert!(matches!(
-            &blocks[4],
-            MdBlock::CodeBlock { language: Some(l), code } if l == "rust" && code == "fn main() {}"
+            &blocks[..],
+            [
+                MdBlock::ListItem {
+                    marker: ListMarker::Bullet,
+                    ..
+                },
+                MdBlock::ListItem {
+                    marker: ListMarker::Continuation,
+                    ..
+                }
+            ]
         ));
     }
 
     #[test]
-    fn cache_reuses_same_revision_and_invalidates_on_new_revision() {
-        let mut cache = MarkdownCache::new();
-        let a = cache.get_or_parse("item-1", "rev-1", "Hello");
-        let b = cache.get_or_parse("item-1", "rev-1", "Different text ignored on cache hit");
-        assert!(Arc::ptr_eq(&a, &b));
-
-        let c = cache.get_or_parse("item-1", "rev-2", "Updated");
-        assert!(!Arc::ptr_eq(&a, &c));
-        assert_eq!(
-            *c,
-            vec![MdBlock::Paragraph(vec![InlineSpan::Text("Updated".to_owned())])]
+    fn headings_code_quotes_and_unterminated_fences() {
+        let blocks = parse_markdown(
+            "# Title\n\n> quoted\n\n```rust\nfn main() {}\n```\n\n---\n\n```py\nprint(1)",
         );
+        assert!(matches!(&blocks[0], MdBlock::Heading { level: 1, .. }));
+        assert!(matches!(&blocks[1], MdBlock::Quote(_)));
+        assert!(
+            matches!(&blocks[2], MdBlock::Code { language: Some(l), code } if l == "rust" && code == "fn main() {}")
+        );
+        assert!(matches!(&blocks[3], MdBlock::Rule));
+        assert!(matches!(&blocks[4], MdBlock::Code { language: Some(l), .. } if l == "py"));
+        assert_eq!(inline_text(&blocks[4]), "print(1)");
+    }
+
+    #[test]
+    fn cache_follows_content_not_timestamps() {
+        let mut cache = MarkdownCache::new();
+        let a = cache.get_or_parse("item-1", "Hello");
+        let b = cache.get_or_parse("item-1", "Hello");
+        assert!(Arc::ptr_eq(&a, &b));
+        // A streaming delta with the same updatedAt still shows the new text.
+        let c = cache.get_or_parse("item-1", "Hello world");
+        assert_eq!(inline_text(&c[0]), "Hello world");
+        assert_eq!(cache.entries.len(), 1);
     }
 }

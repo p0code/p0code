@@ -1,21 +1,24 @@
-//! Tokio <-> GPUI bridge managing `P0dProcess`, `RpcClient`, `ShellStore`, `ThreadStore`,
-//! and reactive change notification counters (coalesced on the UI side at <=60 Hz).
+//! Tokio <-> GPUI bridge: owns the `p0d` handle, the RPC client and the stores. Every change
+//! wakes the UI through one `Notify`; the UI coalesces wakeups to one repaint per frame, so an
+//! idle window does no work at all.
 
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use p0_client::{
     AuthMode, ClientConfig, ClientError, ConnectionState, P0dLaunchConfig, P0dProcess, RpcClient,
-    ShellState, ShellStore, ThreadState, ThreadStore, read_valid_bootstrap_secret_file,
+    ShellState, ShellStore, ThreadState, ThreadStore, read_desktop_secret_file, run_durable_stream,
+    wait_until_connected,
 };
 use p0_protocol::{
-    ApprovalDecision, DispatchMode, ModelSelection, OrchestrationCommand, RuntimeMode,
-    SecretRequestAnswer, SecretRequestAnswerInput, ServerConfig, SubscribeShellInput,
-    SubscribeThreadInput,
+    ApprovalDecision, DispatchMode, LaunchInitialMessage, LaunchThreadInput, ModelSelection,
+    OrchestrationCommand, RPC_ORCHESTRATION_SUBSCRIBE_SHELL, RPC_ORCHESTRATION_SUBSCRIBE_THREAD,
+    RuntimeMode, SecretRequestAnswer, SecretRequestAnswerInput, ServerConfig, ShellStreamItem,
+    SubscribeShellInput, SubscribeThreadInput, ThreadStreamItem, WorkspaceStrategy,
 };
+use serde_json::Value;
 use tokio::runtime::Runtime;
-use tokio::sync::watch;
+use tokio::sync::Notify;
 use tokio::task::JoinHandle;
 use tracing::{info, warn};
 use uuid::Uuid;
@@ -25,13 +28,20 @@ use crate::cli::Cli;
 pub struct AppBridge {
     rt: Runtime,
     client: RpcClient,
-    shell_store: Arc<ShellStore>,
-    thread_store: Arc<ThreadStore>,
-    server_config: watch::Receiver<Option<ServerConfig>>,
-    last_error: Arc<Mutex<Option<String>>>,
-    version: Arc<AtomicU64>,
-    thread_sub_task: Mutex<Option<JoinHandle<()>>>,
-    _p0d: Mutex<Option<P0dProcess>>,
+    base_url: String,
+    shell: Arc<ShellStore>,
+    thread: Arc<ThreadStore>,
+    config: Arc<Mutex<Option<ServerConfig>>>,
+    settings: Arc<Mutex<Option<Value>>>,
+    notice: Arc<Mutex<Option<String>>>,
+    changed: Arc<Notify>,
+    thread_task: Mutex<Option<JoinHandle<()>>>,
+    p0d: Mutex<Option<P0dProcess>>,
+}
+
+/// Errors worth a banner: a dropped socket already shows in the connection chip.
+fn is_user_visible(err: &ClientError) -> bool {
+    !matches!(err, ClientError::Transport(_) | ClientError::Closed)
 }
 
 impl AppBridge {
@@ -40,107 +50,105 @@ impl AppBridge {
             .worker_threads(2)
             .enable_all()
             .build()?;
+        let (base_url, auth, p0d) = rt.block_on(resolve_connection(cli))?;
+        let client = rt.block_on(async { RpcClient::connect(ClientConfig::new(&base_url, auth)) });
 
-        let (base_url, auth, p0d_proc) = rt.block_on(resolve_connection(cli))?;
-        let client = RpcClient::connect(ClientConfig::new(base_url, auth));
-
-        let shell_store = Arc::new(ShellStore::new());
-        let thread_store = Arc::new(ThreadStore::new());
-        let (cfg_tx, cfg_rx) = watch::channel(None);
-        let last_error = Arc::new(Mutex::new(None));
-        let version = Arc::new(AtomicU64::new(1));
-
-        // Bump version whenever connection state changes and re-subscribe shell + config.
-        {
-            let client_c = client.clone();
-            let shell_c = shell_store.clone();
-            let version_c = version.clone();
-            let err_c = last_error.clone();
-            let mut conn_rx = client.subscribe_connection_state();
-            rt.spawn(async move {
-                let mut shell_task: Option<JoinHandle<()>> = None;
-                loop {
-                    let state = conn_rx.borrow().clone();
-                    version_c.fetch_add(1, Ordering::Release);
-                    if matches!(state, ConnectionState::Connected) {
-                        // Fetch server.getConfig
-                        let cfg_client = client_c.clone();
-                        let cfg_tx_c = cfg_tx.clone();
-                        let v_cfg = version_c.clone();
-                        tokio::spawn(async move {
-                            match cfg_client.get_config().await {
-                                Ok(cfg) => {
-                                    let _ = cfg_tx_c.send(Some(cfg));
-                                    v_cfg.fetch_add(1, Ordering::Release);
-                                }
-                                Err(err) => {
-                                    warn!(error = %err, "server.getConfig failed");
-                                }
-                            }
-                        });
-
-                        // Restart shell subscription from last known sequence
-                        if let Some(prev) = shell_task.take() {
-                            prev.abort();
-                        }
-                        let s_client = client_c.clone();
-                        let s_store = shell_c.clone();
-                        let s_ver = version_c.clone();
-                        let s_err = err_c.clone();
-                        shell_task = Some(tokio::spawn(async move {
-                            let seq = s_store.snapshot().last_sequence;
-                            let input = SubscribeShellInput {
-                                after_sequence: (seq > 0).then_some(seq),
-                                http_snapshot_fallback: None,
-                                request_completion_marker: Some(true),
-                            };
-                            match s_client.subscribe_shell(input).await {
-                                Ok(mut sub) => {
-                                    while let Some(item) = sub.recv().await {
-                                        match item {
-                                            Ok(ev) => {
-                                                s_store.apply(ev);
-                                                s_ver.fetch_add(1, Ordering::Release);
-                                            }
-                                            Err(err) => {
-                                                warn!(error = %err, "shell stream error");
-                                                *s_err.lock().unwrap() = Some(err.to_string());
-                                                s_ver.fetch_add(1, Ordering::Release);
-                                                break;
-                                            }
-                                        }
-                                    }
-                                }
-                                Err(err) => {
-                                    warn!(error = %err, "failed to subscribe shell");
-                                    *s_err.lock().unwrap() = Some(err.to_string());
-                                    s_ver.fetch_add(1, Ordering::Release);
-                                }
-                            }
-                        }));
-                    }
-                    if conn_rx.changed().await.is_err() {
-                        break;
-                    }
-                }
-            });
-        }
-
-        Ok(Arc::new(Self {
+        let bridge = Arc::new(Self {
             rt,
             client,
-            shell_store,
-            thread_store,
-            server_config: cfg_rx,
-            last_error,
-            version,
-            thread_sub_task: Mutex::new(None),
-            _p0d: Mutex::new(p0d_proc),
-        }))
+            base_url,
+            shell: Arc::new(ShellStore::new()),
+            thread: Arc::new(ThreadStore::new()),
+            config: Arc::new(Mutex::new(None)),
+            settings: Arc::new(Mutex::new(None)),
+            notice: Arc::new(Mutex::new(None)),
+            changed: Arc::new(Notify::new()),
+            thread_task: Mutex::new(None),
+            p0d: Mutex::new(p0d),
+        });
+        bridge.spawn_background();
+        Ok(bridge)
     }
 
-    pub fn version(&self) -> u64 {
-        self.version.load(Ordering::Acquire)
+    fn spawn_background(&self) {
+        // Connection state changes repaint the chip.
+        let mut state_rx = self.client.subscribe_connection_state();
+        let changed = self.changed.clone();
+        self.rt.spawn(async move {
+            while state_rx.changed().await.is_ok() {
+                changed.notify_one();
+            }
+        });
+
+        let shell = self.shell.clone();
+        let shell_apply = self.shell.clone();
+        let changed = self.changed.clone();
+        let notice = self.notice.clone();
+        self.rt.spawn(run_durable_stream(
+            self.client.clone(),
+            RPC_ORCHESTRATION_SUBSCRIBE_SHELL,
+            move || {
+                let state = shell.snapshot();
+                SubscribeShellInput {
+                    after_sequence: state.synchronized.then_some(state.last_sequence),
+                    ..SubscribeShellInput::default()
+                }
+            },
+            move |item: ShellStreamItem| {
+                shell_apply.apply(item);
+                changed.notify_one();
+            },
+            move |err| {
+                if is_user_visible(err) {
+                    *notice.lock().unwrap() = Some(err.to_string());
+                }
+            },
+        ));
+
+        // Config and settings are fetched on every (re)connect.
+        let client = self.client.clone();
+        let config = self.config.clone();
+        let settings = self.settings.clone();
+        let changed = self.changed.clone();
+        self.rt.spawn(async move {
+            let mut state_rx = client.subscribe_connection_state();
+            loop {
+                if !wait_until_connected(&client).await {
+                    return;
+                }
+                match client.get_config().await {
+                    Ok(cfg) => *config.lock().unwrap() = Some(cfg),
+                    Err(err) => warn!(error = %err, "server.getConfig failed"),
+                }
+                match client.get_settings().await {
+                    Ok(value) => *settings.lock().unwrap() = Some(value),
+                    Err(err) => warn!(error = %err, "server.getSettings failed"),
+                }
+                changed.notify_one();
+                // Wait for this connection to end before fetching again.
+                loop {
+                    if !matches!(*state_rx.borrow_and_update(), ConnectionState::Connected) {
+                        break;
+                    }
+                    if state_rx.changed().await.is_err() {
+                        return;
+                    }
+                }
+            }
+        });
+    }
+
+    /// Resolves after the next change; wakeups that happen while nobody waits are kept.
+    pub async fn changed(&self) {
+        self.changed.notified().await;
+    }
+
+    fn touch(&self) {
+        self.changed.notify_one();
+    }
+
+    pub fn base_url(&self) -> &str {
+        &self.base_url
     }
 
     pub fn connection_state(&self) -> ConnectionState {
@@ -148,76 +156,106 @@ impl AppBridge {
     }
 
     pub fn shell_state(&self) -> ShellState {
-        self.shell_store.snapshot()
+        self.shell.snapshot()
     }
 
     pub fn thread_state(&self) -> ThreadState {
-        self.thread_store.snapshot()
+        self.thread.snapshot()
     }
 
     pub fn server_config(&self) -> Option<ServerConfig> {
-        self.server_config.borrow().clone()
+        self.config.lock().unwrap().clone()
     }
 
-    pub fn last_error(&self) -> Option<String> {
-        self.last_error.lock().unwrap().clone()
+    pub fn server_settings(&self) -> Option<Value> {
+        self.settings.lock().unwrap().clone()
     }
 
-    pub fn clear_error(&self) {
-        *self.last_error.lock().unwrap() = None;
-        self.version.fetch_add(1, Ordering::Release);
+    pub fn notice(&self) -> Option<String> {
+        self.notice.lock().unwrap().clone()
+    }
+
+    pub fn clear_notice(&self) {
+        *self.notice.lock().unwrap() = None;
+        self.touch();
     }
 
     pub fn reconnect_now(&self) {
         let client = self.client.clone();
+        self.rt.spawn(async move { client.reconnect_now().await });
+    }
+
+    /// Runs a mutation once; its failure becomes the banner. Mutations are never retried.
+    fn run<T: Send + 'static>(
+        &self,
+        label: &'static str,
+        fut: impl Future<Output = Result<T, ClientError>> + Send + 'static,
+        on_ok: impl FnOnce(T) + Send + 'static,
+    ) {
+        let notice = self.notice.clone();
+        let changed = self.changed.clone();
         self.rt.spawn(async move {
-            client.reconnect_now().await;
+            match fut.await {
+                Ok(value) => on_ok(value),
+                Err(err) => {
+                    warn!(error = %err, "{label} failed");
+                    *notice.lock().unwrap() = Some(format!("{label}: {err}"));
+                }
+            }
+            changed.notify_one();
         });
     }
 
+    fn dispatch(&self, label: &'static str, command: OrchestrationCommand) {
+        let client = self.client.clone();
+        self.run(
+            label,
+            async move { client.dispatch_command(&command).await },
+            |_| {},
+        );
+    }
+
     pub fn select_thread(&self, thread_id: String) {
-        let mut slot = self.thread_sub_task.lock().unwrap();
+        let mut slot = self.thread_task.lock().unwrap();
         if let Some(prev) = slot.take() {
             prev.abort();
         }
-        self.thread_store.reset(Some(thread_id.clone()));
-        self.version.fetch_add(1, Ordering::Release);
+        self.thread.reset(Some(thread_id.clone()));
+        self.touch();
 
-        let client = self.client.clone();
-        let store = self.thread_store.clone();
-        let ver = self.version.clone();
-        let err_slot = self.last_error.clone();
+        let store = self.thread.clone();
+        let apply_store = self.thread.clone();
+        let changed = self.changed.clone();
+        let notice = self.notice.clone();
+        let payload_id = thread_id.clone();
+        *slot = Some(self.rt.spawn(run_durable_stream(
+            self.client.clone(),
+            RPC_ORCHESTRATION_SUBSCRIBE_THREAD,
+            move || SubscribeThreadInput {
+                thread_id: payload_id.clone(),
+                after_sequence: store.snapshot().resume_cursor(),
+                request_completion_marker: None,
+            },
+            move |item: ThreadStreamItem| {
+                if apply_store.apply_for(&thread_id, item) {
+                    changed.notify_one();
+                }
+            },
+            move |err| {
+                if is_user_visible(err) {
+                    *notice.lock().unwrap() = Some(err.to_string());
+                }
+            },
+        )));
+    }
 
-        *slot = Some(self.rt.spawn(async move {
-            let input = SubscribeThreadInput {
-                thread_id: thread_id.clone(),
-                after_sequence: None,
-                request_completion_marker: Some(true),
-            };
-            match client.subscribe_thread(input).await {
-                Ok(mut sub) => {
-                    while let Some(item) = sub.recv().await {
-                        match item {
-                            Ok(ev) => {
-                                store.apply(ev);
-                                ver.fetch_add(1, Ordering::Release);
-                            }
-                            Err(err) => {
-                                warn!(error = %err, thread = %thread_id, "thread stream error");
-                                *err_slot.lock().unwrap() = Some(err.to_string());
-                                ver.fetch_add(1, Ordering::Release);
-                                break;
-                            }
-                        }
-                    }
-                }
-                Err(err) => {
-                    warn!(error = %err, thread = %thread_id, "failed to subscribe thread");
-                    *err_slot.lock().unwrap() = Some(err.to_string());
-                    ver.fetch_add(1, Ordering::Release);
-                }
-            }
-        }));
+    /// Closes the open thread's stream (New thread shows an empty feed).
+    pub fn clear_thread(&self) {
+        if let Some(prev) = self.thread_task.lock().unwrap().take() {
+            prev.abort();
+        }
+        self.thread.reset(None);
+        self.touch();
     }
 
     pub fn send_message(
@@ -227,57 +265,72 @@ impl AppBridge {
         model_selection: Option<ModelSelection>,
         active_run_id: Option<String>,
     ) {
+        self.dispatch(
+            "Send",
+            OrchestrationCommand::MessageDispatch {
+                command_id: Uuid::new_v4().to_string(),
+                thread_id,
+                message_id: Uuid::new_v4().to_string(),
+                text,
+                attachments: Vec::new(),
+                model_selection,
+                dispatch_mode: if active_run_id.is_some() {
+                    DispatchMode::QueueAfterActive
+                } else {
+                    DispatchMode::StartImmediately
+                },
+            },
+        );
+    }
+
+    /// Starts a thread in `project_id`'s root checkout; `on_started` gets the new thread id.
+    pub fn launch_thread(
+        &self,
+        project_id: String,
+        model_selection: ModelSelection,
+        runtime_mode: RuntimeMode,
+        text: Option<String>,
+        on_started: impl FnOnce(String) + Send + 'static,
+    ) {
         let client = self.client.clone();
-        let err_slot = self.last_error.clone();
-        let ver = self.version.clone();
-        let dispatch_mode = if active_run_id.is_some() {
-            DispatchMode::QueueAfterActive
-        } else {
-            DispatchMode::StartImmediately
-        };
-        let cmd = OrchestrationCommand::MessageDispatch {
+        let input = LaunchThreadInput {
             command_id: Uuid::new_v4().to_string(),
-            thread_id,
-            message_id: Uuid::new_v4().to_string(),
-            text,
-            attachments: Vec::new(),
+            project_id,
+            title: "New thread".to_owned(),
+            generate_title: Some(true),
             model_selection,
-            dispatch_mode,
+            runtime_mode,
+            interaction_mode: Default::default(),
+            workspace_strategy: WorkspaceStrategy::Root { branch: None },
+            initial_message: text.map(|text| LaunchInitialMessage {
+                message_id: Some(Uuid::new_v4().to_string()),
+                text,
+                attachments: Vec::new(),
+            }),
         };
-        self.rt.spawn(async move {
-            if let Err(err) = client.dispatch_command(&cmd).await {
-                warn!(error = %err, "message.dispatch failed");
-                *err_slot.lock().unwrap() = Some(err.to_string());
-                ver.fetch_add(1, Ordering::Release);
-            }
-        });
+        self.run(
+            "New thread",
+            async move { client.launch_thread(&input).await },
+            move |result| on_started(result.thread_id),
+        );
     }
 
     pub fn stop_thread(&self, thread_id: String, active_run_id: Option<String>) {
-        let client = self.client.clone();
-        let err_slot = self.last_error.clone();
-        let ver = self.version.clone();
-        let cmd = if let Some(run_id) = active_run_id {
-            OrchestrationCommand::RunInterrupt {
-                command_id: Uuid::new_v4().to_string(),
+        let command_id = Uuid::new_v4().to_string();
+        let command = match active_run_id {
+            Some(run_id) => OrchestrationCommand::RunInterrupt {
+                command_id,
                 thread_id,
                 run_id,
                 reason: Some("user_stop".to_owned()),
-            }
-        } else {
-            OrchestrationCommand::ThreadStop {
-                command_id: Uuid::new_v4().to_string(),
+            },
+            None => OrchestrationCommand::ThreadStop {
+                command_id,
                 thread_id,
                 reason: Some("user_stop".to_owned()),
-            }
+            },
         };
-        self.rt.spawn(async move {
-            if let Err(err) = client.dispatch_command(&cmd).await {
-                warn!(error = %err, "stop command failed");
-                *err_slot.lock().unwrap() = Some(err.to_string());
-                ver.fetch_add(1, Ordering::Release);
-            }
-        });
+        self.dispatch("Stop", command);
     }
 
     pub fn respond_approval(
@@ -286,52 +339,39 @@ impl AppBridge {
         request_id: String,
         decision: ApprovalDecision,
     ) {
-        let client = self.client.clone();
-        let err_slot = self.last_error.clone();
-        let ver = self.version.clone();
-        let cmd = OrchestrationCommand::RuntimeRequestRespond {
-            command_id: Uuid::new_v4().to_string(),
-            thread_id,
-            request_id,
-            decision: Some(decision),
-            feedback: None,
-            answers: None,
-        };
-        self.rt.spawn(async move {
-            if let Err(err) = client.dispatch_command(&cmd).await {
-                warn!(error = %err, "runtime-request.respond failed");
-                *err_slot.lock().unwrap() = Some(err.to_string());
-                ver.fetch_add(1, Ordering::Release);
-            }
-        });
+        self.dispatch(
+            "Approval",
+            OrchestrationCommand::RuntimeRequestRespond {
+                command_id: Uuid::new_v4().to_string(),
+                thread_id,
+                request_id,
+                decision: Some(decision),
+                feedback: None,
+                answers: None,
+            },
+        );
     }
 
     pub fn answer_user_input(
         &self,
         thread_id: String,
         request_id: String,
-        answers: serde_json::Value,
+        answers: serde_json::Map<String, Value>,
     ) {
-        let client = self.client.clone();
-        let err_slot = self.last_error.clone();
-        let ver = self.version.clone();
-        let cmd = OrchestrationCommand::RuntimeRequestRespond {
-            command_id: Uuid::new_v4().to_string(),
-            thread_id,
-            request_id,
-            decision: None,
-            feedback: None,
-            answers: Some(answers),
-        };
-        self.rt.spawn(async move {
-            if let Err(err) = client.dispatch_command(&cmd).await {
-                warn!(error = %err, "user_input respond failed");
-                *err_slot.lock().unwrap() = Some(err.to_string());
-                ver.fetch_add(1, Ordering::Release);
-            }
-        });
+        self.dispatch(
+            "Answer",
+            OrchestrationCommand::RuntimeRequestRespond {
+                command_id: Uuid::new_v4().to_string(),
+                thread_id,
+                request_id,
+                decision: None,
+                feedback: None,
+                answers: Some(Value::Object(answers)),
+            },
+        );
     }
 
+    /// The answer's plaintext lives only until the request is written to the socket.
     pub fn answer_secret_request(
         &self,
         thread_id: String,
@@ -339,148 +379,184 @@ impl AppBridge {
         answer: SecretRequestAnswer,
     ) {
         let client = self.client.clone();
-        let err_slot = self.last_error.clone();
-        let ver = self.version.clone();
         let input = SecretRequestAnswerInput {
             thread_id,
             turn_item_id,
             answer,
         };
-        self.rt.spawn(async move {
-            if let Err(err) = client.answer_secret_request(&input).await {
-                warn!(error = %err, "secrets.answerRequest failed");
-                *err_slot.lock().unwrap() = Some(err.to_string());
-                ver.fetch_add(1, Ordering::Release);
-            }
-        });
+        self.run(
+            "Secret",
+            async move {
+                let result = client.answer_secret_request(&input).await;
+                zeroize_answer(input.answer);
+                result
+            },
+            |_| {},
+        );
     }
 
     pub fn set_runtime_mode(&self, thread_id: String, runtime_mode: RuntimeMode) {
-        let client = self.client.clone();
-        let err_slot = self.last_error.clone();
-        let ver = self.version.clone();
-        let cmd = OrchestrationCommand::ThreadRuntimeModeSet {
-            command_id: Uuid::new_v4().to_string(),
-            thread_id,
-            runtime_mode,
-        };
-        self.rt.spawn(async move {
-            if let Err(err) = client.dispatch_command(&cmd).await {
-                warn!(error = %err, "thread.runtime-mode.set failed");
-                *err_slot.lock().unwrap() = Some(err.to_string());
-                ver.fetch_add(1, Ordering::Release);
-            }
-        });
+        self.dispatch(
+            "Runtime mode",
+            OrchestrationCommand::ThreadRuntimeModeSet {
+                command_id: Uuid::new_v4().to_string(),
+                thread_id,
+                runtime_mode,
+            },
+        );
     }
 
     pub fn set_model_selection(&self, thread_id: String, model_selection: ModelSelection) {
+        self.dispatch(
+            "Model",
+            OrchestrationCommand::ThreadModelSelectionSet {
+                command_id: Uuid::new_v4().to_string(),
+                thread_id,
+                model_selection,
+            },
+        );
+    }
+
+    /// Patches server settings; the server's answer replaces the local copy.
+    pub fn update_settings(&self, patch: Value) {
         let client = self.client.clone();
-        let err_slot = self.last_error.clone();
-        let ver = self.version.clone();
-        let cmd = OrchestrationCommand::ThreadModelSelectionSet {
-            command_id: Uuid::new_v4().to_string(),
-            thread_id,
-            model_selection,
-        };
-        self.rt.spawn(async move {
-            if let Err(err) = client.dispatch_command(&cmd).await {
-                warn!(error = %err, "thread.model-selection.set failed");
-                *err_slot.lock().unwrap() = Some(err.to_string());
-                ver.fetch_add(1, Ordering::Release);
+        let settings = self.settings.clone();
+        self.run(
+            "Settings",
+            async move { client.update_settings(&patch).await },
+            move |value| *settings.lock().unwrap() = Some(value),
+        );
+    }
+
+    pub fn refresh_providers(&self) {
+        let client = self.client.clone();
+        let config = self.config.clone();
+        self.run(
+            "Providers",
+            async move {
+                client.refresh_providers().await?;
+                client.get_config().await
+            },
+            move |cfg| *config.lock().unwrap() = Some(cfg),
+        );
+    }
+
+    /// Stops a `p0d` this app started. An attached one keeps running for its other clients.
+    pub fn shutdown(&self) {
+        let p0d = self.p0d.lock().unwrap().take();
+        let client = self.client.clone();
+        self.rt.block_on(async move {
+            client.shutdown().await;
+            if let Some(mut p0d) = p0d {
+                p0d.shutdown().await;
             }
         });
     }
 
-    /// Runs the headless `--smoke` flow: connect, probe, wait for shell snapshot, print counts.
+    /// `--smoke`: connect, probe, read config and the shell snapshot, print counts, exit.
     pub fn run_smoke(cli: &Cli) -> Result<(), ClientError> {
         let rt = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(2)
             .enable_all()
             .build()?;
-
         rt.block_on(async move {
-            let (base_url, auth, mut p0d_proc) = resolve_connection(cli).await?;
+            let started = std::time::Instant::now();
+            let (base_url, auth, mut p0d) = resolve_connection(cli).await?;
+            let spawned = p0d.as_ref().is_some_and(P0dProcess::spawned);
             let client = RpcClient::connect(ClientConfig::new(base_url.clone(), auth));
-            client.wait_connected(Duration::from_secs(15)).await?;
-
-            let probe = client.probe().await?;
-            info!(server_time = ?probe.server_time, "server.probe succeeded");
-
-            let store = ShellStore::new();
-            let mut shell_rx = client
-                .subscribe_shell(SubscribeShellInput::default())
-                .await?;
-
-            let first = tokio::time::timeout(Duration::from_secs(15), shell_rx.recv())
-                .await
-                .map_err(|_| ClientError::Timeout)?
-                .ok_or(ClientError::Closed)??;
-            store.apply(first);
-
-            let snap = store.snapshot();
-            println!(
-                "p0-gpui smoke ok: url={} projects={} threads={} archived={} sequence={}",
-                base_url,
-                snap.projects.len(),
-                snap.threads.len(),
-                snap.archived_threads.len(),
-                snap.last_sequence
-            );
-
-            client.shutdown().await;
-            if let Some(proc) = p0d_proc.as_mut() {
-                proc.shutdown().await;
+            let result = async {
+                client.wait_connected(Duration::from_secs(20)).await?;
+                let probe = client.probe().await?;
+                info!(server_time = ?probe.server_time, "server.probe succeeded");
+                let cfg = client.get_config().await?;
+                let store = ShellStore::new();
+                let mut shell = client
+                    .subscribe_shell(SubscribeShellInput::default())
+                    .await?;
+                while !store.snapshot().synchronized {
+                    let item = tokio::time::timeout(Duration::from_secs(60), shell.recv())
+                        .await
+                        .map_err(|_| ClientError::Timeout)?
+                        .ok_or(ClientError::Closed)??;
+                    store.apply(item);
+                }
+                let snap = store.snapshot();
+                println!(
+                    "p0-gpui smoke ok: url={base_url} p0d={} providers={} projects={} threads={} archived={} sequence={} elapsed_ms={}",
+                    if spawned { "spawned" } else { "attached" },
+                    cfg.providers.len(),
+                    snap.projects.len(),
+                    snap.threads.len(),
+                    snap.archived_threads.len(),
+                    snap.last_sequence,
+                    started.elapsed().as_millis()
+                );
+                Ok(())
             }
-            Ok(())
+            .await;
+            client.shutdown().await;
+            if let Some(p0d) = p0d.as_mut() {
+                p0d.shutdown().await;
+            }
+            result
         })
+    }
+}
+
+fn zeroize_answer(answer: SecretRequestAnswer) {
+    use zeroize::Zeroize as _;
+    match answer {
+        SecretRequestAnswer::Save { mut secret } => secret.zeroize(),
+        SecretRequestAnswer::SaveValues { values } => {
+            for (_, mut value) in values {
+                value.zeroize();
+            }
+        }
+        SecretRequestAnswer::Decline => {}
     }
 }
 
 async fn resolve_connection(
     cli: &Cli,
 ) -> Result<(String, AuthMode, Option<P0dProcess>), ClientError> {
+    let home = cli.resolved_home();
+    let local_bootstrap = |secret: String| AuthMode::LocalBootstrap {
+        secret,
+        client_label: "p0code native".to_owned(),
+    };
     if let Some(url) = &cli.url {
-        let auth = if let Some(token) = &cli.token {
-            AuthMode::BearerToken(token.clone())
-        } else {
-            let secret_path = cli
-                .resolved_home()
-                .join("secrets")
-                .join("desktop-bootstrap-secret");
-            if let Some(secret) = read_valid_bootstrap_secret_file(&secret_path) {
-                AuthMode::LocalBootstrap {
-                    secret,
-                    client_label: "p0-gpui".to_owned(),
-                }
-            } else {
-                return Err(ClientError::Auth(
-                    "connecting with --url requires --token or an existing desktop-bootstrap-secret"
-                        .to_owned(),
-                ));
+        let auth = match &cli.token {
+            Some(token) => AuthMode::BearerToken(token.clone()),
+            None => {
+                read_desktop_secret_file(&home.join("secrets").join("desktop-bootstrap-secret"))
+                    .map(local_bootstrap)
+                    .ok_or_else(|| {
+                        ClientError::Auth(
+                            "--url needs --token or the desktop secret of the p0d serving it"
+                                .to_owned(),
+                        )
+                    })?
             }
         };
         return Ok((url.clone(), auth, None));
     }
 
-    let mut cfg = P0dLaunchConfig::for_home(cli.resolved_home());
-    cfg.binary_path = cli.p0d_bin.clone();
-    let proc = P0dProcess::attach_or_spawn(cfg).await?;
-    let secret = proc
+    let mut cfg = P0dLaunchConfig::for_home(&home);
+    cfg.configured_binary = cli.p0d_bin.clone();
+    cfg.legacy_server = cli
+        .legacy_server
+        .clone()
+        .or_else(p0_client::p0d::default_legacy_server_command);
+    let p0d = P0dProcess::attach_or_spawn(cfg).await?;
+    let secret = p0d
         .bootstrap_secret()
+        .map(ToOwned::to_owned)
         .ok_or_else(|| {
-            ClientError::Auth(
-                "attached p0d has no readable desktop-bootstrap-secret; pass --token or restart p0d"
-                    .to_owned(),
-            )
-        })?
-        .to_owned();
-    let url = proc.url().to_owned();
-    Ok((
-        url,
-        AuthMode::LocalBootstrap {
-            secret,
-            client_label: "p0-gpui".to_owned(),
-        },
-        Some(proc),
-    ))
+            ClientError::Auth(format!(
+                "p0d at {} runs without a readable desktop secret in {}",
+                p0d.url(),
+                home.join("secrets").display()
+            ))
+        })?;
+    Ok((p0d.url().to_owned(), local_bootstrap(secret), Some(p0d)))
 }

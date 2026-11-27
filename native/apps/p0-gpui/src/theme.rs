@@ -23,13 +23,38 @@ pub struct AppPalette {
     pub error_surface: Hsla,
     pub info: Hsla,
     pub badge_approval: Hsla,
+    pub backdrop: Hsla,
+}
+
+/// Color scheme setting (Appearance). `System` follows the window's appearance.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ThemePreference {
+    #[default]
+    System,
+    Light,
+    Dark,
+}
+
+impl ThemePreference {
+    pub fn is_dark(self, appearance: WindowAppearance) -> bool {
+        match self {
+            Self::System => matches!(
+                appearance,
+                WindowAppearance::Dark | WindowAppearance::VibrantDark
+            ),
+            Self::Light => false,
+            Self::Dark => true,
+        }
+    }
 }
 
 impl AppPalette {
-    pub fn for_appearance(appearance: WindowAppearance) -> Self {
-        match appearance {
-            WindowAppearance::Dark | WindowAppearance::VibrantDark => Self::dark(),
-            WindowAppearance::Light | WindowAppearance::VibrantLight => Self::light(),
+    pub fn for_preference(pref: ThemePreference, appearance: WindowAppearance) -> Self {
+        if pref.is_dark(appearance) {
+            Self::dark()
+        } else {
+            Self::light()
         }
     }
 
@@ -68,6 +93,7 @@ impl AppPalette {
             info: rgba(0x3b82f6ff).into(),
             // --guest / approval fuchsia-500
             badge_approval: rgba(0xd946efff).into(),
+            backdrop: rgba(0x0000002e).into(),
         }
     }
 
@@ -106,6 +132,7 @@ impl AppPalette {
             info: rgba(0x60a5faff).into(),
             // --guest-foreground fuchsia-300
             badge_approval: rgba(0xf0abfcff).into(),
+            backdrop: rgba(0x00000066).into(),
         }
     }
 }

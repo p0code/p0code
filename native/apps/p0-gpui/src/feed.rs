@@ -1,1086 +1,651 @@
-//! Virtualized thread feed rendering (messages, Markdown blocks, collapsible reasoning &
-//! tool rows, plans, errors, and inline approval cards).
+//! Thread feed: a measured virtual list (`MessageScroller`) that follows the tail unless the
+//! user scrolled up. Rows are re-measured only when their signature changes (content, status,
+//! expansion), so streaming one message never re-lays out the others.
 
-use std::collections::HashSet;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash as _, Hasher as _};
+use std::ops::Range;
 
-use gpui_kit::component::input::{Input, InputState};
+use gpui_kit::component::message_scroller::MessageScrollerState;
 use gpui_kit::{
-    AnyElement, Context, Entity, FontWeight, InteractiveElement as _, IntoElement,
-    ParentElement as _, Pixels, SharedString, StatefulInteractiveElement as _, Styled as _, div, px,
+    AnyElement, App, AppContext as _, Context, Entity, FontStyle, FontWeight, HighlightStyle,
+    InteractiveElement as _, InteractiveText, IntoElement, ParentElement as _, SharedString,
+    StatefulInteractiveElement as _, StrikethroughStyle, Styled as _, StyledText, UnderlineStyle,
+    Window, div, px,
 };
-use p0_i18n::{Catalog, Key};
-use p0_protocol::{
-    ApprovalDecision, ApprovalOption, ProjectedTurnItem, RuntimeRequest, SecretRequestStatus,
-    TurnItem, TurnItemStatus, UserInputQuestion,
-};
+use p0_i18n::Key;
+use p0_protocol::{ProjectedTurnItem, TurnItem, TurnItemStatus};
 
 use crate::app::P0App;
-use crate::markdown::{InlineSpan, MarkdownCache, MdBlock, estimate_markdown_height};
+use crate::markdown::{Inline, ListMarker, MdBlock};
 use crate::theme::AppPalette;
 
-/// Estimates row height in CSS pixels for `v_virtual_list`.
-pub fn estimate_turn_item_height(
-    row: &ProjectedTurnItem,
-    expanded: bool,
-    md_cache: &mut MarkdownCache,
-    has_pending_approval: bool,
-) -> Pixels {
-    let h = match &row.item {
-        TurnItem::UserMessage {
-            id,
-            updated_at,
-            text,
-            ..
-        } => {
-            let blocks = md_cache.get_or_parse(id, updated_at, text);
-            estimate_markdown_height(&blocks, 76) + 46.0
+pub struct FeedState {
+    pub state: Entity<MessageScrollerState>,
+    rows: Vec<(String, u64)>,
+    thread_id: Option<String>,
+}
+
+impl FeedState {
+    pub fn new(cx: &mut Context<P0App>) -> Self {
+        Self {
+            state: cx.new(|cx| MessageScrollerState::new(0, cx)),
+            rows: Vec::new(),
+            thread_id: None,
         }
-        TurnItem::AssistantMessage {
-            id,
-            updated_at,
-            text,
-            ..
-        } => {
-            let blocks = md_cache.get_or_parse(id, updated_at, text);
-            estimate_markdown_height(&blocks, 84) + 38.0
-        }
-        TurnItem::Reasoning { text, .. } => {
-            if expanded {
-                let lines = text.lines().count().clamp(1, 24);
-                44.0 + (lines as f32) * 18.0
-            } else {
-                40.0
-            }
-        }
-        TurnItem::ProposedPlan {
-            id,
-            updated_at,
-            markdown,
-            ..
-        } => {
-            let blocks = md_cache.get_or_parse(id, updated_at, markdown);
-            estimate_markdown_height(&blocks, 80) + 52.0
-        }
-        TurnItem::TodoList { steps, .. } => 48.0 + (steps.len().min(20) as f32) * 22.0,
-        TurnItem::CommandExecution { input, output, .. } => {
-            if expanded {
-                let in_lines = input.lines().count().clamp(1, 6);
-                let out_lines = output
-                    .as_deref()
-                    .map(|o| o.lines().count().min(18))
-                    .unwrap_or(0);
-                54.0 + ((in_lines + out_lines) as f32) * 17.0
-            } else {
-                40.0
-            }
-        }
-        TurnItem::FileChange { diff_str, .. } => {
-            if expanded {
-                let lines = diff_str
-                    .as_deref()
-                    .map(|d| d.lines().count().min(20))
-                    .unwrap_or(1);
-                50.0 + (lines as f32) * 17.0
-            } else {
-                40.0
-            }
-        }
-        TurnItem::FileSearch { .. }
-        | TurnItem::WebSearch { .. }
-        | TurnItem::DynamicTool { .. }
-        | TurnItem::Subagent { .. } => {
-            if expanded {
-                120.0
-            } else {
-                40.0
-            }
-        }
-        TurnItem::ApprovalRequest { .. } => {
-            if has_pending_approval {
-                128.0
-            } else {
-                72.0
-            }
-        }
-        TurnItem::UserInputRequest { questions, .. } => {
-            72.0 + (questions.len().max(1) as f32) * 72.0
+    }
+
+    pub fn follow_tail(&self, cx: &mut App) {
+        self.state.update(cx, |s, cx| s.scroll_to_end(cx));
+    }
+}
+
+/// What changed between two lists of `(row id, signature)`.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct FeedPlan {
+    /// Rows from the first differing id on are replaced by this many new rows.
+    pub splice: Option<(Range<usize>, usize)>,
+    /// Surviving rows whose signature changed.
+    pub remeasure: Vec<usize>,
+}
+
+pub fn plan_feed_update(old: &[(String, u64)], new: &[(String, u64)]) -> FeedPlan {
+    let prefix = old.iter().zip(new).take_while(|(a, b)| a.0 == b.0).count();
+    FeedPlan {
+        splice: (prefix < old.len() || prefix < new.len())
+            .then(|| (prefix..old.len(), new.len() - prefix)),
+        remeasure: (0..prefix).filter(|&i| old[i].1 != new[i].1).collect(),
+    }
+}
+
+/// Everything a row's height depends on.
+pub fn row_signature(row: &ProjectedTurnItem, expanded: bool, extra: u64) -> u64 {
+    let mut h = DefaultHasher::new();
+    row.item.updated_at().hash(&mut h);
+    expanded.hash(&mut h);
+    extra.hash(&mut h);
+    match &row.item {
+        TurnItem::UserMessage { text, .. }
+        | TurnItem::AssistantMessage { text, .. }
+        | TurnItem::Reasoning { text, .. } => text.hash(&mut h),
+        TurnItem::ProposedPlan { markdown, .. } => markdown.hash(&mut h),
+        TurnItem::CommandExecution { output, status, .. } => {
+            output.as_ref().map(String::len).hash(&mut h);
+            std::mem::discriminant(status).hash(&mut h);
         }
         TurnItem::SecretRequest { secret_status, .. } => {
-            if matches!(secret_status, SecretRequestStatus::Pending) {
-                160.0
-            } else {
-                80.0
-            }
+            std::mem::discriminant(secret_status).hash(&mut h)
         }
-        TurnItem::SystemNotice { message, .. }
-        | TurnItem::Notification {
-            summary: message, ..
-        } => {
-            let lines = (message.len() / 80) + 1;
-            36.0 + (lines as f32) * 18.0
-        }
-        TurnItem::Error { failure, .. } => {
-            let lines = (failure.message.len() / 80) + 1;
-            44.0 + (lines as f32) * 18.0
-        }
-        TurnItem::Unknown => 34.0,
-    };
-    px(h)
+        _ => {}
+    }
+    h.finish()
 }
 
-#[allow(clippy::too_many_arguments)]
-pub fn render_turn_item(
-    row: &ProjectedTurnItem,
-    expanded_items: &HashSet<String>,
-    pending_requests: &[&RuntimeRequest],
-    secret_input: &Entity<InputState>,
-    md_cache: &mut MarkdownCache,
-    i18n: &Catalog,
-    palette: &AppPalette,
-    thread_id: &str,
-    cx: &mut Context<P0App>,
-) -> AnyElement {
-    let item_id = row.source_item_id.clone();
-    let expanded = expanded_items.contains(&item_id);
+impl P0App {
+    /// Brings the scroller in line with the open thread.
+    pub(crate) fn sync_feed(&mut self, cx: &mut Context<Self>) {
+        let rows: Vec<(String, u64)> = self
+            .thread
+            .projection
+            .as_ref()
+            .map(|p| {
+                p.visible_turn_items
+                    .iter()
+                    .map(|row| {
+                        let expanded = self.expanded_items.contains(&row.source_item_id);
+                        let extra = self.cards.signature(&row.item, &self.thread);
+                        (
+                            row.source_item_id.clone(),
+                            row_signature(row, expanded, extra),
+                        )
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
 
-    let inner: AnyElement = match &row.item {
-        TurnItem::UserMessage {
-            id,
-            updated_at,
-            text,
-            ..
-        } => {
-            let blocks = md_cache.get_or_parse(id, updated_at, text);
-            div()
-                .w_full()
-                .flex()
-                .justify_end()
-                .child(
-                    div()
-                        .max_w(px(620.0))
-                        .px(px(14.0))
-                        .py(px(10.0))
-                        .rounded(px(10.0))
-                        .bg(palette.message_user)
-                        .border_1()
-                        .border_color(palette.border)
-                        .flex()
-                        .flex_col()
-                        .gap(px(4.0))
-                        .child(
-                            div()
-                                .text_xs()
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(palette.muted_foreground)
-                                .child(SharedString::from(i18n.get(Key::You).to_owned())),
-                        )
-                        .child(render_markdown_blocks(&blocks, palette)),
-                )
-                .into_any_element()
+        if self.feed.thread_id != self.thread.thread_id {
+            self.feed.thread_id.clone_from(&self.thread.thread_id);
+            self.md_cache.clear();
+            let count = rows.len();
+            self.feed.rows = rows;
+            self.feed.state.update(cx, |s, cx| s.reset(count, cx));
+            return;
         }
-        TurnItem::AssistantMessage {
-            id,
-            updated_at,
-            text,
-            streaming,
-            ..
-        } => {
-            let blocks = md_cache.get_or_parse(id, updated_at, text);
-            let mut body = div()
-                .w_full()
-                .px(px(4.0))
-                .py(px(6.0))
-                .flex()
-                .flex_col()
-                .gap(px(6.0))
-                .child(render_markdown_blocks(&blocks, palette));
-            if *streaming {
-                body = body.child(
-                    div()
-                        .text_xs()
-                        .text_color(palette.muted_foreground)
-                        .child(SharedString::from(i18n.get(Key::Working).to_owned())),
-                );
+        let plan = plan_feed_update(&self.feed.rows, &rows);
+        self.feed.rows = rows;
+        if plan == FeedPlan::default() {
+            return;
+        }
+        self.feed.state.update(cx, |s, cx| {
+            for ix in &plan.remeasure {
+                s.remeasure_items(*ix..*ix + 1, cx);
             }
-            body.into_any_element()
-        }
-        TurnItem::Reasoning {
-            text,
-            streaming,
-            status,
-            ..
-        } => {
-            let label = if *streaming || matches!(status, TurnItemStatus::Running) {
-                i18n.get(Key::Thinking).to_owned()
-            } else {
-                i18n.get(Key::Reasoning).to_owned()
-            };
-            let preview = first_line_preview(text, 72);
-            render_collapsible_row(
-                &item_id,
-                &label,
-                &preview,
-                expanded,
-                Some(text.clone()),
-                false,
-                palette,
-                cx,
-            )
-            .into_any_element()
-        }
-        TurnItem::ProposedPlan {
-            id,
-            updated_at,
-            markdown,
-            ..
-        } => {
-            let blocks = md_cache.get_or_parse(id, updated_at, markdown);
-            div()
-                .w_full()
-                .p(px(12.0))
-                .rounded(px(8.0))
-                .bg(palette.card)
-                .border_1()
-                .border_color(palette.border)
-                .flex()
-                .flex_col()
-                .gap(px(6.0))
-                .child(
-                    div()
-                        .text_xs()
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(palette.primary)
-                        .child(SharedString::from(i18n.get(Key::Plan).to_owned())),
-                )
-                .child(render_markdown_blocks(&blocks, palette))
-                .into_any_element()
-        }
-        TurnItem::TodoList {
-            steps, explanation, ..
-        } => {
-            let mut card = div()
-                .w_full()
-                .p(px(12.0))
-                .rounded(px(8.0))
-                .bg(palette.card)
-                .border_1()
-                .border_color(palette.border)
-                .flex()
-                .flex_col()
-                .gap(px(4.0))
-                .child(
-                    div()
-                        .text_xs()
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(palette.primary)
-                        .child(SharedString::from(i18n.get(Key::Plan).to_owned())),
-                );
-            if let Some(exp) = explanation {
-                card = card.child(
-                    div()
-                        .text_xs()
-                        .text_color(palette.muted_foreground)
-                        .child(SharedString::from(exp.clone())),
-                );
+            if let Some((range, count)) = plan.splice {
+                s.splice(range, count, cx);
             }
-            for step in steps {
-                let marker = match step.status.as_str() {
-                    "completed" => "[x]",
-                    "running" => "[~]",
-                    _ => "[ ]",
-                };
-                card = card.child(
-                    div()
-                        .flex()
-                        .gap(px(6.0))
-                        .text_sm()
-                        .text_color(palette.foreground)
-                        .child(
-                            div()
-                                .text_color(palette.muted_foreground)
-                                .child(SharedString::from(marker.to_owned())),
-                        )
-                        .child(SharedString::from(step.text.clone())),
-                );
-            }
-            card.into_any_element()
+        });
+    }
+
+    pub fn toggle_item_expanded(&mut self, item_id: String, cx: &mut Context<Self>) {
+        if !self.expanded_items.remove(&item_id) {
+            self.expanded_items.insert(item_id);
         }
-        TurnItem::CommandExecution {
-            input,
-            output,
-            exit_code,
-            status,
-            ..
-        } => {
-            let status_tag = match (status, exit_code) {
-                (TurnItemStatus::Running, _) => i18n.get(Key::Running).to_owned(),
-                (_, Some(0)) => i18n.get(Key::Done).to_owned(),
-                (_, Some(code)) => format!("exit {code}"),
-                _ => format!("{status:?}"),
-            };
-            let title = format!("{} · {status_tag}", i18n.get(Key::Command));
-            let preview = format!("$ {}", first_line_preview(input, 68));
-            let mut detail = format!("$ {input}");
-            if let Some(out) = output
-                && !out.is_empty()
-            {
-                detail.push_str("\n\n");
-                detail.push_str(&truncate_chars(out, 2000));
-            }
-            render_collapsible_row(
-                &item_id,
-                &title,
-                &preview,
-                expanded,
-                Some(detail),
-                true,
-                palette,
-                cx,
-            )
-            .into_any_element()
-        }
-        TurnItem::FileChange {
-            file_name,
-            additions,
-            deletions,
-            diff_str,
-            ..
-        } => {
-            let stats = match (additions, deletions) {
-                (Some(a), Some(d)) => format!("+{a} -{d}"),
-                _ => String::new(),
-            };
-            let preview = format!("{file_name} {stats}");
-            render_collapsible_row(
-                &item_id,
-                i18n.get(Key::Tools),
-                &preview,
-                expanded,
-                diff_str.as_deref().map(|d| truncate_chars(d, 2000)),
-                true,
-                palette,
-                cx,
-            )
-            .into_any_element()
-        }
-        TurnItem::FileSearch { pattern, .. } => {
-            let preview = pattern.as_deref().unwrap_or("search");
-            render_collapsible_row(
-                &item_id,
-                i18n.get(Key::Tools),
-                &format!("search: {preview}"),
-                expanded,
-                pattern.clone(),
-                true,
-                palette,
-                cx,
-            )
-            .into_any_element()
-        }
-        TurnItem::WebSearch { patterns, .. } => {
-            let preview = patterns
-                .as_ref()
-                .map(|p| p.join(", "))
-                .unwrap_or_else(|| "web search".to_owned());
-            render_collapsible_row(
-                &item_id,
-                i18n.get(Key::Tools),
-                &first_line_preview(&preview, 68),
-                expanded,
-                Some(preview),
-                false,
-                palette,
-                cx,
-            )
-            .into_any_element()
-        }
-        TurnItem::DynamicTool {
-            tool_name,
-            input,
-            output,
-            ..
-        } => {
-            let name = tool_name.as_deref().unwrap_or("tool");
-            let detail = format!(
-                "input: {}\noutput: {}",
-                truncate_chars(&input.to_string(), 800),
-                output
-                    .as_ref()
-                    .map(|o| truncate_chars(&o.to_string(), 1200))
-                    .unwrap_or_else(|| "—".to_owned())
-            );
-            render_collapsible_row(
-                &item_id,
-                i18n.get(Key::Tools),
-                name,
-                expanded,
-                Some(detail),
-                true,
-                palette,
-                cx,
-            )
-            .into_any_element()
-        }
-        TurnItem::Subagent {
-            subagent_id,
-            prompt,
-            result,
-            ..
-        } => {
-            let detail = match result {
-                Some(r) => format!("{prompt}\n\n---\n{}", truncate_chars(r, 1500)),
-                None => prompt.clone(),
-            };
-            render_collapsible_row(
-                &item_id,
-                "Subagent",
-                &format!("{subagent_id}: {}", first_line_preview(prompt, 56)),
-                expanded,
-                Some(detail),
-                false,
-                palette,
-                cx,
-            )
-            .into_any_element()
-        }
-        TurnItem::ApprovalRequest {
-            request_id,
-            title,
-            prompt,
-            reason,
-            options,
-            ..
-        } => {
-            let is_pending = pending_requests.iter().any(|r| r.id == *request_id);
-            render_approval_card(
-                thread_id,
-                request_id,
-                title.as_deref(),
-                prompt.as_deref(),
-                reason.as_deref(),
-                options.as_deref(),
-                is_pending,
-                i18n,
-                palette,
-                cx,
-            )
-            .into_any_element()
-        }
-        TurnItem::UserInputRequest {
-            request_id,
-            questions,
-            ..
-        } => {
-            let is_pending = pending_requests.iter().any(|r| r.id == *request_id);
-            render_user_input_card(
-                thread_id,
-                request_id,
-                questions,
-                is_pending,
-                i18n,
-                palette,
-                cx,
-            )
-            .into_any_element()
-        }
-        TurnItem::SecretRequest {
-            id,
-            label,
-            reason,
-            url,
-            secret_status,
-            ..
-        } => render_secret_request_card(
-            thread_id,
-            id,
-            label,
-            reason,
-            url.as_deref(),
-            *secret_status,
-            secret_input,
-            i18n,
-            palette,
-            cx,
-        )
-        .into_any_element(),
-        TurnItem::SystemNotice { message, .. } => div()
+        self.sync_feed(cx);
+        cx.notify();
+    }
+
+    pub(crate) fn render_feed_row(
+        &mut self,
+        ix: usize,
+        palette: AppPalette,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let Some(row) = self
+            .thread
+            .projection
+            .as_ref()
+            .and_then(|p| p.visible_turn_items.get(ix))
+            .cloned()
+        else {
+            return div().into_any_element();
+        };
+        let inner = self.render_turn_item(&row, &palette, window, cx);
+        div()
             .w_full()
-            .px(px(12.0))
-            .py(px(8.0))
-            .rounded(px(8.0))
-            .bg(palette.warning_surface)
-            .border_1()
-            .border_color(palette.border)
-            .text_xs()
-            .text_color(palette.foreground)
-            .child(SharedString::from(format!(
-                "{}: {message}",
-                i18n.get(Key::System)
-            )))
-            .into_any_element(),
-        TurnItem::Notification {
-            summary, detail, ..
-        } => {
-            let mut text = summary.clone();
-            if let Some(d) = detail
-                && !d.is_empty()
-            {
-                text.push_str(" — ");
-                text.push_str(&first_line_preview(d, 100));
+            .max_w(px(760.0))
+            .mx_auto()
+            .px(px(16.0))
+            .py(px(4.0))
+            .child(inner)
+            .into_any_element()
+    }
+
+    fn render_turn_item(
+        &mut self,
+        row: &ProjectedTurnItem,
+        palette: &AppPalette,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let item_id = row.source_item_id.clone();
+        let expanded = self.expanded_items.contains(&item_id);
+        let i18n = self.i18n.clone();
+        match &row.item {
+            TurnItem::UserMessage { text, .. } => {
+                let blocks = self.md_cache.get_or_parse(&item_id, text);
+                div()
+                    .w_full()
+                    .flex()
+                    .justify_end()
+                    .child(
+                        div()
+                            .max_w(px(620.0))
+                            .px(px(14.0))
+                            .py(px(10.0))
+                            .rounded(px(10.0))
+                            .bg(palette.message_user)
+                            .border_1()
+                            .border_color(palette.border)
+                            .child(render_markdown(&item_id, &blocks, palette)),
+                    )
+                    .into_any_element()
             }
-            div()
+            TurnItem::AssistantMessage {
+                text, streaming, ..
+            } => {
+                let blocks = self.md_cache.get_or_parse(&item_id, text);
+                let mut body = div()
+                    .w_full()
+                    .px(px(4.0))
+                    .py(px(6.0))
+                    .flex()
+                    .flex_col()
+                    .gap(px(6.0))
+                    .child(render_markdown(&item_id, &blocks, palette));
+                if *streaming {
+                    body = body.child(
+                        div()
+                            .text_xs()
+                            .text_color(palette.muted_foreground)
+                            .child(SharedString::from(i18n.get(Key::Working).to_owned())),
+                    );
+                }
+                body.into_any_element()
+            }
+            TurnItem::Reasoning {
+                text,
+                streaming,
+                status,
+                ..
+            } => {
+                let label = if *streaming || matches!(status, TurnItemStatus::Running) {
+                    i18n.get(Key::Thinking)
+                } else {
+                    i18n.get(Key::Reasoning)
+                };
+                self.collapsible(
+                    &item_id,
+                    label,
+                    &first_line(text, 72),
+                    expanded,
+                    Some(text.clone()),
+                    false,
+                    palette,
+                    cx,
+                )
+            }
+            TurnItem::ProposedPlan { markdown, .. } => {
+                let blocks = self.md_cache.get_or_parse(&item_id, markdown);
+                card(palette)
+                    .child(caption(i18n.get(Key::Plan), palette.primary))
+                    .child(render_markdown(&item_id, &blocks, palette))
+                    .into_any_element()
+            }
+            TurnItem::TodoList {
+                steps, explanation, ..
+            } => {
+                let mut c = card(palette).child(caption(i18n.get(Key::Plan), palette.primary));
+                if let Some(exp) = explanation {
+                    c = c.child(
+                        div()
+                            .text_xs()
+                            .text_color(palette.muted_foreground)
+                            .child(SharedString::from(exp.clone())),
+                    );
+                }
+                for step in steps {
+                    let marker = match step.status.as_str() {
+                        "completed" => "☑",
+                        "running" => "◐",
+                        _ => "☐",
+                    };
+                    c = c.child(
+                        div()
+                            .flex()
+                            .gap(px(6.0))
+                            .text_sm()
+                            .child(div().text_color(palette.muted_foreground).child(marker))
+                            .child(SharedString::from(step.text.clone())),
+                    );
+                }
+                c.into_any_element()
+            }
+            TurnItem::CommandExecution {
+                input,
+                output,
+                exit_code,
+                status,
+                ..
+            } => {
+                let tag = match (status, exit_code) {
+                    (TurnItemStatus::Running, _) => i18n.get(Key::Running).to_owned(),
+                    (_, Some(0)) => i18n.get(Key::Done).to_owned(),
+                    (_, Some(code)) => format!("exit {code}"),
+                    _ => String::new(),
+                };
+                let mut detail = format!("$ {input}");
+                if let Some(out) = output.as_deref().filter(|o| !o.is_empty()) {
+                    detail.push_str("\n\n");
+                    detail.push_str(&truncate_chars(out, 4000));
+                }
+                let title = if tag.is_empty() {
+                    i18n.get(Key::Command).to_owned()
+                } else {
+                    format!("{} · {tag}", i18n.get(Key::Command))
+                };
+                self.collapsible(
+                    &item_id,
+                    &title,
+                    &format!("$ {}", first_line(input, 68)),
+                    expanded,
+                    Some(detail),
+                    true,
+                    palette,
+                    cx,
+                )
+            }
+            TurnItem::FileChange {
+                file_name,
+                additions,
+                deletions,
+                diff_str,
+                ..
+            } => {
+                let stats = match (additions, deletions) {
+                    (Some(a), Some(d)) => format!(" +{a} -{d}"),
+                    _ => String::new(),
+                };
+                self.collapsible(
+                    &item_id,
+                    i18n.get(Key::Tools),
+                    &format!("{file_name}{stats}"),
+                    expanded,
+                    diff_str.as_deref().map(|d| truncate_chars(d, 4000)),
+                    true,
+                    palette,
+                    cx,
+                )
+            }
+            TurnItem::FileSearch { pattern, .. } => {
+                let p = pattern.clone().unwrap_or_default();
+                self.collapsible(
+                    &item_id,
+                    i18n.get(Key::Tools),
+                    &p,
+                    expanded,
+                    pattern.clone(),
+                    true,
+                    palette,
+                    cx,
+                )
+            }
+            TurnItem::WebSearch { patterns, .. } => {
+                let p = patterns.as_ref().map(|p| p.join(", ")).unwrap_or_default();
+                self.collapsible(
+                    &item_id,
+                    i18n.get(Key::Tools),
+                    &first_line(&p, 68),
+                    expanded,
+                    Some(p.clone()),
+                    false,
+                    palette,
+                    cx,
+                )
+            }
+            TurnItem::DynamicTool {
+                tool_name,
+                input,
+                output,
+                ..
+            } => {
+                let detail = format!(
+                    "{}\n\n{}",
+                    truncate_chars(&input.to_string(), 1200),
+                    output
+                        .as_ref()
+                        .map(|o| truncate_chars(&o.to_string(), 2000))
+                        .unwrap_or_default()
+                );
+                let name = tool_name.clone().unwrap_or_default();
+                self.collapsible(
+                    &item_id,
+                    i18n.get(Key::Tools),
+                    &name,
+                    expanded,
+                    Some(detail),
+                    true,
+                    palette,
+                    cx,
+                )
+            }
+            TurnItem::Subagent {
+                subagent_id,
+                prompt,
+                result,
+                ..
+            } => {
+                let detail = match result {
+                    Some(r) => format!("{prompt}\n\n{}", truncate_chars(r, 2000)),
+                    None => prompt.clone(),
+                };
+                self.collapsible(
+                    &item_id,
+                    subagent_id,
+                    &first_line(prompt, 64),
+                    expanded,
+                    Some(detail),
+                    false,
+                    palette,
+                    cx,
+                )
+            }
+            TurnItem::ApprovalRequest { .. }
+            | TurnItem::UserInputRequest { .. }
+            | TurnItem::SecretRequest { .. } => self.render_card(row, palette, window, cx),
+            TurnItem::SystemNotice { message, .. } => div()
                 .w_full()
                 .px(px(12.0))
-                .py(px(6.0))
-                .rounded(px(6.0))
-                .bg(palette.card)
-                .border_1()
-                .border_color(palette.border)
+                .py(px(8.0))
+                .rounded(px(8.0))
+                .bg(palette.warning_surface)
                 .text_xs()
-                .text_color(palette.muted_foreground)
-                .child(SharedString::from(text))
-                .into_any_element()
+                .child(SharedString::from(message.clone()))
+                .into_any_element(),
+            TurnItem::Notification {
+                summary, detail, ..
+            } => {
+                let mut text = summary.clone();
+                if let Some(d) = detail.as_deref().filter(|d| !d.is_empty()) {
+                    text.push_str(" — ");
+                    text.push_str(&first_line(d, 120));
+                }
+                div()
+                    .w_full()
+                    .px(px(12.0))
+                    .py(px(6.0))
+                    .text_xs()
+                    .text_color(palette.muted_foreground)
+                    .child(SharedString::from(text))
+                    .into_any_element()
+            }
+            TurnItem::Error { failure, .. } => div()
+                .w_full()
+                .px(px(12.0))
+                .py(px(8.0))
+                .rounded(px(8.0))
+                .bg(palette.error_surface)
+                .border_1()
+                .border_color(palette.error)
+                .text_sm()
+                .text_color(palette.error)
+                .child(SharedString::from(failure.message.clone()))
+                .into_any_element(),
+            TurnItem::Unknown => div().into_any_element(),
         }
-        TurnItem::Error { failure, .. } => div()
-            .w_full()
-            .px(px(12.0))
-            .py(px(8.0))
-            .rounded(px(8.0))
-            .bg(palette.error_surface)
-            .border_1()
-            .border_color(palette.error)
-            .text_sm()
-            .text_color(palette.error)
-            .child(SharedString::from(format!(
-                "{}: {}",
-                i18n.get(Key::Error),
-                failure.message
-            )))
-            .into_any_element(),
-        TurnItem::Unknown => div()
-            .w_full()
-            .px(px(10.0))
-            .py(px(4.0))
-            .text_xs()
-            .text_color(palette.muted_foreground)
-            .child(SharedString::from(format!("[{}]", row.source_item_id)))
-            .into_any_element(),
-    };
+    }
 
-    div()
-        .w_full()
-        .max_w(px(760.0))
-        .mx_auto()
-        .px(px(16.0))
-        .py(px(4.0))
-        .child(inner)
-        .into_any_element()
+    #[allow(clippy::too_many_arguments)]
+    fn collapsible(
+        &self,
+        item_id: &str,
+        badge: &str,
+        preview: &str,
+        expanded: bool,
+        detail: Option<String>,
+        monospace: bool,
+        palette: &AppPalette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let owned_id = item_id.to_owned();
+        let mut el = div()
+            .w_full()
+            .rounded(px(8.0))
+            .bg(palette.card)
+            .border_1()
+            .border_color(palette.border)
+            .flex()
+            .flex_col()
+            .child(
+                div()
+                    .id(SharedString::from(format!("item-toggle-{item_id}")))
+                    .flex()
+                    .items_center()
+                    .gap(px(8.0))
+                    .px(px(10.0))
+                    .py(px(7.0))
+                    .cursor_pointer()
+                    .hover(|s| s.bg(palette.row_hover))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.toggle_item_expanded(owned_id.clone(), cx);
+                    }))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(palette.muted_foreground)
+                            .child(if expanded { "▾" } else { "▸" }),
+                    )
+                    .child(
+                        div()
+                            .flex_none()
+                            .text_xs()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(palette.muted_foreground)
+                            .child(SharedString::from(badge.to_owned())),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .text_xs()
+                            .truncate()
+                            .child(SharedString::from(preview.to_owned())),
+                    ),
+            );
+        if expanded && let Some(text) = detail {
+            let mut body = div()
+                .px(px(12.0))
+                .py(px(8.0))
+                .border_t_1()
+                .border_color(palette.border)
+                .text_xs();
+            if monospace {
+                body = body.bg(palette.code_bg).font_family("monospace");
+            }
+            el = el.child(body.child(SharedString::from(text)));
+        }
+        el.into_any_element()
+    }
 }
 
-#[allow(clippy::too_many_arguments)]
-fn render_collapsible_row(
-    item_id: &str,
-    badge: &str,
-    preview: &str,
-    expanded: bool,
-    detail: Option<String>,
-    monospace: bool,
-    palette: &AppPalette,
-    cx: &mut Context<P0App>,
-) -> impl IntoElement {
-    let chevron = if expanded { "▾" } else { "▸" };
-    let toggle_id = SharedString::from(format!("item-toggle-{item_id}"));
-    let owned_id = item_id.to_owned();
-
-    let mut box_el = div()
+pub fn card(palette: &AppPalette) -> gpui_kit::Div {
+    div()
         .w_full()
-        .rounded(px(8.0))
+        .p(px(12.0))
+        .rounded(px(10.0))
         .bg(palette.card)
         .border_1()
         .border_color(palette.border)
         .flex()
         .flex_col()
-        .child(
-            div()
-                .id(toggle_id)
-                .flex()
-                .items_center()
-                .gap(px(8.0))
-                .px(px(10.0))
-                .py(px(7.0))
-                .cursor_pointer()
-                .hover(|s| s.bg(palette.row_hover))
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    this.toggle_item_expanded(owned_id.clone(), cx);
-                }))
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(palette.muted_foreground)
-                        .child(chevron),
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(palette.muted_foreground)
-                        .child(SharedString::from(badge.to_owned())),
-                )
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .text_xs()
-                        .text_color(palette.foreground)
-                        .truncate()
-                        .child(SharedString::from(preview.to_owned())),
-                ),
-        );
-
-    if expanded
-        && let Some(text) = detail
-    {
-        let mut body = div()
-            .px(px(12.0))
-            .py(px(8.0))
-            .border_t_1()
-            .border_color(palette.border)
-            .text_xs()
-            .text_color(palette.foreground);
-        if monospace {
-            body = body.bg(palette.code_bg).font_family("monospace");
-        }
-        box_el = box_el.child(body.child(SharedString::from(text)));
-    }
-
-    box_el
-}
-
-#[allow(clippy::too_many_arguments)]
-pub fn render_approval_card(
-    thread_id: &str,
-    request_id: &str,
-    title: Option<&str>,
-    prompt: Option<&str>,
-    reason: Option<&str>,
-    options: Option<&[ApprovalOption]>,
-    is_pending: bool,
-    i18n: &Catalog,
-    palette: &AppPalette,
-    cx: &mut Context<P0App>,
-) -> impl IntoElement {
-    let heading = title.unwrap_or_else(|| i18n.get(Key::ApprovalRequested));
-    let mut card = div()
-        .w_full()
-        .p(px(12.0))
-        .rounded(px(10.0))
-        .bg(palette.warning_surface)
-        .border_1()
-        .border_color(if is_pending {
-            palette.warning
-        } else {
-            palette.border
-        })
-        .flex()
-        .flex_col()
         .gap(px(6.0))
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .justify_between()
-                .child(
-                    div()
-                        .text_sm()
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(palette.foreground)
-                        .child(SharedString::from(heading.to_owned())),
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(if is_pending {
-                            palette.warning
-                        } else {
-                            palette.muted_foreground
-                        })
-                        .child(SharedString::from(
-                            i18n.get(if is_pending {
-                                Key::WaitingForApproval
-                            } else {
-                                Key::Completed
-                            })
-                            .to_owned(),
-                        )),
-                ),
-        );
+}
 
-    if let Some(p) = prompt {
-        card = card.child(
-            div()
-                .text_sm()
-                .text_color(palette.foreground)
-                .child(SharedString::from(p.to_owned())),
-        );
-    }
-    if let Some(r) = reason {
-        card = card.child(
-            div()
-                .text_xs()
-                .text_color(palette.muted_foreground)
-                .child(SharedString::from(r.to_owned())),
-        );
-    }
+pub fn caption(text: &str, color: gpui_kit::Hsla) -> gpui_kit::Div {
+    div()
+        .text_xs()
+        .font_weight(FontWeight::SEMIBOLD)
+        .text_color(color)
+        .child(SharedString::from(text.to_owned()))
+}
 
-    if is_pending {
-        let mut btn_row = div().flex().flex_wrap().items_center().gap(px(8.0)).pt(px(4.0));
-        let default_opts = [
-            ApprovalOption {
-                decision: ApprovalDecision::Accept,
-                label: i18n.get(Key::Accept).to_owned(),
-                warning: None,
-            },
-            ApprovalOption {
-                decision: ApprovalDecision::Decline,
-                label: i18n.get(Key::Decline).to_owned(),
-                warning: None,
-            },
-        ];
-        let opts: &[ApprovalOption] = match options {
-            Some(list) if !list.is_empty() => list,
-            _ => &default_opts,
-        };
-
-        for (idx, opt) in opts.iter().enumerate() {
-            let tid = thread_id.to_owned();
-            let rid = request_id.to_owned();
-            let decision = opt.decision;
-            let btn_id = SharedString::from(format!("approve-{request_id}-{idx}"));
-            let is_accept = matches!(
-                decision,
-                ApprovalDecision::Accept
-                    | ApprovalDecision::AcceptForSession
-                    | ApprovalDecision::AcceptAlways
-            );
-            let is_decline = matches!(decision, ApprovalDecision::Decline | ApprovalDecision::Cancel);
-
-            let mut btn = div()
-                .id(btn_id)
-                .px(px(12.0))
-                .py(px(5.0))
-                .rounded(px(6.0))
-                .text_xs()
-                .font_weight(FontWeight::SEMIBOLD)
-                .cursor_pointer()
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    this.respond_approval(tid.clone(), rid.clone(), decision, cx);
-                }))
-                .child(SharedString::from(opt.label.clone()));
-
-            if is_accept && idx == 0 {
-                btn = btn.bg(palette.primary).text_color(palette.primary_foreground);
-            } else if is_decline {
-                btn = btn
-                    .bg(palette.card)
-                    .border_1()
-                    .border_color(palette.border)
-                    .text_color(palette.error);
-            } else {
-                btn = btn
-                    .bg(palette.card)
-                    .border_1()
-                    .border_color(palette.border)
-                    .text_color(palette.foreground);
+fn inline_text(id: SharedString, inline: &Inline, palette: &AppPalette) -> AnyElement {
+    let highlights: Vec<(Range<usize>, HighlightStyle)> = inline
+        .runs
+        .iter()
+        .map(|run| {
+            let mut style = HighlightStyle::default();
+            if run.style.strong {
+                style.font_weight = Some(FontWeight::BOLD);
             }
-            btn_row = btn_row.child(btn);
-        }
-        card = card.child(btn_row);
-    }
-
-    card
-}
-
-fn render_user_input_card(
-    thread_id: &str,
-    request_id: &str,
-    questions: &[UserInputQuestion],
-    is_pending: bool,
-    i18n: &Catalog,
-    palette: &AppPalette,
-    cx: &mut Context<P0App>,
-) -> impl IntoElement {
-    let mut card = div()
-        .w_full()
-        .p(px(12.0))
-        .rounded(px(10.0))
-        .bg(palette.card)
-        .border_1()
-        .border_color(if is_pending {
-            palette.info
-        } else {
-            palette.border
-        })
-        .flex()
-        .flex_col()
-        .gap(px(8.0));
-
-    for (q_idx, q) in questions.iter().enumerate() {
-        let mut q_box = div()
-            .flex()
-            .flex_col()
-            .gap(px(4.0))
-            .child(
-                div()
-                    .text_xs()
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(palette.info)
-                    .child(SharedString::from(q.header.clone())),
-            )
-            .child(
-                div()
-                    .text_sm()
-                    .text_color(palette.foreground)
-                    .child(SharedString::from(q.question.clone())),
-            );
-
-        if is_pending && !q.options.is_empty() {
-            let mut opts_row = div().flex().flex_wrap().gap(px(6.0)).pt(px(4.0));
-            for (o_idx, opt) in q.options.iter().enumerate() {
-                let tid = thread_id.to_owned();
-                let rid = request_id.to_owned();
-                let qid = q.id.clone();
-                let ans_val = opt.value.clone().unwrap_or_else(|| opt.label.clone());
-                let btn_id = SharedString::from(format!("q-{request_id}-{q_idx}-{o_idx}"));
-                opts_row = opts_row.child(
-                    div()
-                        .id(btn_id)
-                        .px(px(10.0))
-                        .py(px(5.0))
-                        .rounded(px(6.0))
-                        .bg(palette.background)
-                        .border_1()
-                        .border_color(palette.border)
-                        .hover(|s| s.bg(palette.row_hover))
-                        .cursor_pointer()
-                        .text_xs()
-                        .text_color(palette.foreground)
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.answer_user_input(
-                                tid.clone(),
-                                rid.clone(),
-                                serde_json::json!({ qid.clone(): ans_val.clone() }),
-                                cx,
-                            );
-                        }))
-                        .child(SharedString::from(opt.label.clone())),
-                );
+            if run.style.emphasis {
+                style.font_style = Some(FontStyle::Italic);
             }
-            q_box = q_box.child(opts_row);
-        } else if !is_pending {
-            q_box = q_box.child(
-                div()
-                    .text_xs()
-                    .text_color(palette.muted_foreground)
-                    .child(SharedString::from(i18n.get(Key::Completed).to_owned())),
-            );
-        }
-        card = card.child(q_box);
-    }
-    card
-}
-
-#[allow(clippy::too_many_arguments)]
-fn render_secret_request_card(
-    thread_id: &str,
-    turn_item_id: &str,
-    label: &str,
-    reason: &str,
-    url: Option<&str>,
-    secret_status: SecretRequestStatus,
-    secret_input: &Entity<InputState>,
-    i18n: &Catalog,
-    palette: &AppPalette,
-    cx: &mut Context<P0App>,
-) -> impl IntoElement {
-    let is_pending = matches!(secret_status, SecretRequestStatus::Pending);
-    let status_text = match secret_status {
-        SecretRequestStatus::Pending => i18n.get(Key::Pending).to_owned(),
-        SecretRequestStatus::Saved => i18n.get(Key::Done).to_owned(),
-        SecretRequestStatus::Declined => i18n.get(Key::Declined).to_owned(),
-        SecretRequestStatus::Cancelled => i18n.get(Key::Cancelled).to_owned(),
-        SecretRequestStatus::Unknown => i18n.get(Key::Pending).to_owned(),
-    };
-
-    let mut card = div()
-        .w_full()
-        .p(px(12.0))
-        .rounded(px(10.0))
-        .bg(palette.card)
-        .border_1()
-        .border_color(if is_pending {
-            palette.badge_approval
-        } else {
-            palette.border
+            if run.style.strike {
+                style.strikethrough = Some(StrikethroughStyle {
+                    thickness: px(1.0),
+                    ..Default::default()
+                });
+            }
+            if run.style.code {
+                style.background_color = Some(palette.code_bg);
+            }
+            if run.link.is_some() {
+                style.color = Some(palette.primary);
+                style.underline = Some(UnderlineStyle {
+                    thickness: px(1.0),
+                    ..Default::default()
+                });
+            }
+            (run.range.clone(), style)
         })
-        .flex()
-        .flex_col()
-        .gap(px(6.0))
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .justify_between()
-                .child(
-                    div()
-                        .text_sm()
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(palette.foreground)
-                        .child(SharedString::from(format!(
-                            "{}: {label}",
-                            i18n.get(Key::AskForSecret)
-                        ))),
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(palette.muted_foreground)
-                        .child(SharedString::from(status_text)),
-                ),
-        )
-        .child(
-            div()
-                .text_xs()
-                .text_color(palette.muted_foreground)
-                .child(SharedString::from(reason.to_owned())),
-        );
-
-    if let Some(u) = url {
-        card = card.child(
-            div()
-                .text_xs()
-                .text_color(palette.primary)
-                .child(SharedString::from(u.to_owned())),
-        );
+        .collect();
+    let text = StyledText::new(SharedString::from(inline.text.clone())).with_highlights(highlights);
+    let links: Vec<(Range<usize>, String)> = inline
+        .runs
+        .iter()
+        .filter_map(|r| Some((r.range.clone(), r.link.clone()?)))
+        .collect();
+    if links.is_empty() {
+        return text.into_any_element();
     }
-
-    if is_pending {
-        let tid_save = thread_id.to_owned();
-        let item_save = turn_item_id.to_owned();
-        let tid_decline = thread_id.to_owned();
-        let item_decline = turn_item_id.to_owned();
-
-        card = card.child(
-            div()
-                .flex()
-                .items_center()
-                .gap(px(8.0))
-                .pt(px(4.0))
-                .child(div().flex_1().child(Input::new(secret_input).mask_toggle()))
-                .child(
-                    div()
-                        .id(SharedString::from(format!("secret-save-{turn_item_id}")))
-                        .px(px(12.0))
-                        .py(px(5.0))
-                        .rounded(px(6.0))
-                        .bg(palette.primary)
-                        .text_xs()
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(palette.primary_foreground)
-                        .cursor_pointer()
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            this.submit_secret_request(tid_save.clone(), item_save.clone(), window, cx);
-                        }))
-                        .child(SharedString::from(i18n.get(Key::Accept).to_owned())),
-                )
-                .child(
-                    div()
-                        .id(SharedString::from(format!("secret-decline-{turn_item_id}")))
-                        .px(px(12.0))
-                        .py(px(5.0))
-                        .rounded(px(6.0))
-                        .bg(palette.background)
-                        .border_1()
-                        .border_color(palette.border)
-                        .text_xs()
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(palette.error)
-                        .cursor_pointer()
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.decline_secret_request(
-                                tid_decline.clone(),
-                                item_decline.clone(),
-                                cx,
-                            );
-                        }))
-                        .child(SharedString::from(i18n.get(Key::Decline).to_owned())),
-                ),
-        );
-    }
-
-    card
+    let ranges = links.iter().map(|(r, _)| r.clone()).collect();
+    InteractiveText::new(id, text)
+        .on_click(ranges, move |ix, _, cx| {
+            if let Some((_, url)) = links.get(ix) {
+                cx.open_url(url);
+            }
+        })
+        .into_any_element()
 }
 
-fn render_markdown_blocks(blocks: &[MdBlock], palette: &AppPalette) -> impl IntoElement {
-    let mut container = div().flex().flex_col().gap(px(6.0)).w_full();
-
-    for block in blocks {
-        match block {
-            MdBlock::Heading { level, spans } => {
-                let mut h = div()
-                    .font_weight(FontWeight::BOLD)
-                    .text_color(palette.foreground);
-                h = match level {
+pub fn render_markdown(item_id: &str, blocks: &[MdBlock], palette: &AppPalette) -> AnyElement {
+    let mut container = div().flex().flex_col().gap(px(6.0)).w_full().text_sm();
+    for (ix, block) in blocks.iter().enumerate() {
+        let id = SharedString::from(format!("md-{item_id}-{ix}"));
+        container = container.child(match block {
+            MdBlock::Heading { level, inline } => {
+                let h = div().font_weight(FontWeight::BOLD);
+                match level {
                     1 => h.text_lg(),
                     2 => h.text_base(),
-                    _ => h.text_sm(),
-                };
-                container = container.child(h.child(render_inline_spans(spans, palette)));
+                    _ => h,
+                }
+                .child(inline_text(id, inline, palette))
+                .into_any_element()
             }
-            MdBlock::Paragraph(spans) => {
-                container = container.child(
-                    div()
-                        .text_sm()
-                        .text_color(palette.foreground)
-                        .child(render_inline_spans(spans, palette)),
-                );
-            }
+            MdBlock::Paragraph(inline) => div()
+                .child(inline_text(id, inline, palette))
+                .into_any_element(),
             MdBlock::ListItem {
-                ordered_index,
-                spans,
+                depth,
+                marker,
+                inline,
             } => {
-                let bullet = match ordered_index {
-                    Some(n) => format!("{n}."),
-                    None => "•".to_owned(),
+                let bullet = match marker {
+                    ListMarker::Bullet => "•".to_owned(),
+                    ListMarker::Number(n) => format!("{n}."),
+                    ListMarker::Continuation => String::new(),
                 };
-                container = container.child(
-                    div()
-                        .flex()
-                        .items_start()
-                        .gap(px(6.0))
-                        .pl(px(8.0))
-                        .text_sm()
-                        .text_color(palette.foreground)
-                        .child(
-                            div()
-                                .text_color(palette.muted_foreground)
-                                .child(SharedString::from(bullet)),
-                        )
-                        .child(div().flex_1().child(render_inline_spans(spans, palette))),
-                );
+                div()
+                    .flex()
+                    .items_start()
+                    .gap(px(6.0))
+                    .pl(px(8.0 + 16.0 * *depth as f32))
+                    .child(
+                        div()
+                            .flex_none()
+                            .min_w(px(14.0))
+                            .text_color(palette.muted_foreground)
+                            .child(SharedString::from(bullet)),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .child(inline_text(id, inline, palette)),
+                    )
+                    .into_any_element()
             }
-            MdBlock::BlockQuote(spans) => {
-                container = container.child(
-                    div()
-                        .pl(px(10.0))
-                        .border_l_2()
-                        .border_color(palette.border)
-                        .text_sm()
-                        .text_color(palette.muted_foreground)
-                        .child(render_inline_spans(spans, palette)),
-                );
-            }
-            MdBlock::CodeBlock { language, code } => {
-                let mut code_card = div()
+            MdBlock::Quote(inline) => div()
+                .pl(px(10.0))
+                .border_l_2()
+                .border_color(palette.border)
+                .text_color(palette.muted_foreground)
+                .child(inline_text(id, inline, palette))
+                .into_any_element(),
+            MdBlock::Code { language, code } => {
+                let mut c = div()
                     .w_full()
                     .rounded(px(6.0))
                     .bg(palette.code_bg)
@@ -1089,7 +654,7 @@ fn render_markdown_blocks(blocks: &[MdBlock], palette: &AppPalette) -> impl Into
                     .flex()
                     .flex_col();
                 if let Some(lang) = language {
-                    code_card = code_card.child(
+                    c = c.child(
                         div()
                             .px(px(10.0))
                             .py(px(4.0))
@@ -1100,78 +665,27 @@ fn render_markdown_blocks(blocks: &[MdBlock], palette: &AppPalette) -> impl Into
                             .child(SharedString::from(lang.clone())),
                     );
                 }
-                code_card = code_card.child(
+                c.child(
                     div()
                         .px(px(10.0))
                         .py(px(8.0))
                         .font_family("monospace")
                         .text_xs()
-                        .text_color(palette.foreground)
                         .child(SharedString::from(code.clone())),
-                );
-                container = container.child(code_card);
+                )
+                .into_any_element()
             }
-            MdBlock::ThematicBreak => {
-                container = container.child(div().w_full().h(px(1.0)).bg(palette.border));
-            }
-        }
+            MdBlock::Rule => div()
+                .w_full()
+                .h(px(1.0))
+                .bg(palette.border)
+                .into_any_element(),
+        });
     }
-
-    container
+    container.into_any_element()
 }
 
-fn render_inline_spans(spans: &[InlineSpan], palette: &AppPalette) -> impl IntoElement {
-    let mut row = div().flex().flex_wrap().items_baseline().gap_x(px(2.0));
-    for span in spans {
-        match span {
-            InlineSpan::Text(t) => {
-                row = row.child(SharedString::from(t.clone()));
-            }
-            InlineSpan::Strong(t) => {
-                row = row.child(
-                    div()
-                        .font_weight(FontWeight::BOLD)
-                        .child(SharedString::from(t.clone())),
-                );
-            }
-            InlineSpan::Emphasis(t) => {
-                row = row.child(
-                    div()
-                        .italic()
-                        .child(SharedString::from(t.clone())),
-                );
-            }
-            InlineSpan::Code(t) => {
-                row = row.child(
-                    div()
-                        .px(px(4.0))
-                        .py(px(1.0))
-                        .rounded(px(4.0))
-                        .bg(palette.code_bg)
-                        .font_family("monospace")
-                        .text_xs()
-                        .child(SharedString::from(t.clone())),
-                );
-            }
-            InlineSpan::Link { label, url } => {
-                let text = if label == url {
-                    label.clone()
-                } else {
-                    format!("{label} ({url})")
-                };
-                row = row.child(
-                    div()
-                        .text_color(palette.primary)
-                        .underline()
-                        .child(SharedString::from(text)),
-                );
-            }
-        }
-    }
-    row
-}
-
-fn first_line_preview(text: &str, max_chars: usize) -> String {
+fn first_line(text: &str, max_chars: usize) -> String {
     let line = text
         .lines()
         .map(str::trim)
@@ -1180,14 +694,71 @@ fn first_line_preview(text: &str, max_chars: usize) -> String {
     truncate_chars(line, max_chars)
 }
 
-fn truncate_chars(text: &str, max_chars: usize) -> String {
-    let mut out = String::new();
-    for (idx, ch) in text.chars().enumerate() {
-        if idx >= max_chars {
-            out.push('…');
-            break;
-        }
-        out.push(ch);
+pub fn truncate_chars(text: &str, max_chars: usize) -> String {
+    match text.char_indices().nth(max_chars) {
+        Some((cut, _)) => format!("{}…", &text[..cut]),
+        None => text.to_owned(),
     }
-    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn rows(spec: &[(&str, u64)]) -> Vec<(String, u64)> {
+        spec.iter()
+            .map(|(id, sig)| ((*id).to_owned(), *sig))
+            .collect()
+    }
+
+    #[test]
+    fn streaming_tail_only_remeasures_that_row() {
+        let plan = plan_feed_update(&rows(&[("a", 1), ("b", 1)]), &rows(&[("a", 1), ("b", 2)]));
+        assert_eq!(
+            plan,
+            FeedPlan {
+                splice: None,
+                remeasure: vec![1]
+            }
+        );
+    }
+
+    #[test]
+    fn appended_rows_splice_at_the_end() {
+        let plan = plan_feed_update(&rows(&[("a", 1)]), &rows(&[("a", 1), ("b", 1), ("c", 1)]));
+        assert_eq!(
+            plan,
+            FeedPlan {
+                splice: Some((1..1, 2)),
+                remeasure: vec![]
+            }
+        );
+    }
+
+    #[test]
+    fn inserted_or_removed_rows_splice_from_first_difference() {
+        let plan = plan_feed_update(
+            &rows(&[("a", 1), ("c", 1), ("d", 1)]),
+            &rows(&[("a", 2), ("b", 1), ("c", 1), ("d", 1)]),
+        );
+        assert_eq!(
+            plan,
+            FeedPlan {
+                splice: Some((1..3, 3)),
+                remeasure: vec![0]
+            }
+        );
+        let removed = plan_feed_update(&rows(&[("a", 1), ("b", 1)]), &rows(&[("a", 1)]));
+        assert_eq!(removed.splice, Some((1..2, 0)));
+        assert_eq!(
+            plan_feed_update(&rows(&[("a", 1)]), &rows(&[("a", 1)])),
+            FeedPlan::default()
+        );
+    }
+
+    #[test]
+    fn truncates_on_char_boundaries() {
+        assert_eq!(truncate_chars("日本語テキスト", 3), "日本語…");
+        assert_eq!(truncate_chars("short", 10), "short");
+    }
 }
