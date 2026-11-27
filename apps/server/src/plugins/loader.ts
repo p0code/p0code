@@ -12,6 +12,7 @@ import { importInstalledBundle } from "./bundle.ts";
 import { readInstallRecord, writeInstallRecord } from "./installRecords.ts";
 
 import * as ServerConfig from "../config.ts";
+import { BUILTIN_DEPLOY_PROVIDER_IDS } from "../deploy/BuiltinDeployProviders.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import {
   installedPluginVersionDir,
@@ -261,8 +262,9 @@ export const layerWith = (bundledIds: ReadonlyArray<string>) =>
 
       const failures: Array<FailedInstallation> = [];
       const plugins: Array<Plugin> = [];
+      const reservedIds = new Set([...bundledIds, ...BUILTIN_DEPLOY_PROVIDER_IDS]);
       for (const id of ids) {
-        if (bundledIds.includes(id)) {
+        if (reservedIds.has(id)) {
           yield* Effect.logWarning(
             `Refusing the installed copy of plugin "${id}": it is built into this version of the server.`,
           );

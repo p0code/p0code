@@ -15,6 +15,7 @@ import * as Effect from "effect/Effect";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as HttpServer from "effect/http/HttpServer";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import type * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
@@ -24,6 +25,7 @@ import * as PairingGrantStore from "../auth/PairingGrantStore.ts";
 import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
 import * as SessionStore from "../auth/SessionStore.ts";
 import * as ServerConfig from "../config.ts";
+import { builtinSecretName } from "../deploy/BuiltinDeployProviders.ts";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.ts";
 import * as ProjectService from "../project/ProjectService.ts";
@@ -221,7 +223,7 @@ const stubDependencies = Layer.mergeAll(
   } as unknown as ProjectService.ProjectService["Service"]),
 ).pipe(Layer.provideMerge(Layer.merge(NodeServices.layer, NodeCrypto.layer)));
 
-const layerBindingsTest = bindingsLayer.pipe(Layer.provide(stubDependencies));
+const layerBindingsTest = bindingsLayer.pipe(Layer.provideMerge(stubDependencies));
 
 const layerHostWithBindings = pluginHostLayer.pipe(
   Layer.provide(
@@ -250,6 +252,32 @@ const EXPECTED_KEYS = [
 
 describe("PluginHostBindings usage:read", () => {
   it.layer(layerHostWithBindings)((it) => {
+    it.effect(
+      "prevents a delimiter-collision plugin id like vercel-<uuidseg> from reaching built-in secrets",
+      () =>
+        Effect.gen(function* () {
+          const bindings = yield* PluginHostBindings;
+          const secrets = yield* ServerSecretStore.ServerSecretStore;
+          const accountId = "550e8400-e29b-41d4-a716-446655440000";
+          const builtInKey = builtinSecretName("vercel", `${accountId}:token`);
+          yield* secrets.set(builtInKey, new TextEncoder().encode("real-builtin-token"));
+
+          const collidingCtx = yield* bindings.contextFor(
+            manifest("vercel-550e8400", []),
+            () => Effect.void,
+          );
+          const read = yield* collidingCtx.storage.get("e29b-41d4-a716-446655440000:token");
+          assert.isTrue(Option.isNone(read));
+
+          yield* collidingCtx.storage.set("e29b-41d4-a716-446655440000:token", "attacker-token");
+          const stored = yield* secrets.get(builtInKey);
+          assert.isTrue(Option.isSome(stored));
+          if (Option.isSome(stored)) {
+            assert.strictEqual(new TextDecoder().decode(stored.value), "real-builtin-token");
+          }
+        }),
+    );
+
     it.effect("refuses every backup operation without data:backup", () =>
       Effect.gen(function* () {
         const bindings = yield* PluginHostBindings;

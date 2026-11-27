@@ -1,8 +1,7 @@
 /**
- * Deploy providers that ship with p0code (Vercel, Cloudflare). They need no plugin consent, shop
- * entry or relay scope. Credentials live in the server secret store under the same names the
- * former `vercel` / `cloudflare` plugins used (`plugin-<id>-<key>`), so accounts linked through
- * those plugins keep working unchanged.
+ * Built-in deploy providers (Vercel, Cloudflare). Secrets live under `deploy-builtin:<id>:<key>`,
+ * isolated from `plugin-<id>-*`. Reads perform a one-time read-through copy from legacy plugin
+ * secrets without deleting them, so already-linked accounts keep working across upgrades.
  */
 import {
   type DeployProviderOperation,
@@ -47,8 +46,31 @@ export class BuiltinDeployProviders extends Context.Service<
   ReadonlyArray<BuiltinDeployProvider>
 >()("p0/deploy/BuiltinDeployProviders") {}
 
-/** The secret name the former plugin of the same id used, so existing credentials still resolve. */
-export const builtinSecretName = (providerId: string, key: string) => `plugin-${providerId}-${key}`;
+/** Dedicated secret prefix for built-in deploy providers, isolated from `plugin-<id>-*`. */
+export const BUILTIN_DEPLOY_SECRET_PREFIX = "deploy-builtin:";
+
+/** Ids reserved by built-in deploy providers; installed plugins cannot claim them. */
+export const BUILTIN_DEPLOY_PROVIDER_IDS: ReadonlyArray<string> = [
+  VERCEL_PROVIDER_INFO.id,
+  CLOUDFLARE_PROVIDER_INFO.id,
+];
+
+export const isBuiltinDeployProviderId = (id: string): boolean =>
+  BUILTIN_DEPLOY_PROVIDER_IDS.includes(id);
+
+/**
+ * Secret name under the dedicated built-in prefix (`deploy-builtin:<id>:<key>`).
+ * Uses `:` as delimiter so hyphenated plugin ids (e.g. `vercel-<uuidseg>`) cannot collide.
+ */
+export const builtinSecretName = (providerId: string, key: string) =>
+  `${BUILTIN_DEPLOY_SECRET_PREFIX}${providerId}:${key}`;
+
+/**
+ * Legacy secret name written by the former `vercel` / `cloudflare` plugins (`plugin-<id>-<key>`).
+ * Used only as a read-through fallback on `get` (and cleaned up on explicit `unlink`).
+ */
+export const legacyPluginSecretName = (providerId: string, key: string) =>
+  `plugin-${providerId}-${key}`;
 
 const secretStorage = (
   secrets: ServerSecretStore.ServerSecretStore["Service"],
@@ -56,13 +78,32 @@ const secretStorage = (
 ): DeployProviderStorage => {
   const failed = (message: string) => (cause: unknown) => new PluginError({ message, cause });
   return {
-    get: (key) =>
-      secrets
-        .get(builtinSecretName(providerId, key))
-        .pipe(
-          Effect.map(Option.map((bytes) => new TextDecoder().decode(bytes))),
-          Effect.mapError(failed("Could not read deploy credentials.")),
+    get: Effect.fn("BuiltinDeployProviders.storage.get")(function* (key: string) {
+      const dedicated = builtinSecretName(providerId, key);
+      const current = yield* secrets
+        .get(dedicated)
+        .pipe(Effect.mapError(failed("Could not read deploy credentials.")));
+      if (Option.isSome(current)) {
+        return Option.some(new TextDecoder().decode(current.value));
+      }
+      // One-time read-through migration from legacy `plugin-<id>-<key>`:
+      // copy into `deploy-builtin:` and intentionally leave the legacy secret untouched.
+      const legacy = yield* secrets
+        .get(legacyPluginSecretName(providerId, key))
+        .pipe(Effect.mapError(failed("Could not read deploy credentials.")));
+      if (Option.isNone(legacy)) {
+        return Option.none();
+      }
+      yield* secrets.set(dedicated, legacy.value).pipe(
+        Effect.catchCause((cause) =>
+          Effect.logWarning("Could not copy legacy deploy secret to built-in namespace", {
+            providerId,
+            cause,
+          }),
         ),
+      );
+      return Option.some(new TextDecoder().decode(legacy.value));
+    }),
     set: (key, value) =>
       secrets
         .set(builtinSecretName(providerId, key), new TextEncoder().encode(value))
@@ -70,7 +111,10 @@ const secretStorage = (
     remove: (key) =>
       secrets
         .remove(builtinSecretName(providerId, key))
-        .pipe(Effect.mapError(failed("Could not write deploy credentials."))),
+        .pipe(
+          Effect.andThen(secrets.remove(legacyPluginSecretName(providerId, key))),
+          Effect.mapError(failed("Could not write deploy credentials.")),
+        ),
   };
 };
 

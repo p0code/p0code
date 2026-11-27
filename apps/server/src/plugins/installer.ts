@@ -20,6 +20,10 @@ import * as NodeModule from "node:module";
 import * as NodeURL from "node:url";
 import { readGithub, readArchive, type Bundle } from "./installSources.ts";
 import { ServerConfig } from "../config.ts";
+import {
+  BUILTIN_DEPLOY_PROVIDER_IDS,
+  BUILTIN_DEPLOY_SECRET_PREFIX,
+} from "../deploy/BuiltinDeployProviders.ts";
 import { ServerSecretStore } from "../auth/ServerSecretStore.ts";
 import { PluginHost } from "./PluginHost.ts";
 import { isValidPluginId, isValidVersionSegment } from "./installedPaths.ts";
@@ -88,11 +92,12 @@ export const makeInstaller = Effect.fn("PluginInstaller.make")(function* (
   const { stateDir } = yield* ServerConfig;
   const host = yield* PluginHost;
   const secrets = yield* ServerSecretStore;
-  const bundledIds = new Set(
-    (yield* host.snapshot).plugins
+  const bundledIds = new Set([
+    ...(yield* host.snapshot).plugins
       .filter((plugin) => plugin.origin === "bundled")
       .map((plugin) => plugin.manifest.id),
-  );
+    ...BUILTIN_DEPLOY_PROVIDER_IDS,
+  ]);
   const lock = yield* Semaphore.make(1);
   const root = NodePath.join(stateDir, "installed-plugins");
   const io = <A>(id: string, run: () => Promise<A>) =>
@@ -176,6 +181,7 @@ export const makeInstaller = Effect.fn("PluginInstaller.make")(function* (
       )
         throw new Error("The shop entry API version does not match the manifest it downloads.");
       if (
+        bundledIds.has(manifest.id) ||
         snapshot.plugins.some(
           (plugin) => plugin.manifest.id === manifest.id && plugin.origin === "bundled",
         )
@@ -408,14 +414,14 @@ export const makeInstaller = Effect.fn("PluginInstaller.make")(function* (
                 pluginId: input.id,
                 message: "Secret store cannot enumerate secrets for purge.",
               });
-            const names = yield* secrets
+            const names = (yield* secrets
               .list(`plugin-${input.id}-`)
               .pipe(
                 Effect.mapError(
                   (error) =>
                     new PluginOperationError({ pluginId: input.id, message: error.message }),
                 ),
-              );
+              )).filter((name) => !name.startsWith(BUILTIN_DEPLOY_SECRET_PREFIX));
             yield* Effect.forEach(names, (name) => secrets.remove(name), { discard: true }).pipe(
               Effect.mapError(
                 (error) => new PluginOperationError({ pluginId: input.id, message: error.message }),

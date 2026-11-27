@@ -27,6 +27,7 @@ import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 import * as SubscriptionRef from "effect/SubscriptionRef";
 
+import { isBuiltinDeployProviderId } from "../deploy/BuiltinDeployProviders.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import type { FailedInstallation } from "./loader.ts";
 
@@ -125,7 +126,16 @@ const failureMessage = (cause: Cause.Cause<{ readonly message: string }>) => {
 
 const make = Effect.gen(function* () {
   const hosted = yield* BundledPlugins;
-  const plugins = [...hosted.plugins];
+  const plugins: Array<Plugin> = [];
+  for (const plugin of hosted.plugins) {
+    if (isBuiltinDeployProviderId(plugin.manifest.id)) {
+      yield* Effect.logWarning(
+        `Refusing plugin "${plugin.manifest.id}" in PluginHost: it is reserved by a built-in deploy provider.`,
+      );
+      continue;
+    }
+    plugins.push(plugin);
+  }
   const bindings = yield* PluginHostBindings;
   const settingsService = yield* ServerSettings.ServerSettingsService;
   const platform = bindings.platform;
@@ -145,6 +155,7 @@ const make = Effect.gen(function* () {
   );
   // A broken install is not runnable, but it stays visible with why it failed.
   for (const failure of hosted.failures) {
+    if (isBuiltinDeployProviderId(failure.manifest.id)) continue;
     infos.set(failure.manifest.id, {
       manifest: failure.manifest,
       origin: "installed",
@@ -397,6 +408,15 @@ const make = Effect.gen(function* () {
     replace: Effect.fn("PluginHost.replace")((id, plugin) =>
       lock.withPermits(1)(
         Effect.gen(function* () {
+          if (
+            plugin !== null &&
+            (isBuiltinDeployProviderId(id) || isBuiltinDeployProviderId(plugin.manifest.id))
+          ) {
+            yield* Effect.logWarning(
+              `Refusing to register plugin "${plugin.manifest.id}" in PluginHost: it is reserved by a built-in deploy provider.`,
+            );
+            return;
+          }
           const index = plugins.findIndex((candidate) => candidate.manifest.id === id);
           const current = plugins[index];
           if (current) {

@@ -46,6 +46,7 @@ import {
   BuiltinDeployProviders,
   builtinSecretName,
   layer as builtinsLayer,
+  legacyPluginSecretName,
 } from "./BuiltinDeployProviders.ts";
 import { DeployService, DeployWorkspace, layer as deployLayer, redact } from "./DeployService.ts";
 import * as DeployStore from "./DeployStore.ts";
@@ -999,7 +1000,7 @@ describe("DeployService", () => {
 
     it.effect("keeps an account linked through the former vercel plugin working", () =>
       Effect.gen(function* () {
-        // What the `vercel` plugin left behind: its account row and its namespaced secrets.
+        // What the `vercel` plugin left behind: its account row and its legacy plugin secrets.
         const store = yield* DeployStore.DeployStore;
         yield* store.insertAccount({
           id: "legacy-vercel",
@@ -1010,12 +1011,18 @@ describe("DeployService", () => {
           createdAt: "2026-01-01T00:00:00.000Z",
         });
         const encode = (text: string) => new TextEncoder().encode(text);
-        memorySecrets.set(builtinSecretName("vercel", "legacy-vercel:token"), encode(TOKEN));
+        const legacyTokenKey = legacyPluginSecretName("vercel", "legacy-vercel:token");
+        const legacyAccountKey = legacyPluginSecretName("vercel", "legacy-vercel:account");
+        const builtinTokenKey = builtinSecretName("vercel", "legacy-vercel:token");
+        const builtinAccountKey = builtinSecretName("vercel", "legacy-vercel:account");
+        assert.strictEqual(builtinSecretName("vercel", "k"), "deploy-builtin:vercel:k");
+        assert.strictEqual(legacyPluginSecretName("vercel", "k"), "plugin-vercel-k");
+
+        memorySecrets.set(legacyTokenKey, encode(TOKEN));
         memorySecrets.set(
-          builtinSecretName("vercel", "legacy-vercel:account"),
+          legacyAccountKey,
           encode(JSON.stringify({ accountLabel: "acme", userId: "u_1", linkedAt: 1 })),
         );
-        assert.strictEqual(builtinSecretName("vercel", "k"), "plugin-vercel-k");
 
         const deploy = yield* DeployService;
         const account = (yield* deploy.overview).accounts.find(
@@ -1028,9 +1035,85 @@ describe("DeployService", () => {
           warnings: [],
         });
 
+        // Read-through migration copies into the dedicated built-in prefix without deleting legacy keys.
+        assert.isTrue(memorySecrets.has(builtinTokenKey));
+        assert.isTrue(memorySecrets.has(builtinAccountKey));
+        assert.isTrue(memorySecrets.has(legacyTokenKey));
+        assert.isTrue(memorySecrets.has(legacyAccountKey));
+
+        // Even if the legacy plugin keys are later gone, the migrated built-in copy keeps working.
+        memorySecrets.delete(legacyTokenKey);
+        memorySecrets.delete(legacyAccountKey);
+        const afterLegacyGone = (yield* deploy.overview).accounts.find(
+          (candidate) => candidate.id === "legacy-vercel",
+        );
+        assert.strictEqual(afterLegacyGone?.status.state, "linked");
+
+        // Re-seed legacy to confirm explicit unlink clears both built-in and legacy entries.
+        memorySecrets.set(legacyTokenKey, encode(TOKEN));
+        memorySecrets.set(
+          legacyAccountKey,
+          encode(JSON.stringify({ accountLabel: "acme", userId: "u_1", linkedAt: 1 })),
+        );
         yield* deploy.unlink("legacy-vercel");
-        assert.isFalse(memorySecrets.has("plugin-vercel-legacy-vercel:token"));
-        assert.isFalse(memorySecrets.has("plugin-vercel-legacy-vercel:account"));
+        assert.isFalse(memorySecrets.has(builtinTokenKey));
+        assert.isFalse(memorySecrets.has(builtinAccountKey));
+        assert.isFalse(memorySecrets.has(legacyTokenKey));
+        assert.isFalse(memorySecrets.has(legacyAccountKey));
+      }),
+    );
+
+    it.effect("keeps an account linked through the former cloudflare plugin working", () =>
+      Effect.gen(function* () {
+        const store = yield* DeployStore.DeployStore;
+        yield* store.insertAccount({
+          id: "legacy-cloudflare",
+          pluginId: "cloudflare",
+          label: "Old CF plugin",
+          teamId: "cf_acc_123",
+          profileIds: [],
+          createdAt: "2026-01-01T00:00:00.000Z",
+        });
+        const encode = (text: string) => new TextEncoder().encode(text);
+        const legacyTokenKey = legacyPluginSecretName("cloudflare", "legacy-cloudflare:api_token");
+        const legacyMetaKey = legacyPluginSecretName(
+          "cloudflare",
+          "legacy-cloudflare:account_meta",
+        );
+        const builtinTokenKey = builtinSecretName("cloudflare", "legacy-cloudflare:api_token");
+        const builtinMetaKey = builtinSecretName("cloudflare", "legacy-cloudflare:account_meta");
+
+        memorySecrets.set(legacyTokenKey, encode(TOKEN));
+        // An already-past expiresAt lets Cloudflare resolve account metadata offline without HTTP.
+        memorySecrets.set(
+          legacyMetaKey,
+          encode(
+            JSON.stringify({
+              accountId: "cf_acc_123",
+              accountLabel: "Acme Cloudflare",
+              tokenId: "tok_legacy",
+              expiresAt: "1969-12-31T00:00:00Z",
+              accounts: [{ id: "cf_acc_123", name: "Acme Cloudflare" }],
+            }),
+          ),
+        );
+
+        const deploy = yield* DeployService;
+        const account = (yield* deploy.overview).accounts.find(
+          (candidate) => candidate.id === "legacy-cloudflare",
+        );
+        assert.strictEqual(account?.status.state, "expired");
+        assert.strictEqual(account?.status.accountLabel, "Acme Cloudflare");
+        assert.isTrue(memorySecrets.has(builtinTokenKey));
+        assert.isTrue(memorySecrets.has(builtinMetaKey));
+        assert.isTrue(memorySecrets.has(legacyTokenKey));
+        assert.isTrue(memorySecrets.has(legacyMetaKey));
+
+        yield* deploy.unlink("legacy-cloudflare");
+        assert.isFalse(memorySecrets.has(builtinTokenKey));
+        assert.isFalse(memorySecrets.has(builtinMetaKey));
+        assert.isFalse(memorySecrets.has(legacyTokenKey));
+        assert.isFalse(memorySecrets.has(legacyMetaKey));
       }),
     );
   });

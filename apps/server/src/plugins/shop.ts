@@ -22,6 +22,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as NodeCrypto from "node:crypto";
+import { BUILTIN_DEPLOY_PROVIDER_IDS } from "../deploy/BuiltinDeployProviders.ts";
 import { download, readArchive, type Bundle } from "./installSources.ts";
 import * as PluginInstallerModule from "./installer.ts";
 
@@ -167,11 +168,15 @@ export const makeShop = Effect.fn("PluginShop.make")(function* (options: ShopOpt
       readonly activeVersion: string | null;
       readonly stagedVersion: string | null;
     }>,
+    reservedIds: ReadonlySet<string>,
   ) => {
     const byId = new Map(installed.map((record) => [record.id, record]));
     const entries: PluginShopEntryState[] = [];
     let skippedEntries = 0;
     for (const entry of catalog.plugins) {
+      if (reservedIds.has(entry.id)) {
+        continue;
+      }
       if (entryProblems(entry).length > 0) {
         skippedEntries += 1;
         continue;
@@ -195,23 +200,33 @@ export const makeShop = Effect.fn("PluginShop.make")(function* (options: ShopOpt
     return { entries, skippedEntries };
   };
 
-  const installedRecords = Effect.fn("PluginShop.installedRecords")(function* (): Effect.fn.Return<
-    ReadonlyArray<{
-      readonly id: string;
-      readonly activeVersion: string | null;
-      readonly stagedVersion: string | null;
-    }>,
+  const installerState = Effect.fn("PluginShop.installerState")(function* (): Effect.fn.Return<
+    {
+      readonly installations: ReadonlyArray<{
+        readonly id: string;
+        readonly activeVersion: string | null;
+        readonly stagedVersion: string | null;
+      }>;
+      readonly reservedIds: ReadonlySet<string>;
+    },
     never
   > {
     const listed = yield* installer.list.pipe(Effect.orElseSucceed(() => null));
-    return listed?.installations ?? [];
+    const bundledIds =
+      listed?.snapshot.plugins
+        .filter((plugin) => plugin.origin === "bundled")
+        .map((plugin) => plugin.manifest.id) ?? [];
+    return {
+      installations: listed?.installations ?? [],
+      reservedIds: new Set([...bundledIds, ...BUILTIN_DEPLOY_PROVIDER_IDS]),
+    };
   });
 
   const list = Effect.fn("PluginShop.list")(function* (
     input: PluginShopListInput,
     force = false,
   ): Effect.fn.Return<PluginShopList, never> {
-    const installations = yield* installedRecords();
+    const { installations, reservedIds } = yield* installerState();
     const fetchedAt = DateTime.formatIso(yield* DateTime.now);
     const outcome = yield* Effect.promise(() => attempt(force, fetchedAt));
     // Keep showing the previous catalog, with the failure beside it, rather than an empty shop.
@@ -226,7 +241,7 @@ export const makeShop = Effect.fn("PluginShop.make")(function* (options: ShopOpt
         error,
         skippedEntries: 0,
       } satisfies PluginShopList;
-    const computed = states(loaded.catalog, installations);
+    const computed = states(loaded.catalog, installations, reservedIds);
     const categories = [
       ...new Set(computed.entries.flatMap((state) => state.entry.categories)),
     ].sort();
@@ -261,15 +276,16 @@ export const makeShop = Effect.fn("PluginShop.make")(function* (options: ShopOpt
   const entry = Effect.fn("PluginShop.entry")(function* (
     id: string,
   ): Effect.fn.Return<PluginShopEntryResult, never> {
-    const installations = yield* installedRecords();
+    const { installations, reservedIds } = yield* installerState();
     const fetchedAt = DateTime.formatIso(yield* DateTime.now);
     const outcome = yield* Effect.promise(() => attempt(false, fetchedAt));
     if (!outcome.ok)
       return { entry: null, fetchedAt: cache?.fetchedAt ?? null, error: outcome.error };
     const loaded = outcome.cache;
+    if (reservedIds.has(id)) return { entry: null, fetchedAt: loaded.fetchedAt, error: null };
     const found = loaded.catalog.plugins.find((plugin) => plugin.id === id);
     if (!found) return { entry: null, fetchedAt: loaded.fetchedAt, error: null };
-    const computed = states({ ...loaded.catalog, plugins: [found] }, installations);
+    const computed = states({ ...loaded.catalog, plugins: [found] }, installations, reservedIds);
     const state = computed.entries[0];
     if (!state)
       return {
@@ -281,6 +297,12 @@ export const makeShop = Effect.fn("PluginShop.make")(function* (options: ShopOpt
   });
 
   const requireEntry = Effect.fn("PluginShop.requireEntry")(function* (id: string) {
+    const { reservedIds } = yield* installerState();
+    if (reservedIds.has(id))
+      return yield* new PluginOperationError({
+        pluginId: id,
+        message: "This plugin is built into this version of the server.",
+      });
     const fetchedAt = DateTime.formatIso(yield* DateTime.now);
     const outcome = yield* Effect.promise(() => attempt(false, fetchedAt));
     if (!outcome.ok)
@@ -367,7 +389,7 @@ export const makeShop = Effect.fn("PluginShop.make")(function* (options: ShopOpt
         pluginId: input.id,
         message: "No release of this plugin works with this p0code version.",
       });
-    const record = (yield* installedRecords()).find((item) => item.id === input.id);
+    const record = (yield* installerState()).installations.find((item) => item.id === input.id);
     const installed = record?.activeVersion ?? record?.stagedVersion ?? null;
     if (installed !== null && comparePluginVersions(selected.version, installed) <= 0)
       return yield* new PluginOperationError({

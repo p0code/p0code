@@ -386,6 +386,23 @@ describe("plugin loader", () => {
     }).pipe(Effect.provide(loaderLayerFor(one("built-in", "9.9.9"), {}, ["built-in"]))),
   );
 
+  it.effect("refuses installed plugins claiming reserved built-in deploy provider ids", () =>
+    Effect.gen(function* () {
+      const installed = yield* InstalledPlugins;
+      assert.deepStrictEqual(installed.plugins, []);
+      assert.deepStrictEqual(installed.failures, []);
+    }).pipe(
+      Effect.provide(
+        loaderLayerFor((context) =>
+          Effect.gen(function* () {
+            yield* writeVersion(context, { id: "vercel", version: "1.0.0" });
+            yield* writeVersion(context, { id: "cloudflare", version: "1.0.0" });
+          }),
+        ),
+      ),
+    ),
+  );
+
   it.effect("reports an install without its plugin.mjs as failed", () =>
     Effect.gen(function* () {
       const installed = yield* InstalledPlugins;

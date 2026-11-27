@@ -4,11 +4,17 @@ import { t3ConnectBridge } from "@t3tools/plugin-t3-connect-bridge";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
+import { BUILTIN_DEPLOY_PROVIDER_IDS } from "../deploy/BuiltinDeployProviders.ts";
 import { InstalledPlugins, layerWith } from "./loader.ts";
 import { BundledPlugins } from "./PluginHost.ts";
 
 /** First-party plugins shipped in this build; installed ones join them from the plugin folder. */
 const bundledPlugins = [backupPlugin, t3ConnectBridge, obsidianSharedMemory];
+
+const reservedPluginIds = [
+  ...bundledPlugins.map((plugin) => plugin.manifest.id),
+  ...BUILTIN_DEPLOY_PROVIDER_IDS,
+];
 
 export const layer = Layer.effect(
   BundledPlugins,
@@ -19,4 +25,4 @@ export const layer = Layer.effect(
       failures: installed.failures,
     });
   }),
-).pipe(Layer.provide(layerWith(bundledPlugins.map((plugin) => plugin.manifest.id))));
+).pipe(Layer.provide(layerWith(reservedPluginIds)));
