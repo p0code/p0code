@@ -13,10 +13,12 @@ use p0_protocol::{
     ORCHESTRATION_PROTOCOL_QUERY_PARAM, ORCHESTRATION_PROTOCOL_VERSION, OrchestrationCommand,
     RPC_ORCHESTRATION_DISPATCH_COMMAND, RPC_ORCHESTRATION_FORCE_STOP_THREAD,
     RPC_ORCHESTRATION_LAUNCH_THREAD, RPC_ORCHESTRATION_SUBSCRIBE_SHELL,
-    RPC_ORCHESTRATION_SUBSCRIBE_THREAD, RPC_SERVER_GET_CONFIG, RPC_SERVER_PROBE, RequestId,
-    RpcClientFrame, RpcExit, RpcServerFrame, SOCKET_FRAME_PARTS_QUERY_PARAM, ServerConfig,
-    ServerProbeResult, ShellStreamItem, SubscribeShellInput, SubscribeThreadInput,
-    ThreadStreamItem, decode_server_frame, encode_client_frame,
+    RPC_ORCHESTRATION_SUBSCRIBE_THREAD, RPC_SECRETS_ANSWER_REQUEST, RPC_SERVER_GET_CONFIG,
+    RPC_SERVER_GET_SETTINGS, RPC_SERVER_PROBE, RPC_SERVER_UPDATE_SETTINGS, RequestId,
+    RpcClientFrame, RpcExit, RpcServerFrame, SOCKET_FRAME_PARTS_QUERY_PARAM,
+    SecretRequestAnswerInput, ServerConfig, ServerProbeResult, ShellStreamItem,
+    SubscribeShellInput, SubscribeThreadInput, ThreadStreamItem, decode_server_frame,
+    encode_client_frame,
 };
 use rand::RngExt as _;
 use serde::Serialize;
@@ -287,6 +289,22 @@ impl RpcClient {
             &json!({ "threadId": thread_id }),
         )
         .await
+    }
+
+    pub async fn answer_secret_request(
+        &self,
+        input: &SecretRequestAnswerInput,
+    ) -> Result<Value, ClientError> {
+        self.request(RPC_SECRETS_ANSWER_REQUEST, input).await
+    }
+
+    pub async fn get_settings(&self) -> Result<Value, ClientError> {
+        self.request(RPC_SERVER_GET_SETTINGS, &json!({})).await
+    }
+
+    pub async fn update_settings(&self, patch: &Value) -> Result<Value, ClientError> {
+        self.request(RPC_SERVER_UPDATE_SETTINGS, &json!({ "patch": patch }))
+            .await
     }
 }
 

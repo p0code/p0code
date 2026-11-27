@@ -11,7 +11,8 @@ use p0_client::{
 };
 use p0_protocol::{
     ApprovalDecision, DispatchMode, ModelSelection, OrchestrationCommand, RuntimeMode,
-    ServerConfig, SubscribeShellInput, SubscribeThreadInput,
+    SecretRequestAnswer, SecretRequestAnswerInput, ServerConfig, SubscribeShellInput,
+    SubscribeThreadInput,
 };
 use tokio::runtime::Runtime;
 use tokio::sync::watch;
@@ -299,6 +300,55 @@ impl AppBridge {
         self.rt.spawn(async move {
             if let Err(err) = client.dispatch_command(&cmd).await {
                 warn!(error = %err, "runtime-request.respond failed");
+                *err_slot.lock().unwrap() = Some(err.to_string());
+                ver.fetch_add(1, Ordering::Release);
+            }
+        });
+    }
+
+    pub fn answer_user_input(
+        &self,
+        thread_id: String,
+        request_id: String,
+        answers: serde_json::Value,
+    ) {
+        let client = self.client.clone();
+        let err_slot = self.last_error.clone();
+        let ver = self.version.clone();
+        let cmd = OrchestrationCommand::RuntimeRequestRespond {
+            command_id: Uuid::new_v4().to_string(),
+            thread_id,
+            request_id,
+            decision: None,
+            feedback: None,
+            answers: Some(answers),
+        };
+        self.rt.spawn(async move {
+            if let Err(err) = client.dispatch_command(&cmd).await {
+                warn!(error = %err, "user_input respond failed");
+                *err_slot.lock().unwrap() = Some(err.to_string());
+                ver.fetch_add(1, Ordering::Release);
+            }
+        });
+    }
+
+    pub fn answer_secret_request(
+        &self,
+        thread_id: String,
+        turn_item_id: String,
+        answer: SecretRequestAnswer,
+    ) {
+        let client = self.client.clone();
+        let err_slot = self.last_error.clone();
+        let ver = self.version.clone();
+        let input = SecretRequestAnswerInput {
+            thread_id,
+            turn_item_id,
+            answer,
+        };
+        self.rt.spawn(async move {
+            if let Err(err) = client.answer_secret_request(&input).await {
+                warn!(error = %err, "secrets.answerRequest failed");
                 *err_slot.lock().unwrap() = Some(err.to_string());
                 ver.fetch_add(1, Ordering::Release);
             }

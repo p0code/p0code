@@ -88,6 +88,9 @@ define_keys! {
     You => "0c982111ac348e9f",
     System => "a03e4c1348ad9ba8",
     Permissions => "f0d4573b2e03e2a7",
+    Settings => "0a75e464d833bca8",
+    AskForSecret => "76ed47bc9da51cc4",
+    Declined => "8cc00444f7443feb",
 }
 
 #[derive(Debug, Clone)]

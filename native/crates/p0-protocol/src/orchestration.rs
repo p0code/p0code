@@ -15,6 +15,7 @@ pub const RPC_ORCHESTRATION_FORCE_STOP_THREAD: &str = "orchestration.forceStopTh
 pub const RPC_ORCHESTRATION_GET_TURN_ITEM: &str = "orchestration.getTurnItem";
 pub const RPC_ORCHESTRATION_SUBSCRIBE_SHELL: &str = "orchestration.subscribeShell";
 pub const RPC_ORCHESTRATION_SUBSCRIBE_THREAD: &str = "orchestration.subscribeThread";
+pub const RPC_SECRETS_ANSWER_REQUEST: &str = "secrets.answerRequest";
 
 // ---------------------------------------------------------------------------
 // Shell snapshot & stream
@@ -332,6 +333,57 @@ pub struct ApprovalOption {
     pub label: String,
     #[serde(default)]
     pub warning: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UserInputOption {
+    pub label: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub value: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UserInputQuestion {
+    pub id: String,
+    pub header: String,
+    pub question: String,
+    #[serde(default)]
+    pub options: Vec<UserInputOption>,
+    #[serde(rename = "multiSelect", default)]
+    pub multi_select: Option<bool>,
+    #[serde(rename = "allowCustomAnswer", default)]
+    pub allow_custom_answer: Option<bool>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SecretRequestStatus {
+    Pending,
+    Saved,
+    Declined,
+    Cancelled,
+    #[serde(other)]
+    Unknown,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum SecretRequestAnswer {
+    #[serde(rename = "save")]
+    Save { secret: String },
+    #[serde(rename = "decline")]
+    Decline,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SecretRequestAnswerInput {
+    #[serde(rename = "threadId")]
+    pub thread_id: String,
+    #[serde(rename = "turnItemId")]
+    pub turn_item_id: String,
+    pub answer: SecretRequestAnswer,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -694,6 +746,46 @@ pub enum TurnItem {
         #[serde(default)]
         options: Option<Vec<ApprovalOption>>,
     },
+    #[serde(rename = "user_input_request")]
+    UserInputRequest {
+        id: String,
+        #[serde(rename = "threadId")]
+        thread_id: String,
+        #[serde(rename = "runId", default)]
+        run_id: Option<String>,
+        ordinal: u64,
+        status: TurnItemStatus,
+        #[serde(default)]
+        title: Option<String>,
+        #[serde(rename = "updatedAt")]
+        updated_at: String,
+        #[serde(rename = "requestId")]
+        request_id: String,
+        #[serde(default)]
+        questions: Vec<UserInputQuestion>,
+    },
+    #[serde(rename = "secret_request")]
+    SecretRequest {
+        id: String,
+        #[serde(rename = "threadId")]
+        thread_id: String,
+        #[serde(rename = "runId", default)]
+        run_id: Option<String>,
+        ordinal: u64,
+        status: TurnItemStatus,
+        #[serde(default)]
+        title: Option<String>,
+        #[serde(rename = "updatedAt")]
+        updated_at: String,
+        label: String,
+        reason: String,
+        #[serde(default)]
+        url: Option<String>,
+        #[serde(default)]
+        placeholder: Option<String>,
+        #[serde(rename = "secretStatus")]
+        secret_status: SecretRequestStatus,
+    },
     #[serde(rename = "system_notice")]
     SystemNotice {
         id: String,
@@ -781,6 +873,8 @@ impl TurnItem {
             | Self::WebSearch { id, .. }
             | Self::DynamicTool { id, .. }
             | Self::ApprovalRequest { id, .. }
+            | Self::UserInputRequest { id, .. }
+            | Self::SecretRequest { id, .. }
             | Self::SystemNotice { id, .. }
             | Self::Error { id, .. }
             | Self::Notification { id, .. }
@@ -802,6 +896,8 @@ impl TurnItem {
             | Self::WebSearch { thread_id, .. }
             | Self::DynamicTool { thread_id, .. }
             | Self::ApprovalRequest { thread_id, .. }
+            | Self::UserInputRequest { thread_id, .. }
+            | Self::SecretRequest { thread_id, .. }
             | Self::SystemNotice { thread_id, .. }
             | Self::Error { thread_id, .. }
             | Self::Notification { thread_id, .. }
@@ -823,6 +919,8 @@ impl TurnItem {
             | Self::WebSearch { ordinal, .. }
             | Self::DynamicTool { ordinal, .. }
             | Self::ApprovalRequest { ordinal, .. }
+            | Self::UserInputRequest { ordinal, .. }
+            | Self::SecretRequest { ordinal, .. }
             | Self::SystemNotice { ordinal, .. }
             | Self::Error { ordinal, .. }
             | Self::Notification { ordinal, .. }
@@ -844,6 +942,8 @@ impl TurnItem {
             | Self::WebSearch { updated_at, .. }
             | Self::DynamicTool { updated_at, .. }
             | Self::ApprovalRequest { updated_at, .. }
+            | Self::UserInputRequest { updated_at, .. }
+            | Self::SecretRequest { updated_at, .. }
             | Self::SystemNotice { updated_at, .. }
             | Self::Error { updated_at, .. }
             | Self::Notification { updated_at, .. }

@@ -10,6 +10,8 @@ use crate::auth::{ExecutionEnvironmentDescriptor, ServerAuthDescriptor};
 pub const RPC_SERVER_PROBE: &str = "server.probe";
 pub const RPC_SERVER_GET_CONFIG: &str = "server.getConfig";
 pub const RPC_SERVER_SUBSCRIBE_CONFIG: &str = "server.subscribeServerConfig";
+pub const RPC_SERVER_GET_SETTINGS: &str = "server.getSettings";
+pub const RPC_SERVER_UPDATE_SETTINGS: &str = "server.updateSettings";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ServerProbeResult {

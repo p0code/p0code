@@ -5,7 +5,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
-use gpui_kit::component::input::{InputEvent, TextareaState};
+use gpui_kit::component::input::{InputEvent, InputState, TextareaState};
 use gpui_kit::component::{VirtualListScrollHandle, v_virtual_list};
 use gpui_kit::{
     App, AppContext as _, Context, Entity, FontWeight, InteractiveElement as _, IntoElement,
@@ -14,7 +14,9 @@ use gpui_kit::{
 };
 use p0_client::ConnectionState;
 use p0_i18n::{Catalog, Key};
-use p0_protocol::{ApprovalDecision, ModelSelection, RuntimeMode, ThreadStatus};
+use p0_protocol::{
+    ApprovalDecision, ModelSelection, RuntimeMode, SecretRequestAnswer, ThreadStatus,
+};
 
 use crate::bridge::AppBridge;
 use crate::composer::render_composer;
@@ -33,6 +35,7 @@ pub struct P0App {
     selected_runtime_mode: Option<RuntimeMode>,
     model_picker_open: bool,
     composer_input: Entity<TextareaState>,
+    secret_input: Entity<InputState>,
     _composer_sub: Subscription,
     feed_scroll: VirtualListScrollHandle,
     last_rendered_thread_rev: u64,
@@ -48,6 +51,11 @@ impl P0App {
             TextareaState::new(window, cx)
                 .placeholder(placeholder)
                 .auto_grow(2, 8)
+        });
+        let secret_input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .masked(true)
+                .placeholder("••••••••")
         });
         let composer_sub = cx.subscribe_in(
             &composer_input,
@@ -101,6 +109,7 @@ impl P0App {
             selected_runtime_mode: None,
             model_picker_open: false,
             composer_input,
+            secret_input,
             _composer_sub: composer_sub,
             feed_scroll: VirtualListScrollHandle::new(),
             last_rendered_thread_rev: 0,
@@ -249,6 +258,54 @@ impl P0App {
         cx: &mut Context<Self>,
     ) {
         self.bridge.respond_approval(thread_id, request_id, decision);
+        cx.notify();
+    }
+
+    pub fn answer_user_input(
+        &mut self,
+        thread_id: String,
+        request_id: String,
+        answers: serde_json::Value,
+        cx: &mut Context<Self>,
+    ) {
+        self.bridge.answer_user_input(thread_id, request_id, answers);
+        cx.notify();
+    }
+
+    pub fn submit_secret_request(
+        &mut self,
+        thread_id: String,
+        turn_item_id: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let value = self.secret_input.read(cx).value().to_string();
+        let trimmed = value.trim().to_owned();
+        if trimmed.is_empty() {
+            return;
+        }
+        self.secret_input.update(cx, |s, cx| {
+            s.set_value("", window, cx);
+        });
+        self.bridge.answer_secret_request(
+            thread_id,
+            turn_item_id,
+            SecretRequestAnswer::Save { secret: trimmed },
+        );
+        cx.notify();
+    }
+
+    pub fn decline_secret_request(
+        &mut self,
+        thread_id: String,
+        turn_item_id: String,
+        cx: &mut Context<Self>,
+    ) {
+        self.bridge.answer_secret_request(
+            thread_id,
+            turn_item_id,
+            SecretRequestAnswer::Decline,
+        );
         cx.notify();
     }
 
@@ -613,6 +670,7 @@ impl P0App {
                 let pending = state.pending_approvals();
                 let tid = proj.thread.id.clone();
                 let expanded_snapshot = this.expanded_items.clone();
+                let secret_input = this.secret_input.clone();
                 let i18n = this.i18n.clone();
                 range
                     .filter_map(|ix| proj.visible_turn_items.get(ix))
@@ -621,6 +679,7 @@ impl P0App {
                             row,
                             &expanded_snapshot,
                             &pending,
+                            &secret_input,
                             &mut this.md_cache,
                             &i18n,
                             &palette,

@@ -3,12 +3,16 @@
 
 use std::collections::HashSet;
 
+use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::{
-    AnyElement, Context, FontWeight, InteractiveElement as _, IntoElement,
+    AnyElement, Context, Entity, FontWeight, InteractiveElement as _, IntoElement,
     ParentElement as _, Pixels, SharedString, StatefulInteractiveElement as _, Styled as _, div, px,
 };
 use p0_i18n::{Catalog, Key};
-use p0_protocol::{ApprovalDecision, ProjectedTurnItem, RuntimeRequest, TurnItem, TurnItemStatus};
+use p0_protocol::{
+    ApprovalDecision, ApprovalOption, ProjectedTurnItem, RuntimeRequest, SecretRequestStatus,
+    TurnItem, TurnItemStatus, UserInputQuestion,
+};
 
 use crate::app::P0App;
 use crate::markdown::{InlineSpan, MarkdownCache, MdBlock, estimate_markdown_height};
@@ -98,6 +102,16 @@ pub fn estimate_turn_item_height(
                 72.0
             }
         }
+        TurnItem::UserInputRequest { questions, .. } => {
+            72.0 + (questions.len().max(1) as f32) * 72.0
+        }
+        TurnItem::SecretRequest { secret_status, .. } => {
+            if matches!(secret_status, SecretRequestStatus::Pending) {
+                160.0
+            } else {
+                80.0
+            }
+        }
         TurnItem::SystemNotice { message, .. }
         | TurnItem::Notification {
             summary: message, ..
@@ -119,6 +133,7 @@ pub fn render_turn_item(
     row: &ProjectedTurnItem,
     expanded_items: &HashSet<String>,
     pending_requests: &[&RuntimeRequest],
+    secret_input: &Entity<InputState>,
     md_cache: &mut MarkdownCache,
     i18n: &Catalog,
     palette: &AppPalette,
@@ -433,6 +448,7 @@ pub fn render_turn_item(
             title,
             prompt,
             reason,
+            options,
             ..
         } => {
             let is_pending = pending_requests.iter().any(|r| r.id == *request_id);
@@ -442,6 +458,7 @@ pub fn render_turn_item(
                 title.as_deref(),
                 prompt.as_deref(),
                 reason.as_deref(),
+                options.as_deref(),
                 is_pending,
                 i18n,
                 palette,
@@ -449,6 +466,43 @@ pub fn render_turn_item(
             )
             .into_any_element()
         }
+        TurnItem::UserInputRequest {
+            request_id,
+            questions,
+            ..
+        } => {
+            let is_pending = pending_requests.iter().any(|r| r.id == *request_id);
+            render_user_input_card(
+                thread_id,
+                request_id,
+                questions,
+                is_pending,
+                i18n,
+                palette,
+                cx,
+            )
+            .into_any_element()
+        }
+        TurnItem::SecretRequest {
+            id,
+            label,
+            reason,
+            url,
+            secret_status,
+            ..
+        } => render_secret_request_card(
+            thread_id,
+            id,
+            label,
+            reason,
+            url.as_deref(),
+            *secret_status,
+            secret_input,
+            i18n,
+            palette,
+            cx,
+        )
+        .into_any_element(),
         TurnItem::SystemNotice { message, .. } => div()
             .w_full()
             .px(px(12.0))
@@ -609,6 +663,7 @@ pub fn render_approval_card(
     title: Option<&str>,
     prompt: Option<&str>,
     reason: Option<&str>,
+    options: Option<&[ApprovalOption]>,
     is_pending: bool,
     i18n: &Catalog,
     palette: &AppPalette,
@@ -678,12 +733,241 @@ pub fn render_approval_card(
     }
 
     if is_pending {
-        let tid_accept = thread_id.to_owned();
-        let req_accept = request_id.to_owned();
+        let mut btn_row = div().flex().flex_wrap().items_center().gap(px(8.0)).pt(px(4.0));
+        let default_opts = [
+            ApprovalOption {
+                decision: ApprovalDecision::Accept,
+                label: i18n.get(Key::Accept).to_owned(),
+                warning: None,
+            },
+            ApprovalOption {
+                decision: ApprovalDecision::Decline,
+                label: i18n.get(Key::Decline).to_owned(),
+                warning: None,
+            },
+        ];
+        let opts: &[ApprovalOption] = match options {
+            Some(list) if !list.is_empty() => list,
+            _ => &default_opts,
+        };
+
+        for (idx, opt) in opts.iter().enumerate() {
+            let tid = thread_id.to_owned();
+            let rid = request_id.to_owned();
+            let decision = opt.decision;
+            let btn_id = SharedString::from(format!("approve-{request_id}-{idx}"));
+            let is_accept = matches!(
+                decision,
+                ApprovalDecision::Accept
+                    | ApprovalDecision::AcceptForSession
+                    | ApprovalDecision::AcceptAlways
+            );
+            let is_decline = matches!(decision, ApprovalDecision::Decline | ApprovalDecision::Cancel);
+
+            let mut btn = div()
+                .id(btn_id)
+                .px(px(12.0))
+                .py(px(5.0))
+                .rounded(px(6.0))
+                .text_xs()
+                .font_weight(FontWeight::SEMIBOLD)
+                .cursor_pointer()
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.respond_approval(tid.clone(), rid.clone(), decision, cx);
+                }))
+                .child(SharedString::from(opt.label.clone()));
+
+            if is_accept && idx == 0 {
+                btn = btn.bg(palette.primary).text_color(palette.primary_foreground);
+            } else if is_decline {
+                btn = btn
+                    .bg(palette.card)
+                    .border_1()
+                    .border_color(palette.border)
+                    .text_color(palette.error);
+            } else {
+                btn = btn
+                    .bg(palette.card)
+                    .border_1()
+                    .border_color(palette.border)
+                    .text_color(palette.foreground);
+            }
+            btn_row = btn_row.child(btn);
+        }
+        card = card.child(btn_row);
+    }
+
+    card
+}
+
+fn render_user_input_card(
+    thread_id: &str,
+    request_id: &str,
+    questions: &[UserInputQuestion],
+    is_pending: bool,
+    i18n: &Catalog,
+    palette: &AppPalette,
+    cx: &mut Context<P0App>,
+) -> impl IntoElement {
+    let mut card = div()
+        .w_full()
+        .p(px(12.0))
+        .rounded(px(10.0))
+        .bg(palette.card)
+        .border_1()
+        .border_color(if is_pending {
+            palette.info
+        } else {
+            palette.border
+        })
+        .flex()
+        .flex_col()
+        .gap(px(8.0));
+
+    for (q_idx, q) in questions.iter().enumerate() {
+        let mut q_box = div()
+            .flex()
+            .flex_col()
+            .gap(px(4.0))
+            .child(
+                div()
+                    .text_xs()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(palette.info)
+                    .child(SharedString::from(q.header.clone())),
+            )
+            .child(
+                div()
+                    .text_sm()
+                    .text_color(palette.foreground)
+                    .child(SharedString::from(q.question.clone())),
+            );
+
+        if is_pending && !q.options.is_empty() {
+            let mut opts_row = div().flex().flex_wrap().gap(px(6.0)).pt(px(4.0));
+            for (o_idx, opt) in q.options.iter().enumerate() {
+                let tid = thread_id.to_owned();
+                let rid = request_id.to_owned();
+                let qid = q.id.clone();
+                let ans_val = opt.value.clone().unwrap_or_else(|| opt.label.clone());
+                let btn_id = SharedString::from(format!("q-{request_id}-{q_idx}-{o_idx}"));
+                opts_row = opts_row.child(
+                    div()
+                        .id(btn_id)
+                        .px(px(10.0))
+                        .py(px(5.0))
+                        .rounded(px(6.0))
+                        .bg(palette.background)
+                        .border_1()
+                        .border_color(palette.border)
+                        .hover(|s| s.bg(palette.row_hover))
+                        .cursor_pointer()
+                        .text_xs()
+                        .text_color(palette.foreground)
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.answer_user_input(
+                                tid.clone(),
+                                rid.clone(),
+                                serde_json::json!({ qid.clone(): ans_val.clone() }),
+                                cx,
+                            );
+                        }))
+                        .child(SharedString::from(opt.label.clone())),
+                );
+            }
+            q_box = q_box.child(opts_row);
+        } else if !is_pending {
+            q_box = q_box.child(
+                div()
+                    .text_xs()
+                    .text_color(palette.muted_foreground)
+                    .child(SharedString::from(i18n.get(Key::Completed).to_owned())),
+            );
+        }
+        card = card.child(q_box);
+    }
+    card
+}
+
+#[allow(clippy::too_many_arguments)]
+fn render_secret_request_card(
+    thread_id: &str,
+    turn_item_id: &str,
+    label: &str,
+    reason: &str,
+    url: Option<&str>,
+    secret_status: SecretRequestStatus,
+    secret_input: &Entity<InputState>,
+    i18n: &Catalog,
+    palette: &AppPalette,
+    cx: &mut Context<P0App>,
+) -> impl IntoElement {
+    let is_pending = matches!(secret_status, SecretRequestStatus::Pending);
+    let status_text = match secret_status {
+        SecretRequestStatus::Pending => i18n.get(Key::Pending).to_owned(),
+        SecretRequestStatus::Saved => i18n.get(Key::Done).to_owned(),
+        SecretRequestStatus::Declined => i18n.get(Key::Declined).to_owned(),
+        SecretRequestStatus::Cancelled => i18n.get(Key::Cancelled).to_owned(),
+        SecretRequestStatus::Unknown => i18n.get(Key::Pending).to_owned(),
+    };
+
+    let mut card = div()
+        .w_full()
+        .p(px(12.0))
+        .rounded(px(10.0))
+        .bg(palette.card)
+        .border_1()
+        .border_color(if is_pending {
+            palette.badge_approval
+        } else {
+            palette.border
+        })
+        .flex()
+        .flex_col()
+        .gap(px(6.0))
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .justify_between()
+                .child(
+                    div()
+                        .text_sm()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(palette.foreground)
+                        .child(SharedString::from(format!(
+                            "{}: {label}",
+                            i18n.get(Key::AskForSecret)
+                        ))),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(palette.muted_foreground)
+                        .child(SharedString::from(status_text)),
+                ),
+        )
+        .child(
+            div()
+                .text_xs()
+                .text_color(palette.muted_foreground)
+                .child(SharedString::from(reason.to_owned())),
+        );
+
+    if let Some(u) = url {
+        card = card.child(
+            div()
+                .text_xs()
+                .text_color(palette.primary)
+                .child(SharedString::from(u.to_owned())),
+        );
+    }
+
+    if is_pending {
+        let tid_save = thread_id.to_owned();
+        let item_save = turn_item_id.to_owned();
         let tid_decline = thread_id.to_owned();
-        let req_decline = request_id.to_owned();
-        let accept_id = SharedString::from(format!("approve-accept-{request_id}"));
-        let decline_id = SharedString::from(format!("approve-decline-{request_id}"));
+        let item_decline = turn_item_id.to_owned();
 
         card = card.child(
             div()
@@ -691,9 +975,10 @@ pub fn render_approval_card(
                 .items_center()
                 .gap(px(8.0))
                 .pt(px(4.0))
+                .child(div().flex_1().child(Input::new(secret_input).mask_toggle()))
                 .child(
                     div()
-                        .id(accept_id)
+                        .id(SharedString::from(format!("secret-save-{turn_item_id}")))
                         .px(px(12.0))
                         .py(px(5.0))
                         .rounded(px(6.0))
@@ -702,23 +987,18 @@ pub fn render_approval_card(
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(palette.primary_foreground)
                         .cursor_pointer()
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.respond_approval(
-                                tid_accept.clone(),
-                                req_accept.clone(),
-                                ApprovalDecision::Accept,
-                                cx,
-                            );
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.submit_secret_request(tid_save.clone(), item_save.clone(), window, cx);
                         }))
                         .child(SharedString::from(i18n.get(Key::Accept).to_owned())),
                 )
                 .child(
                     div()
-                        .id(decline_id)
+                        .id(SharedString::from(format!("secret-decline-{turn_item_id}")))
                         .px(px(12.0))
                         .py(px(5.0))
                         .rounded(px(6.0))
-                        .bg(palette.card)
+                        .bg(palette.background)
                         .border_1()
                         .border_color(palette.border)
                         .text_xs()
@@ -726,10 +1006,9 @@ pub fn render_approval_card(
                         .text_color(palette.error)
                         .cursor_pointer()
                         .on_click(cx.listener(move |this, _, _, cx| {
-                            this.respond_approval(
+                            this.decline_secret_request(
                                 tid_decline.clone(),
-                                req_decline.clone(),
-                                ApprovalDecision::Decline,
+                                item_decline.clone(),
                                 cx,
                             );
                         }))
