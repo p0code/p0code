@@ -141,7 +141,24 @@ Run tests and clippy from `native/`:
 ```sh
 cd native
 cargo test --workspace
-cargo clippy --workspace -- -D warnings
-# Headless connectivity smoke test against p0d (never point at ~/.p0code/userdata):
-cargo run -p p0-gpui -- --home /tmp/p0-gpui-smoke --smoke
+cargo clippy --workspace --all-targets -- -D warnings
 ```
+
+`p0-gpui` finds and starts `p0d` the way the desktop app does (same binary lookup, `--home`, ready
+file and `secrets/desktop-bootstrap-secret`), so both apps pointed at one home share one `p0d`.
+Every desktop sign-in revokes the previous desktop session: two GUIs on one `p0d` sign each other
+out, and `p0-gpui` signs back in a few times with growing delays, then waits for **Sign in here**.
+
+`p0d` serves most RPCs through its Node sidecar, which needs a home named `userdata` and a server
+to run. Without a built `apps/server/dist/bin.mjs`, pass the sources. Headless smoke test (never
+point at `~/.p0code/userdata`):
+
+```sh
+cd apps/p0d && go build -o /tmp/p0d-dev ./ && cd ../..
+native/target/debug/p0-gpui --smoke --home /tmp/p0-gpui-smoke/userdata --p0d-bin /tmp/p0d-dev \
+  --legacy-server "\"node\" \"$PWD/apps/server/src/bin.ts\" \"--mode\" \"web\" \"--no-browser\""
+```
+
+Add `"--dev-url" "http://127.0.0.1:59999"` to the sidecar command to get the free Replay (dev)
+provider. Without a desktop session, `Xvfb :93` plus lavapipe (`mesa-vulkan-drivers`) renders the
+window; `xwd -root` captures it.
