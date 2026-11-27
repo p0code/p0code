@@ -13,6 +13,7 @@ import {
   DeployRollbackInput,
   DeployTargetRequest,
   DeploymentStatus,
+  pluginHttpRoutePath,
 } from "@t3tools/contracts";
 import type {
   DataSnapshotManifest,
@@ -226,8 +227,9 @@ function instanceStarter<Actions extends PluginActionSchemas>(
     if (manifest.httpRoutes.length > 0 && !manifest.capabilities.includes("http:routes")) {
       return Effect.fail(new PluginError({ message: "Capability http:routes is not declared." }));
     }
+    const declaredRoutes = new Set(manifest.httpRoutes.map(pluginHttpRoutePath));
     for (const path of routes.keys()) {
-      if (!manifest.httpRoutes.includes(path)) {
+      if (!declaredRoutes.has(path)) {
         return Effect.fail(new PluginError({ message: `Route ${path} is not declared.` }));
       }
     }

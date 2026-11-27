@@ -41,7 +41,11 @@ const events: Array<string> = [];
 const revoked: Array<string> = [];
 
 const echo = definePlugin({
-  manifest: manifest("echo", ["auth:issue-device-credentials", "http:routes"], ["/api/echo/ping"]),
+  manifest: manifest(
+    "echo",
+    ["auth:issue-device-credentials", "http:routes"],
+    ["/api/echo/ping", { path: "/api/echo/webhook", auth: "none" }],
+  ),
   actions: { echo: { input: Schema.Struct({ text: Schema.String }), output: Schema.String } },
   start: Effect.gen(function* () {
     const context = yield* PluginContext;
@@ -51,6 +55,7 @@ const echo = definePlugin({
       actions: { echo: ({ text }) => Effect.succeed(text.toUpperCase()) },
       routes: {
         "/api/echo/ping": () => Effect.succeed({ status: 200, body: { pong: true } }),
+        "/api/echo/webhook": () => Effect.succeed({ status: 200, body: { webhook: true } }),
       },
     };
   }),
@@ -226,6 +231,8 @@ describe("PluginHost", () => {
         assert.strictEqual(invalid, "Invalid action input.");
         const route = yield* host.route("/api/echo/ping");
         assert.isNotNull(route);
+        const webhookRoute = yield* host.route("/api/echo/webhook");
+        assert.isNotNull(webhookRoute);
 
         revoked.length = 0;
         yield* host.setEnabled({ pluginId: "echo", enabled: false });

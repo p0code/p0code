@@ -1,4 +1,10 @@
-import type { PluginManifest } from "@t3tools/contracts";
+import {
+  AuthRelayConfigureScope,
+  pluginHttpRouteAuth,
+  pluginHttpRoutePath,
+  type PluginHttpRouteAuth,
+  type PluginManifest,
+} from "@t3tools/contracts";
 import * as ByteSize from "effect/ByteSize";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -8,11 +14,17 @@ import {
   HttpIncomingMessage,
   HttpRouter,
   HttpServerRequest,
+  HttpServerRespondable,
   HttpServerResponse,
 } from "effect/http";
 
+import * as EnvironmentAuth from "../auth/EnvironmentAuth.ts";
+import {
+  failEnvironmentAuthInvalid,
+  failEnvironmentInternal,
+  failEnvironmentScopeRequired,
+} from "../auth/http.ts";
 import { API_MAX_BODY_BYTES } from "../http.ts";
-import { DESKTOP_RENDERER_ORIGINS } from "../httpCors.ts";
 import { requestUrl } from "../requestUrl.ts";
 import { timingSafeEqualBase64Url } from "../auth/utils.ts";
 import { BundledPlugins, PluginHost } from "./PluginHost.ts";
@@ -23,6 +35,8 @@ import { removeObsoleteRouteSecrets, routeSecret } from "./routeSecret.ts";
 
 const NO_STORE = { "cache-control": "no-store", pragma: "no-cache" };
 const ROUTE_SECRET_HEADER = "x-p0code-plugin-route-secret";
+// Switch to AuthPluginsManageScope (`plugins:manage`) once fix/plugins-relay-scope lands.
+const PLUGIN_HTTP_REQUIRED_SCOPE = AuthRelayConfigureScope;
 
 // Provide outside HttpRouter.serve so its logger and root request spans share these names.
 export const layerSecretRedaction = Layer.mergeAll(
@@ -44,37 +58,37 @@ const forbidden = () =>
 
 const decodeJson = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Unknown));
 
-const hostHeader = (request: HttpServerRequest.HttpServerRequest) => {
-  const value = request.headers["x-forwarded-host"] ?? request.headers.host;
-  return value?.split(",")[0]?.trim().toLowerCase();
-};
-
-/**
- * Same-origin means the origin this request reached, matching how OAuth and pairing decide it
- * behind Tailscale and tunnels. Desktop renderer origins are the p0code UI too.
- */
-const isUiOrigin = (request: HttpServerRequest.HttpServerRequest, origin: string): boolean => {
-  if ((DESKTOP_RENDERER_ORIGINS as ReadonlyArray<string>).includes(origin)) return true;
-  // Browsers set this for a same-origin POST even when a proxy hides the public host.
-  if (request.headers["sec-fetch-site"] === "same-origin") return true;
-  const reached = Option.getOrUndefined(requestUrl(request));
-  if (reached !== undefined && origin === reached.origin) return true;
-  try {
-    const host = new URL(origin).host.toLowerCase();
-    return host.length > 0 && host === hostHeader(request);
-  } catch {
-    return false;
+const authenticateSessionRoute = Effect.fn("PluginHttp.authenticateSession")(function* () {
+  const request = yield* HttpServerRequest.HttpServerRequest;
+  const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
+  const session = yield* serverAuth.authenticateHttpRequest(request).pipe(
+    Effect.catchIf(EnvironmentAuth.isServerAuthCredentialError, (error) =>
+      failEnvironmentAuthInvalid(
+        EnvironmentAuth.serverAuthCredentialReason(error),
+        EnvironmentAuth.serverAuthDpopFailureReason(error),
+      ),
+    ),
+    Effect.catchIf(EnvironmentAuth.isServerAuthInternalError, (error) =>
+      failEnvironmentInternal("internal_error", error),
+    ),
+  );
+  if (!session.scopes.includes(PLUGIN_HTTP_REQUIRED_SCOPE)) {
+    return yield* failEnvironmentScopeRequired(PLUGIN_HTTP_REQUIRED_SCOPE);
   }
-};
+  return session;
+});
 
 /**
- * Plugin routes are host-guarded, not plugin-guarded: a caller must be the p0code UI (same
- * origin) or present the route secret, and every body is capped like the HttpApi routes.
+ * Plugin routes are host-guarded, not plugin-guarded: routes default to `auth: "session"` (an
+ * authenticated owner session with plugin management scope, or the per-plugin route secret). Only
+ * routes explicitly declared `auth: "none"` in the manifest are reachable unauthenticated. Every
+ * body is capped like the HttpApi routes.
  */
 const route = Effect.fn("PluginHttp.route")(function* (
   path: string,
   secret: string,
   pluginId: string,
+  routeAuth: PluginHttpRouteAuth,
 ) {
   const request = yield* HttpServerRequest.HttpServerRequest;
   if (request.method !== "POST") return HttpServerResponse.empty({ status: 404 });
@@ -83,17 +97,46 @@ const route = Effect.fn("PluginHttp.route")(function* (
   const url = Option.getOrUndefined(requestUrl(request));
   const querySecret = url?.searchParams.get("p0_route");
   url?.searchParams.delete("p0_route");
+  let sanitizedHeaders = Headers.remove(request.headers, ROUTE_SECRET_HEADER);
+  if (routeAuth !== "none") {
+    sanitizedHeaders = Headers.remove(Headers.remove(sanitizedHeaders, "authorization"), "cookie");
+  }
   const sanitized = request.modify({
     url: url === undefined ? path : `${url.pathname}${url.search}`,
-    headers: Headers.remove(request.headers, ROUTE_SECRET_HEADER),
+    headers: sanitizedHeaders,
   });
   const secretHeader = request.headers[ROUTE_SECRET_HEADER];
-  const origin = request.headers.origin;
-  const allowed =
+  const hasSecretAttempt = secretHeader !== undefined || querySecret != null;
+  const hasValidSecret =
     (secretHeader !== undefined && timingSafeEqualBase64Url(secretHeader, secret)) ||
-    (querySecret != null && timingSafeEqualBase64Url(querySecret, secret)) ||
-    (origin !== undefined && isUiOrigin(request, origin));
-  if (!allowed) return yield* forbidden();
+    (querySecret != null && timingSafeEqualBase64Url(querySecret, secret));
+  if (routeAuth !== "none" && !hasValidSecret) {
+    if (hasSecretAttempt) return yield* forbidden();
+    const usesDpop = /^DPoP /i.test(request.headers.authorization ?? "");
+    const authFailure = yield* authenticateSessionRoute().pipe(
+      Effect.as(null),
+      Effect.catchTags({
+        EnvironmentAuthInvalidError: (error) =>
+          HttpServerRespondable.toResponse(error).pipe(
+            Effect.map((response) =>
+              HttpServerResponse.setHeaders(response, {
+                ...NO_STORE,
+                ...(usesDpop ? { "www-authenticate": "DPoP" } : {}),
+              }),
+            ),
+          ),
+        EnvironmentScopeRequiredError: (error) =>
+          HttpServerRespondable.toResponse(error).pipe(
+            Effect.map((response) => HttpServerResponse.setHeaders(response, NO_STORE)),
+          ),
+        EnvironmentInternalError: (error) =>
+          HttpServerRespondable.toResponse(error).pipe(
+            Effect.map((response) => HttpServerResponse.setHeaders(response, NO_STORE)),
+          ),
+      }),
+    );
+    if (authFailure !== null) return authFailure;
+  }
   const raw = yield* sanitized.text.pipe(
     Effect.provideService(HttpIncomingMessage.MaxBodySize, ByteSize.bytes(API_MAX_BODY_BYTES)),
   );
@@ -147,11 +190,19 @@ export const makeLayer = <R>(
         const owner = candidates.find(
           (plugin) =>
             plugin.manifest.capabilities.includes("http:routes") &&
-            plugin.manifest.httpRoutes.includes(pathname),
+            plugin.manifest.httpRoutes.some((entry) => pluginHttpRoutePath(entry) === pathname),
         );
         if (!owner) return HttpServerResponse.empty({ status: 404 });
+        const matchingRoutes = owner.manifest.httpRoutes.filter(
+          (entry) => pluginHttpRoutePath(entry) === pathname,
+        );
+        const routeAuth: PluginHttpRouteAuth =
+          matchingRoutes.length > 0 &&
+          matchingRoutes.every((entry) => pluginHttpRouteAuth(entry) === "none")
+            ? "none"
+            : "session";
         const secret = yield* secretFor(owner.manifest.id);
-        return yield* route(pathname, secret, owner.manifest.id);
+        return yield* route(pathname, secret, owner.manifest.id, routeAuth);
       });
       yield* router.add("*", "/api/*", dispatch);
       yield* router.add("*", "/api", HttpServerResponse.empty({ status: 404 }));
