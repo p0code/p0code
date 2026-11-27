@@ -13,6 +13,7 @@ pub enum PaletteAction {
     OpenSettings(&'static str),
     ToggleSidebar,
     FocusComposer,
+    ToggleTerminal,
     Reconnect,
 }
 

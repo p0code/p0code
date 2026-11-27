@@ -24,6 +24,11 @@ use tracing::{info, warn};
 use uuid::Uuid;
 
 use crate::cli::Cli;
+use crate::terminal::{DEFAULT_TERMINAL_ID, SharedTerminal, apply_event};
+use p0_terminal::rpc::{
+    TERMINAL_ATTACH, TERMINAL_RESIZE, TERMINAL_WRITE, TerminalAttachInput,
+    TerminalAttachStreamEvent, TerminalResizeInput, TerminalWriteInput,
+};
 
 pub struct AppBridge {
     rt: Runtime,
@@ -36,6 +41,7 @@ pub struct AppBridge {
     notice: Arc<Mutex<Option<String>>>,
     changed: Arc<Notify>,
     thread_task: Mutex<Option<JoinHandle<()>>>,
+    terminal_task: Mutex<Option<JoinHandle<()>>>,
     p0d: Mutex<Option<P0dProcess>>,
 }
 
@@ -64,6 +70,7 @@ impl AppBridge {
             notice: Arc::new(Mutex::new(None)),
             changed: Arc::new(Notify::new()),
             thread_task: Mutex::new(None),
+            terminal_task: Mutex::new(None),
             p0d: Mutex::new(p0d),
         });
         bridge.spawn_background();
@@ -449,6 +456,94 @@ impl AppBridge {
                 client.get_config().await
             },
             move |cfg| *config.lock().unwrap() = Some(cfg),
+        );
+    }
+
+    /// Attaches the thread's default terminal (opening it in `cwd` when it is not running).
+    pub fn attach_terminal(
+        &self,
+        thread_id: String,
+        cwd: String,
+        cols: u16,
+        rows: u16,
+    ) -> SharedTerminal {
+        self.detach_terminal();
+        let shared = crate::terminal::new_shared(cols, rows);
+        let client = self.client.clone();
+        let changed = self.changed.clone();
+        let term = shared.clone();
+        let input = TerminalAttachInput {
+            thread_id: thread_id.clone(),
+            terminal_id: DEFAULT_TERMINAL_ID.to_owned(),
+            cwd: Some(cwd),
+            cols: Some(cols),
+            rows: Some(rows),
+            ..TerminalAttachInput::default()
+        };
+        *self.terminal_task.lock().unwrap() = Some(self.rt.spawn(async move {
+            let result = async {
+                let mut sub = client
+                    .subscribe::<_, TerminalAttachStreamEvent>(TERMINAL_ATTACH, &input)
+                    .await?;
+                while let Some(event) = sub.recv().await {
+                    let reply = apply_event(&mut term.lock().unwrap(), event?);
+                    changed.notify_one();
+                    if !reply.is_empty() {
+                        let write = TerminalWriteInput {
+                            thread_id: input.thread_id.clone(),
+                            terminal_id: input.terminal_id.clone(),
+                            data: String::from_utf8_lossy(&reply).into_owned(),
+                            reply: Some(true),
+                            ..TerminalWriteInput::default()
+                        };
+                        client.request::<_, Value>(TERMINAL_WRITE, &write).await?;
+                    }
+                }
+                Ok::<_, ClientError>(())
+            }
+            .await;
+            if let Err(err) = result {
+                term.lock().unwrap().status = Some(err.to_string());
+                changed.notify_one();
+            }
+        }));
+        shared
+    }
+
+    /// Hides the terminal; its session keeps running on the server.
+    pub fn detach_terminal(&self) {
+        if let Some(task) = self.terminal_task.lock().unwrap().take() {
+            task.abort();
+        }
+    }
+
+    pub fn terminal_write(&self, thread_id: String, data: String) {
+        let client = self.client.clone();
+        let input = TerminalWriteInput {
+            thread_id,
+            terminal_id: DEFAULT_TERMINAL_ID.to_owned(),
+            data,
+            ..TerminalWriteInput::default()
+        };
+        self.run(
+            "Terminal",
+            async move { client.request::<_, Value>(TERMINAL_WRITE, &input).await },
+            |_| {},
+        );
+    }
+
+    pub fn terminal_resize(&self, thread_id: String, cols: u16, rows: u16) {
+        let client = self.client.clone();
+        let input = TerminalResizeInput {
+            thread_id,
+            terminal_id: DEFAULT_TERMINAL_ID.to_owned(),
+            cols,
+            rows,
+        };
+        self.run(
+            "Terminal",
+            async move { client.request::<_, Value>(TERMINAL_RESIZE, &input).await },
+            |_| {},
         );
     }
 

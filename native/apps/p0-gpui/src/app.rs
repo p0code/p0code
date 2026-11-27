@@ -24,6 +24,9 @@ use crate::feed::FeedState;
 use crate::markdown::MarkdownCache;
 use crate::palette::{PaletteAction, PaletteItem, rank};
 use crate::settings::{LocalPrefs, SECTIONS};
+use p0_terminal::TerminalEngine as _;
+
+use crate::terminal::{CELL_WIDTH, DRAWER_ROWS, SharedTerminal, key_bytes};
 use crate::theme::AppPalette;
 
 actions!(
@@ -36,6 +39,7 @@ actions!(
         ToggleSidebar,
         OpenSettings,
         NewThread,
+        ToggleTerminal,
     ]
 );
 
@@ -62,6 +66,7 @@ fn keybindings() -> Vec<KeyBinding> {
         KeyBinding::new(mod_key!("shift-o"), NewThread, None),
         KeyBinding::new(mod_key!(","), OpenSettings, None),
         KeyBinding::new(mod_key!("l"), FocusComposer, None),
+        KeyBinding::new(mod_key!("j"), ToggleTerminal, None),
     ]
 }
 
@@ -99,7 +104,15 @@ pub struct P0App {
     model_picker_open: bool,
     composer_input: Entity<TextareaState>,
     pub(crate) palette: Option<Palette>,
+    terminal: Option<TerminalPane>,
     _subs: Vec<Subscription>,
+}
+
+struct TerminalPane {
+    thread_id: String,
+    shared: SharedTerminal,
+    focus: FocusHandle,
+    size: (u16, u16),
 }
 
 impl P0App {
@@ -162,6 +175,7 @@ impl P0App {
             model_picker_open: false,
             composer_input,
             palette: None,
+            terminal: None,
             _subs: vec![composer_sub, appearance_sub],
         };
         app.apply_theme(window, cx);
@@ -408,6 +422,94 @@ impl P0App {
         self.set_prefs(prefs, window, cx);
     }
 
+    /// Where a thread's terminal starts: its worktree, else its project's root.
+    fn terminal_cwd(&self, thread_id: &str) -> Option<String> {
+        let thread = self.shell.thread_by_id(thread_id)?;
+        thread.worktree_path.clone().or_else(|| {
+            self.shell
+                .projects
+                .iter()
+                .find(|p| p.id == thread.project_id)
+                .map(|p| p.workspace_root.clone())
+        })
+    }
+
+    fn terminal_cols(window: &Window, sidebar: bool) -> u16 {
+        let width =
+            f32::from(window.viewport_size().width) - if sidebar { 272.0 } else { 0.0 } - 24.0;
+        (width / CELL_WIDTH).clamp(20.0, 400.0) as u16
+    }
+
+    fn toggle_terminal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.terminal.take().is_some() {
+            self.bridge.detach_terminal();
+            window.focus(&self.focus, cx);
+            cx.notify();
+            return;
+        }
+        let Some(thread_id) = self.selected_thread_id.clone() else {
+            return;
+        };
+        let Some(cwd) = self.terminal_cwd(&thread_id) else {
+            return;
+        };
+        let size = (
+            Self::terminal_cols(window, !self.prefs.sidebar_hidden),
+            DRAWER_ROWS,
+        );
+        let shared = self
+            .bridge
+            .attach_terminal(thread_id.clone(), cwd, size.0, size.1);
+        let focus = cx.focus_handle();
+        window.focus(&focus, cx);
+        self.terminal = Some(TerminalPane {
+            thread_id,
+            shared,
+            focus,
+            size,
+        });
+        self.view = View::Chat;
+        cx.notify();
+    }
+
+    pub(crate) fn focus_terminal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(t) = &self.terminal {
+            window.focus(&t.focus, cx);
+            cx.notify();
+        }
+    }
+
+    /// Sends a key press to the terminal; `false` when it was not the terminal's.
+    pub(crate) fn terminal_key(&mut self, event: &gpui_kit::KeyDownEvent) -> bool {
+        let Some(t) = &self.terminal else {
+            return false;
+        };
+        let app_cursor = t.shared.lock().unwrap().engine.app_cursor_mode();
+        let Some(bytes) = key_bytes(event, app_cursor) else {
+            return false;
+        };
+        self.bridge.terminal_write(
+            t.thread_id.clone(),
+            String::from_utf8_lossy(&bytes).into_owned(),
+        );
+        true
+    }
+
+    /// Keeps the session's size in step with the window.
+    fn sync_terminal_size(&mut self, window: &Window) {
+        let sidebar = !self.prefs.sidebar_hidden;
+        let Some(t) = self.terminal.as_mut() else {
+            return;
+        };
+        let size = (Self::terminal_cols(window, sidebar), DRAWER_ROWS);
+        if size != t.size {
+            t.size = size;
+            t.shared.lock().unwrap().engine.resize(size.0, size.1);
+            self.bridge
+                .terminal_resize(t.thread_id.clone(), size.0, size.1);
+        }
+    }
+
     pub(crate) fn open_settings(&mut self, path: &'static str, cx: &mut Context<Self>) {
         self.view = View::Settings(path);
         self.palette = None;
@@ -486,6 +588,11 @@ impl P0App {
             action: PaletteAction::FocusComposer,
         });
         items.push(PaletteItem {
+            label: t("Terminal"),
+            detail: String::new(),
+            action: PaletteAction::ToggleTerminal,
+        });
+        items.push(PaletteItem {
             label: t("Reconnect"),
             detail: String::new(),
             action: PaletteAction::Reconnect,
@@ -543,6 +650,7 @@ impl P0App {
             PaletteAction::OpenSettings(path) => self.open_settings(path, cx),
             PaletteAction::ToggleSidebar => self.toggle_sidebar(window, cx),
             PaletteAction::FocusComposer => self.focus_composer(window, cx),
+            PaletteAction::ToggleTerminal => self.toggle_terminal(window, cx),
             PaletteAction::Reconnect => self.bridge.reconnect_now(),
         }
         cx.notify();
@@ -1038,9 +1146,16 @@ impl P0App {
                     ),
             );
         }
-        let _ = window;
-        pane.child(div().flex_1().min_h_0().w_full().child(body))
-            .child(render_composer(self, &palette, cx))
+        self.sync_terminal_size(window);
+        let pane = pane
+            .child(div().flex_1().min_h_0().w_full().child(body))
+            .child(render_composer(self, &palette, cx));
+        match &self.terminal {
+            Some(t) => pane
+                .child(self.render_terminal(&t.focus, &t.shared, &palette, window, cx))
+                .into_any_element(),
+            None => pane.into_any_element(),
+        }
     }
 }
 
@@ -1061,35 +1176,39 @@ impl SelectedRow for gpui_kit::Stateful<gpui_kit::Div> {
 impl Render for P0App {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = self.palette_colors(window);
-        let mut root = div()
-            .id("p0-root")
-            .key_context("P0App")
-            .track_focus(&self.focus)
-            .on_action(cx.listener(|this, _: &ToggleCommandPalette, window, cx| {
-                this.toggle_palette(window, cx)
-            }))
-            .on_action(
-                cx.listener(|this, _: &FocusComposer, window, cx| this.focus_composer(window, cx)),
-            )
-            .on_action(cx.listener(|this, _: &NextThread, _, cx| this.step_thread(true, cx)))
-            .on_action(cx.listener(|this, _: &PreviousThread, _, cx| this.step_thread(false, cx)))
-            .on_action(
-                cx.listener(|this, _: &ToggleSidebar, window, cx| this.toggle_sidebar(window, cx)),
-            )
-            .on_action(
-                cx.listener(|this, _: &OpenSettings, _, cx| {
+        let mut root =
+            div()
+                .id("p0-root")
+                .key_context("P0App")
+                .track_focus(&self.focus)
+                .on_action(cx.listener(|this, _: &ToggleCommandPalette, window, cx| {
+                    this.toggle_palette(window, cx)
+                }))
+                .on_action(cx.listener(|this, _: &FocusComposer, window, cx| {
+                    this.focus_composer(window, cx)
+                }))
+                .on_action(cx.listener(|this, _: &NextThread, _, cx| this.step_thread(true, cx)))
+                .on_action(
+                    cx.listener(|this, _: &PreviousThread, _, cx| this.step_thread(false, cx)),
+                )
+                .on_action(cx.listener(|this, _: &ToggleSidebar, window, cx| {
+                    this.toggle_sidebar(window, cx)
+                }))
+                .on_action(cx.listener(|this, _: &OpenSettings, _, cx| {
                     this.open_settings(SECTIONS[0].path, cx)
-                }),
-            )
-            .on_action(cx.listener(|this, _: &NewThread, window, cx| {
-                this.start_new_thread(None, window, cx)
-            }))
-            .relative()
-            .size_full()
-            .flex()
-            .flex_row()
-            .bg(palette.background)
-            .text_color(palette.foreground);
+                }))
+                .on_action(cx.listener(|this, _: &NewThread, window, cx| {
+                    this.start_new_thread(None, window, cx)
+                }))
+                .on_action(cx.listener(|this, _: &ToggleTerminal, window, cx| {
+                    this.toggle_terminal(window, cx)
+                }))
+                .relative()
+                .size_full()
+                .flex()
+                .flex_row()
+                .bg(palette.background)
+                .text_color(palette.foreground);
         match self.view {
             View::Chat => {
                 if !self.prefs.sidebar_hidden {
@@ -1164,6 +1283,6 @@ mod tests {
     #[test]
     fn keybindings_parse() {
         // KeyBinding::new panics on a keystroke this gpui cannot parse.
-        assert_eq!(keybindings().len(), 8);
+        assert_eq!(keybindings().len(), 9);
     }
 }

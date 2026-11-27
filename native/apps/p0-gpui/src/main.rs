@@ -7,6 +7,7 @@ mod feed;
 mod markdown;
 mod palette;
 mod settings;
+mod terminal;
 mod theme;
 
 use clap::Parser as _;
