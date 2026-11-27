@@ -648,6 +648,30 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
 
   it.effect("declares Calendar and Apple Events access for hosted commands in macOS builds", () =>
     Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const repoRoot = path.join(import.meta.dirname, "..");
+      const expectedInheritPath = path.join(
+        repoRoot,
+        "apps/desktop/resources/entitlements.mac.inherit.plist",
+      );
+      const inheritPlist = yield* fs.readFileString(expectedInheritPath);
+      for (const entitlement of [
+        "com.apple.security.cs.allow-jit",
+        "com.apple.security.cs.allow-unsigned-executable-memory",
+        "com.apple.security.cs.disable-library-validation",
+        "com.apple.security.automation.apple-events",
+        "com.apple.security.device.camera",
+        "com.apple.security.device.audio-input",
+      ]) {
+        assert.match(
+          inheritPlist,
+          new RegExp(`<key>${entitlement.replaceAll(".", "\\.")}</key>\\s*<true/>`, "u"),
+        );
+      }
+      assert.notInclude(inheritPlist, "com.apple.application-identifier");
+      assert.notInclude(inheritPlist, "com.apple.developer.associated-domains");
+
       for (const version of ["0.1.0", "0.1.1-nightly.20261019.1"]) {
         for (const signed of [false, true]) {
           const config = yield* createBuildConfig(
@@ -659,18 +683,48 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
             undefined,
             undefined,
           );
-          const mac = config.mac as { extendInfo: Record<string, unknown> };
+          assert.equal(config.afterPack, path.join(repoRoot, "scripts/mac-after-pack.ts"));
+          const mac = config.mac as {
+            extendInfo: Record<string, unknown>;
+            entitlements: string;
+            entitlementsInherit: string;
+          };
+          assert.equal(mac.entitlements, expectedInheritPath);
+          assert.equal(mac.entitlementsInherit, expectedInheritPath);
           for (const key of [
             "NSCalendarsUsageDescription",
             "NSCalendarsFullAccessUsageDescription",
             "NSCalendarsWriteOnlyAccessUsageDescription",
             "NSAppleEventsUsageDescription",
+            "NSCameraUsageDescription",
+            "NSMicrophoneUsageDescription",
           ]) {
             assert.isString(mac.extendInfo[key], `${version}, signed=${signed}: ${key}`);
             assert.isNotEmpty(mac.extendInfo[key]);
           }
         }
       }
+
+      const passkeyConfig = yield* createBuildConfig(
+        "mac",
+        "dmg",
+        "0.1.0",
+        true,
+        false,
+        undefined,
+        {
+          entitlementsPath: "/tmp/passkey.entitlements.plist",
+          provisioningProfilePath: "/tmp/t3code.provisionprofile",
+        },
+      );
+      const passkeyMac = passkeyConfig.mac as {
+        entitlements: string;
+        entitlementsInherit: string;
+        provisioningProfile: string;
+      };
+      assert.equal(passkeyMac.entitlements, "/tmp/passkey.entitlements.plist");
+      assert.equal(passkeyMac.entitlementsInherit, expectedInheritPath);
+      assert.equal(passkeyMac.provisioningProfile, "/tmp/t3code.provisionprofile");
     }),
   );
 

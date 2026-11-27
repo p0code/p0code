@@ -27,6 +27,7 @@ import serverPackageJson from "../../../server/package.json" with { type: "json"
 
 import * as DesktopCliShim from "../app/DesktopCliShim.ts";
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
+import { resolveHeadlessNodeExecutable } from "../app/resolveHeadlessNodeExecutable.ts";
 import * as DesktopState from "../app/DesktopState.ts";
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
 import * as DesktopShellEnvironment from "../shell/DesktopShellEnvironment.ts";
@@ -566,7 +567,7 @@ const resolvePrimaryStartConfig = Effect.fn("desktop.backendConfiguration.resolv
     };
 
     return {
-      executablePath: process.execPath,
+      executablePath: resolveHeadlessNodeExecutable({ platform: environment.platform }),
       // Packaged builds have a separate cache; --require prevents cache settings leaking to provider subprocesses.
       args: [
         "--title=p0code-backend",
@@ -948,7 +949,8 @@ export const make = Effect.gen(function* () {
     const config: DesktopBackendManager.DesktopBackendStartConfig = {
       backendMode: "local-service",
       serviceDriver: driver,
-      executablePath: driver.binaryPath ?? process.execPath,
+      executablePath:
+        driver.binaryPath ?? resolveHeadlessNodeExecutable({ platform: environment.platform }),
       args: [],
       entryPath: driver.binaryPath ?? environment.backendEntryPath,
       cwd: environment.backendCwd,

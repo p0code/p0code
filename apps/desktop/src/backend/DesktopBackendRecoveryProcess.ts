@@ -4,6 +4,8 @@ import * as NodeChildProcess from "node:child_process";
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
 
+import { resolveHeadlessNodeExecutable } from "../app/resolveHeadlessNodeExecutable.ts";
+
 export type RecoveryWorkerMessage =
   | { readonly type: "recovering"; readonly pid: number }
   | { readonly type: "error"; readonly operation: string }
@@ -17,9 +19,12 @@ const recoverDeadlineMs = 10_000;
 export function make(input: {
   readonly appDataDirectory: string;
   readonly stateDir: string;
+  readonly platform?: NodeJS.Platform;
   readonly onRecovery: (pid: number) => void;
   readonly onError: (operation: string) => void;
 }) {
+  // oxlint-disable-next-line t3code/no-global-process-runtime -- Synchronous fallback for non-Effect callers.
+  const platform = input.platform ?? process.platform;
   const run = (
     operation: "track" | "recover",
     deadlineMs: number,
@@ -40,8 +45,8 @@ export function make(input: {
             ...(options.backendPid === undefined ? [] : [String(options.backendPid)]),
           ],
           {
-            // The default macOS Helper executable would not match the backend's recorded executable.
-            execPath: process.execPath,
+            // Match the headless executable used to launch the backend so ownership verification succeeds.
+            execPath: resolveHeadlessNodeExecutable({ platform }),
             env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
             execArgv: [],
             stdio: ["ignore", "ignore", "inherit", "ipc"],

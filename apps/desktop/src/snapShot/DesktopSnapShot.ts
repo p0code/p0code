@@ -823,7 +823,11 @@ export const make = Effect.gen(function* () {
     "snapShot",
     "SnapShotAccessibilityWorker.cjs",
   );
-  const accessibilityProcessPool = makeSnapShotAccessibilityProcessPool(accessibilityWorkerPath);
+  const accessibilityProcessPool = makeSnapShotAccessibilityProcessPool(accessibilityWorkerPath, {
+    // On macOS, the accessibility worker stays on the main binary for Accessibility TCC, so spawn
+    // it on demand instead of keeping a persistent standby that could register a second Dock icon.
+    warmStandby: environment.platform !== "darwin",
+  });
   const regionSnapShotPool = makeRegionSnapShotPool(
     path.join(__dirname, "snapShot", "RegionSnapShotWorker.cjs"),
   );
@@ -864,7 +868,13 @@ export const make = Effect.gen(function* () {
   ) =>
     environment.platform === "darwin"
       ? startMacModifierPairShortcutProcess(modifier, onTrigger, onFailure)
-      : startGlobalShiftShortcutProcess(shiftShortcutWorkerPath, modifier, onTrigger, onFailure);
+      : startGlobalShiftShortcutProcess(
+          shiftShortcutWorkerPath,
+          modifier,
+          onTrigger,
+          onFailure,
+          environment.platform,
+        );
 
   const releaseShortcut = () => {
     shortcutGeneration++;

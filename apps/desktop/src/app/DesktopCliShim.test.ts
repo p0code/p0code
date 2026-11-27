@@ -4,9 +4,16 @@ import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
-import { afterEach, describe, expect, it } from "vite-plus/test";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { type CliShimTarget, renderCliShim } from "./DesktopCliShim.ts";
+import * as DesktopConfig from "./DesktopConfig.ts";
+import { type CliShimTarget, install, renderCliShim } from "./DesktopCliShim.ts";
+import * as DesktopEnvironment from "./DesktopEnvironment.ts";
 
 const directories: Array<string> = [];
 afterEach(() => {
@@ -217,5 +224,62 @@ describe("renderCliShim", () => {
     );
     expect(bare).toEqual([]);
     expect(lines).toContain('set "T3CODE_CLI_PATH=C:\\Users\\José\\.t3\\bin\\p0.cmd"');
+  });
+
+  it("installs a macOS shim targeting the Helper executable on a packaged bundle layout", async () => {
+    const root = tempRoot();
+    const mainExec = NodePath.posix.join(root, "p0code.app", "Contents", "MacOS", "p0code");
+    const helperExec = NodePath.posix.join(
+      root,
+      "p0code.app",
+      "Contents",
+      "Frameworks",
+      "p0code Helper.app",
+      "Contents",
+      "MacOS",
+      "p0code Helper",
+    );
+    writeExecutable(mainExec, REPORTER);
+    writeExecutable(helperExec, REPORTER);
+
+    const execPathSpy = vi.spyOn(process, "execPath", "get").mockReturnValue(mainExec);
+    try {
+      const layer = DesktopEnvironment.layer({
+        dirname: NodePath.join(
+          root,
+          "p0code.app",
+          "Contents",
+          "Resources",
+          "app.asar",
+          "apps",
+          "desktop",
+          "dist-electron",
+        ),
+        homeDirectory: root,
+        platform: "darwin",
+        processArch: "arm64",
+        appVersion: "1.2.3",
+        appPath: NodePath.join(root, "p0code.app", "Contents", "Resources", "app.asar"),
+        isPackaged: true,
+        resourcesPath: NodePath.join(root, "p0code.app", "Contents", "Resources"),
+        runningUnderArm64Translation: false,
+      }).pipe(
+        Layer.provideMerge(
+          Layer.mergeAll(
+            NodeServices.layer,
+            NodeCrypto.layer,
+            DesktopConfig.layerTest({ T3CODE_HOME: NodePath.join(root, "home") }),
+          ),
+        ),
+      );
+      // oxlint-disable-next-line t3code/no-manual-effect-runtime-in-tests -- File uses plain vitest `it`; runs a scoped Effect once.
+      const installed = await Effect.runPromise(install.pipe(Effect.provide(layer)));
+      expect(Option.isSome(installed)).toBe(true);
+      const shimPath = Option.getOrThrow(installed);
+      const shimContent = NodeFS.readFileSync(shimPath, "utf8");
+      expect(shimContent).toContain(`app='${helperExec}'`);
+    } finally {
+      execPathSpy.mockRestore();
+    }
   });
 });

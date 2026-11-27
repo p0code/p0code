@@ -30,6 +30,7 @@ import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import * as DesktopObservability from "../app/DesktopObservability.ts";
+import { resolveHeadlessNodeExecutable } from "../app/resolveHeadlessNodeExecutable.ts";
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
 
 const DEFAULT_SERVICE_HOST = "127.0.0.1";
@@ -433,6 +434,19 @@ const parseUrlOrNull = (value: string | null): URL | null => {
     return null;
   }
 };
+
+// Matches p0d's splitCommand: whitespace splits unquoted tokens, and inside double quotes
+// only `\"` and `\\` are escapes so Windows and spaced macOS paths round-trip cleanly.
+function quoteLegacyServerCommandArg(arg: string): string {
+  if (arg.length > 0 && !/[\s"']/.test(arg)) {
+    return arg;
+  }
+  return `"${arg.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
+}
+
+export function formatLegacyServerCommand(executablePath: string, entryPath: string): string {
+  return `${quoteLegacyServerCommandArg(executablePath)} ${quoteLegacyServerCommandArg(entryPath)}`;
+}
 
 export interface MakeP0dServiceDriverInput {
   readonly binaryPath: string;
@@ -1093,7 +1107,10 @@ export const make = Effect.gen(function* () {
       .pipe(Effect.orElseSucceed(() => false));
     if (Option.isSome(p0dBinary)) {
       const legacyServerCommand = legacyEntryExists
-        ? `${process.execPath} ${environment.backendEntryPath}`
+        ? formatLegacyServerCommand(
+            resolveHeadlessNodeExecutable({ platform: environment.platform }),
+            environment.backendEntryPath,
+          )
         : null;
       return makeP0dServiceDriver({
         binaryPath: p0dBinary.value,
@@ -1108,7 +1125,7 @@ export const make = Effect.gen(function* () {
       });
     }
     return makeLegacyNodeServiceDriver({
-      executablePath: process.execPath,
+      executablePath: resolveHeadlessNodeExecutable({ platform: environment.platform }),
       entryPath: environment.backendEntryPath,
       cwd: environment.backendCwd,
       stateDir: environment.stateDir,
