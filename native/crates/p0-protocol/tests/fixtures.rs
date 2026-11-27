@@ -41,7 +41,10 @@ fn golden_shell_snapshot_event_roundtrip() {
             assert_eq!(snapshot.projects[0].title, "p0code");
             assert_eq!(snapshot.threads.len(), 1);
             assert_eq!(snapshot.threads[0].status, ThreadStatus::Completed);
-            assert_eq!(snapshot.threads[0].runtime_mode, RuntimeMode::ApprovalRequired);
+            assert_eq!(
+                snapshot.threads[0].runtime_mode,
+                RuntimeMode::ApprovalRequired
+            );
             assert!(snapshot.threads[0].is_unread());
         }
         other => panic!("expected snapshot, got {other:?}"),
@@ -95,7 +98,10 @@ fn golden_domain_event_and_commands_roundtrip() {
 
     let dispatch_raw = include_str!("../fixtures/command_message_dispatch.json");
     let dispatch: OrchestrationCommand = serde_json::from_str(dispatch_raw).unwrap();
-    assert!(matches!(dispatch, OrchestrationCommand::MessageDispatch { .. }));
+    assert!(matches!(
+        dispatch,
+        OrchestrationCommand::MessageDispatch { .. }
+    ));
 
     let respond_raw = include_str!("../fixtures/command_runtime_request_respond.json");
     let respond: OrchestrationCommand = serde_json::from_str(respond_raw).unwrap();
@@ -108,7 +114,10 @@ fn golden_domain_event_and_commands_roundtrip() {
 
     let interrupt_raw = include_str!("../fixtures/command_run_interrupt.json");
     let interrupt: OrchestrationCommand = serde_json::from_str(interrupt_raw).unwrap();
-    assert!(matches!(interrupt, OrchestrationCommand::RunInterrupt { .. }));
+    assert!(matches!(
+        interrupt,
+        OrchestrationCommand::RunInterrupt { .. }
+    ));
 
     for cmd in [dispatch, respond, interrupt] {
         let json = serde_json::to_string(&cmd).unwrap();

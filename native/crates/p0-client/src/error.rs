@@ -8,6 +8,9 @@ pub enum ClientError {
     #[error("authentication error: {0}")]
     Auth(String),
 
+    #[error("rate limited; retry in {}s", retry_after.as_secs())]
+    RateLimited { retry_after: std::time::Duration },
+
     #[error("rpc failure: {0}")]
     RpcFailure(String),
 

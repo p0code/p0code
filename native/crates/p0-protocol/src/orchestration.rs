@@ -239,6 +239,21 @@ pub enum ShellStreamItem {
     Unknown,
 }
 
+impl ShellStreamItem {
+    /// The event sequence of a delta; `None` for snapshots and markers.
+    pub fn sequence(&self) -> Option<u64> {
+        match self {
+            Self::ProjectUpdated { sequence, .. }
+            | Self::ProjectRemoved { sequence, .. }
+            | Self::ThreadUpdated { sequence, .. }
+            | Self::ThreadRemoved { sequence, .. } => Some(*sequence),
+            Self::Synchronized | Self::SnapshotRequired | Self::Snapshot { .. } | Self::Unknown => {
+                None
+            }
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Thread projection, turn items, approvals, and stream
 // ---------------------------------------------------------------------------
@@ -355,6 +370,21 @@ pub struct UserInputQuestion {
     pub multi_select: Option<bool>,
     #[serde(rename = "allowCustomAnswer", default)]
     pub allow_custom_answer: Option<bool>,
+    #[serde(rename = "initialAnswer", default)]
+    pub initial_answer: Option<String>,
+    #[serde(default)]
+    pub required: Option<bool>,
+}
+
+/// One input of a multi-value secret card; `secret: false` shows what the user types.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SecretRequestField {
+    pub name: String,
+    pub label: String,
+    #[serde(default)]
+    pub placeholder: Option<String>,
+    #[serde(default)]
+    pub secret: Option<bool>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -368,16 +398,39 @@ pub enum SecretRequestStatus {
     Unknown,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// An answer to a `secret_request` card (`packages/contracts/src/secretRequest.ts`). `Debug`
+/// never prints a value; callers keep the plaintext in `zeroize::Zeroizing` until it is sent.
+#[derive(Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "type")]
 pub enum SecretRequestAnswer {
     #[serde(rename = "save")]
     Save { secret: String },
+    /// A card with `fields`: one value per field name.
+    #[serde(rename = "save")]
+    SaveValues {
+        values: std::collections::BTreeMap<String, String>,
+    },
     #[serde(rename = "decline")]
     Decline,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+impl std::fmt::Debug for SecretRequestAnswer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Save { .. } => f.write_str("Save(<redacted>)"),
+            Self::SaveValues { values } => {
+                write!(
+                    f,
+                    "SaveValues({:?}: <redacted>)",
+                    values.keys().collect::<Vec<_>>()
+                )
+            }
+            Self::Decline => f.write_str("Decline"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct SecretRequestAnswerInput {
     #[serde(rename = "threadId")]
     pub thread_id: String,
@@ -783,6 +836,8 @@ pub enum TurnItem {
         url: Option<String>,
         #[serde(default)]
         placeholder: Option<String>,
+        #[serde(default)]
+        fields: Option<Vec<SecretRequestField>>,
         #[serde(rename = "secretStatus")]
         secret_status: SecretRequestStatus,
     },
@@ -1060,10 +1115,7 @@ pub enum ThreadStreamItem {
         has_more_history: Option<bool>,
     },
     #[serde(rename = "event")]
-    Event {
-        sequence: u64,
-        event: DomainEvent,
-    },
+    Event { sequence: u64, event: DomainEvent },
     #[serde(rename = "unknown-event")]
     UnknownEvent {
         sequence: u64,
@@ -1233,6 +1285,8 @@ pub struct LaunchThreadInput {
     #[serde(rename = "projectId")]
     pub project_id: String,
     pub title: String,
+    #[serde(rename = "generateTitle", skip_serializing_if = "Option::is_none")]
+    pub generate_title: Option<bool>,
     #[serde(rename = "modelSelection")]
     pub model_selection: ModelSelection,
     #[serde(rename = "runtimeMode")]

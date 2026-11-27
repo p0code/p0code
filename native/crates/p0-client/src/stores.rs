@@ -1,9 +1,9 @@
 //! Reactive `ShellStore` and `ThreadStore` applying snapshots and incremental deltas.
 
 use p0_protocol::{
-    DomainEvent, ProjectShell, RuntimeRequest, RuntimeRequestStatus, ShellSnapshot,
-    ShellStreamItem, ShellThreadLocation, ThreadProjection, ThreadShell, ThreadStreamItem,
-    TurnItem, ProjectedTurnItem,
+    DomainEvent, ProjectShell, ProjectedTurnItem, RuntimeRequest, RuntimeRequestStatus,
+    ShellSnapshot, ShellStreamItem, ShellThreadLocation, ThreadProjection, ThreadShell,
+    ThreadStreamItem, TurnItem,
 };
 use tokio::sync::watch;
 
@@ -74,7 +74,15 @@ impl ShellStore {
         self.tx.borrow().clone()
     }
 
+    /// Applies one stream item. Deltas at or below the current cursor are replays after a resume
+    /// and are skipped.
     pub fn apply(&self, item: ShellStreamItem) {
+        if let Some(sequence) = item.sequence()
+            && self.tx.borrow().synchronized
+            && sequence <= self.tx.borrow().last_sequence
+        {
+            return;
+        }
         self.tx.send_modify(|state| match item {
             ShellStreamItem::Synchronized => {
                 state.synchronized = true;
@@ -169,6 +177,11 @@ impl ThreadState {
             .collect()
     }
 
+    /// The cursor to resume this thread's stream from, once a snapshot has been applied.
+    pub fn resume_cursor(&self) -> Option<u64> {
+        self.projection.as_ref().map(|_| self.last_sequence)
+    }
+
     pub fn active_run_id(&self) -> Option<&str> {
         let proj = self.projection.as_ref()?;
         proj.runs
@@ -215,35 +228,55 @@ impl ThreadStore {
         });
     }
 
-    pub fn apply(&self, item: ThreadStreamItem) {
-        self.tx.send_modify(|state| match item {
-            ThreadStreamItem::Synchronized => {
-                state.synchronized = true;
-                state.revision = state.revision.wrapping_add(1);
+    /// Applies one item of `thread_id`'s stream. Items of any other thread (a stream that was
+    /// still delivering when the user switched threads) and replayed events are ignored.
+    /// Returns whether the state changed.
+    pub fn apply_for(&self, thread_id: &str, item: ThreadStreamItem) -> bool {
+        self.tx.send_if_modified(|state| {
+            if state.thread_id.as_deref() != Some(thread_id) {
+                return false;
             }
-            ThreadStreamItem::Snapshot {
-                snapshot_sequence,
-                projection,
-                ..
-            } => {
-                state.thread_id = Some(projection.thread.id.clone());
-                state.projection = Some(projection);
-                state.last_sequence = snapshot_sequence;
-                state.synchronized = true;
-                state.revision = state.revision.wrapping_add(1);
-            }
-            ThreadStreamItem::Event { sequence, event } => {
-                if let Some(proj) = state.projection.as_mut() {
-                    apply_domain_event(proj, event);
+            match item {
+                ThreadStreamItem::Synchronized => {
+                    let changed = !state.synchronized;
+                    state.synchronized = true;
+                    changed
                 }
-                state.last_sequence = state.last_sequence.max(sequence);
-                state.revision = state.revision.wrapping_add(1);
+                ThreadStreamItem::Snapshot {
+                    snapshot_sequence,
+                    projection,
+                    ..
+                } => {
+                    if projection.thread.id != thread_id {
+                        return false;
+                    }
+                    state.projection = Some(projection);
+                    state.last_sequence = snapshot_sequence;
+                    state.synchronized = true;
+                    state.revision = state.revision.wrapping_add(1);
+                    true
+                }
+                ThreadStreamItem::Event { sequence, event } => {
+                    let Some(proj) = state.projection.as_mut() else {
+                        return false;
+                    };
+                    if sequence <= state.last_sequence {
+                        return false;
+                    }
+                    apply_domain_event(proj, event);
+                    state.last_sequence = sequence;
+                    state.revision = state.revision.wrapping_add(1);
+                    true
+                }
+                ThreadStreamItem::UnknownEvent { sequence, .. } => {
+                    if state.projection.is_some() {
+                        state.last_sequence = state.last_sequence.max(sequence);
+                    }
+                    false
+                }
+                ThreadStreamItem::Unknown => false,
             }
-            ThreadStreamItem::UnknownEvent { sequence, .. } => {
-                state.last_sequence = state.last_sequence.max(sequence);
-            }
-            ThreadStreamItem::Unknown => {}
-        });
+        })
     }
 }
 
@@ -287,7 +320,12 @@ fn apply_domain_event(proj: &mut ThreadProjection, event: DomainEvent) {
                     .map(ToOwned::to_owned)
                     .unwrap_or_else(|| proj.thread.id.clone());
                 upsert_turn_item(&mut proj.turn_items, payload.clone(), &item_id);
-                upsert_visible_turn_item(&mut proj.visible_turn_items, payload, &thread_id, &item_id);
+                upsert_visible_turn_item(
+                    &mut proj.visible_turn_items,
+                    payload,
+                    &thread_id,
+                    &item_id,
+                );
             }
             proj.updated_at = occurred_at;
         }
@@ -371,5 +409,118 @@ fn upsert_visible_turn_item(
     );
     for (idx, row) in rows.iter_mut().enumerate() {
         row.position = idx as u64;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn thread_json(id: &str) -> serde_json::Value {
+        json!({
+            "id": id, "projectId": "p", "title": id, "providerInstanceId": "replay",
+            "modelSelection": {"instanceId": "replay", "model": "m"},
+            "runtimeMode": "full-access", "interactionMode": "default",
+            "createdAt": "2026-01-01T00:00:00.000Z", "updatedAt": "2026-01-01T00:00:00.000Z"
+        })
+    }
+
+    fn snapshot(id: &str, seq: u64) -> ThreadStreamItem {
+        serde_json::from_value(json!({
+            "kind": "snapshot", "snapshotSequence": seq,
+            "projection": {"thread": thread_json(id), "updatedAt": "2026-01-01T00:00:00.000Z"}
+        }))
+        .unwrap()
+    }
+
+    fn message_event(thread: &str, seq: u64, text: &str) -> ThreadStreamItem {
+        serde_json::from_value(json!({
+            "kind": "event", "sequence": seq,
+            "event": {"type": "turn-item.updated", "occurredAt": "2026-01-01T00:00:01.000Z",
+                "payload": {"type": "assistant_message", "id": "i1", "threadId": thread, "ordinal": 0,
+                    "status": "running", "updatedAt": "2026-01-01T00:00:01.000Z",
+                    "messageId": "m1", "text": text, "streaming": true}}
+        }))
+        .unwrap()
+    }
+
+    fn assistant_text(state: &ThreadState) -> Option<String> {
+        state
+            .projection
+            .as_ref()?
+            .visible_turn_items
+            .iter()
+            .find_map(|row| match &row.item {
+                TurnItem::AssistantMessage { text, .. } => Some(text.clone()),
+                _ => None,
+            })
+    }
+
+    #[test]
+    fn late_items_from_previous_thread_are_ignored() {
+        let store = ThreadStore::new();
+        store.reset(Some("a".to_owned()));
+        assert!(store.apply_for("a", snapshot("a", 10)));
+        store.reset(Some("b".to_owned()));
+        // The old stream was still delivering when the user switched.
+        assert!(!store.apply_for("a", message_event("a", 11, "stale")));
+        assert!(!store.apply_for("a", snapshot("a", 12)));
+        assert!(store.snapshot().projection.is_none());
+        assert!(store.apply_for("b", snapshot("b", 5)));
+        assert_eq!(store.snapshot().projection.unwrap().thread.id, "b");
+    }
+
+    #[test]
+    fn replayed_thread_events_apply_once() {
+        let store = ThreadStore::new();
+        store.reset(Some("a".to_owned()));
+        assert!(!store.apply_for("a", message_event("a", 9, "before snapshot")));
+        store.apply_for("a", snapshot("a", 10));
+        assert!(store.apply_for("a", message_event("a", 11, "one")));
+        assert!(store.apply_for("a", message_event("a", 12, "one two")));
+        let rev = store.snapshot().revision;
+        // A resume from an older cursor replays 11 and 12.
+        assert!(!store.apply_for("a", message_event("a", 11, "one")));
+        assert!(!store.apply_for("a", message_event("a", 12, "one two")));
+        assert_eq!(store.snapshot().revision, rev);
+        assert_eq!(
+            assistant_text(&store.snapshot()).as_deref(),
+            Some("one two")
+        );
+        assert_eq!(store.snapshot().resume_cursor(), Some(12));
+    }
+
+    fn shell_thread_json(id: &str) -> serde_json::Value {
+        let mut thread = thread_json(id);
+        thread["status"] = json!("idle");
+        thread["itemCount"] = json!(0);
+        thread["visibleItemCount"] = json!(0);
+        thread
+    }
+
+    #[test]
+    fn replayed_shell_deltas_are_skipped() {
+        let store = ShellStore::new();
+        store.apply(
+            serde_json::from_value(json!({"kind": "snapshot", "snapshot": {
+                "schemaVersion": 2, "snapshotSequence": 20, "projects": [],
+                "threads": [shell_thread_json("t")], "archivedThreads": []}}))
+            .unwrap(),
+        );
+        let update = |seq: u64, title: &str| -> ShellStreamItem {
+            let mut thread = shell_thread_json("t");
+            thread["title"] = json!(title);
+            serde_json::from_value(
+                json!({"kind": "thread.updated", "sequence": seq, "location": "active", "thread": thread}),
+            )
+            .unwrap()
+        };
+        store.apply(update(19, "older than snapshot"));
+        assert_eq!(store.snapshot().threads[0].title, "t");
+        store.apply(update(21, "new"));
+        store.apply(update(21, "replayed"));
+        assert_eq!(store.snapshot().threads[0].title, "new");
+        assert_eq!(store.snapshot().last_sequence, 21);
     }
 }

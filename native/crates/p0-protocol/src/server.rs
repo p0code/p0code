@@ -12,6 +12,7 @@ pub const RPC_SERVER_GET_CONFIG: &str = "server.getConfig";
 pub const RPC_SERVER_SUBSCRIBE_CONFIG: &str = "server.subscribeServerConfig";
 pub const RPC_SERVER_GET_SETTINGS: &str = "server.getSettings";
 pub const RPC_SERVER_UPDATE_SETTINGS: &str = "server.updateSettings";
+pub const RPC_SERVER_REFRESH_PROVIDERS: &str = "server.refreshProviders";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ServerProbeResult {
@@ -51,9 +52,10 @@ impl RuntimeMode {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ProviderInteractionMode {
+    #[default]
     Default,
     Plan,
     #[serde(other)]
@@ -139,9 +141,7 @@ pub struct ServerProvider {
 
 impl ServerProvider {
     pub fn label(&self) -> &str {
-        self.display_name
-            .as_deref()
-            .unwrap_or(&self.instance_id)
+        self.display_name.as_deref().unwrap_or(&self.instance_id)
     }
 
     pub fn is_available(&self) -> bool {

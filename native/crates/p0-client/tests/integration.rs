@@ -1,12 +1,14 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::Duration;
 
 use futures_util::{SinkExt as _, StreamExt as _};
 use p0_client::{
     AuthMode, ClientConfig, ClientError, ConnectionState, RpcClient, ShellStore, ThreadStore,
-    derive_desktop_bootstrap_token, ensure_bootstrap_secret_file, is_valid_desktop_bootstrap_token,
+    derive_desktop_bootstrap_token, ensure_desktop_secret_file, is_valid_desktop_bootstrap_token,
+    read_desktop_secret_file,
 };
 use p0_protocol::{
     ApprovalDecision, DispatchMode, ModelSelection, OrchestrationCommand, SOCKET_FRAME_PART_BYTES,
@@ -20,10 +22,16 @@ use tokio_tungstenite::tungstenite::Message;
 
 struct FakeServerState {
     secret: String,
-    issued_token: String,
+    /// The one live session token; each exchange replaces (revokes) the previous one.
+    issued_token: Mutex<String>,
+    exchanges: AtomicUsize,
     shell_acks: AtomicUsize,
     ws_connections: AtomicUsize,
     drop_first_ws_after_probe: bool,
+    /// Simulates another desktop client signing in right after every connection.
+    revoke_after_connect: AtomicBool,
+    /// Chunks to flood a subscribeShell with, ignoring Acks.
+    flood_shell_chunks: AtomicUsize,
 }
 
 async fn start_fake_server(
@@ -34,10 +42,13 @@ async fn start_fake_server(
     let addr = listener.local_addr().unwrap();
     let state = Arc::new(FakeServerState {
         secret,
-        issued_token: "v1.session.token.test".to_owned(),
+        issued_token: Mutex::new(String::new()),
+        exchanges: AtomicUsize::new(0),
         shell_acks: AtomicUsize::new(0),
         ws_connections: AtomicUsize::new(0),
         drop_first_ws_after_probe,
+        revoke_after_connect: AtomicBool::new(false),
+        flood_shell_chunks: AtomicUsize::new(0),
     });
     let state_clone = state.clone();
 
@@ -136,19 +147,28 @@ async fn handle_conn(mut stream: TcpStream, state: Arc<FakeServerState>) {
             params.get("requested_token_type").map(String::as_str),
             Some("urn:ietf:params:oauth:token-type:access_token")
         );
-        assert!(!params.contains_key("scope"), "local bootstrap must not send scope");
+        assert!(
+            !params.contains_key("scope"),
+            "local bootstrap must not send scope"
+        );
 
         let subject_token = params.get("subject_token").cloned().unwrap_or_default();
         // Must NEVER be the raw secret!
-        assert_ne!(subject_token, state.secret, "client sent raw secret instead of HMAC token!");
+        assert_ne!(
+            subject_token, state.secret,
+            "client sent raw secret instead of HMAC token!"
+        );
 
         let now_ms = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_millis() as u64;
         if is_valid_desktop_bootstrap_token(&state.secret, &subject_token, now_ms) {
+            let n = state.exchanges.fetch_add(1, Ordering::SeqCst) + 1;
+            let token = format!("v1.session.token.{n}");
+            *state.issued_token.lock().unwrap() = token.clone();
             let payload = json!({
-                "access_token": state.issued_token,
+                "access_token": token,
                 "issued_token_type": "urn:ietf:params:oauth:token-type:access_token",
                 "token_type": "Bearer",
                 "expires_in": 2592000,
@@ -180,9 +200,8 @@ async fn handle_conn(mut stream: TcpStream, state: Arc<FakeServerState>) {
 
 #[allow(clippy::result_large_err)]
 async fn handle_ws(stream: TcpStream, state: Arc<FakeServerState>) {
-    let expected_auth = format!("Bearer {}", state.issued_token);
+    let expected_auth = format!("Bearer {}", state.issued_token.lock().unwrap());
     let mut query_ok = false;
-    let mut auth_ok = false;
 
     let ws = match tokio_tungstenite::accept_hdr_async(
         stream,
@@ -192,11 +211,19 @@ async fn handle_ws(stream: TcpStream, state: Arc<FakeServerState>) {
             query_ok = uri.contains("orchestrationProtocol=2")
                 && uri.contains("frameParts=1")
                 && uri.contains("clientSurface=desktop");
-            auth_ok = req
+            let auth_ok = req
                 .headers()
                 .get("authorization")
                 .and_then(|v| v.to_str().ok())
                 == Some(expected_auth.as_str());
+            if !auth_ok {
+                let mut reject =
+                    tokio_tungstenite::tungstenite::handshake::server::ErrorResponse::new(Some(
+                        "revoked".to_owned(),
+                    ));
+                *reject.status_mut() = http::StatusCode::UNAUTHORIZED;
+                return Err(reject);
+            }
             Ok(resp)
         },
     )
@@ -207,10 +234,15 @@ async fn handle_ws(stream: TcpStream, state: Arc<FakeServerState>) {
     };
 
     assert!(query_ok, "WS upgrade missing required query params");
-    assert!(auth_ok, "WS upgrade missing Bearer authorization");
 
     let conn_num = state.ws_connections.fetch_add(1, Ordering::SeqCst);
     let (mut tx, mut rx) = ws.split();
+    if state.revoke_after_connect.load(Ordering::SeqCst) {
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        state.issued_token.lock().unwrap().clear();
+        let _ = tx.close().await;
+        return;
+    }
     let mut pending_shell_req: Option<Value> = None;
 
     while let Some(Ok(msg)) = rx.next().await {
@@ -314,6 +346,18 @@ async fn handle_ws(stream: TcpStream, state: Arc<FakeServerState>) {
                         });
                         for part in split_socket_frame(&resp.to_string(), SOCKET_FRAME_PART_BYTES) {
                             let _ = tx.send(Message::Text(part.into())).await;
+                        }
+                    }
+                    "orchestration.subscribeShell"
+                        if state.flood_shell_chunks.load(Ordering::SeqCst) > 0 =>
+                    {
+                        for n in 0..state.flood_shell_chunks.load(Ordering::SeqCst) {
+                            let chunk = json!({
+                                "_tag": "Chunk",
+                                "requestId": id,
+                                "values": [{"kind": "project.removed", "sequence": n + 1, "projectId": format!("p{n}")}]
+                            });
+                            let _ = tx.send(Message::Text(chunk.to_string().into())).await;
                         }
                     }
                     "orchestration.subscribeShell" => {
@@ -422,21 +466,56 @@ async fn handle_ws(stream: TcpStream, state: Arc<FakeServerState>) {
 }
 
 #[tokio::test]
-async fn bootstrap_secret_file_is_stable_and_hmac_matches_windows() {
+async fn desktop_secret_file_matches_electron_and_p0d() {
     let dir = std::env::temp_dir().join(format!("p0-auth-test-{}", uuid::Uuid::new_v4()));
     let path = dir.join("secrets").join("desktop-bootstrap-secret");
 
-    let s1 = ensure_bootstrap_secret_file(&path).unwrap();
-    let s2 = ensure_bootstrap_secret_file(&path).unwrap();
+    // Created in Electron's format: 64 hex chars + newline, mode 0600, dir 0700.
+    let s1 = ensure_desktop_secret_file(&path).unwrap();
+    let s2 = ensure_desktop_secret_file(&path).unwrap();
     assert_eq!(s1, s2, "secret file must be reused stably across launches");
-    assert!(!s1.ends_with('\n'));
+    assert!(p0_client::is_electron_desktop_secret(&s1));
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), format!("{s1}\n"));
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
+        let dir_mode = std::fs::metadata(path.parent().unwrap())
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(dir_mode, 0o700);
+    }
 
+    // A file Electron wrote is used as-is; a loose mode is repaired, not rotated.
+    let electron = "ab".repeat(32);
+    std::fs::write(&path, format!("{electron}\n")).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+    }
+    assert_eq!(ensure_desktop_secret_file(&path).unwrap(), electron);
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt as _;
         let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
         assert_eq!(mode, 0o600);
     }
+
+    // p0d accepts any base64url secret of >= 32 bytes, so attaching reads it; starting a new p0d
+    // replaces it, because Electron would rotate it on its next launch.
+    let b64 = "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFB";
+    std::fs::write(&path, b64).unwrap();
+    assert_eq!(read_desktop_secret_file(&path).as_deref(), Some(b64));
+    let replaced = ensure_desktop_secret_file(&path).unwrap();
+    assert_ne!(replaced, b64);
+    assert!(p0_client::is_electron_desktop_secret(&replaced));
+
+    std::fs::write(&path, "too-short").unwrap();
+    assert_eq!(read_desktop_secret_file(&path), None);
 
     let now_ms = 1_764_250_000_000u64;
     let tok = derive_desktop_bootstrap_token(&s1, now_ms);
@@ -473,7 +552,10 @@ async fn end_to_end_local_bootstrap_ws_rpc_frame_parts_ack_and_stores() {
 
     // 1. Unary probe
     let probe = client.probe().await.unwrap();
-    assert_eq!(probe.server_time.as_deref(), Some("2026-11-27T12:00:00.000Z"));
+    assert_eq!(
+        probe.server_time.as_deref(),
+        Some("2026-11-27T12:00:00.000Z")
+    );
 
     // 2. Large (>48 KiB) server.getConfig reassembled across U+001E frame parts
     let cfg = client.get_config().await.unwrap();
@@ -506,6 +588,7 @@ async fn end_to_end_local_bootstrap_ws_rpc_frame_parts_ack_and_stores() {
 
     // 4. subscribeThread + ThreadStore snapshot + turn-item.updated delta
     let thread_store = ThreadStore::new();
+    thread_store.reset(Some("thread-1".to_owned()));
     let mut thread_rx = client
         .subscribe_thread(SubscribeThreadInput {
             thread_id: "thread-1".to_owned(),
@@ -518,8 +601,8 @@ async fn end_to_end_local_bootstrap_ws_rpc_frame_parts_ack_and_stores() {
     let t2 = thread_rx.recv().await.unwrap().unwrap();
     assert!(matches!(t1, ThreadStreamItem::Snapshot { .. }));
     assert!(matches!(t2, ThreadStreamItem::Event { .. }));
-    thread_store.apply(t1);
-    thread_store.apply(t2);
+    assert!(thread_store.apply_for("thread-1", t1));
+    assert!(thread_store.apply_for("thread-1", t2));
     let tstate = thread_store.snapshot();
     let proj = tstate.projection.unwrap();
     assert_eq!(proj.visible_turn_items.len(), 1);
@@ -585,6 +668,8 @@ async fn reconnects_after_server_drops_socket() {
     client.wait_connected(Duration::from_secs(5)).await.unwrap();
     assert!(state.ws_connections.load(Ordering::SeqCst) >= 2);
     let _ = client.probe().await.unwrap();
+    // A reconnect reuses the session: signing in again would sign other desktop clients out.
+    assert_eq!(state.exchanges.load(Ordering::SeqCst), 1);
 
     client.shutdown().await;
     server_task.abort();
@@ -598,7 +683,10 @@ async fn dpop_mode_returns_clear_unimplemented_error() {
             key_id: "remote-1".to_owned(),
         },
     ));
-    let err = client.wait_connected(Duration::from_secs(2)).await.unwrap_err();
+    let err = client
+        .wait_connected(Duration::from_secs(2))
+        .await
+        .unwrap_err();
     assert!(matches!(err, ClientError::Auth(_)));
     assert!(matches!(
         client.connection_state(),
@@ -641,7 +729,7 @@ async fn live_p0d_bootstrap_auth_and_probe() {
     }
 
     let mut cfg = p0_client::P0dLaunchConfig::for_home(&dir);
-    cfg.binary_path = Some(bin.into());
+    cfg.configured_binary = Some(bin.into());
 
     let mut proc = p0_client::P0dProcess::attach_or_spawn(cfg).await.unwrap();
     let secret = proc
@@ -656,11 +744,149 @@ async fn live_p0d_bootstrap_auth_and_probe() {
             client_label: "p0-gpui-live-test".to_owned(),
         },
     ));
-    client.wait_connected(Duration::from_secs(10)).await.unwrap();
+    client
+        .wait_connected(Duration::from_secs(10))
+        .await
+        .unwrap();
     let probe = client.probe().await.unwrap();
     assert!(probe.server_time.is_some());
 
     client.shutdown().await;
     proc.shutdown().await;
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+fn local_client(base_url: String, secret: &str) -> ClientConfig {
+    ClientConfig::new(
+        base_url,
+        AuthMode::LocalBootstrap {
+            secret: secret.to_owned(),
+            client_label: "p0-gpui-test".to_owned(),
+        },
+    )
+}
+
+#[tokio::test]
+async fn revoked_session_signs_in_again_then_stops_instead_of_looping() {
+    let secret = "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC";
+    let (base_url, state, server_task) = start_fake_server(secret.to_owned(), false).await;
+    let mut config = local_client(base_url, secret);
+    config.revoked_retry_delay = |n| (n < 3).then_some(Duration::from_millis(20));
+    let client = RpcClient::connect(config);
+    client.wait_connected(Duration::from_secs(5)).await.unwrap();
+    assert_eq!(state.exchanges.load(Ordering::SeqCst), 1);
+
+    // One revocation: the client signs in again by itself and keeps working.
+    state.revoke_after_connect.store(true, Ordering::SeqCst);
+    client.reconnect_now().await;
+    let mut rx = client.subscribe_connection_state();
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            if matches!(
+                *rx.borrow_and_update(),
+                ConnectionState::SignedOutElsewhere { retry_in_ms: None }
+            ) {
+                break;
+            }
+            rx.changed().await.unwrap();
+        }
+    })
+    .await
+    .expect("client must stop signing back in after repeated revocations");
+    // Initial sign-in + one per allowed retry (revocations 1 and 2), then it parks.
+    assert_eq!(state.exchanges.load(Ordering::SeqCst), 3);
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert_eq!(
+        state.exchanges.load(Ordering::SeqCst),
+        3,
+        "parked client must not sign in"
+    );
+
+    // The user asks to sign in here again.
+    state.revoke_after_connect.store(false, Ordering::SeqCst);
+    client.reconnect_now().await;
+    client.wait_connected(Duration::from_secs(5)).await.unwrap();
+    assert_eq!(state.exchanges.load(Ordering::SeqCst), 4);
+    let _ = client.probe().await.unwrap();
+
+    client.shutdown().await;
+    server_task.abort();
+}
+
+#[tokio::test]
+async fn unread_stream_does_not_block_other_requests() {
+    let secret = "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD";
+    let (base_url, state, server_task) = start_fake_server(secret.to_owned(), false).await;
+    state.flood_shell_chunks.store(1_000, Ordering::SeqCst);
+    let client = RpcClient::connect(local_client(base_url, secret));
+    client.wait_connected(Duration::from_secs(5)).await.unwrap();
+
+    // Never read: the old bounded sink blocked the read loop after 128 values.
+    let _unread = client
+        .subscribe_shell(SubscribeShellInput::default())
+        .await
+        .unwrap();
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    let probe = tokio::time::timeout(Duration::from_secs(3), client.probe())
+        .await
+        .expect("probe must not wait behind an unread stream");
+    probe.unwrap();
+
+    client.shutdown().await;
+    server_task.abort();
+}
+
+#[tokio::test]
+async fn durable_stream_resubscribes_from_cursor_after_reconnect() {
+    let secret = "EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE";
+    let (base_url, state, server_task) = start_fake_server(secret.to_owned(), true).await;
+    let client = RpcClient::connect(local_client(base_url, secret));
+    let store = Arc::new(ShellStore::new());
+    let payloads = Arc::new(Mutex::new(Vec::<Option<u64>>::new()));
+    let task = tokio::spawn(p0_client::run_durable_stream(
+        client.clone(),
+        p0_protocol::RPC_ORCHESTRATION_SUBSCRIBE_SHELL,
+        {
+            let store = store.clone();
+            let payloads = payloads.clone();
+            move || {
+                let seq = store.snapshot().last_sequence;
+                let after = (seq > 0).then_some(seq);
+                payloads.lock().unwrap().push(after);
+                SubscribeShellInput {
+                    after_sequence: after,
+                    ..SubscribeShellInput::default()
+                }
+            }
+        },
+        {
+            let store = store.clone();
+            move |item: ShellStreamItem| store.apply(item)
+        },
+        |_| {},
+    ));
+
+    client.wait_connected(Duration::from_secs(5)).await.unwrap();
+    tokio::time::timeout(Duration::from_secs(3), async {
+        while store.snapshot().last_sequence < 43 {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .unwrap();
+    // The fake server drops the first socket after a probe.
+    let _ = client.probe().await;
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while payloads.lock().unwrap().len() < 2 {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .expect("stream must be re-subscribed after reconnect");
+    assert_eq!(payloads.lock().unwrap()[1], Some(43));
+    assert!(state.ws_connections.load(Ordering::SeqCst) >= 2);
+
+    task.abort();
+    client.shutdown().await;
+    server_task.abort();
 }

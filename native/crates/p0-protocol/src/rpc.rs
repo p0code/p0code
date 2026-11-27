@@ -220,7 +220,8 @@ mod tests {
             RpcServerFrame::Pong
         );
 
-        let chunk = decode_server_frame(r#"{"_tag":"Chunk","requestId":7,"values":[1,2]}"#).unwrap();
+        let chunk =
+            decode_server_frame(r#"{"_tag":"Chunk","requestId":7,"values":[1,2]}"#).unwrap();
         assert_eq!(
             chunk,
             RpcServerFrame::Chunk {
@@ -264,7 +265,8 @@ mod tests {
         );
 
         let proto_err =
-            decode_server_frame(r#"{"_tag":"ClientProtocolError","defect":"unsupported"}"#).unwrap();
+            decode_server_frame(r#"{"_tag":"ClientProtocolError","defect":"unsupported"}"#)
+                .unwrap();
         assert_eq!(
             proto_err,
             RpcServerFrame::ClientProtocolError {

@@ -93,10 +93,33 @@ define_keys! {
     Declined => "8cc00444f7443feb",
 }
 
+/// Locales the web catalogs ship, with their own names for the Language setting.
+pub const SUPPORTED_LOCALES: &[(&str, &str)] = &[
+    ("en", "English"),
+    ("de", "Deutsch"),
+    ("es", "Español"),
+    ("fr", "Français"),
+    ("ja", "日本語"),
+    ("ko", "한국어"),
+    ("pt-BR", "Português (Brasil)"),
+    ("ru", "Русский"),
+    ("sv", "Svenska"),
+    ("zh", "简体中文"),
+    ("zh-TW", "繁體中文"),
+];
+
+#[derive(Debug)]
+struct Inner {
+    /// Catalog id -> text in the active locale (English where it has no translation).
+    by_id: HashMap<String, String>,
+    /// English text -> catalog id, so native code can look strings up by their English.
+    id_by_english: HashMap<String, String>,
+}
+
 #[derive(Debug, Clone)]
 pub struct Catalog {
     locale: String,
-    strings: HashMap<Key, String>,
+    inner: std::sync::Arc<Inner>,
 }
 
 impl Catalog {
@@ -108,22 +131,29 @@ impl Catalog {
 
     /// Load translations for a BCP-47 locale tag (e.g. `"en-US"`, `"zh-TW"`, `"ja"`).
     pub fn for_locale(locale: &str) -> Self {
-        let en_map = parse_subset(EN_JSON);
         let normalized = resolve_supported_locale(locale);
-        let overlay = locale_json(normalized).map(parse_subset).unwrap_or_default();
-
-        let mut strings = HashMap::with_capacity(Key::ALL.len());
-        for &key in Key::ALL {
-            let value = overlay
-                .get(&key)
-                .or_else(|| en_map.get(&key))
-                .cloned()
-                .unwrap_or_else(|| key.id().to_owned());
-            strings.insert(key, value);
+        let mut by_id = parse_catalog(EN_JSON);
+        let mut id_by_english = HashMap::with_capacity(by_id.len());
+        for (id, text) in &by_id {
+            // Several ids can share English text (different `$context`); keep a stable one.
+            id_by_english
+                .entry(text.clone())
+                .and_modify(|existing: &mut String| {
+                    if id < existing {
+                        existing.clone_from(id);
+                    }
+                })
+                .or_insert_with(|| id.clone());
+        }
+        if let Some(raw) = locale_json(normalized) {
+            by_id.extend(parse_catalog(raw));
         }
         Self {
             locale: normalized.to_owned(),
-            strings,
+            inner: std::sync::Arc::new(Inner {
+                by_id,
+                id_by_english,
+            }),
         }
     }
 
@@ -132,19 +162,39 @@ impl Catalog {
     }
 
     pub fn get(&self, key: Key) -> &str {
-        self.strings
-            .get(&key)
+        self.inner
+            .by_id
+            .get(key.id())
             .map(String::as_str)
             .unwrap_or_else(|| key.id())
     }
 
-    pub fn format(&self, key: Key, vars: &[(&str, &str)]) -> String {
-        let mut out = self.get(key).to_owned();
-        for (name, value) in vars {
-            out = out.replace(&format!("{{{name}}}"), value);
-        }
-        out
+    /// The translation of a string the web app also shows, by its English text; the English
+    /// itself when the catalogs do not have it.
+    pub fn tr<'a>(&'a self, english: &'a str) -> &'a str {
+        self.inner
+            .id_by_english
+            .get(english)
+            .and_then(|id| self.inner.by_id.get(id))
+            .map_or(english, String::as_str)
     }
+
+    /// Like [`Self::tr`], then substitutes `{name}` placeholders.
+    pub fn tr_format(&self, english: &str, vars: &[(&str, &str)]) -> String {
+        substitute(self.tr(english), vars)
+    }
+
+    pub fn format(&self, key: Key, vars: &[(&str, &str)]) -> String {
+        substitute(self.get(key), vars)
+    }
+}
+
+fn substitute(template: &str, vars: &[(&str, &str)]) -> String {
+    let mut out = template.to_owned();
+    for (name, value) in vars {
+        out = out.replace(&format!("{{{name}}}"), value);
+    }
+    out
 }
 
 pub fn resolve_supported_locale(raw: &str) -> &'static str {
@@ -199,15 +249,12 @@ fn locale_json(locale: &str) -> Option<&'static str> {
     }
 }
 
-fn parse_subset(raw: &str) -> HashMap<Key, String> {
+fn parse_catalog(raw: &str) -> HashMap<String, String> {
     let parsed: HashMap<String, serde_json::Value> = serde_json::from_str(raw).unwrap_or_default();
-    let mut subset = HashMap::with_capacity(Key::ALL.len());
-    for &key in Key::ALL {
-        if let Some(value) = parsed.get(key.id()).and_then(serde_json::Value::as_str) {
-            subset.insert(key, value.to_owned());
-        }
-    }
-    subset
+    parsed
+        .into_iter()
+        .filter_map(|(id, value)| Some((id, value.as_str()?.to_owned())))
+        .collect()
 }
 
 #[cfg(test)]
@@ -243,5 +290,17 @@ mod tests {
         let zh_tw = Catalog::for_locale("zh-Hant-TW");
         assert_eq!(zh_tw.locale(), "zh-TW");
         assert!(!zh_tw.get(Key::Projects).is_empty());
+    }
+
+    #[test]
+    fn looks_up_by_english_text() {
+        let zh_tw = Catalog::for_locale("zh-TW");
+        assert_ne!(zh_tw.tr("Settings"), "Settings");
+        assert_eq!(zh_tw.tr("Settings"), zh_tw.get(Key::Settings));
+        assert_eq!(
+            zh_tw.tr("A string the web app never shows"),
+            "A string the web app never shows"
+        );
+        assert_eq!(Catalog::for_locale("en").tr("Appearance"), "Appearance");
     }
 }

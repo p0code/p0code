@@ -1,12 +1,16 @@
 //! Client authentication modes and local desktop bootstrap token exchange.
 //!
 //! Mirrors `packages/shared/src/desktopBootstrapToken.ts` and `apps/p0d/internal/auth`:
-//! the client shares a 32-byte base64url secret file (mode `0600`) with `p0d` via
+//! the client shares the GUI's secret file (mode `0600`) with `p0d` via
 //! `--desktop-bootstrap-secret-file`, and sends an HMAC-SHA256 derived token (never
 //! the raw secret) to `POST /oauth/token`.
+//!
+//! Every exchange revokes the subject's earlier desktop sessions (PROTOCOL.md §6), so two GUIs
+//! signed in to one `p0d` sign each other out. The supervisor in `ws.rs` therefore reuses its
+//! token across reconnects and re-exchanges only after a 401, with growing backoff.
 
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use base64::Engine as _;
 use base64::engine::general_purpose::{URL_SAFE, URL_SAFE_NO_PAD};
@@ -71,7 +75,11 @@ pub fn derive_desktop_bootstrap_token_for_window(secret: &str, window: u64) -> S
 /// Validates a presented bootstrap token against the previous, current, and next 12-hour windows.
 pub fn is_valid_desktop_bootstrap_token(secret: &str, presented: &str, now_ms: u64) -> bool {
     let current = now_ms / DESKTOP_BOOTSTRAP_TOKEN_WINDOW_MS;
-    let windows = [current.saturating_sub(1), current, current.saturating_add(1)];
+    let windows = [
+        current.saturating_sub(1),
+        current,
+        current.saturating_add(1),
+    ];
     windows
         .into_iter()
         .any(|w| derive_desktop_bootstrap_token_for_window(secret, w) == presented)
@@ -84,33 +92,17 @@ pub fn now_epoch_ms() -> u64 {
         .unwrap_or(0)
 }
 
-/// Loads an existing valid bootstrap secret file (0600 on Unix, base64url decoding to >= 32 bytes),
-/// or generates a fresh 32-byte random base64url secret (without trailing newline) and writes it
-/// atomically with mode `0600`.
-pub fn ensure_bootstrap_secret_file(path: &Path) -> Result<String, ClientError> {
-    if let Some(existing) = read_valid_bootstrap_secret_file(path) {
-        return Ok(existing);
-    }
-    generate_bootstrap_secret_file(path)
-}
-
-/// Reads and validates an existing bootstrap secret file. Returns `None` if missing, malformed,
-/// too short, or (on Unix) readable by group/other.
-pub fn read_valid_bootstrap_secret_file(path: &Path) -> Option<String> {
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt as _;
-        let meta = std::fs::metadata(path).ok()?;
-        if !meta.is_file() || (meta.permissions().mode() & 0o077) != 0 {
-            return None;
-        }
-    }
-    let raw = std::fs::read_to_string(path).ok()?;
-    let secret = raw.trim_end_matches(['\r', '\n']);
-    if secret.is_empty() || secret.len() != raw.len() {
-        // Ensure the stored file itself has no trailing newline (key must match exact file bytes).
+/// Reads the desktop secret the way `p0d` does (`apps/p0d/internal/auth/desktop.go`): trimmed text
+/// that decodes as base64url to at least 32 bytes. The HMAC key is that trimmed text. A file that
+/// is valid but readable by others has its mode repaired to `0600` instead of being rotated, as
+/// Electron does, because a running `p0d` only knows the secret it read at its own start.
+pub fn read_desktop_secret_file(path: &Path) -> Option<String> {
+    let meta = std::fs::metadata(path).ok()?;
+    if !meta.is_file() {
         return None;
     }
+    let raw = std::fs::read_to_string(path).ok()?;
+    let secret = raw.trim();
     let decoded = URL_SAFE_NO_PAD
         .decode(secret)
         .or_else(|_| URL_SAFE.decode(secret))
@@ -118,31 +110,75 @@ pub fn read_valid_bootstrap_secret_file(path: &Path) -> Option<String> {
     if decoded.len() < DESKTOP_BOOTSTRAP_SECRET_MIN_BYTES {
         return None;
     }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        if meta.permissions().mode() & 0o077 != 0 {
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600)).ok()?;
+        }
+    }
     Some(secret.to_owned())
 }
 
-/// Generates a random 32-byte secret, encodes it as unpadded base64url (no trailing newline),
-/// and writes it atomically to `path` with mode `0600` (on Unix).
-pub fn generate_bootstrap_secret_file(path: &Path) -> Result<String, ClientError> {
+/// The format Electron writes and keeps (`readOrCreateDesktopSecretFile`): 64 lowercase hex chars.
+pub fn is_electron_desktop_secret(secret: &str) -> bool {
+    secret.len() == 64
+        && secret
+            .bytes()
+            .all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+}
+
+/// Returns the secret a `p0d` started now should use, creating it when missing.
+///
+/// Anything other than Electron's format is replaced, because Electron rotates such a file on its
+/// next launch and would lock this client out of a `p0d` it started.
+pub fn ensure_desktop_secret_file(path: &Path) -> Result<String, ClientError> {
+    if let Some(existing) = read_desktop_secret_file(path)
+        && is_electron_desktop_secret(&existing)
+    {
+        return Ok(existing);
+    }
+    generate_desktop_secret_file(path)
+}
+
+/// Writes a fresh secret exactly as Electron does: 32 random bytes as hex plus a newline, mode
+/// `0600`, in a `0700` directory, through a temporary file and rename.
+pub fn generate_desktop_secret_file(path: &Path) -> Result<String, ClientError> {
     let mut bytes = [0u8; DESKTOP_BOOTSTRAP_SECRET_MIN_BYTES];
     rand::rng().fill_bytes(&mut bytes);
-    let secret = URL_SAFE_NO_PAD.encode(bytes);
+    let secret = hex::encode(bytes);
 
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
+        create_private_dir(parent)?;
     }
-
     let tmp_path = tmp_sibling(path);
-    write_secret_file(&tmp_path, secret.as_bytes())?;
+    let _ = std::fs::remove_file(&tmp_path);
+    write_secret_file(&tmp_path, format!("{secret}\n").as_bytes())?;
     std::fs::rename(&tmp_path, path)?;
     Ok(secret)
+}
+
+#[cfg(unix)]
+fn create_private_dir(dir: &Path) -> Result<(), ClientError> {
+    use std::os::unix::fs::DirBuilderExt as _;
+    std::fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(dir)?;
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn create_private_dir(dir: &Path) -> Result<(), ClientError> {
+    std::fs::create_dir_all(dir)?;
+    Ok(())
 }
 
 fn tmp_sibling(path: &Path) -> PathBuf {
     let mut name = path
         .file_name()
         .map(|s| s.to_os_string())
-        .unwrap_or_else(|| "bootstrap-secret".into());
+        .unwrap_or_else(|| "desktop-bootstrap-secret".into());
     name.push(".tmp");
     path.with_file_name(name)
 }
@@ -153,8 +189,7 @@ fn write_secret_file(path: &Path, contents: &[u8]) -> Result<(), ClientError> {
     use std::os::unix::fs::{OpenOptionsExt as _, PermissionsExt as _};
 
     let mut file = std::fs::OpenOptions::new()
-        .create(true)
-        .truncate(true)
+        .create_new(true)
         .write(true)
         .mode(0o600)
         .open(path)?;
@@ -186,18 +221,30 @@ pub async fn exchange_desktop_bootstrap(
 
     let response = http.post(&url).form(&form).send().await?;
     let status = response.status();
+    if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+        let retry_after = response
+            .headers()
+            .get(reqwest::header::RETRY_AFTER)
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.trim().parse::<u64>().ok())
+            .unwrap_or(60);
+        return Err(ClientError::RateLimited {
+            retry_after: Duration::from_secs(retry_after),
+        });
+    }
     if !status.is_success() {
         let body = response.text().await.unwrap_or_default();
         return Err(ClientError::Auth(format!(
-            "POST /oauth/token failed with {status}: {body}"
+            "POST /oauth/token failed with {status}: {}",
+            body.chars().take(300).collect::<String>()
         )));
     }
     let parsed: AccessTokenResponse = response.json().await?;
     Ok(parsed)
 }
 
-/// Resolves a bearer credential for the given [`AuthMode`].
-pub async fn resolve_bearer_token(
+/// Obtains a fresh bearer credential for the given [`AuthMode`].
+pub async fn issue_bearer_token(
     http: &reqwest::Client,
     http_base_url: &str,
     mode: &AuthMode,
