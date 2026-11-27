@@ -36,7 +36,7 @@ export function PluginInstaller({
   const m = useMessages();
   const allowed = useAtomValue(serverEnvironment.pluginsInstall.permissionAtom(environmentId));
   const installations = useEnvironmentQuery(
-    serverEnvironment.pluginsInstalledList({ environmentId, input: {} }),
+    allowed ? serverEnvironment.pluginsInstalledList({ environmentId, input: {} }) : null,
   );
   const installed = installations.data;
   const install = useAtomCommand(serverEnvironment.pluginsInstall, { reportFailure: false });
@@ -149,7 +149,9 @@ export function PluginInstaller({
       >
         <div className="space-y-4 px-4 py-3 text-sm">
           {installations.error ? (
-            <p role="alert">{m(pluginInstallError(installations.error))}</p>
+            <p role="alert">
+              {m(pluginInstallError(installations.failure ?? installations.error))}
+            </p>
           ) : null}
           {error ? (
             <p role="alert" className="text-destructive">

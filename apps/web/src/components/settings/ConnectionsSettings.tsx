@@ -19,6 +19,7 @@ import {
   AuthEnvironmentMaintainScope,
   type AuthPairingCredentialResult,
   type AuthPairingLink,
+  AuthPluginsManageScope,
   AuthRelayReadScope,
   type DesktopServerExposureState,
   type DesktopWslState,
@@ -427,6 +428,7 @@ function ConnectionsSettingsContent({
   const canReadAccess = useEnvironmentScope(accessEnvironmentId, AuthAccessReadScope);
   const canWriteAccess = useEnvironmentScope(accessEnvironmentId, AuthAccessWriteScope);
   const canReadRelay = useEnvironmentScope(accessEnvironmentId, AuthRelayReadScope);
+  const canManagePlugins = useEnvironmentScope(accessEnvironmentId, AuthPluginsManageScope);
   const canMaintain = useEnvironmentScope(accessEnvironmentId, AuthEnvironmentMaintainScope);
   const canManageLocalBackend = isPrimaryAccess && !isLocalEnvironmentDisabled() && canMaintain;
   const showsAccess = view === "access";
@@ -470,7 +472,11 @@ function ConnectionsSettingsContent({
     liveStatusLoaded: relayStatus.isSuccess,
     cached: accessEnvironment?.serverConfig?.environment.publicOrigin,
   });
-  const hostedAppUrl = useT3ConnectBridgeHostedAppUrl(accessEnvironmentId);
+  const hostedAppUrl = useT3ConnectBridgeHostedAppUrl(
+    canManagePlugins && accessEnvironment?.serverConfig?.environment.capabilities.plugins === true
+      ? accessEnvironmentId
+      : null,
+  );
   const publicEndpoint = publicOrigin
     ? publicOriginAdvertisedEndpoint(publicOrigin, resolveMessage, hostedAppUrl)
     : null;

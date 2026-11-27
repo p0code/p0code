@@ -7,6 +7,7 @@ import { reuseUnchanged } from "./serverConfigProjection.ts";
 export { runStreamInEnvironment, followStreamInEnvironment } from "./environmentStreams.ts";
 import {
   type ClientGuardedRpcTag,
+  type EnvironmentAuthorizationError,
   EnvironmentId,
   type EnvironmentId as EnvironmentIdType,
 } from "@t3tools/contracts";
@@ -826,7 +827,17 @@ export function createEnvironmentQueryAtomFamily<R, ER, Input, A, E>(
                           AsyncResult.value,
                         ),
                       )
-                      .pipe(pendingOnceSessionReplaced(session.value)),
+                      .pipe(
+                        Effect.provideService(RpcPermissionGuard, {
+                          authorize: (id, method, payload) =>
+                            createCommandPermissions(runtime, method).authorize(
+                              get.registry,
+                              id,
+                              payload,
+                            ),
+                        }),
+                        pendingOnceSessionReplaced(session.value),
+                      ),
                   )
                 : Effect.never;
             case "connecting":
@@ -956,9 +967,17 @@ export function createEnvironmentSubscriptionAtomFamily<R, ER, Input, A, E>(
   const live = Atom.family((key: string) => {
     const target = parseEnvironmentRpcKey<Input>(key);
     return runtime
-      .atom(
+      .atom((get) =>
         Stream.suspend(() =>
-          followStreamInEnvironment(target.environmentId, options.subscribe(target.input)),
+          followStreamInEnvironment(
+            target.environmentId,
+            options.subscribe(target.input).pipe(
+              Stream.provideService(RpcPermissionGuard, {
+                authorize: (id, method, payload) =>
+                  createCommandPermissions(runtime, method).authorize(get.registry, id, payload),
+              }),
+            ),
+          ),
         ).pipe(options.completeWhen ? Stream.takeUntil(options.completeWhen) : (stream) => stream),
       )
       .pipe(Atom.setIdleTTL(idleTtlMs), Atom.withLabel(label(key)));
@@ -1076,12 +1095,12 @@ export function createEnvironmentRpcSubscriptionAtomFamily<
     readonly transform?: (
       stream: Stream.Stream<
         EnvironmentRpcStreamValue<TTag>,
-        EnvironmentRpcStreamFailure<TTag>,
+        EnvironmentRpcStreamFailure<TTag> | EnvironmentAuthorizationError,
         EnvironmentSupervisor.EnvironmentSupervisor | R
       >,
     ) => Stream.Stream<
       B,
-      EnvironmentRpcStreamFailure<TTag>,
+      EnvironmentRpcStreamFailure<TTag> | EnvironmentAuthorizationError,
       EnvironmentSupervisor.EnvironmentSupervisor | R
     >;
   },
@@ -1096,7 +1115,7 @@ export function createEnvironmentRpcSubscriptionAtomFamily<
       return options.transform === undefined
         ? (stream as Stream.Stream<
             B,
-            EnvironmentRpcStreamFailure<TTag>,
+            EnvironmentRpcStreamFailure<TTag> | EnvironmentAuthorizationError,
             EnvironmentSupervisor.EnvironmentSupervisor | R
           >)
         : options.transform(stream);

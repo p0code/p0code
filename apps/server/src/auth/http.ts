@@ -2,6 +2,7 @@ import {
   authScopeRequiredResponse,
   AuthAccessTokenType,
   AuthAccessWriteScope,
+  AuthPluginsManageScope,
   AuthStandardClientScopes,
   AuthGrantScope,
   EnvironmentAuthInvalidError,
@@ -45,6 +46,10 @@ const CREDENTIAL_RESPONSE_HEADERS = {
   "cache-control": "no-store",
   pragma: "no-cache",
 } as const;
+
+const isAuthGrantScope = Schema.is(AuthGrantScope);
+const isRequestableTokenScope = (scope: string): scope is AuthEnvironmentScope =>
+  isAuthGrantScope(scope) || scope === AuthPluginsManageScope;
 
 const appendCredentialResponseHeaders = HttpEffect.appendPreResponseHandler((_request, response) =>
   Effect.succeed(HttpServerResponse.setHeaders(response, CREDENTIAL_RESPONSE_HEADERS)),
@@ -392,7 +397,7 @@ export const layer = HttpApiBuilder.group(
             const requestedScopes =
               args.payload.scope === undefined
                 ? undefined
-                : (parseOAuthScope(args.payload.scope)?.filter(Schema.is(AuthGrantScope)) ?? null);
+                : (parseOAuthScope(args.payload.scope)?.filter(isRequestableTokenScope) ?? null);
             if (requestedScopes === null || requestedScopes?.length === 0) {
               return yield* failEnvironmentInvalidRequest("invalid_scope");
             }

@@ -267,7 +267,7 @@ func authorizationError(scope string) map[string]string {
 		parent = "relay:write"
 	case "filesystem:read", "diagnostics:read":
 		parent = "orchestration:read"
-	case "settings:write", "providers:manage", "environment:maintain", "preview:operate", "source-control:write", "filesystem:write":
+	case "settings:write", "providers:manage", "environment:maintain", "preview:operate", "source-control:write", "filesystem:write", "plugins:manage":
 		parent = "orchestration:operate"
 	case "terminal:read":
 		parent = "terminal:operate"

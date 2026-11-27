@@ -9,8 +9,11 @@ import { vi } from "vite-plus/test";
 import {
   AuthAccessReadScope,
   AuthAccessWriteScope,
+  AuthAdministrativeClientScopes,
   AuthEnvironmentMaintainScope,
   AuthOrchestrationOperateScope,
+  AuthPluginsManageScope,
+  AuthStandardClientScopes,
   AuthTerminalOperateScope,
   AuthOrchestrationReadScope,
   AuthPreviewOperateScope,
@@ -33,7 +36,12 @@ import * as Layer from "effect/Layer";
 import { Atom, AtomRegistry, AsyncResult } from "effect/reactivity";
 import { EnvironmentRegistry } from "../connection/registry.ts";
 import { createCommandPermissions } from "./commandPermissions.ts";
-import { createEnvironmentRpcCommand, runAtomCommand } from "./runtime.ts";
+import {
+  createEnvironmentQueryAtomFamily,
+  createEnvironmentRpcCommand,
+  createEnvironmentRpcSubscriptionAtomFamily,
+  runAtomCommand,
+} from "./runtime.ts";
 import { AVAILABLE_CONNECTION_STATE, BearerConnectionTarget } from "../connection/model.ts";
 import { createPeerLinkEnvironmentAtoms } from "./peerLinks.ts";
 
@@ -617,5 +625,216 @@ it.effect("rejects protected unary and streamed RPCs outside a guarded command",
     }).pipe(Stream.runDrain, Effect.provideService(EnvironmentSupervisor, supervisor), Effect.flip);
     expect(streamed._tag).toBe("EnvironmentAuthorizationError");
     expect(writes).toBe(0);
+  }),
+);
+
+it.effect("authorizes guarded plugin queries against the target environment session", () =>
+  Effect.gen(function* () {
+    const registry = yield* setup;
+    let installedCalls = 0;
+    let shopCalls = 0;
+    const rpcSession = {
+      client: {
+        [WS_METHODS.pluginsInstalledList]: () =>
+          Effect.sync(() => {
+            installedCalls += 1;
+            return { snapshot: { plugins: [] }, installations: [], stagedManifests: [] };
+          }),
+        [WS_METHODS.pluginsShopList]: () =>
+          Effect.sync(() => {
+            shopCalls += 1;
+            return {
+              entries: [],
+              categories: [],
+              fetchedAt: null,
+              stale: false,
+              skippedEntries: 0,
+              error: null,
+            };
+          }),
+      },
+    } as unknown as RpcSession;
+    const supervisorState = yield* SubscriptionRef.make({
+      ...AVAILABLE_CONNECTION_STATE,
+      desired: true,
+      network: "online" as const,
+      phase: "connected" as const,
+      attempt: 1,
+      generation: 1,
+    });
+    const supervisorSession = yield* SubscriptionRef.make(Option.some(rpcSession));
+    const supervisor = EnvironmentSupervisor.of({
+      target: new BearerConnectionTarget({
+        environmentId: env,
+        label: "target",
+        connectionId: "conn-1",
+      }),
+      state: supervisorState,
+      session: supervisorSession,
+      prepared: yield* SubscriptionRef.make(Option.none()),
+      connect: Effect.void,
+      disconnect: Effect.void,
+      retryNow: Effect.void,
+    } as unknown as EnvironmentSupervisor["Service"]);
+    const queryRuntime = Atom.runtime(
+      Layer.succeed(EnvironmentRegistry, {
+        run: (_id: EnvironmentId, effect: Effect.Effect<unknown>) =>
+          Effect.provideService(effect, EnvironmentSupervisor, supervisor),
+        followStream: (_id: EnvironmentId, stream: Stream.Stream<unknown>) =>
+          Stream.provideService(stream, EnvironmentSupervisor, supervisor),
+        stateChanges: () => SubscriptionRef.changes(supervisorState),
+      } as unknown as EnvironmentRegistry["Service"]),
+    );
+
+    const installedList = createEnvironmentQueryAtomFamily(queryRuntime, {
+      label: "test:pluginsInstalledList",
+      execute: (_input: Record<string, never>) =>
+        requestGuarded(WS_METHODS.pluginsInstalledList, {}),
+    });
+    const shopList = createEnvironmentQueryAtomFamily(queryRuntime, {
+      label: "test:pluginsShopList",
+      execute: (_input: Record<string, never>) => requestGuarded(WS_METHODS.pluginsShopList, {}),
+    });
+
+    // Standard/shared client without plugins:manage is blocked client-side before sending the RPC.
+    registry.set(
+      sessions(env),
+      AsyncResult.success({
+        ...grant(true),
+        scopes: AuthStandardClientScopes,
+        permissions: AuthStandardClientScopes,
+      }),
+    );
+    const deniedInstalled = yield* AtomRegistry.getResult(
+      registry,
+      installedList({ environmentId: env, input: {} }),
+    ).pipe(Effect.flip);
+    expect(deniedInstalled).toMatchObject({
+      _tag: "EnvironmentAuthorizationError",
+      requiredPermission: AuthPluginsManageScope,
+    });
+    const deniedShop = yield* AtomRegistry.getResult(
+      registry,
+      shopList({ environmentId: env, input: {} }),
+    ).pipe(Effect.flip);
+    expect(deniedShop).toMatchObject({
+      _tag: "EnvironmentAuthorizationError",
+      requiredPermission: AuthPluginsManageScope,
+    });
+    expect(installedCalls).toBe(0);
+    expect(shopCalls).toBe(0);
+
+    // Owner session with AuthAdministrativeClientScopes (includes plugins:manage) succeeds.
+    registry.set(
+      sessions(env),
+      AsyncResult.success({
+        ...grant(true),
+        scopes: AuthAdministrativeClientScopes,
+        permissions: AuthAdministrativeClientScopes,
+      }),
+    );
+    const installedAtom = installedList({ environmentId: env, input: {} }, "owner");
+    const shopAtom = shopList({ environmentId: env, input: {} }, "owner");
+    registry.refresh(installedAtom);
+    registry.refresh(shopAtom);
+    const installed = yield* AtomRegistry.getResult(registry, installedAtom);
+    const shop = yield* AtomRegistry.getResult(registry, shopAtom);
+    expect(installed.installations).toEqual([]);
+    expect(shop.entries).toEqual([]);
+    expect(installedCalls).toBe(1);
+    expect(shopCalls).toBe(1);
+  }),
+);
+
+it.effect("authorizes guarded plugin subscriptions against the target environment session", () =>
+  Effect.gen(function* () {
+    const registry = yield* setup;
+    let subscribeCalls = 0;
+    const rpcSession = {
+      client: {
+        [WS_METHODS.pluginsSubscribe]: () =>
+          Stream.suspend(() => {
+            subscribeCalls += 1;
+            return Stream.make({ plugins: [] });
+          }),
+      },
+    } as unknown as RpcSession;
+    const supervisorState = yield* SubscriptionRef.make({
+      ...AVAILABLE_CONNECTION_STATE,
+      desired: true,
+      network: "online" as const,
+      phase: "connected" as const,
+      attempt: 1,
+      generation: 1,
+    });
+    const supervisorSession = yield* SubscriptionRef.make(Option.some(rpcSession));
+    const supervisor = EnvironmentSupervisor.of({
+      target: new BearerConnectionTarget({
+        environmentId: env,
+        label: "target",
+        connectionId: "conn-1",
+      }),
+      state: supervisorState,
+      session: supervisorSession,
+      prepared: yield* SubscriptionRef.make(Option.none()),
+      connect: Effect.void,
+      disconnect: Effect.void,
+      retryNow: Effect.void,
+    } as unknown as EnvironmentSupervisor["Service"]);
+    const subscriptionRuntime = Atom.runtime(
+      Layer.succeed(EnvironmentRegistry, {
+        run: (_id: EnvironmentId, effect: Effect.Effect<unknown>) =>
+          Effect.provideService(effect, EnvironmentSupervisor, supervisor),
+        followStream: (_id: EnvironmentId, stream: Stream.Stream<unknown>) =>
+          Stream.provideService(stream, EnvironmentSupervisor, supervisor),
+        stateChanges: () => SubscriptionRef.changes(supervisorState),
+      } as unknown as EnvironmentRegistry["Service"]),
+    );
+
+    const pluginsSubscription = createEnvironmentRpcSubscriptionAtomFamily(subscriptionRuntime, {
+      label: "test:pluginsSubscribe",
+      tag: WS_METHODS.pluginsSubscribe,
+    });
+
+    registry.set(
+      sessions(env),
+      AsyncResult.success({
+        ...grant(true),
+        scopes: AuthStandardClientScopes,
+        permissions: AuthStandardClientScopes,
+      }),
+    );
+    const denied = yield* AtomRegistry.getResult(
+      registry,
+      pluginsSubscription({ environmentId: env, input: {} }),
+    ).pipe(Effect.flip);
+    expect(denied).toMatchObject({
+      _tag: "EnvironmentAuthorizationError",
+      requiredPermission: AuthPluginsManageScope,
+    });
+    expect(subscribeCalls).toBe(0);
+
+    registry.set(
+      sessions(env),
+      AsyncResult.success({
+        ...grant(true),
+        scopes: AuthAdministrativeClientScopes,
+        permissions: AuthAdministrativeClientScopes,
+      }),
+    );
+    const ownerAtom = pluginsSubscription({ environmentId: env, input: {} });
+    const received = yield* Effect.callback<{ readonly plugins: ReadonlyArray<unknown> }>(
+      (resume) => {
+        const cancel = registry.subscribe(ownerAtom, (result) => {
+          if (AsyncResult.isSuccess(result)) {
+            resume(Effect.succeed(result.value));
+          }
+        });
+        registry.refresh(ownerAtom);
+        return Effect.sync(cancel);
+      },
+    );
+    expect(received).toEqual({ plugins: [] });
+    expect(subscribeCalls).toBe(1);
   }),
 );

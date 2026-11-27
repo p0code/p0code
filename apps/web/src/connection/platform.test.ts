@@ -1,6 +1,8 @@
 import {
+  AuthAdministrativeClientScopes,
   AuthStandardClientScopes,
   EnvironmentId,
+  ORCHESTRATION_PROTOCOL_VERSION,
   PRIMARY_LOCAL_ENVIRONMENT_ID,
   type DesktopBridge,
   type DesktopSshEnvironmentBootstrap,
@@ -11,6 +13,7 @@ import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import { afterEach, vi } from "vite-plus/test";
 import { ClientCapabilities } from "@t3tools/client-runtime/platform";
+import { FetchHttpClient } from "effect/http";
 import {
   ConnectionBlockedError,
   ConnectionTransientError,
@@ -20,6 +23,7 @@ import {
   canRetainCachedPlatformRegistrationAfterRefreshFailure,
   canReuseCachedPlatformRegistration,
   layer,
+  loadSecondaryConnectionRegistration,
   isRejectedBootstrapCredentialError,
   isRejectedSecondaryBootstrap,
   nextRejectedSecondaryBootstrap,
@@ -449,4 +453,83 @@ describe("primary topology cache", () => {
       }),
     ).toBe(cached);
   });
+});
+
+describe("desktop-local secondary bootstrap exchange", () => {
+  it.effect("omits scope so secondary local backends retain owner scopes", () =>
+    Effect.gen(function* () {
+      vi.stubGlobal("window", {
+        location: {
+          href: "http://127.0.0.1:5173/",
+          origin: "http://127.0.0.1:5173",
+          hostname: "127.0.0.1",
+        },
+        desktopBridge: { getClientPlatform: () => "darwin" },
+      });
+      vi.stubGlobal("navigator", {
+        userAgent: "p0code-test",
+        platform: "MacIntel",
+        maxTouchPoints: 0,
+      });
+
+      const calls: Array<{ readonly url: string; readonly body: string | null }> = [];
+      const fetchFn = ((input, init) => {
+        const url = String(input);
+        const body =
+          typeof init?.body === "string"
+            ? init.body
+            : init?.body instanceof Uint8Array
+              ? new TextDecoder().decode(init.body)
+              : null;
+        calls.push({ url, body });
+        if (url.endsWith("/.well-known/t3/environment")) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                environmentId: "environment-secondary",
+                label: "Secondary Local",
+                platform: { os: "darwin", arch: "arm64" },
+                serverVersion: APP_VERSION,
+                orchestrationProtocolVersion: ORCHESTRATION_PROTOCOL_VERSION,
+                capabilities: { repositoryIdentity: true, plugins: true },
+              }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            ),
+          );
+        }
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              access_token: "secondary-owner-bearer",
+              issued_token_type: "urn:ietf:params:oauth:token-type:access_token",
+              token_type: "Bearer",
+              expires_in: 3_600,
+              scope: AuthAdministrativeClientScopes.join(" "),
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          ),
+        );
+      }) satisfies typeof fetch;
+
+      vi.stubGlobal("fetch", fetchFn);
+
+      const loaded = yield* loadSecondaryConnectionRegistration({
+        id: "secondary-1",
+        label: "Secondary Local",
+        httpBaseUrl: "http://127.0.0.1:4773/",
+        wsBaseUrl: "ws://127.0.0.1:4773/",
+        bootstrapToken: "secondary-bootstrap-token",
+      }).pipe(Effect.provide(FetchHttpClient.layer));
+
+      expect(loaded.registration.credential).toMatchObject({
+        _tag: "BearerConnectionCredential",
+        token: "secondary-owner-bearer",
+      });
+      const tokenCall = calls.find((call) => call.url.endsWith("/oauth/token"));
+      expect(tokenCall).toBeDefined();
+      const params = new URLSearchParams(tokenCall?.body ?? "");
+      expect(params.get("subject_token")).toBe("secondary-bootstrap-token");
+      expect(params.has("scope")).toBe(false);
+    }),
+  );
 });

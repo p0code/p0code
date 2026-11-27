@@ -3,6 +3,7 @@ import {
   AuthOrchestrationOperateScope,
   AuthAccessWriteScope,
   AuthSettingsWriteScope,
+  AuthPluginsManageScope,
   AuthProvidersManageScope,
   AuthRelayConfigureScope,
   AuthRelayWriteScope,
@@ -1613,7 +1614,7 @@ export const ServerSettings = Schema.Struct({
   ).pipe(Schema.withDecodingDefault(Effect.succeed({}))),
   /** Fold once so restarts cannot undo later UI resets. */
   projectSettingsFolded: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
-  /** Bundled plugins stay off until someone with relay:configure turns them on. */
+  /** Bundled plugins stay off until someone with plugins:manage turns them on. */
   plugins: PluginSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
 
   enableAgentDeviceAccess: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
@@ -2284,8 +2285,9 @@ export function requiredScopesForServerSettingsPatch(
       !changesRelayConfigure)
       ? [AuthSettingsWriteScope]
       : []),
-    // A plugin can open the environment to an outside service: the bar of linking a relay.
-    ...(changesPlugins || changesRelayConfigure ? [AuthRelayConfigureScope] : []),
+    // Plugins run inside the server process with host account rights: an administrative scope.
+    ...(changesPlugins ? [AuthPluginsManageScope] : []),
+    ...(changesRelayConfigure ? [AuthRelayConfigureScope] : []),
     ...(changesRelayWrite ? [AuthRelayWriteScope] : []),
     ...(changesProviders ? [AuthProvidersManageScope] : []),
     ...(changesAccess ? [AuthAccessWriteScope] : []),

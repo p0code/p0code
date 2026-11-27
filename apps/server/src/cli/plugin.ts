@@ -1,5 +1,5 @@
 import {
-  AuthRelayConfigureScope,
+  AuthPluginsManageScope,
   ORCHESTRATION_PROTOCOL_QUERY_PARAM,
   ORCHESTRATION_PROTOCOL_VERSION,
   PluginOperationError,
@@ -39,7 +39,7 @@ export const withPlugins = Effect.fn("cli.plugin.session")(function* <A, E, R>(
     const auth = yield* EnvironmentAuth.EnvironmentAuth;
     const session = yield* Effect.acquireRelease(
       auth.issueSession({
-        scopes: [AuthRelayConfigureScope],
+        scopes: [AuthPluginsManageScope],
         subject: "cli",
         label: "p0 plugin cli",
         ttl: Duration.minutes(5),

@@ -434,7 +434,7 @@ const loadPrimaryConnectionRegistration = Effect.fn(
   });
 });
 
-const loadSecondaryConnectionRegistration = Effect.fn(
+export const loadSecondaryConnectionRegistration = Effect.fn(
   "web.connectionPlatform.loadSecondaryConnectionRegistration",
 )(function* (entry: DesktopEnvironmentBootstrap) {
   if (
@@ -455,8 +455,8 @@ const loadSecondaryConnectionRegistration = Effect.fn(
   const issuedAtEpochMs = yield* Clock.currentTimeMillis;
   const access = yield* bootstrapRemoteBearerSession({
     httpBaseUrl,
+    // This credential belongs to a local backend. Keep its server-issued owner scopes.
     credential: entry.bootstrapToken,
-    scopes: AuthStandardClientScopes,
     clientMetadata: currentClientMetadata(),
   }).pipe(Effect.mapError(mapRemoteEnvironmentError));
   // Desktop operations need the pool backend id to reach the owning instance; RPC uses the environment id.

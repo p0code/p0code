@@ -6,7 +6,11 @@ import * as NodePath from "node:path";
 
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { AuthStandardClientScopes, ORCHESTRATION_PROTOCOL_VERSION } from "@t3tools/contracts";
+import {
+  AuthPluginsManageScope,
+  AuthStandardClientScopes,
+  ORCHESTRATION_PROTOCOL_VERSION,
+} from "@t3tools/contracts";
 import * as NetService from "@t3tools/shared/Net";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { assert, describe, expect, it } from "@effect/vitest";
@@ -1014,5 +1018,58 @@ describe("scripted auth output", () => {
         assert.match(output.trim(), /^[\w-]+\.[\w-]+/);
       }
     }),
+  );
+});
+
+describe("auth session issue --scope plugins:manage", () => {
+  it.effect(
+    "allows local operators to issue a plugins:manage session while rejecting pairing",
+    () =>
+      Effect.gen(function* () {
+        const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-cli-plugin-scope-"));
+        const issuedOutput = yield* captureStdout(
+          runCli([
+            "auth",
+            "session",
+            "issue",
+            "--base-dir",
+            baseDir,
+            "--scope",
+            AuthPluginsManageScope,
+            "--json",
+          ]),
+        );
+        const issued = JSON.parse(issuedOutput) as {
+          readonly scopes: ReadonlyArray<string>;
+          readonly permissions?: ReadonlyArray<string>;
+        };
+        assert.deepEqual(issued.permissions ?? issued.scopes, [AuthPluginsManageScope]);
+
+        const defaultOutput = yield* captureStdout(
+          runCli(["auth", "session", "issue", "--base-dir", baseDir, "--json"]),
+        );
+        const defaultIssued = JSON.parse(defaultOutput) as {
+          readonly scopes: ReadonlyArray<string>;
+          readonly permissions?: ReadonlyArray<string>;
+        };
+        assert.notInclude(
+          defaultIssued.permissions ?? defaultIssued.scopes,
+          AuthPluginsManageScope,
+        );
+
+        const pairingError = yield* runCli([
+          "auth",
+          "pairing",
+          "create",
+          "--base-dir",
+          baseDir,
+          "--scope",
+          AuthPluginsManageScope,
+        ]).pipe(Effect.provide(layerCliRuntime), Effect.flip);
+        if (!CliError.isCliError(pairingError) || pairingError._tag !== "ShowHelp") {
+          assert.fail(`Expected ShowHelp, got ${String(pairingError)}`);
+        }
+        assert.equal(pairingError.errors[0]?._tag, "InvalidValue");
+      }),
   );
 });

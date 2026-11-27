@@ -22,8 +22,8 @@ plugins depend only on [`@t3tools/plugin-api`](../../packages/plugin-api), never
   `Scope.provide` must stay innermost when starting a plugin: the platform context it receives
   carries the host's own scope, which would otherwise collect the plugin's finalizers.
 - **Settings are the switch.** `plugins.<id>.enabled` in server settings decides what runs, so a
-  settings edit and the RPC agree. Changing it needs `relay:configure`, the administrative scope,
-  because a plugin can open the environment to an outside service.
+  settings edit and the RPC agree. Plugin RPCs and plugin settings edits require `plugins:manage`.
+  Local owner credentials carry this scope because plugins run with the server's OS privileges.
 - **Sessions are owned by subject.** Credentials a plugin mints use the subject `plugin:<id>`. The
   host revokes that subject's sessions and pairing links whenever the plugin is disabled, and at
   startup for plugins that are off, so a plugin cannot leave devices signed in after it is gone.

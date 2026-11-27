@@ -4,17 +4,24 @@ import { expect, it, vi } from "vite-plus/test";
 import { render } from "../../../test/render";
 import "~/index.css";
 
-const state = vi.hoisted(() => ({ plugins: [] as PluginInfo[], setEnabled: vi.fn() }));
+const state = vi.hoisted(() => ({
+  canManage: true,
+  pluginSubscribes: 0,
+  plugins: [] as PluginInfo[],
+  setEnabled: vi.fn(),
+}));
 vi.mock("../../state/query", () => ({
   useEnvironmentQuery: () => ({ data: { plugins: state.plugins } }),
 }));
 vi.mock("../../state/server", async () => {
   const { Atom } = await import("effect/reactivity");
-  const allowed = Atom.make(true);
   return {
     serverEnvironment: {
-      plugins: () => undefined,
-      pluginsSetEnabled: { permissionAtom: () => allowed },
+      plugins: () => {
+        state.pluginSubscribes += 1;
+        return undefined;
+      },
+      pluginsSetEnabled: { permissionAtom: () => Atom.make(state.canManage) },
     },
   };
 });
@@ -119,4 +126,16 @@ it("shows host disclosures for disabled plugins before allowing enable", async (
     environmentId: EnvironmentId.make("local"),
     input: { pluginId: "test-reader", enabled: true },
   });
+});
+
+it("explains that owner access is required without subscribing when plugins:manage is missing", async () => {
+  state.canManage = false;
+  state.pluginSubscribes = 0;
+  state.plugins = [];
+  await using screen = await render(<PluginsSettingsPanel />);
+  await expect
+    .element(screen.getByText("Managing plugins requires owner access on this environment."))
+    .toBeVisible();
+  expect(state.pluginSubscribes).toBe(0);
+  state.canManage = true;
 });

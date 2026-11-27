@@ -15,11 +15,11 @@ const T3_CONNECT_BRIDGE_ID = "t3-connect-bridge";
 export function PluginsSection({ environmentId }: { readonly environmentId: EnvironmentId }) {
   const gt = useGT();
   const config = useEnvironmentServerConfig(environmentId);
-  const supported = config?.environment.capabilities.plugins === true;
+  const canManage = useAtomValue(serverEnvironment.pluginsSetEnabled.permissionAtom(environmentId));
+  const supported = config?.environment.capabilities.plugins === true && canManage;
   const snapshot = useEnvironmentQuery(
     supported ? serverEnvironment.plugins({ environmentId, input: {} }) : null,
   );
-  const canManage = useAtomValue(serverEnvironment.pluginsSetEnabled.permissionAtom(environmentId));
   const setEnabled = useAtomCommand(serverEnvironment.pluginsSetEnabled);
   if (!supported || !snapshot.data || snapshot.data.plugins.length === 0) return null;
   const describe = (plugin: PluginInfo) => {

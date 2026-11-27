@@ -1,9 +1,4 @@
-import {
-  AuthRelayConfigureScope,
-  AuthRelayReadScope,
-  type PluginManifest,
-  WS_METHODS,
-} from "@t3tools/contracts";
+import { AuthPluginsManageScope, type PluginManifest, WS_METHODS } from "@t3tools/contracts";
 import { definePlugin, PluginContext, PluginError, type PluginServices } from "@t3tools/plugin-api";
 import * as PtyAdapter from "@t3tools/shared/PtyAdapter";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
@@ -340,10 +335,10 @@ describe("PluginHost", () => {
     );
   });
 
-  it("requires the administrative relay scope to manage plugins", () => {
+  it("requires the owner plugin scope for plugin RPCs and settings patches", () => {
     assert.deepStrictEqual(
       requiredScopesForRpcCall(WS_METHODS.pluginsSetEnabled, { pluginId: "echo", enabled: true }),
-      [AuthRelayConfigureScope],
+      [AuthPluginsManageScope],
     );
     assert.deepStrictEqual(
       requiredScopesForRpcCall(WS_METHODS.pluginsInvoke, {
@@ -351,16 +346,16 @@ describe("PluginHost", () => {
         action: "x",
         input: {},
       }),
-      [AuthRelayConfigureScope],
+      [AuthPluginsManageScope],
     );
     assert.deepStrictEqual(requiredScopesForRpcCall(WS_METHODS.pluginsSubscribe, {}), [
-      AuthRelayReadScope,
+      AuthPluginsManageScope,
     ]);
     assert.deepStrictEqual(
       requiredScopesForRpcCall(WS_METHODS.serverUpdateSettings, {
         patch: { plugins: { echo: { enabled: true } } },
       }),
-      [AuthRelayConfigureScope],
+      [AuthPluginsManageScope],
     );
   });
 });

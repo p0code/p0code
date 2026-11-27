@@ -1,5 +1,11 @@
 import {
   AuthEnvironmentMaintainScope,
+  AuthAdministrativeClientScopes,
+  AuthPluginsManageScope,
+  AuthRelayConfigureScope,
+  AuthStandardClientScopes,
+  mcpClientScopes,
+  PluginOperationError,
   AuthDiagnosticsReadScope,
   AuthFilesystemReadScope,
   AuthProvidersManageScope,
@@ -1040,6 +1046,172 @@ describe("RPC authorization scopes", () => {
       );
     }
   });
+});
+
+it.effect(
+  "allows local owners to use all plugin and restore RPCs and stops shared clients before the handlers",
+  () =>
+    Effect.gen(function* () {
+      const tags = [
+        WS_METHODS.pluginsInstalledList,
+        WS_METHODS.pluginsShopList,
+        WS_METHODS.pluginsShopEntry,
+        WS_METHODS.pluginsShopRefresh,
+        WS_METHODS.pluginsShopInstall,
+        WS_METHODS.pluginsShopUpdate,
+        WS_METHODS.pluginsShopUninstall,
+        WS_METHODS.pluginsInstall,
+        WS_METHODS.pluginsConsent,
+        WS_METHODS.pluginsUpdate,
+        WS_METHODS.pluginsRemove,
+        WS_METHODS.pluginsRollback,
+        WS_METHODS.pluginsSetEnabled,
+        WS_METHODS.pluginsInvoke,
+        WS_METHODS.pluginsSubscribe,
+        WS_METHODS.dataRestorePending,
+        WS_METHODS.dataRestoreApprove,
+        WS_METHODS.dataRestoreCancel,
+      ] as const;
+      const group = WsRpcGroup.omit(
+        ...[...WsRpcGroup.requests.keys()].filter(
+          (tag): tag is Exclude<keyof typeof RPC_REQUIRED_SCOPES, (typeof tags)[number]> =>
+            !(tags as ReadonlyArray<string>).includes(tag),
+        ),
+      );
+      const snapshot = { plugins: [] };
+      const emptyShop = {
+        entries: [],
+        categories: [],
+        fetchedAt: null,
+        stale: false,
+        skippedEntries: 0,
+        error: null,
+      };
+      const handlerReached = new PluginOperationError({
+        pluginId: "example",
+        message: "Handler reached",
+      });
+      const handlers = group.toLayer({
+        [WS_METHODS.pluginsInstalledList]: () =>
+          Effect.succeed({ snapshot, installations: [], stagedManifests: [] }),
+        [WS_METHODS.pluginsShopList]: () => Effect.succeed(emptyShop),
+        [WS_METHODS.pluginsShopEntry]: () =>
+          Effect.succeed({ entry: null, fetchedAt: null, error: null }),
+        [WS_METHODS.pluginsShopRefresh]: () => Effect.succeed(emptyShop),
+        [WS_METHODS.pluginsShopInstall]: () => Effect.fail(handlerReached),
+        [WS_METHODS.pluginsShopUpdate]: () => Effect.fail(handlerReached),
+        [WS_METHODS.pluginsShopUninstall]: () => Effect.fail(handlerReached),
+        [WS_METHODS.pluginsInstall]: () => Effect.fail(handlerReached),
+        [WS_METHODS.pluginsConsent]: () => Effect.fail(handlerReached),
+        [WS_METHODS.pluginsUpdate]: () => Effect.fail(handlerReached),
+        [WS_METHODS.pluginsRemove]: () => Effect.fail(handlerReached),
+        [WS_METHODS.pluginsRollback]: () => Effect.fail(handlerReached),
+        [WS_METHODS.pluginsSetEnabled]: () => Effect.succeed(snapshot),
+        [WS_METHODS.pluginsInvoke]: () => Effect.succeed("invoked"),
+        [WS_METHODS.pluginsSubscribe]: () => Stream.make(snapshot),
+        [WS_METHODS.dataRestorePending]: () => Stream.make(null),
+        [WS_METHODS.dataRestoreApprove]: () => Effect.void,
+        [WS_METHODS.dataRestoreCancel]: () => Effect.void,
+      });
+      const clientWith = (scopes: Parameters<typeof RpcAuthorization.layer>[0]) =>
+        RpcTest.makeClient(group).pipe(
+          Effect.provide(Layer.merge(handlers, RpcAuthorization.layer(scopes))),
+        );
+      const id = { id: "example" };
+      const remove = { id: "example", purgeData: false };
+      const install = { source: "example" };
+      const enable = { pluginId: "example", enabled: true };
+      const consent = { id: "example", version: "1.0.0", capabilities: [] };
+      const invoke = { pluginId: "example", action: "example", input: {} };
+      const owner = yield* clientWith(AuthAdministrativeClientScopes);
+      expect((yield* owner[WS_METHODS.pluginsInstalledList]({})).snapshot).toEqual(snapshot);
+      expect((yield* owner[WS_METHODS.pluginsShopList]({})).entries).toEqual([]);
+      expect((yield* owner[WS_METHODS.pluginsShopEntry](id)).entry).toBeNull();
+      expect((yield* owner[WS_METHODS.pluginsShopRefresh]({})).entries).toEqual([]);
+      expect(yield* owner[WS_METHODS.pluginsShopInstall](id).pipe(Effect.flip)).toEqual(
+        handlerReached,
+      );
+      expect(yield* owner[WS_METHODS.pluginsShopUpdate](id).pipe(Effect.flip)).toEqual(
+        handlerReached,
+      );
+      expect(yield* owner[WS_METHODS.pluginsShopUninstall](remove).pipe(Effect.flip)).toEqual(
+        handlerReached,
+      );
+      expect(yield* owner[WS_METHODS.pluginsInstall](install).pipe(Effect.flip)).toEqual(
+        handlerReached,
+      );
+      expect(yield* owner[WS_METHODS.pluginsConsent](consent).pipe(Effect.flip)).toEqual(
+        handlerReached,
+      );
+      expect(yield* owner[WS_METHODS.pluginsUpdate](id).pipe(Effect.flip)).toEqual(handlerReached);
+      expect(yield* owner[WS_METHODS.pluginsRemove](remove).pipe(Effect.flip)).toEqual(
+        handlerReached,
+      );
+      expect(yield* owner[WS_METHODS.pluginsRollback](id).pipe(Effect.flip)).toEqual(
+        handlerReached,
+      );
+      expect(yield* owner[WS_METHODS.pluginsSetEnabled](enable)).toEqual(snapshot);
+      expect(yield* owner[WS_METHODS.pluginsInvoke](invoke)).toBe("invoked");
+      expect(yield* owner[WS_METHODS.pluginsSubscribe]({}).pipe(Stream.runCollect)).toEqual([
+        snapshot,
+      ]);
+      expect(yield* owner[WS_METHODS.dataRestorePending]({}).pipe(Stream.runCollect)).toEqual([
+        null,
+      ]);
+      expect(yield* owner[WS_METHODS.dataRestoreApprove]({ id: "restore-1" })).toBeUndefined();
+      expect(yield* owner[WS_METHODS.dataRestoreCancel]({})).toBeUndefined();
+
+      const expectUnauthorized = <A, E>(call: Effect.Effect<A, E>) =>
+        Effect.result(call).pipe(
+          Effect.map((result) => {
+            expect(result).toMatchObject({
+              _tag: "Failure",
+              failure: {
+                _tag: "EnvironmentAuthorizationError",
+                requiredPermission: AuthPluginsManageScope,
+              },
+            });
+          }),
+        );
+
+      for (const scopes of [
+        AuthStandardClientScopes,
+        mcpClientScopes("auto"),
+        [AuthRelayConfigureScope],
+      ]) {
+        const client = yield* clientWith(scopes);
+        yield* expectUnauthorized(client[WS_METHODS.pluginsInstalledList]({}));
+        yield* expectUnauthorized(client[WS_METHODS.pluginsShopList]({}));
+        yield* expectUnauthorized(client[WS_METHODS.pluginsShopEntry](id));
+        yield* expectUnauthorized(client[WS_METHODS.pluginsShopRefresh]({}));
+        yield* expectUnauthorized(client[WS_METHODS.pluginsShopInstall](id));
+        yield* expectUnauthorized(client[WS_METHODS.pluginsShopUpdate](id));
+        yield* expectUnauthorized(client[WS_METHODS.pluginsShopUninstall](remove));
+        yield* expectUnauthorized(client[WS_METHODS.pluginsInstall](install));
+        yield* expectUnauthorized(client[WS_METHODS.pluginsConsent](consent));
+        yield* expectUnauthorized(client[WS_METHODS.pluginsUpdate](id));
+        yield* expectUnauthorized(client[WS_METHODS.pluginsRemove](remove));
+        yield* expectUnauthorized(client[WS_METHODS.pluginsRollback](id));
+        yield* expectUnauthorized(client[WS_METHODS.pluginsSetEnabled](enable));
+        yield* expectUnauthorized(client[WS_METHODS.pluginsInvoke](invoke));
+        yield* expectUnauthorized(client[WS_METHODS.pluginsSubscribe]({}).pipe(Stream.runCollect));
+        yield* expectUnauthorized(
+          client[WS_METHODS.dataRestorePending]({}).pipe(Stream.runCollect),
+        );
+        yield* expectUnauthorized(client[WS_METHODS.dataRestoreApprove]({ id: "restore-1" }));
+        yield* expectUnauthorized(client[WS_METHODS.dataRestoreCancel]({}));
+      }
+    }),
+);
+
+it("requires plugins:manage for backup restore RPCs", () => {
+  for (const method of [
+    WS_METHODS.dataRestorePending,
+    WS_METHODS.dataRestoreApprove,
+    WS_METHODS.dataRestoreCancel,
+  ]) {
+    expect(RpcAuthorization.requiredScopesForRpcCall(method, {})).toEqual([AuthPluginsManageScope]);
+  }
 });
 
 it("requires relay configuration and access scopes consistently on WS RPC", () => {

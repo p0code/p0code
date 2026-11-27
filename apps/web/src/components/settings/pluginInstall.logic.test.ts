@@ -1,3 +1,8 @@
+import {
+  AuthOrchestrationOperateScope,
+  AuthPluginsManageScope,
+  EnvironmentAuthorizationError,
+} from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 import { pluginInstallError, validGithubInput } from "./pluginInstall.logic";
 
@@ -32,5 +37,17 @@ describe("plugin install input", () => {
       expect(pluginInstallError(new Error(value))).toBeDefined();
       expect(JSON.stringify(pluginInstallError(new Error(value)))).not.toContain("private/path");
     }
+  });
+
+  it("explains when plugin management requires owner access", () => {
+    const authError = new EnvironmentAuthorizationError({
+      message: "The authenticated token is missing required scope: plugins:manage.",
+      requiredScope: AuthOrchestrationOperateScope,
+      requiredPermission: AuthPluginsManageScope,
+    });
+    expect(JSON.stringify(pluginInstallError(authError))).toContain("owner access");
+    expect(
+      JSON.stringify(pluginInstallError("This connection requires plugins:manage.")),
+    ).toContain("owner access");
   });
 });

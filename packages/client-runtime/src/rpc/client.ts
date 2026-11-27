@@ -288,10 +288,10 @@ export function runStreamInSession<TTag extends EnvironmentStreamCommandRpcTag>(
 interface SubscriptionOptions<TTag extends EnvironmentSubscriptionRpcTag> {
   /** Reports defects; the subscription then waits for the next session or resubscribe. */
   readonly onDefect?: (
-    cause: Cause.Cause<EnvironmentRpcStreamFailure<TTag>>,
+    cause: Cause.Cause<EnvironmentRpcStreamFailure<TTag> | EnvironmentAuthorizationError>,
   ) => Effect.Effect<void, never, never>;
   readonly onExpectedFailure?: (
-    cause: Cause.Cause<EnvironmentRpcStreamFailure<TTag>>,
+    cause: Cause.Cause<EnvironmentRpcStreamFailure<TTag> | EnvironmentAuthorizationError>,
   ) => Effect.Effect<void, never, never>;
   readonly retryExpectedFailureAfter?: Duration.Input;
   readonly resubscribe?: Stream.Stream<unknown, never, never>;
@@ -308,13 +308,14 @@ function subscribeDynamicMapped<TTag extends EnvironmentSubscriptionRpcTag, A>(
   options?: SubscriptionOptions<TTag>,
 ): Stream.Stream<
   A,
-  EnvironmentRpcStreamFailure<TTag>,
+  EnvironmentRpcStreamFailure<TTag> | EnvironmentAuthorizationError,
   EnvironmentSupervisor.EnvironmentSupervisor
 > {
   return Stream.unwrap(
     Effect.gen(function* () {
       const supervisor = yield* EnvironmentSupervisor.EnvironmentSupervisor;
       const observer = yield* EnvironmentRpcSubscriptionObserver;
+      const guard = yield* RpcPermissionGuard;
       const sessionChanges = SubscriptionRef.changes(supervisor.session);
       const sessions =
         options?.resubscribe === undefined
@@ -343,11 +344,17 @@ function subscribeDynamicMapped<TTag extends EnvironmentSubscriptionRpcTag, A>(
               let expectedFailureRetries = 0;
               // Not reset by a first value: a stream can emit before every chunk failure.
               let streamFailureRetries = 0;
-              const subscribeToSession = (): Stream.Stream<A, EnvironmentRpcStreamFailure<TTag>> =>
+              const subscribeToSession = (): Stream.Stream<
+                A,
+                EnvironmentRpcStreamFailure<TTag> | EnvironmentAuthorizationError
+              > =>
                 Stream.suspend(() =>
                   Stream.unwrap(
                     Effect.gen(function* () {
                       const input = yield* makeInput(session);
+                      if (clientRpcRequiredScopes(tag, input).length > 0) {
+                        yield* guard.authorize(supervisor.target.environmentId, tag, input);
+                      }
                       const completeObservation = yield* observer.observe({
                         environmentId: supervisor.target.environmentId,
                         method: tag,
@@ -487,7 +494,7 @@ export function subscribeDynamic<TTag extends EnvironmentSubscriptionRpcTag>(
   options?: SubscriptionOptions<TTag>,
 ): Stream.Stream<
   EnvironmentRpcStreamValue<TTag>,
-  EnvironmentRpcStreamFailure<TTag>,
+  EnvironmentRpcStreamFailure<TTag> | EnvironmentAuthorizationError,
   EnvironmentSupervisor.EnvironmentSupervisor
 > {
   return subscribeDynamicMapped(tag, makeInput, (_session, _input, stream) => stream, options);
@@ -500,7 +507,7 @@ export function subscribeDynamicWithSession<TTag extends EnvironmentSubscription
   options?: SubscriptionOptions<TTag>,
 ): Stream.Stream<
   readonly [session: RpcSession, value: EnvironmentRpcStreamValue<TTag>],
-  EnvironmentRpcStreamFailure<TTag>,
+  EnvironmentRpcStreamFailure<TTag> | EnvironmentAuthorizationError,
   EnvironmentSupervisor.EnvironmentSupervisor
 > {
   return subscribeDynamicMapped(
@@ -522,7 +529,7 @@ export function subscribeDynamicWithInput<TTag extends EnvironmentSubscriptionRp
   options?: SubscriptionOptions<TTag>,
 ): Stream.Stream<
   readonly [input: EnvironmentRpcInput<TTag>, value: EnvironmentRpcStreamValue<TTag>],
-  EnvironmentRpcStreamFailure<TTag>,
+  EnvironmentRpcStreamFailure<TTag> | EnvironmentAuthorizationError,
   EnvironmentSupervisor.EnvironmentSupervisor
 > {
   return subscribeDynamicMapped(
@@ -539,7 +546,7 @@ export function subscribe<TTag extends EnvironmentSubscriptionRpcTag>(
   options?: SubscriptionOptions<TTag>,
 ): Stream.Stream<
   EnvironmentRpcStreamValue<TTag>,
-  EnvironmentRpcStreamFailure<TTag>,
+  EnvironmentRpcStreamFailure<TTag> | EnvironmentAuthorizationError,
   EnvironmentSupervisor.EnvironmentSupervisor
 > {
   return subscribeDynamic(tag, () => Effect.succeed(input), options);

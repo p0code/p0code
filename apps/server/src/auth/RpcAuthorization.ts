@@ -166,7 +166,6 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.tunnelsLink]: AuthRelayReadScope,
   [WS_METHODS.tunnelsDecideRequest]: AuthRelayWriteScope,
   [WS_METHODS.tunnelsSubscribe]: AuthRelayReadScope,
-  [WS_METHODS.pluginsSubscribe]: AuthRelayReadScope,
   [WS_METHODS.pullRequestsList]: AuthOrchestrationReadScope,
   [WS_METHODS.pullRequestsListStats]: AuthOrchestrationReadScope,
   [WS_METHODS.pullRequestsFilterOptions]: AuthOrchestrationReadScope,

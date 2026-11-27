@@ -13,17 +13,23 @@ type PluginSnapshot = {
 };
 
 const harness = vi.hoisted(() => ({
+  canManagePlugins: true,
   dataUpdatedAt: 1,
   plugins: [] as ReadonlyArray<PluginSnapshot>,
   status: null as BridgeStatus | null,
   fail: false,
   calls: 0,
+  pluginSubscribes: 0,
 }));
 
+vi.mock(import("../../state/session"), async (original) => ({
+  ...(await original()),
+  useEnvironmentScope: () => harness.canManagePlugins,
+}));
 vi.mock(import("../../state/query"), async (original) => ({
   ...(await original()),
-  useEnvironmentQuery: (() => ({
-    data: { plugins: harness.plugins },
+  useEnvironmentQuery: ((atom: unknown) => ({
+    data: atom === null ? null : { plugins: harness.plugins },
     dataUpdatedAt: harness.dataUpdatedAt,
   })) as never,
 }));
@@ -33,7 +39,10 @@ vi.mock(import("../../state/server"), async (original) => {
     ...actual,
     serverEnvironment: {
       ...actual.serverEnvironment,
-      plugins: (() => null) as never,
+      plugins: (() => {
+        harness.pluginSubscribes += 1;
+        return "plugins-atom";
+      }) as never,
       pluginsInvoke: null as never,
     },
   };
@@ -151,4 +160,20 @@ it("clears on a failed tunnel, a bridge error, and a failed status call", async 
   harness.dataUpdatedAt = 4;
   await probe.screen.rerender(<Probe />);
   await probe.expectUrl("none");
+});
+
+it("skips plugin subscriptions and status calls without plugins:manage", async () => {
+  harness.canManagePlugins = false;
+  harness.fail = false;
+  harness.calls = 0;
+  harness.pluginSubscribes = 0;
+  harness.plugins = snapshot(true);
+  harness.status = status("https://app.example.com");
+  harness.dataUpdatedAt = 1;
+  await using probe = await mount();
+
+  await probe.expectUrl("none");
+  expect(harness.pluginSubscribes).toBe(0);
+  expect(harness.calls).toBe(0);
+  harness.canManagePlugins = true;
 });

@@ -3,7 +3,7 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { assert, describe, it } from "@effect/vitest";
 import { PluginContext, type PluginServices, type Plugin } from "@t3tools/plugin-api";
-import { type PluginManifest, WS_METHODS, AuthRelayConfigureScope } from "@t3tools/contracts";
+import { type PluginManifest, WS_METHODS, AuthPluginsManageScope } from "@t3tools/contracts";
 import * as PtyAdapter from "@t3tools/shared/PtyAdapter";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -417,7 +417,7 @@ describe("plugin installer", () => {
       }),
     );
   });
-  it("requires administrative scope for every installer RPC", () => {
+  it("requires the owner plugin scope for every installer RPC", () => {
     for (const method of [
       WS_METHODS.pluginsInstalledList,
       WS_METHODS.pluginsShopList,
@@ -432,6 +432,6 @@ describe("plugin installer", () => {
       WS_METHODS.pluginsRemove,
       WS_METHODS.pluginsRollback,
     ])
-      assert.deepEqual(requiredScopesForRpcCall(method, {}), [AuthRelayConfigureScope]);
+      assert.deepEqual(requiredScopesForRpcCall(method, {}), [AuthPluginsManageScope]);
   });
 });

@@ -1,11 +1,12 @@
 import { BridgeStatus, T3_CONNECT_BRIDGE_ID } from "@t3tools/plugin-t3-connect-bridge/actions";
-import type { EnvironmentId } from "@t3tools/contracts";
+import { AuthPluginsManageScope, type EnvironmentId } from "@t3tools/contracts";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { useEffect, useState } from "react";
 
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
+import { useEnvironmentScope } from "../../state/session";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { hostedAppUrlFromBridgeStatus } from "./bridgeHostedAppUrl";
 
@@ -16,13 +17,16 @@ const decodeStatus = Schema.decodeUnknownOption(BridgeStatus);
  * Pairing QRs stay on the environment unless the bridge opted into a hosted app.
  */
 export function useT3ConnectBridgeHostedAppUrl(environmentId: EnvironmentId | null): string | null {
+  const canManagePlugins = useEnvironmentScope(environmentId, AuthPluginsManageScope);
   const plugins = useEnvironmentQuery(
-    environmentId ? serverEnvironment.plugins({ environmentId, input: {} }) : null,
+    environmentId && canManagePlugins
+      ? serverEnvironment.plugins({ environmentId, input: {} })
+      : null,
   );
   const invoke = useAtomCommand(serverEnvironment.pluginsInvoke);
-  const bridge = plugins.data?.plugins.find(
-    (plugin) => plugin.manifest.id === T3_CONNECT_BRIDGE_ID,
-  );
+  const bridge = canManagePlugins
+    ? plugins.data?.plugins.find((plugin) => plugin.manifest.id === T3_CONNECT_BRIDGE_ID)
+    : undefined;
   const bridgeRunning = bridge?.enabled === true && bridge.state === "running";
   // The bridge keeps its config behind its status action, not in the plugin snapshot, so each
   // snapshot push (a config edit republishes one) and running change needs a fresh status read.
@@ -31,7 +35,7 @@ export function useT3ConnectBridgeHostedAppUrl(environmentId: EnvironmentId | nu
 
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- the status action returns the bridge's config; the snapshot only says it changed.
   useEffect(() => {
-    if (!environmentId || !bridgeRunning) return;
+    if (!environmentId || !canManagePlugins || !bridgeRunning) return;
 
     let cancelled = false;
     void invoke({
@@ -48,7 +52,9 @@ export function useT3ConnectBridgeHostedAppUrl(environmentId: EnvironmentId | nu
     return () => {
       cancelled = true;
     };
-  }, [bridgeRunning, environmentId, invoke, refreshKey]);
+  }, [bridgeRunning, canManagePlugins, environmentId, invoke, refreshKey]);
 
-  return bridgeRunning && loaded?.key === refreshKey ? loaded.hostedAppUrl : null;
+  return canManagePlugins && bridgeRunning && loaded?.key === refreshKey
+    ? loaded.hostedAppUrl
+    : null;
 }
