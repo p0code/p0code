@@ -8175,7 +8175,6 @@
   "129164189c938942": "Bereitstellungsanbieter",
   "3813b894c79465cc": "Zeigt Konten im Profil {profile} sowie nicht zugeordnete Konten.",
   "3a2e919ca921a60c": "Bereitstellungen",
-  "1e80233b9193116f": "In Plugins aus",
   "58b7b0e79013a091": "Verknüpft",
   "364cae9e608a63d4": "Sign-in expired",
   "4ad258969e361b3c": "Fehler",
@@ -8212,21 +8211,8 @@
   "0deabb397a585f0c": "Projektstammverzeichnis",
   "8c74857ecf98c255": "Entwicklung",
   "f59d5b9846c2a3c6": "Verbinde eine Umgebung mit dieser Version, um daraus bereitzustellen.",
-  "0c5c6d47c9eec1cd": "Keine Bereitstellungsanbieter installiert",
-  "3e68a8b268965f62": [
-    "Bereitstellungsziele wie Vercel, Cloudflare oder deine eigenen Docker-Hosts kommen aus Plugins. Installiere eines unter ",
-    {
-      "t": "Link",
-      "i": 1,
-      "c": "Plugins"
-    },
-    ", schalte es ein und verknüpfe dann hier dein Konto."
-  ],
   "5486b18239ddf78e": "Füge dieser Umgebung ein Projekt hinzu, um es bereitzustellen.",
   "7f9c4906e0c768ca": "Hier erscheinen Bereitstellungen, die aus dieser Umgebung gestartet wurden.",
-  "7770f2ba0e443fb7": "Schalte dieses Plugin unter Plugins ein, um ein Konto zu verknüpfen.",
-  "583bcfdd538ebd2d": "Verknüpfen Sie ein oder mehrere Konten für Bereitstellungen mit diesem Anbieter.",
-  "7245b7d43b25b231": "Weiteres benanntes Konto für ein anderes Team oder Profil hinzufügen.",
   "6a4c8edee7d78217": "Anmeldung abschließen",
   "a4f401eedf02e8ef": [
     "Konto: ",
@@ -13284,5 +13270,52 @@
   "27d76249d09eb69f": "Review-Leitfaden bereit",
   "faa3bb26abb39c93": "Review-Leitfaden fehlgeschlagen",
   "b7df38b7d8792d78": "Leitfaden öffnen",
-  "9e91e9a77b664e4e": "Review-Leitfaden konnte nicht gestartet werden"
+  "9e91e9a77b664e4e": "Review-Leitfaden konnte nicht gestartet werden",
+  "06733861c1f03c73": "Web-Apps und Vorschau-Branches in Vercel-Projekte deployen.",
+  "2e24ae788942b986": "Workers und Pages auf Cloudflare deployen.",
+  "a6e90bbd4e60eefd": "Eigener Server (Docker)",
+  "3eb926382e41fcef": "Container auf deinen eigenen SSH- oder Docker-Host deployen.",
+  "84ef1e253ce4eaf0": "{provider} ist noch nicht verfügbar",
+  "3d2d6722cf09e29b": "{provider} aktivieren (betrifft alle zugehörigen Konten)",
+  "3837a204523829ef": "Noch nicht verfügbar",
+  "91611915dd411366": "Fehlgeschlagen",
+  "f55a6fbb3192eed9": "Nicht eingerichtet",
+  "8c3f9838f963817d": "Verknüpfte Konten: {linked} von {total}",
+  "ec3eae4139018317": "{provider}-Konto {account}",
+  "3422c3be6c74c41b": "Deploy-Anbieter hinzufügen",
+  "2e0e8280d5b8c59b": "Von Plugins bereitgestellt",
+  "66a1b681b85228d6": "{provider}-Einstellungen",
+  "02b6d088f04ae679": "{provider}-Konto",
+  "6b9b5854e255ecf3": "{provider} ist in dieser Version noch nicht verfügbar und kann nicht verknüpft werden.",
+  "21d12930f01fe4a0": "Dieser Deploy-Anbieter konnte nicht gestartet werden.",
+  "1ea2a4cf9b195958": "Aktiviere {provider}, um Konten zu verknüpfen oder damit zu deployen.",
+  "93d63f22863a17bf": "Anbieter aktiviert",
+  "948332b727449509": "Das Ein- oder Ausschalten von {provider} betrifft alle zugehörigen Konten.",
+  "c719b6bd1fc31802": "Konten",
+  "5e7aa569caab20e6": "Im Profil {profile} sind keine Konten verknüpft.",
+  "03d68ee79cd9a592": "Noch keine Konten verknüpft.",
+  "a2231e047ea8ddef": "Konto verknüpfen",
+  "ec6e8564f5faaf6e": "Anzeigename für {account}",
+  "62fe78f40530ddd8": "Plugins öffnen",
+  "00513a3b28638818": "Ansehen",
+  "599406fecc8804a5": "Füge ein benanntes Konto hinzu, um Projekte mit diesem Anbieter zu deployen.",
+  "6f48f2bd818d5033": "Wähle einen Deploy-Anbieter, um ein Konto zu verknüpfen.",
+  "0e8eb3f68ed2f69e": [
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    "-Konto verknüpfen"
+  ],
+  "1b905fd0eb58bf12": [
+    "Deploy-Anbieter von Drittanbietern lassen sich hier hinzufügen:",
+    " ",
+    {
+      "t": "Link",
+      "i": 1,
+      "c": "Plugins"
+    },
+    "."
+  ]
 }

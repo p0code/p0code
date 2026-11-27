@@ -18,18 +18,31 @@ import type {
   DeployTargetKind,
   DeployWarning,
   EnvironmentId,
+  PluginId,
+  PluginInfo,
+  PluginState,
   ProjectId,
   ThreadId,
 } from "@t3tools/contracts";
 import { Link } from "@tanstack/react-router";
 import { T, useGT, Var } from "gt-react";
-import { AlertTriangleIcon, ExternalLinkIcon, KeyRoundIcon, RocketIcon } from "lucide-react";
-import { useState } from "react";
+import {
+  AlertTriangleIcon,
+  CloudIcon,
+  ExternalLinkIcon,
+  KeyRoundIcon,
+  PlusIcon,
+  RocketIcon,
+  ServerIcon,
+  TriangleIcon,
+} from "lucide-react";
+import { type ReactNode, useState } from "react";
 
 import { useEnvironmentSettings } from "../../hooks/useSettings";
 import { deployEnvironment } from "../../state/deploy";
 import { useProfileProjects, useProjects } from "../../state/entities";
 import { useEnvironmentQuery } from "../../state/query";
+import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -43,10 +56,18 @@ import {
   DialogPopup,
   DialogTitle,
 } from "../ui/dialog";
+import { DraftInput } from "../ui/draft-input";
 import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Sheet, SheetHeader, SheetPopup, SheetTitle } from "../ui/sheet";
+import { Switch } from "../ui/switch";
 import { Textarea } from "../ui/textarea";
+import {
+  ProviderInstancesLayout,
+  type ProviderInstanceListRow,
+  type ProviderInstanceRowStatusTone,
+} from "./ProviderInstancesLayout";
+import { getProviderVersionLabel } from "./providerStatus";
 import { useSettingsScope } from "./SettingsScopeContext";
 import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
 
@@ -55,6 +76,89 @@ export interface DeployPreselection {
   readonly projectId?: ProjectId;
   readonly branch?: string;
   readonly threadId?: ThreadId;
+}
+
+/** A deploy provider the page offers, whether or not this server has a backend for it. */
+interface DeployProviderEntry {
+  /** The provider id the server reports it under. */
+  readonly id: string;
+  readonly builtIn: boolean;
+  readonly label: string;
+  readonly icon: string | null;
+  readonly description: string | null;
+  /** Null for a built-in this server cannot run yet: shown, but not linkable. */
+  readonly provider: DeployProviderSummary | null;
+  /** Null for providers that are not plugins; only plugins can be turned on and off. */
+  readonly plugin: PluginInfo | null;
+  readonly accounts: ReadonlyArray<DeployAccountSummary>;
+}
+
+const builtInDeployProviders = (gt: ReturnType<typeof useGT>) => [
+  {
+    id: "vercel",
+    // oxlint-disable-next-line t3code/no-untranslated-copy -- product brand name
+    label: "Vercel",
+    icon: "triangle",
+    description: gt("Deploy web apps and preview branches to Vercel projects."),
+  },
+  {
+    id: "cloudflare",
+    // oxlint-disable-next-line t3code/no-untranslated-copy -- product brand name
+    label: "Cloudflare",
+    icon: "cloud",
+    description: gt("Deploy Workers and Pages to Cloudflare."),
+  },
+  {
+    id: "p0deploy",
+    label: gt("Own server (Docker)"),
+    icon: "server",
+    description: gt("Deploy containers to your own SSH or Docker host."),
+  },
+];
+
+/** The built-in catalog first, then every other provider the server reports. */
+function listDeployProviders(
+  gt: ReturnType<typeof useGT>,
+  overview: DeployOverview,
+  plugins: ReadonlyArray<PluginInfo>,
+): ReadonlyArray<DeployProviderEntry> {
+  const builtIns = builtInDeployProviders(gt);
+  const entry = (id: string, builtIn: (typeof builtIns)[number] | null): DeployProviderEntry => {
+    const provider = overview.providers.find((candidate) => candidate.pluginId === id) ?? null;
+    const plugin = plugins.find((candidate) => candidate.manifest.id === id) ?? null;
+    return {
+      id,
+      builtIn: builtIn !== null,
+      label: provider?.label ?? builtIn?.label ?? id,
+      icon: provider?.icon ?? builtIn?.icon ?? null,
+      description: plugin?.manifest.description ?? builtIn?.description ?? null,
+      provider,
+      plugin,
+      accounts: overview.accounts.filter((account) => account.pluginId === id),
+    };
+  };
+  return [
+    ...builtIns.map((builtIn) => entry(builtIn.id, builtIn)),
+    ...overview.providers
+      .filter((provider) => !builtIns.some((builtIn) => builtIn.id === provider.pluginId))
+      .map((provider) => entry(provider.pluginId, null)),
+  ];
+}
+
+const PROVIDER_ICONS: Partial<Record<string, typeof RocketIcon>> = {
+  cloud: CloudIcon,
+  server: ServerIcon,
+  triangle: TriangleIcon,
+};
+
+/** Providers name a lucide icon or give an `https:`/`data:` image URL. */
+function DeployProviderIcon({ entry }: { readonly entry: DeployProviderEntry }) {
+  const icon = entry.icon ?? "";
+  if (/^(https:|data:image\/)/.test(icon)) {
+    return <img src={icon} alt="" className="size-4 object-contain" />;
+  }
+  const Icon = PROVIDER_ICONS[icon] ?? RocketIcon;
+  return <Icon className="size-4 text-foreground/80" aria-hidden />;
 }
 
 const failureText = (result: Parameters<typeof squashAtomCommandFailure>[0], fallback: string) => {
@@ -72,6 +176,66 @@ const targetKindLabel = (gt: ReturnType<typeof useGT>, kind: DeployTargetKind): 
       return gt("Project", { $context: "deploy target kind" });
   }
 };
+
+/** Why a provider cannot be used right now, or null while it runs. */
+function providerUnavailableLabel(
+  gt: ReturnType<typeof useGT>,
+  entry: DeployProviderEntry,
+): string | null {
+  if (entry.provider === null) return gt("Not available yet");
+  if (entry.plugin?.state === "failed") {
+    return gt("Failed", { $context: "deploy provider status" });
+  }
+  if (entry.plugin?.state === "starting") return gt("Starting…");
+  if (!entry.provider.running) return gt("Disabled", { $context: "provider status" });
+  return null;
+}
+
+function summarizeAccountStatus(
+  gt: ReturnType<typeof useGT>,
+  account: DeployAccountSummary,
+): { readonly text: string; readonly tone: ProviderInstanceRowStatusTone } {
+  const hasWarnings = (account.status.warnings?.length ?? 0) > 0;
+  switch (account.status.state) {
+    case "linked":
+      return {
+        text: account.status.accountLabel
+          ? `${gt("Linked")} · ${account.status.accountLabel}`
+          : gt("Linked"),
+        tone: hasWarnings ? "warning" : "ready",
+      };
+    case "expired":
+      return { text: gt("Sign-in expired"), tone: "warning" };
+    case "error":
+      return { text: gt("Error", { $context: "deploy provider status" }), tone: "error" };
+    case "unlinked":
+      return { text: gt("Not linked"), tone: "neutral" };
+  }
+}
+
+function summarizeProviderStatus(
+  gt: ReturnType<typeof useGT>,
+  entry: DeployProviderEntry,
+): { readonly text: string; readonly tone: ProviderInstanceRowStatusTone } {
+  const unavailable = providerUnavailableLabel(gt, entry);
+  if (unavailable !== null) {
+    if (entry.plugin?.state !== "failed") return { text: unavailable, tone: "disabled" };
+    const detail = entry.plugin.message;
+    return { text: detail ? `${unavailable} · ${detail}` : unavailable, tone: "error" };
+  }
+  if (entry.accounts.length === 0) return { text: gt("Not set up"), tone: "neutral" };
+  const tones = entry.accounts.map((account) => summarizeAccountStatus(gt, account).tone);
+  return {
+    text: gt("Accounts linked: {linked} of {total}", {
+      linked: entry.accounts.filter((account) => account.status.state === "linked").length,
+      total: entry.accounts.length,
+    }),
+    tone: tones.includes("error") ? "error" : tones.includes("warning") ? "warning" : "ready",
+  };
+}
+
+/** Account rows share the list with provider rows; plugin ids cannot contain a colon. */
+const accountRowId = (accountId: string) => `account:${accountId}`;
 
 export function DeploySettingsPanel({ preselect }: { readonly preselect: DeployPreselection }) {
   const gt = useGT();
@@ -106,7 +270,16 @@ function EnvironmentDeploy({
   readonly preselect: DeployPreselection;
 }) {
   const gt = useGT();
-  const query = useEnvironmentQuery(deployEnvironment.overview({ environmentId, input: {} }));
+  const overviewQuery = useEnvironmentQuery(
+    deployEnvironment.overview({ environmentId, input: {} }),
+  );
+  const pluginsQuery = useEnvironmentQuery(serverEnvironment.plugins({ environmentId, input: {} }));
+  const canTogglePlugin = useAtomValue(
+    serverEnvironment.pluginsSetEnabled.permissionAtom(environmentId),
+  );
+  const setPluginEnabled = useAtomCommand(serverEnvironment.pluginsSetEnabled, {
+    reportFailure: false,
+  });
   const projects = useProfileProjects(useProjects()).filter(
     (project) => project.environmentId === environmentId && project.archivedAt == null,
   );
@@ -114,43 +287,128 @@ function EnvironmentDeploy({
     environmentId,
     (settings) => settings.accountProfiles,
   );
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // `pluginId` opens the dialog straight on that provider's link form.
+  const [addDialog, setAddDialog] = useState<{ readonly pluginId: string | null } | null>(null);
+  const [togglingPluginId, setTogglingPluginId] = useState<PluginId | null>(null);
+  const [toggleError, setToggleError] = useState<string | null>(null);
+  const [linkWarnings, setLinkWarnings] = useState<
+    Readonly<Record<string, ReadonlyArray<DeployWarning>>>
+  >({});
   const [dialog, setDialog] = useState<DeployPreselection | null>(
     preselect.projectId === undefined ? null : preselect,
   );
   const [envDialogProjectId, setEnvDialogProjectId] = useState<ProjectId | null>(null);
-  const overview = query.data;
+  const overview = overviewQuery.data;
 
   if (overview === null) {
     return (
       <SettingsSection title={gt("Deploy")}>
         <p
           className="px-4 py-3 text-sm text-muted-foreground"
-          role={query.error ? "alert" : "status"}
+          role={overviewQuery.error ? "alert" : "status"}
         >
-          {query.error ?? gt("Loading…")}
+          {overviewQuery.error ?? gt("Loading…")}
         </p>
       </SettingsSection>
     );
   }
 
-  if (overview.providers.length === 0) {
+  const entries = listDeployProviders(gt, overview, pluginsQuery.data?.plugins ?? []);
+  const hasBackend = entries.some((entry) => entry.provider !== null);
+  const selectedAccount =
+    overview.accounts.find((account) => accountRowId(account.id) === selectedId) ?? null;
+  const selectedEntry =
+    entries.find((entry) => entry.id === (selectedAccount?.pluginId ?? selectedId)) ??
+    entries.find((entry) => entry.accounts.length > 0) ??
+    entries.find((entry) => entry.provider !== null) ??
+    entries[0]!;
+
+  const togglePlugin = async (pluginId: PluginId, enabled: boolean) => {
+    setToggleError(null);
+    setTogglingPluginId(pluginId);
+    const result = await setPluginEnabled({ environmentId, input: { pluginId, enabled } });
+    setTogglingPluginId(null);
+    if (result._tag === "Failure") {
+      setToggleError(failureText(result, gt("The request failed.")));
+      return;
+    }
+    overviewQuery.refresh();
+    pluginsQuery.refresh();
+  };
+
+  const pluginSwitch = (entry: DeployProviderEntry) => {
+    // A built-in without a backend keeps a dead switch; other non-plugins have nothing to toggle.
+    if (entry.provider !== null && entry.plugin === null) return null;
+    const plugin = entry.plugin;
     return (
-      <SettingsSection title={gt("Deploy")}>
-        <div className="space-y-2 px-4 py-4 text-sm">
-          <p className="font-medium">
-            <T>No deploy providers installed</T>
-          </p>
-          <p className="text-muted-foreground">
-            <T>
-              Deploy targets such as Vercel, Cloudflare or your own Docker hosts come from plugins.
-              Install one in <Link to="/settings/plugins">Plugins</Link>, turn it on, then link your
-              account here.
-            </T>
-          </p>
-        </div>
-      </SettingsSection>
+      <Switch
+        checked={entry.provider !== null && plugin?.enabled === true}
+        disabled={
+          entry.provider === null ||
+          !canTogglePlugin ||
+          plugin?.state === "starting" ||
+          togglingPluginId !== null
+        }
+        onCheckedChange={(checked) => {
+          if (plugin) void togglePlugin(plugin.manifest.id, Boolean(checked));
+        }}
+        aria-label={
+          entry.provider === null
+            ? gt("{provider} is not available yet", { provider: entry.label })
+            : gt("Enable {provider} (affects all its accounts)", { provider: entry.label })
+        }
+      />
     );
-  }
+  };
+
+  const buildRows = (entry: DeployProviderEntry): ReadonlyArray<ProviderInstanceListRow> => {
+    const unavailable = providerUnavailableLabel(gt, entry);
+    const summary = summarizeProviderStatus(gt, entry);
+    return [
+      {
+        id: entry.id,
+        testId: `deploy-provider-row-${entry.id}`,
+        icon: <DeployProviderIcon entry={entry} />,
+        name: entry.label,
+        version: getProviderVersionLabel(entry.plugin?.manifest.version),
+        status: summary.text,
+        statusTone: summary.tone,
+        dimmed: unavailable !== null,
+        trailing: pluginSwitch(entry),
+      },
+      ...entry.accounts.map((account): ProviderInstanceListRow => {
+        const name = deployAccountDisplayName(account);
+        const accountSummary = summarizeAccountStatus(gt, account);
+        return {
+          id: accountRowId(account.id),
+          nested: true,
+          icon: <KeyRoundIcon className="size-3.5 text-muted-foreground" aria-hidden />,
+          name,
+          ariaLabel: gt("{provider} account {account}", {
+            provider: entry.label,
+            account: name,
+          }),
+          status: unavailable ?? accountSummary.text,
+          statusTone: unavailable === null ? accountSummary.tone : "disabled",
+          dimmed: unavailable !== null,
+        };
+      }),
+    ];
+  };
+
+  const builtInRows = entries.filter((entry) => entry.builtIn).flatMap(buildRows);
+  const pluginRows = entries.filter((entry) => !entry.builtIn).flatMap(buildRows);
+
+  const handleAccountLinked = (
+    pluginId: string,
+    accountId: string,
+    warnings: ReadonlyArray<DeployWarning>,
+  ) => {
+    setSelectedId(pluginId);
+    setLinkWarnings((previous) => ({ ...previous, [accountId]: warnings }));
+    setAddDialog(null);
+  };
 
   const titleOf = (projectId: ProjectId) =>
     projects.find((project) => project.id === projectId)?.title ?? projectId;
@@ -166,29 +424,61 @@ function EnvironmentDeploy({
 
   return (
     <>
-      <SettingsSection title={gt("Deploy providers")}>
-        {activeProfileName ? (
-          <p className="px-4 py-2 text-xs text-muted-foreground">
-            {gt("Showing accounts in profile {profile} and untagged accounts.", {
-              profile: activeProfileName,
-            })}
-          </p>
-        ) : null}
-        {overview.providers.map((provider) => {
-          const providerAccounts = overview.accounts.filter(
-            (account) => account.pluginId === provider.pluginId,
-          );
-          return (
-            <ProviderSection
-              key={provider.pluginId}
-              environmentId={environmentId}
-              provider={provider}
-              accounts={providerAccounts}
-              profiles={accountProfiles}
-            />
-          );
-        })}
-      </SettingsSection>
+      <ProviderInstancesLayout
+        title={gt("Deploy")}
+        titleAction={
+          <Button
+            size="icon-xs"
+            variant="ghost-muted"
+            aria-label={gt("Add deploy provider")}
+            title={gt("Add deploy provider")}
+            onClick={() => setAddDialog({ pluginId: null })}
+          >
+            <PlusIcon />
+          </Button>
+        }
+        toolbar={
+          activeProfileName ? (
+            <p className="px-3 text-xs text-muted-foreground sm:px-4">
+              {gt("Showing accounts in profile {profile} and untagged accounts.", {
+                profile: activeProfileName,
+              })}
+            </p>
+          ) : null
+        }
+        banner={
+          toggleError ? (
+            <p role="alert" className="px-3 text-xs text-destructive sm:px-4">
+              {toggleError}
+            </p>
+          ) : null
+        }
+        groups={[
+          {
+            id: "built-in",
+            ...(pluginRows.length > 0 ? { label: gt("Built-in") } : {}),
+            rows: builtInRows,
+          },
+          { id: "plugins", label: gt("Plugin-provided"), rows: pluginRows },
+        ]}
+        selectedId={selectedAccount ? accountRowId(selectedAccount.id) : selectedEntry.id}
+        onSelect={setSelectedId}
+        listLabel={gt("Deploy providers")}
+        detailLabel={gt("{provider} settings", { provider: selectedEntry.label })}
+        detail={
+          <DeployProviderDetail
+            key={selectedAccount?.id ?? selectedEntry.id}
+            environmentId={environmentId}
+            entry={selectedEntry}
+            account={selectedAccount}
+            profiles={accountProfiles}
+            activeProfileName={activeProfileName}
+            enableSwitch={pluginSwitch(selectedEntry)}
+            linkWarnings={linkWarnings}
+            onAddAccount={() => setAddDialog({ pluginId: selectedEntry.id })}
+          />
+        }
+      />
 
       {overview.approvals.length > 0 ? (
         <SettingsSection title={gt("Waiting for approval")}>
@@ -204,43 +494,61 @@ function EnvironmentDeploy({
         </SettingsSection>
       ) : null}
 
-      <SettingsSection title={gt("Projects")}>
-        {projects.length === 0 ? (
-          <p className="px-4 py-3 text-sm text-muted-foreground">
-            <T>Add a project to this environment to deploy it.</T>
-          </p>
-        ) : (
-          projects.map((project) => (
-            <ProjectRow
-              key={project.id}
-              environmentId={environmentId}
-              projectId={project.id}
-              title={project.title}
-              overview={overview}
-              onDeploy={() => setDialog({ projectId: project.id })}
-              onEditEnv={() => setEnvDialogProjectId(project.id)}
-            />
-          ))
-        )}
-      </SettingsSection>
+      {hasBackend ? (
+        <SettingsSection title={gt("Projects")}>
+          {projects.length === 0 ? (
+            <p className="px-4 py-3 text-sm text-muted-foreground">
+              <T>Add a project to this environment to deploy it.</T>
+            </p>
+          ) : (
+            projects.map((project) => (
+              <ProjectRow
+                key={project.id}
+                environmentId={environmentId}
+                projectId={project.id}
+                title={project.title}
+                overview={overview}
+                onDeploy={() => setDialog({ projectId: project.id })}
+                onEditEnv={() => setEnvDialogProjectId(project.id)}
+              />
+            ))
+          )}
+        </SettingsSection>
+      ) : null}
 
-      <SettingsSection title={gt("Deployments")}>
-        {overview.deployments.length === 0 ? (
-          <p className="px-4 py-3 text-sm text-muted-foreground">
-            <T>Deploys started from this environment appear here.</T>
-          </p>
-        ) : (
-          overview.deployments.map((deployment) => (
-            <DeploymentRow
-              key={`${deployment.accountId}:${deployment.deploymentId}`}
-              environmentId={environmentId}
-              deployment={deployment}
-              projectTitle={titleOf(deployment.projectId)}
-              accountName={accountNameOf(deployment.accountId)}
-            />
-          ))
-        )}
-      </SettingsSection>
+      {hasBackend || overview.deployments.length > 0 ? (
+        <SettingsSection title={gt("Deployments")}>
+          {overview.deployments.length === 0 ? (
+            <p className="px-4 py-3 text-sm text-muted-foreground">
+              <T>Deploys started from this environment appear here.</T>
+            </p>
+          ) : (
+            overview.deployments.map((deployment) => (
+              <DeploymentRow
+                key={`${deployment.accountId}:${deployment.deploymentId}`}
+                environmentId={environmentId}
+                deployment={deployment}
+                projectTitle={titleOf(deployment.projectId)}
+                accountName={accountNameOf(deployment.accountId)}
+              />
+            ))
+          )}
+        </SettingsSection>
+      ) : null}
+
+      {addDialog !== null ? (
+        <AddDeployProviderDialog
+          environmentId={environmentId}
+          entries={entries}
+          initialPluginId={addDialog.pluginId}
+          onView={(entryId) => {
+            setSelectedId(entryId);
+            setAddDialog(null);
+          }}
+          onLinked={handleAccountLinked}
+          onClose={() => setAddDialog(null)}
+        />
+      ) : null}
 
       {dialog?.projectId !== undefined ? (
         <DeployDialog
@@ -269,13 +577,23 @@ function EnvironmentDeploy({
 
 function AccountStatusBadge({
   running,
+  pluginState,
   state,
 }: {
   readonly running: boolean;
+  readonly pluginState: PluginState | null;
   readonly state: DeployAccountSummary["status"]["state"];
 }) {
   const gt = useGT();
-  if (!running) return <Badge variant="outline">{gt("Off in Plugins")}</Badge>;
+  if (pluginState === "failed") {
+    return <Badge variant="error">{gt("Failed", { $context: "deploy provider status" })}</Badge>;
+  }
+  if (pluginState === "starting") {
+    return <Badge variant="outline">{gt("Starting…")}</Badge>;
+  }
+  if (!running) {
+    return <Badge variant="outline">{gt("Disabled", { $context: "provider status" })}</Badge>;
+  }
   switch (state) {
     case "linked":
       return <Badge variant="success">{gt("Linked")}</Badge>;
@@ -305,38 +623,177 @@ function AccountWarnings({ warnings }: { readonly warnings: ReadonlyArray<Deploy
   );
 }
 
-function ProviderSection({
+/** The detail pane: one account when its row is selected, otherwise the provider and its accounts. */
+function DeployProviderDetail({
   environmentId,
-  provider,
-  accounts,
+  entry,
+  account,
   profiles,
+  activeProfileName,
+  enableSwitch,
+  linkWarnings,
+  onAddAccount,
 }: {
   readonly environmentId: EnvironmentId;
-  readonly provider: DeployProviderSummary;
-  readonly accounts: ReadonlyArray<DeployAccountSummary>;
+  readonly entry: DeployProviderEntry;
+  readonly account: DeployAccountSummary | null;
   readonly profiles: ReadonlyArray<AccountProfile>;
+  readonly activeProfileName: string | null;
+  readonly enableSwitch: ReactNode;
+  readonly linkWarnings: Readonly<Record<string, ReadonlyArray<DeployWarning>>>;
+  readonly onAddAccount: () => void;
 }) {
   const gt = useGT();
   const canLink = useAtomValue(deployEnvironment.link.permissionAtom(environmentId));
-  const link = useAtomCommand(deployEnvironment.link, { label: `link ${provider.label}` });
+  const provider = entry.provider;
+  const version = getProviderVersionLabel(entry.plugin?.manifest.version);
+  const unavailable = providerUnavailableLabel(gt, entry);
+  const accountCard = (shown: DeployAccountSummary) =>
+    provider ? (
+      <AccountCardRow
+        key={shown.id}
+        environmentId={environmentId}
+        provider={provider}
+        pluginState={entry.plugin?.state ?? null}
+        account={shown}
+        profiles={profiles}
+        extraWarnings={linkWarnings[shown.id]}
+      />
+    ) : null;
+
+  if (account !== null) {
+    return (
+      <SettingsSection
+        title={gt("{provider} account", { provider: entry.label })}
+        icon={<DeployProviderIcon entry={entry} />}
+      >
+        {accountCard(account)}
+      </SettingsSection>
+    );
+  }
+
+  const description =
+    provider === null
+      ? gt("{provider} is not available in this version yet and cannot be linked.", {
+          provider: entry.label,
+        })
+      : entry.plugin?.state === "failed"
+        ? (entry.plugin.message ?? gt("This deploy provider failed to start."))
+        : !provider.running
+          ? gt("Turn on {provider} to link accounts or deploy with it.", { provider: entry.label })
+          : entry.description;
+
+  return (
+    <>
+      <SettingsSection
+        title={entry.label}
+        icon={<DeployProviderIcon entry={entry} />}
+        headerAction={
+          version ? <code className="text-xs text-muted-foreground">{version}</code> : undefined
+        }
+      >
+        <SettingsRow
+          title={gt("Status")}
+          status={unavailable ?? summarizeProviderStatus(gt, entry).text}
+          description={description}
+          control={
+            entry.plugin !== null && unavailable !== null ? (
+              <Button size="xs" variant="outline" render={<Link to="/settings/plugins" />}>
+                <T>Open Plugins</T>
+              </Button>
+            ) : undefined
+          }
+        />
+        {entry.plugin !== null && provider !== null ? (
+          <SettingsRow
+            title={gt("Provider enabled")}
+            description={gt("Turning {provider} on or off affects all of its accounts.", {
+              provider: entry.label,
+            })}
+            control={enableSwitch}
+          />
+        ) : null}
+      </SettingsSection>
+
+      {provider !== null ? (
+        <SettingsSection
+          title={gt("Accounts")}
+          headerAction={
+            provider.running ? (
+              <Button size="xs" variant="outline" disabled={!canLink} onClick={onAddAccount}>
+                <PlusIcon />
+                <T>Add account</T>
+              </Button>
+            ) : undefined
+          }
+        >
+          {entry.accounts.length === 0 ? (
+            <p className="px-3 py-3 text-sm text-muted-foreground sm:px-4">
+              {activeProfileName
+                ? gt("No accounts linked in profile {profile}.", { profile: activeProfileName })
+                : gt("No accounts linked yet.")}
+            </p>
+          ) : (
+            entry.accounts.map(accountCard)
+          )}
+        </SettingsSection>
+      ) : null}
+    </>
+  );
+}
+
+function AddDeployProviderDialog({
+  environmentId,
+  entries,
+  initialPluginId,
+  onView,
+  onLinked,
+  onClose,
+}: {
+  readonly environmentId: EnvironmentId;
+  readonly entries: ReadonlyArray<DeployProviderEntry>;
+  readonly initialPluginId: string | null;
+  readonly onView: (entryId: string) => void;
+  readonly onLinked: (
+    pluginId: string,
+    accountId: string,
+    warnings: ReadonlyArray<DeployWarning>,
+  ) => void;
+  readonly onClose: () => void;
+}) {
+  const gt = useGT();
+  const canLink = useAtomValue(deployEnvironment.link.permissionAtom(environmentId));
+  const link = useAtomCommand(deployEnvironment.link, { label: "link deploy account" });
+  const [pluginId, setPluginId] = useState(initialPluginId);
   const [label, setLabel] = useState("");
   const [teamId, setTeamId] = useState("");
   const [token, setToken] = useState("");
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const [authorizeUrl, setAuthorizeUrl] = useState<string | null>(null);
-  const [linkWarnings, setLinkWarnings] = useState<ReadonlyArray<DeployWarning>>([]);
 
-  const addAccount = async () => {
+  const selected = entries.find((entry) => entry.id === pluginId) ?? null;
+  const target = selected?.provider?.running ? selected.provider : null;
+
+  const choose = (nextPluginId: string | null) => {
+    setPluginId(nextPluginId);
+    setLabel("");
+    setTeamId("");
+    setToken("");
+    setFailure(null);
+    setAuthorizeUrl(null);
+  };
+
+  const submit = async () => {
+    if (target === null) return;
     setBusy(true);
     setFailure(null);
-    setLinkWarnings([]);
     const trimmedLabel = label.trim();
     const trimmedTeam = teamId.trim();
     const result = await link({
       environmentId,
       input: {
-        pluginId: provider.pluginId,
+        pluginId: target.pluginId,
         ...(trimmedLabel.length > 0 ? { label: trimmedLabel } : {}),
         ...(trimmedTeam.length > 0 ? { teamId: trimmedTeam } : {}),
         ...(token.length > 0 ? { token } : {}),
@@ -351,69 +808,86 @@ function ProviderSection({
     }
     if (result.value.result._tag === "pending") {
       setAuthorizeUrl(result.value.result.authorizeUrl);
-    } else {
-      setAuthorizeUrl(null);
-      setLabel("");
-      setTeamId("");
-      setLinkWarnings(result.value.result.warnings ?? []);
+      return;
     }
+    onLinked(target.pluginId, result.value.accountId, result.value.result.warnings ?? []);
   };
 
+  const catalogItem = (entry: DeployProviderEntry) => {
+    const unavailable = providerUnavailableLabel(gt, entry);
+    const version = getProviderVersionLabel(entry.plugin?.manifest.version);
+    return (
+      <div
+        key={entry.id}
+        data-testid={`add-deploy-provider-item-${entry.id}`}
+        className="flex items-start gap-2.5 rounded-lg border border-border/60 px-3 py-2.5"
+      >
+        <span className="flex size-5 shrink-0 items-center justify-center">
+          <DeployProviderIcon entry={entry} />
+        </span>
+        <div className="min-w-0 flex-1 space-y-0.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-medium">{entry.label}</span>
+            {version ? <code className="text-xs text-muted-foreground">{version}</code> : null}
+            {unavailable ? <Badge variant="outline">{unavailable}</Badge> : null}
+          </div>
+          {entry.description ? (
+            <p className="text-xs text-muted-foreground">{entry.description}</p>
+          ) : null}
+        </div>
+        {entry.provider === null ? null : entry.provider.running ? (
+          <Button size="xs" variant="outline" disabled={!canLink} onClick={() => choose(entry.id)}>
+            {entry.accounts.length > 0 ? gt("Add account") : gt("Link")}
+          </Button>
+        ) : (
+          <Button size="xs" variant="ghost" onClick={() => onView(entry.id)}>
+            <T>View</T>
+          </Button>
+        )}
+      </div>
+    );
+  };
+
+  const pluginEntries = entries.filter((entry) => !entry.builtIn);
+
   return (
-    <>
-      <SettingsRow
-        title={
-          <span className="flex items-center gap-2">
-            {provider.label}
-            {!provider.running ? <Badge variant="outline">{gt("Off in Plugins")}</Badge> : null}
-          </span>
-        }
-        description={
-          <>
-            {!provider.running ? (
-              <T>Turn this plugin on in Plugins to link an account.</T>
-            ) : accounts.length === 0 ? (
-              <T>Link one or more accounts to deploy with this provider.</T>
+    <Dialog open onOpenChange={(open) => (open ? undefined : onClose())}>
+      <DialogPopup className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>
+            {target ? (
+              <T>
+                Link <Var>{target.label}</Var> account
+              </T>
             ) : (
-              <T>Add another named account for a different team or profile.</T>
+              gt("Add deploy provider")
             )}
-            {authorizeUrl ? (
-              <a
-                className="mt-1 inline-flex items-center gap-1 text-foreground underline"
-                href={authorizeUrl}
-                target="_blank"
-                rel="noreferrer"
-              >
-                <T>Finish signing in</T>
-                <ExternalLinkIcon className="size-3" />
-              </a>
-            ) : null}
-            {failure ? (
-              <span role="alert" className="block text-destructive">
-                {failure}
-              </span>
-            ) : null}
-          </>
-        }
-        control={
-          provider.running ? (
-            <div className="flex flex-wrap items-center justify-end gap-1.5">
+          </DialogTitle>
+          <DialogDescription>
+            {target ? (
+              <T>Add a named account to deploy projects with this provider.</T>
+            ) : (
+              <T>Choose a deploy provider to link an account.</T>
+            )}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogPanel>
+          {target ? (
+            <div className="space-y-3">
               <Input
                 size="sm"
-                className="w-32"
                 value={label}
                 disabled={!canLink || busy}
                 placeholder={gt("Account name")}
-                aria-label={gt("{provider} account name", { provider: provider.label })}
+                aria-label={gt("{provider} account name", { provider: target.label })}
                 onChange={(event) => setLabel(event.target.value)}
               />
               <Input
                 size="sm"
-                className="w-28"
                 value={teamId}
                 disabled={!canLink || busy}
                 placeholder={gt("Team ID (optional)")}
-                aria-label={gt("{provider} team ID", { provider: provider.label })}
+                aria-label={gt("{provider} team ID", { provider: target.label })}
                 onChange={(event) => setTeamId(event.target.value)}
               />
               <Input
@@ -421,45 +895,91 @@ function ProviderSection({
                 autoComplete="off"
                 spellCheck={false}
                 size="sm"
-                className="w-40"
                 value={token}
                 disabled={!canLink || busy}
                 placeholder={gt("Access token (optional)")}
-                aria-label={gt("{provider} access token", { provider: provider.label })}
+                aria-label={gt("{provider} access token", { provider: target.label })}
                 onChange={(event) => setToken(event.target.value)}
               />
-              <Button size="xs" disabled={!canLink || busy} onClick={() => void addAccount()}>
-                {accounts.length > 0 ? gt("Add account") : gt("Link")}
-              </Button>
+              {authorizeUrl ? (
+                <a
+                  className="inline-flex items-center gap-1 text-sm underline"
+                  href={authorizeUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <T>Finish signing in</T>
+                  <ExternalLinkIcon className="size-3.5" />
+                </a>
+              ) : null}
+              {failure ? (
+                <p role="alert" className="text-sm text-destructive">
+                  {failure}
+                </p>
+              ) : null}
             </div>
-          ) : null
-        }
-      >
-        <AccountWarnings warnings={linkWarnings} />
-      </SettingsRow>
-      {accounts.map((account) => (
-        <AccountCardRow
-          key={account.id}
-          environmentId={environmentId}
-          provider={provider}
-          account={account}
-          profiles={profiles}
-        />
-      ))}
-    </>
+          ) : (
+            <div className="space-y-4">
+              <div className="space-y-2" data-testid="add-deploy-provider-builtins">
+                <h3 className="text-xs font-medium text-muted-foreground">{gt("Built-in")}</h3>
+                {entries.filter((entry) => entry.builtIn).map(catalogItem)}
+              </div>
+              <div className="space-y-2" data-testid="add-deploy-provider-plugins">
+                <h3 className="text-xs font-medium text-muted-foreground">
+                  {gt("Plugin-provided")}
+                </h3>
+                {pluginEntries.length > 0 ? (
+                  pluginEntries.map(catalogItem)
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    <T>
+                      Third-party deploy providers can be added from{" "}
+                      <Link to="/settings/plugins" className="underline" onClick={onClose}>
+                        Plugins
+                      </Link>
+                      .
+                    </T>
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogPanel>
+        <DialogFooter>
+          {target ? (
+            <>
+              <Button variant="outline" disabled={busy} onClick={() => choose(null)}>
+                <T>Back</T>
+              </Button>
+              <Button disabled={!canLink || busy} onClick={() => void submit()}>
+                {gt("Link account")}
+              </Button>
+            </>
+          ) : (
+            <Button variant="outline" onClick={onClose}>
+              <T>Close</T>
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogPopup>
+    </Dialog>
   );
 }
 
 function AccountCardRow({
   environmentId,
   provider,
+  pluginState,
   account,
   profiles,
+  extraWarnings,
 }: {
   readonly environmentId: EnvironmentId;
   readonly provider: DeployProviderSummary;
+  readonly pluginState: PluginState | null;
   readonly account: DeployAccountSummary;
   readonly profiles: ReadonlyArray<AccountProfile>;
+  readonly extraWarnings?: ReadonlyArray<DeployWarning> | undefined;
 }) {
   const gt = useGT();
   const canManage = useAtomValue(deployEnvironment.link.permissionAtom(environmentId));
@@ -474,7 +994,7 @@ function AccountCardRow({
   const [authorizeUrl, setAuthorizeUrl] = useState<string | null>(null);
   const displayName = deployAccountDisplayName(account);
   const linked = account.status.state === "linked";
-  const warnings = account.status.warnings ?? [];
+  const warnings = mergeWarnings(account.status.warnings, extraWarnings);
 
   const relink = async () => {
     setBusy(true);
@@ -502,6 +1022,20 @@ function AccountCardRow({
     setBusy(true);
     setFailure(null);
     const result = await unlink({ environmentId, input: { accountId: account.id } });
+    setBusy(false);
+    if (result._tag === "Failure") setFailure(failureText(result, gt("The request failed.")));
+  };
+
+  const renameAccount = async (rawValue: string) => {
+    const trimmed = rawValue.trim();
+    const nextLabel = trimmed.length > 0 ? trimmed : null;
+    if (nextLabel === account.label) return;
+    setBusy(true);
+    setFailure(null);
+    const result = await updateAccount({
+      environmentId,
+      input: { accountId: account.id, label: nextLabel },
+    });
     setBusy(false);
     if (result._tag === "Failure") setFailure(failureText(result, gt("The request failed.")));
   };
@@ -537,8 +1071,11 @@ function AccountCardRow({
       title={
         <span className="flex flex-wrap items-center gap-2" data-testid="deploy-account-card">
           <span>{displayName}</span>
-          <span className="text-xs font-normal text-muted-foreground">{provider.label}</span>
-          <AccountStatusBadge running={provider.running} state={account.status.state} />
+          <AccountStatusBadge
+            running={provider.running}
+            pluginState={pluginState}
+            state={account.status.state}
+          />
         </span>
       }
       description={
@@ -609,35 +1146,60 @@ function AccountCardRow({
       }
     >
       <AccountWarnings warnings={warnings} />
-      {profiles.length > 0 ? (
-        <div className="mt-1.5 flex flex-wrap items-center gap-1">
-          <Button
-            size="xs"
-            variant={account.profileIds.length === 0 ? "secondary" : "outline"}
-            disabled={!canManage || busy}
-            onClick={() => void setAllProfiles()}
-          >
-            <T>All profiles</T>
-          </Button>
-          {profiles.map((profile) => {
-            const tagged = account.profileIds.includes(profile.id);
-            return (
-              <Button
-                key={profile.id}
-                size="xs"
-                variant={tagged ? "secondary" : "outline"}
-                aria-pressed={tagged}
-                disabled={!canManage || busy}
-                onClick={() => void toggleProfile(profile.id)}
-              >
-                {profile.name}
-              </Button>
-            );
-          })}
-        </div>
-      ) : null}
+      <div className="mt-2 flex flex-wrap items-center gap-2 pb-1">
+        <DraftInput
+          size="sm"
+          className="w-48"
+          value={account.label ?? ""}
+          disabled={!canManage || busy}
+          placeholder={account.status.accountLabel ?? gt("Account name")}
+          aria-label={gt("Display name for {account}", { account: displayName })}
+          spellCheck={false}
+          onCommit={(next) => void renameAccount(next)}
+        />
+        {profiles.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-1">
+            <Button
+              size="xs"
+              variant={account.profileIds.length === 0 ? "secondary" : "outline"}
+              disabled={!canManage || busy}
+              onClick={() => void setAllProfiles()}
+            >
+              <T>All profiles</T>
+            </Button>
+            {profiles.map((profile) => {
+              const tagged = account.profileIds.includes(profile.id);
+              return (
+                <Button
+                  key={profile.id}
+                  size="xs"
+                  variant={tagged ? "secondary" : "outline"}
+                  aria-pressed={tagged}
+                  disabled={!canManage || busy}
+                  onClick={() => void toggleProfile(profile.id)}
+                >
+                  {profile.name}
+                </Button>
+              );
+            })}
+          </div>
+        ) : null}
+      </div>
     </SettingsRow>
   );
+}
+
+function mergeWarnings(
+  primary: ReadonlyArray<DeployWarning> | undefined,
+  extra: ReadonlyArray<DeployWarning> | undefined,
+): ReadonlyArray<DeployWarning> {
+  if (!extra || extra.length === 0) return primary ?? [];
+  if (!primary || primary.length === 0) return extra;
+  const seen = new Set(primary.map((warning) => `${warning.code}:${warning.message}`));
+  return [
+    ...primary,
+    ...extra.filter((warning) => !seen.has(`${warning.code}:${warning.message}`)),
+  ];
 }
 
 function ProjectRow({
