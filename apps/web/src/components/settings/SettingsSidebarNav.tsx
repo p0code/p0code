@@ -38,6 +38,7 @@ import {
   type KeyboardEvent,
 } from "react";
 
+import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { cn } from "../../lib/utils";
 import { workspaceAreaProps } from "../../lib/workspaceFocus";
 import { Button } from "../ui/button";
@@ -138,6 +139,8 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
   const currentHash = useLocation({ select: (location) => location.hash });
   const activePath = SETTINGS_DETAIL_PAGE_PARENTS[pathname] ?? pathname;
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const restoreCompactSearchFocus = useRef(false);
+  const wideNav = useMediaQuery("md");
   const [query, setQuery] = useState("");
   // Below md the nav is an icon rail; searching expands it over the page.
   const [compactSearchOpen, setCompactSearchOpen] = useState(false);
@@ -236,10 +239,16 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
 
   const handleSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.nativeEvent.isComposing || event.keyCode === 229) return;
-    if (event.key === "Escape" && (query || event.repeat)) {
+    const compactSearchExpanded = !wideNav && compactSearchOpen;
+    if (event.key === "Escape" && (query || event.repeat || compactSearchExpanded)) {
       event.preventDefault();
       event.stopPropagation();
-      clearSearch();
+      if (query) {
+        clearSearch();
+      } else if (!event.repeat) {
+        restoreCompactSearchFocus.current = true;
+        setCompactSearchOpen(false);
+      }
       return;
     }
     if (results.length === 0) return;
@@ -273,7 +282,7 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
       className={cn(
         "flex w-60 shrink-0 flex-col border-e bg-sidebar text-sidebar-foreground max-md:w-14",
         compactSearchOpen &&
-          "max-md:absolute max-md:inset-y-0 max-md:start-0 max-md:z-10 max-md:w-full",
+          "max-md:absolute max-md:bottom-0 max-md:top-[var(--settings-header-height,0px)] max-md:start-0 max-md:z-10 max-md:w-full",
       )}
     >
       <SidebarContent className="overflow-x-hidden">
@@ -383,6 +392,12 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
                   <SidebarMenu className="md:hidden">
                     <SidebarMenuItem>
                       <SidebarMenuButton
+                        ref={(button) => {
+                          if (button && restoreCompactSearchFocus.current) {
+                            restoreCompactSearchFocus.current = false;
+                            button.focus();
+                          }
+                        }}
                         aria-label={gt("Search settings")}
                         onClick={() => setCompactSearchOpen(true)}
                       >

@@ -49,7 +49,8 @@ it("ignores composing keys in the search", async () => {
   );
 });
 
-it("Esc clears a search of spaces and a held Esc keeps Settings open", async () => {
+it("Esc clears a search of spaces and a held Esc keeps Settings open on desktop", async () => {
+  await page.viewport(1280, 800);
   await using _screen = await render(
     <AppRouteModal label="Settings">
       <SidebarProvider defaultOpen>

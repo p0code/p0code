@@ -307,3 +307,95 @@ describe("open in editor announcement", () => {
     expect(await spoken()).toBe("Opened in VS Code");
   });
 });
+
+describe("modal and inert suppression", () => {
+  it("does not fire editor.openFavorite while a modal route, dialog, or inert container hides the picker", async () => {
+    await using fixture = await setup();
+    const { screen, renderPicker, pressOpenFavorite } = fixture;
+    state.allowed.add(selected);
+    await renderPicker();
+
+    // Inert ancestor (like the background thread behind Settings) must not be triggered.
+    const inertWrapper = document.createElement("div");
+    inertWrapper.setAttribute("inert", "");
+    const picker = screen.container.firstElementChild!;
+    screen.container.append(inertWrapper);
+    inertWrapper.append(picker);
+    expect((await pressOpenFavorite()).defaultPrevented).toBe(false);
+    expect(state.run).not.toHaveBeenCalled();
+
+    // Restoring from inert allows the shortcut again unless a dialog/app modal is mounted.
+    screen.container.append(picker);
+    inertWrapper.remove();
+
+    const modal = document.createElement("div");
+    modal.setAttribute("role", "dialog");
+    modal.setAttribute("data-app-modal", "");
+    document.body.append(modal);
+    try {
+      expect((await pressOpenFavorite()).defaultPrevented).toBe(false);
+      expect(state.run).not.toHaveBeenCalled();
+    } finally {
+      modal.remove();
+    }
+
+    // With no modal or inert ancestor, Mod+O opens the favorite editor normally.
+    state.run.mockResolvedValueOnce(AsyncResult.failure(Cause.fail(new Error("stub"))));
+    expect((await pressOpenFavorite()).defaultPrevented).toBe(true);
+    expect(state.run).toHaveBeenCalledTimes(1);
+  });
+
+  it("blocks editor.openFavorite via router modal route even without a DOM modal element", async () => {
+    state.allowed.clear();
+    state.allowed.add(selected);
+    state.remote = { mode: "local-exec" };
+    state.clientEditors = editors;
+    state.run.mockReset().mockResolvedValue(AsyncResult.failure(Cause.fail(new Error("stub"))));
+    using _platform = vi.spyOn(navigator, "platform", "get").mockReturnValue("Linux");
+    let pathname = "/settings/general";
+    const unregister = registerOpenFavoriteEditorCommand({
+      state: {
+        get location() {
+          return { pathname };
+        },
+        get matches() {
+          return [{ pathname }];
+        },
+      } as never,
+    });
+    using _cleanup = { [Symbol.dispose]: unregister };
+    await using _screen = await renderUi(
+      <OpenInPicker
+        environmentId={selected}
+        keybindings={DEFAULT_RESOLVED_KEYBINDINGS}
+        availableEditors={editors}
+        openInCwd="/work/project"
+        fileManagerAction="open"
+        displayMode="toolbar"
+        compact
+      />,
+    );
+
+    const press = async () => {
+      const event = new KeyboardEvent("keydown", {
+        key: "o",
+        ctrlKey: true,
+        bubbles: true,
+        cancelable: true,
+      });
+      await act(async () => document.body.dispatchEvent(event));
+      return event;
+    };
+
+    expect((await press()).defaultPrevented).toBe(false);
+    expect(state.run).not.toHaveBeenCalled();
+
+    pathname = "/usage";
+    expect((await press()).defaultPrevented).toBe(false);
+    expect(state.run).not.toHaveBeenCalled();
+
+    pathname = "/env-1/thread-1";
+    expect((await press()).defaultPrevented).toBe(true);
+    expect(state.run).toHaveBeenCalledTimes(1);
+  });
+});

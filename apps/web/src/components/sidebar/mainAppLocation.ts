@@ -4,13 +4,25 @@ import { GUEST_PAGE_PATH } from "../../guestPage";
 import { withoutAssistantCitationHash } from "../../lib/assistantCitationNavigation";
 import { resolveThreadRouteTarget, type ThreadRouteTarget } from "../../threadRoutes";
 
-/** Usage opens as a modal over the last main-app view. */
+/** Settings and Usage open as modals over the last main-app view. */
 export function isAppModalPage(pathname: string) {
-  return pathname === "/usage";
+  return pathname === "/settings" || pathname.startsWith("/settings/") || pathname === "/usage";
 }
 
-function isSettingsPage(pathname: string) {
-  return pathname === "/settings" || pathname.startsWith("/settings/");
+const BLOCKING_DIALOG_SELECTOR = '[role="dialog"], [aria-modal="true"], [data-app-modal]';
+
+/** Whether a modal app route or dialog is open and blocks background shortcuts. */
+export function isAppModalOpen(router?: Pick<AnyRouter, "state">): boolean {
+  if (
+    router &&
+    (isAppModalPage(router.state.location.pathname) ||
+      router.state.matches.some((match) => isAppModalPage(match.pathname)))
+  ) {
+    return true;
+  }
+  return (
+    typeof document !== "undefined" && document.querySelector(BLOCKING_DIALOG_SELECTOR) !== null
+  );
 }
 
 export function isSidebarUtilityPage(pathname: string) {
@@ -35,11 +47,14 @@ let initialHistoryIndex = 0;
 
 /** Remembers where Settings, Usage, and the utility pages lead back to. */
 export function startMainAppLocationTracking(router: AnyRouter): () => void {
+  mainAppHref = null;
+  appModalReturnHref = null;
+  appModalReturnHistoryIndex = null;
+  appModalReturnThreadTarget = null;
   initialHistoryIndex = router.state.location.state.__TSR_index;
   const record = () => {
     const { pathname } = router.state.location;
-    if (isAppModalPage(pathname) || isSettingsPage(pathname) || SHELL_LESS_PATHS.has(pathname))
-      return;
+    if (isAppModalPage(pathname) || SHELL_LESS_PATHS.has(pathname)) return;
     const href = withoutAssistantCitationHash(router.state.location.href);
     appModalReturnHref = href;
     // Only an entry that is exactly the return location can be stepped back to.

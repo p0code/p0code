@@ -1,7 +1,6 @@
 import { DataRestoreBanner } from "../components/settings/DataRestoreBanner";
-import { createFileRoute, Outlet, redirect, useLocation } from "@tanstack/react-router";
+import { createFileRoute, Outlet, redirect, useLocation, useRouter } from "@tanstack/react-router";
 import { workspaceAreaProps } from "../lib/workspaceFocus";
-import { useRouter } from "@tanstack/react-router";
 import { useState, type ReactNode } from "react";
 import { T, useGT, useMessages, Var } from "gt-react";
 import { RotateCcwIcon } from "lucide-react";
@@ -9,7 +8,7 @@ import { RotateCcwIcon } from "lucide-react";
 import { useSettingsRestore } from "../components/settings/SettingsPanels";
 import { Button } from "../components/ui/button";
 
-import { SettingsWorkspace } from "../components/settings/SettingsWorkspace";
+import { AppRouteModal, AppRouteModalClose } from "../components/AppRouteModal";
 import { SettingsBreadcrumb } from "../components/settings/SettingsBreadcrumb";
 import {
   SettingsScopeProvider,
@@ -141,17 +140,24 @@ function SettingsContentLayout() {
   const [restoreSignal, setRestoreSignal] = useState(0);
 
   return (
-    <SettingsWorkspace
-      breadcrumb={<SettingsBreadcrumb pathname={location.pathname} />}
-      actions={
-        location.pathname === "/settings/general" ? (
-          <RestoreDeviceDefaultsButton onRestored={() => setRestoreSignal((value) => value + 1)} />
-        ) : null
-      }
+    <AppRouteModal
+      label={gt("Settings")}
+      popupClassName="sm:max-h-[min(80dvh,60rem)] sm:max-w-[68rem]"
     >
-      <div className="relative flex min-h-0 flex-1">
+      <div className="relative flex min-h-0 flex-1 [--settings-header-height:3rem]">
         <SettingsSidebarNav pathname={navPathname} />
         <div {...contentArea} className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <header className="flex h-(--settings-header-height) shrink-0 items-center gap-3 border-b ps-5 pe-2">
+            <SettingsBreadcrumb pathname={pathname} />
+            <div className="ms-auto flex shrink-0 items-center gap-1">
+              {pathname === "/settings/general" ? (
+                <RestoreDeviceDefaultsButton
+                  onRestored={() => setRestoreSignal((value) => value + 1)}
+                />
+              ) : null}
+              <AppRouteModalClose />
+            </div>
+          </header>
           <DataRestoreBanner />
           <div key={`${contentScopeKey}:${restoreSignal}`} className="min-h-0 flex flex-1 flex-col">
             <SettingsScopeBoundary pathname={pathname}>
@@ -160,7 +166,7 @@ function SettingsContentLayout() {
           </div>
         </div>
       </div>
-    </SettingsWorkspace>
+    </AppRouteModal>
   );
 }
 

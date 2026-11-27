@@ -48,6 +48,7 @@ import {
   resolveThreadRouteTarget,
 } from "../threadRoutes";
 import { toastManager } from "./ui/toast";
+import { isAppModalOpen } from "./sidebar/mainAppLocation";
 import { readIssueListPreferences } from "./issue/issueListPreferences";
 import { readPullRequestListPreferences } from "./pullRequest/pullRequestListPreferences";
 
@@ -224,6 +225,7 @@ export function ReopenClosedViewShortcut() {
       if (
         event.defaultPrevented ||
         isCommandPaletteOpen() ||
+        isAppModalOpen(router) ||
         useClosedViewStore.getState().entries.length === 0 ||
         (event.target instanceof HTMLElement && event.target.closest("[data-keybinding-capture]"))
       )
@@ -245,13 +247,14 @@ export function ReopenClosedViewShortcut() {
     };
     window.addEventListener("keydown", onKeyDown, true);
     const unsubscribe = window.desktopBridge?.onMenuAction((action) => {
-      if (action === "view.reopenClosed" && !isCommandPaletteOpen()) enqueueReopen();
+      if (action === "view.reopenClosed" && !isCommandPaletteOpen() && !isAppModalOpen(router))
+        enqueueReopen();
     });
     return () => {
       window.removeEventListener("keydown", onKeyDown, true);
       unsubscribe?.();
     };
-  }, [keybindings, previewOpen, terminalOpen]);
+  }, [keybindings, previewOpen, router, terminalOpen]);
 
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- registers forwarded shortcut chords with the desktop preview bridge and clears them on cleanup
   useEffect(() => {
