@@ -12,6 +12,7 @@ import {
 } from "react";
 
 import { getCommandPaletteOpener } from "../commandPaletteStore";
+import { cn } from "../lib/utils";
 import { useNativeTitlebarHeight } from "../lib/windowControlsOverlay";
 import { requestWorkspaceFocus } from "../lib/workspaceFocus";
 import { GlobalVoiceInputIndicator } from "./chat/GlobalVoiceInputIndicator";
@@ -21,17 +22,19 @@ import { DialogBackdrop } from "./ui/dialog";
 import { SharedTooltipTrigger } from "./ui/shared-tooltip";
 
 /**
- * Large modal for the Usage route. Esc, the close button, or a press on the
+ * Large modal for the Settings and Usage routes. Esc, the close button, or a press on the
  * backdrop returns to the page that opened it. Keyboard guards that skip dialogs exempt
  * `[data-app-modal]`, because these pages own their shortcuts.
  */
 export function AppRouteModal({
   label,
   actionsRef,
+  popupClassName,
   children,
 }: {
   label: string;
   actionsRef?: RefObject<DialogPrimitive.Root.Actions | null>;
+  popupClassName?: string;
   children: ReactNode;
 }) {
   const closeAppModal = useCloseAppModal();
@@ -116,7 +119,10 @@ export function AppRouteModal({
             backdropPressRef.current = event.target === event.currentTarget;
           }}
           onClick={(event) => {
-            if (backdropPressRef.current && event.target === event.currentTarget) setOpen(false);
+            if (backdropPressRef.current && event.target === event.currentTarget) {
+              blurFocusedWithin(popupRef.current);
+              setOpen(false);
+            }
             backdropPressRef.current = false;
           }}
         >
@@ -136,7 +142,10 @@ export function AppRouteModal({
             aria-label={label}
             data-slot="dialog-popup"
             data-app-modal=""
-            className="relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden bg-background max-sm:pt-(--app-modal-top-inset) max-sm:pb-safe text-foreground outline-none transition-[opacity,scale] duration-150 ease-out [-webkit-app-region:no-drag] data-ending-style:scale-[0.985] data-ending-style:opacity-0 data-starting-style:scale-[0.985] data-starting-style:opacity-0 sm:max-h-[60rem] sm:max-w-[80rem] sm:rounded-2xl sm:border sm:shadow-2xl/40"
+            className={cn(
+              "relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden bg-background max-sm:pt-(--app-modal-top-inset) max-sm:pb-safe text-foreground outline-none transition-[opacity,scale] duration-150 ease-out [-webkit-app-region:no-drag] data-ending-style:scale-[0.985] data-ending-style:opacity-0 data-starting-style:scale-[0.985] data-starting-style:opacity-0 sm:max-h-[60rem] sm:max-w-[80rem] sm:rounded-2xl sm:border sm:shadow-2xl/40",
+              popupClassName,
+            )}
           >
             {/* The emptied strip still moves the window, as the titlebar it replaces does. */}
             <div
