@@ -9,7 +9,9 @@ export function isAppModalPage(pathname: string) {
   return pathname === "/settings" || pathname.startsWith("/settings/") || pathname === "/usage";
 }
 
-/** Whether a modal app route (Settings or Usage) is active in the router or mounted in the DOM. */
+const BLOCKING_DIALOG_SELECTOR = '[role="dialog"], [aria-modal="true"], [data-app-modal]';
+
+/** Whether a modal app route or dialog is open and blocks background shortcuts. */
 export function isAppModalOpen(router?: Pick<AnyRouter, "state">): boolean {
   if (
     router &&
@@ -18,7 +20,9 @@ export function isAppModalOpen(router?: Pick<AnyRouter, "state">): boolean {
   ) {
     return true;
   }
-  return typeof document !== "undefined" && document.querySelector("[data-app-modal]") !== null;
+  return (
+    typeof document !== "undefined" && document.querySelector(BLOCKING_DIALOG_SELECTOR) !== null
+  );
 }
 
 export function isSidebarUtilityPage(pathname: string) {

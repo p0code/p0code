@@ -43,7 +43,7 @@ import { BackgroundThreadAnnouncer } from "./BackgroundThreadAnnouncer";
 import { HistorySwipeNavigation } from "./HistorySwipeNavigation";
 import ThreadSidebar from "./Sidebar";
 import { SidebarBrandWidthProbe } from "./sidebar/SidebarChrome";
-import { isAppModalPage } from "./sidebar/mainAppLocation";
+import { isAppModalOpen, isAppModalPage } from "./sidebar/mainAppLocation";
 import type { SidebarRouteReveal } from "./sidebar/routeReveal";
 import { useSidebarStageBackdropVariant } from "./SidebarStageBackdrop";
 import {
@@ -333,7 +333,7 @@ function SidebarControl({ showSidebar }: { readonly showSidebar: boolean }) {
     // A hidden sidebar would still save the toggle, so the shortcut does nothing without one.
     if (!showSidebar) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented) return;
+      if (event.defaultPrevented || isAppModalOpen(router)) return;
       if (
         event.target instanceof HTMLElement &&
         event.target.closest("[data-keybinding-capture]")
@@ -368,7 +368,7 @@ function SidebarControl({ showSidebar }: { readonly showSidebar: boolean }) {
 
     window.addEventListener("keydown", onKeyDown, true);
     const unsubscribe = window.desktopBridge?.onMenuAction((action) => {
-      if (action === "sidebar.toggle") toggleSidebar();
+      if (action === "sidebar.toggle" && !isAppModalOpen(router)) toggleSidebar();
     });
     return () => {
       window.removeEventListener("keydown", onKeyDown, true);

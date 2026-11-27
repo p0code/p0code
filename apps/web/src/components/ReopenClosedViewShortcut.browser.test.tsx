@@ -479,4 +479,24 @@ describe("root reopen shortcut", () => {
       ),
     );
   });
+
+  it("ignores Mod+Shift+T while Settings or Usage modal route is open", async () => {
+    setup();
+    const id = useClosedViewStore.getState().remember({
+      kind: "panel-tab",
+      threadRef: PULL_REQUESTS_PANEL_REF,
+      surface: { kind: "pull-requests", id: "pull-requests" },
+    });
+    await using screen = await renderShortcut();
+
+    for (const href of ["/settings/general", "/usage"]) {
+      await screen.router.navigate({ href });
+      await act(() => {
+        press();
+        menuAction?.("view.reopenClosed");
+      });
+      expect(useClosedViewStore.getState().entries.map((entry) => entry.id)).toEqual([id]);
+    }
+    expect(state.navigate).not.toHaveBeenCalled();
+  });
 });

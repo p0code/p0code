@@ -40,6 +40,7 @@ vi.mock(import("~/state/server"), async (original) => {
   const { compileResolvedKeybindingsConfig } = await import("@t3tools/shared/keybindings");
   const keybindings = compileResolvedKeybindingsConfig([
     { key: "mod+shift+]", command: "thread.next", when: "!previewFocus && !previewOpen" },
+    { key: "mod+alt+up", command: "thread.previous" },
     { key: "mod+1", command: "thread.jump.1", when: "!previewFocus" },
   ]);
   return { ...actual, primaryServerKeybindingsAtom: Atom.make(keybindings) };
@@ -100,4 +101,18 @@ it("leaves thread shortcuts and their hints to the preview when their rules excl
     expect(router.history.location.pathname).toBe(`/${ENVIRONMENT_ID}/${second.id}`),
   );
   await whileHoldingControl(() => expect(jumpHint()).not.toBeNull());
+
+  // While Settings or Usage modal route is open, thread traversal and jump shortcuts stay inert.
+  for (const modalPath of ["/settings/general", "/usage"]) {
+    await router.navigate({ to: modalPath });
+    await vi.waitFor(() => expect(router.state.location.pathname).toBe(modalPath));
+    for (const chord of [
+      "{Control>}1{/Control}",
+      "{Control>}{Alt>}{ArrowUp}{/Alt}{/Control}",
+      "{Control>}{Shift>}]{/Shift}{/Control}",
+    ]) {
+      await userEvent.keyboard(chord);
+      expect(router.history.location.pathname).toBe(modalPath);
+    }
+  }
 });

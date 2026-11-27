@@ -73,6 +73,7 @@ import { findForMessageMatch, openThreadFindOnQuery } from "./chat/threadFindSto
 import { requestCustomSnooze } from "./CustomSnoozeDialog";
 
 import { useRouter, type AnyRouter } from "@tanstack/react-router";
+import { isAppModalOpen } from "./sidebar/mainAppLocation";
 import {
   CheckIcon,
   ChevronDownIcon,
@@ -3110,7 +3111,13 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes to window keydown for thread navigation shortcuts using the current thread list
   useEffect(() => {
     const onWindowKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.repeat || isCommandPaletteOpen() || isModelPickerOpen()) {
+      if (
+        event.defaultPrevented ||
+        event.repeat ||
+        isCommandPaletteOpen() ||
+        isModelPickerOpen() ||
+        isAppModalOpen(router)
+      ) {
         return;
       }
       const command = resolveShortcutCommand(event, keybindings, {
@@ -3154,6 +3161,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     orderedRowKeys,
     routeRowKey,
     routeThreadRef,
+    router,
     threadByKey,
   ]);
 

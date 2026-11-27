@@ -22,12 +22,6 @@ import { isAppModalOpen } from "../sidebar/mainAppLocation";
 /** Marks an OpenInPicker's primary button as the target of `editor.openFavorite`. */
 export const OPEN_FAVORITE_EDITOR_ATTRIBUTE = "data-open-favorite-editor";
 
-const BLOCKING_DIALOG_SELECTOR = '[role="dialog"], [aria-modal="true"], [data-app-modal]';
-
-function hasBlockingDialog(router?: Pick<AnyRouter, "state">): boolean {
-  return isAppModalOpen(router) || document.querySelector(BLOCKING_DIALOG_SELECTOR) !== null;
-}
-
 /**
  * `editor.openFavorite` presses the marked OpenInPicker primary button, so the shortcut opens
  * exactly what the button on screen would. A missing or disabled button leaves the chord to the
@@ -48,7 +42,7 @@ export function registerOpenFavoriteEditorCommand(router?: Pick<AnyRouter, "stat
         button.click();
       },
     },
-    { capture: true, when: () => !hasBlockingDialog(router) },
+    { capture: true, when: () => !isAppModalOpen(router) },
   );
 }
 
@@ -80,7 +74,7 @@ export function useOpenFavoriteEditorShortcut({
       if (
         event.repeat ||
         event.defaultPrevented ||
-        hasBlockingDialog() ||
+        isAppModalOpen() ||
         !isOpenFavoriteEditorShortcut(event, keybindings)
       )
         return;
