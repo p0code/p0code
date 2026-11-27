@@ -215,12 +215,14 @@ const make = Effect.gen(function* () {
     if (projectRoot === null) {
       return yield* fail("unknown-project", "This project's folder is not known on this server.");
     }
-    const requested = input.directory ?? mapping.directory;
+    const requested = Object.hasOwn(input, "directory") ? input.directory : mapping.directory;
     const directory = requested === undefined ? projectRoot : path.resolve(projectRoot, requested);
     const relative = path.relative(projectRoot, directory);
     const outside =
       relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative);
-    if (outside && input.allowOutsideProject !== true) {
+    const allowOutsideProject =
+      Object.hasOwn(input, "allowOutsideProject") && input.allowOutsideProject === true;
+    if (outside && !allowOutsideProject) {
       return yield* fail(
         "outside-project",
         `${directory} is outside the project folder. Allow deploying from outside the project to use it.`,

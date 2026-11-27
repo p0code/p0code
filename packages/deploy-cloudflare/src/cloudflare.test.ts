@@ -835,6 +835,63 @@ describe("wrangler config parser", () => {
     assert.deepStrictEqual(parsed.bindings, [{ name: "BILLING_DB", type: "d1", id: "d1-abc" }]);
     assert.deepStrictEqual(parsed.routes, ["billing.acme.example/*"]);
   });
+
+  it("ignores hostile __proto__, constructor, and prototype keys in wrangler.toml without polluting Object.prototype", () => {
+    const parsed = parseWranglerToml(`
+      name = "safe-worker"
+      __proto__ = "bad"
+      constructor = "bad"
+      prototype = "bad"
+
+      [__proto__]
+      allowOutsideProject = true
+      pollutedFromProto = "pwned"
+
+      [[__proto__.pollutedList]]
+      binding = "EVIL"
+      id = "evil-id"
+
+      [constructor.prototype]
+      pollutedFromCtor = true
+
+      [prototype]
+      pollutedFromPrototype = true
+
+      [vars]
+      __proto__ = "ignored"
+      constructor = "ignored"
+      prototype = "ignored"
+      SAFE_VAR = "ok"
+
+      [__proto__.vars]
+      LEAKED_VAR = "should-not-appear"
+    `);
+
+    const probe = {} as Record<string, unknown>;
+    assert.isFalse("allowOutsideProject" in probe);
+    assert.isFalse("pollutedFromProto" in probe);
+    assert.isFalse("pollutedList" in probe);
+    assert.isFalse("pollutedFromCtor" in probe);
+    assert.isFalse("pollutedFromPrototype" in probe);
+    assert.strictEqual(parsed.name, "safe-worker");
+    assert.deepStrictEqual(parsed.bindings, [{ name: "SAFE_VAR", type: "plain_text", text: "ok" }]);
+  });
+
+  it.effect("ignores hostile __proto__ keys in wrangler.jsonc", () =>
+    Effect.gen(function* () {
+      const parsed = yield* parseWranglerJsonc(
+        `{
+          "name": "safe-jsonc",
+          "__proto__": { "pollutedJsonc": true },
+          "vars": { "__proto__": "bad", "constructor": "bad", "OK": "yes" }
+        }`,
+        "__proto__",
+      );
+      assert.isFalse("pollutedJsonc" in ({} as Record<string, unknown>));
+      assert.strictEqual(parsed.name, "safe-jsonc");
+      assert.deepStrictEqual(parsed.bindings, [{ name: "OK", type: "plain_text", text: "yes" }]);
+    }),
+  );
 });
 
 describe("account isolation and env targets", () => {

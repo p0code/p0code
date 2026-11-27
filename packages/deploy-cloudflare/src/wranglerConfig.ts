@@ -83,6 +83,20 @@ function stripJsonCommentsAndTrailingCommas(input: string): string {
   return out.replace(/,(\s*[}\]])/g, "$1");
 }
 
+const FORBIDDEN_OBJECT_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+
+function isSafeKey(key: string): boolean {
+  return key.length > 0 && !FORBIDDEN_OBJECT_KEYS.has(key);
+}
+
+function createNullRecord(): Record<string, unknown> {
+  return Object.create(null) as Record<string, unknown>;
+}
+
+function ownProp(obj: Record<string, unknown>, key: string): unknown {
+  return Object.hasOwn(obj, key) ? obj[key] : undefined;
+}
+
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -101,54 +115,59 @@ function asStringArray(value: unknown): Array<string> {
 function extractBindingsFromObject(obj: Record<string, unknown>): Array<WorkerBinding> {
   const bindings: Array<WorkerBinding> = [];
 
-  const vars = asRecord(obj.vars);
+  const vars = asRecord(ownProp(obj, "vars"));
   if (vars) {
     for (const [key, val] of Object.entries(vars)) {
+      if (!isSafeKey(key)) continue;
       if (typeof val === "string" || typeof val === "number" || typeof val === "boolean") {
         bindings.push({ name: key, type: "plain_text", text: String(val) });
       }
     }
   }
 
-  if (Array.isArray(obj.kv_namespaces)) {
-    for (const entry of obj.kv_namespaces) {
+  const kvNamespaces = ownProp(obj, "kv_namespaces");
+  if (Array.isArray(kvNamespaces)) {
+    for (const entry of kvNamespaces) {
       const rec = asRecord(entry);
-      const name = asString(rec?.binding);
-      const namespaceId = asString(rec?.id);
+      const name = rec ? asString(ownProp(rec, "binding")) : undefined;
+      const namespaceId = rec ? asString(ownProp(rec, "id")) : undefined;
       if (name && namespaceId) {
         bindings.push({ name, type: "kv_namespace", namespace_id: namespaceId });
       }
     }
   }
 
-  if (Array.isArray(obj.d1_databases)) {
-    for (const entry of obj.d1_databases) {
+  const d1Databases = ownProp(obj, "d1_databases");
+  if (Array.isArray(d1Databases)) {
+    for (const entry of d1Databases) {
       const rec = asRecord(entry);
-      const name = asString(rec?.binding);
-      const id = asString(rec?.database_id);
+      const name = rec ? asString(ownProp(rec, "binding")) : undefined;
+      const id = rec ? asString(ownProp(rec, "database_id")) : undefined;
       if (name && id) {
         bindings.push({ name, type: "d1", id });
       }
     }
   }
 
-  if (Array.isArray(obj.r2_buckets)) {
-    for (const entry of obj.r2_buckets) {
+  const r2Buckets = ownProp(obj, "r2_buckets");
+  if (Array.isArray(r2Buckets)) {
+    for (const entry of r2Buckets) {
       const rec = asRecord(entry);
-      const name = asString(rec?.binding);
-      const bucketName = asString(rec?.bucket_name);
+      const name = rec ? asString(ownProp(rec, "binding")) : undefined;
+      const bucketName = rec ? asString(ownProp(rec, "bucket_name")) : undefined;
       if (name && bucketName) {
         bindings.push({ name, type: "r2_bucket", bucket_name: bucketName });
       }
     }
   }
 
-  if (Array.isArray(obj.services)) {
-    for (const entry of obj.services) {
+  const services = ownProp(obj, "services");
+  if (Array.isArray(services)) {
+    for (const entry of services) {
       const rec = asRecord(entry);
-      const name = asString(rec?.binding);
-      const service = asString(rec?.service);
-      const environment = asString(rec?.environment);
+      const name = rec ? asString(ownProp(rec, "binding")) : undefined;
+      const service = rec ? asString(ownProp(rec, "service")) : undefined;
+      const environment = rec ? asString(ownProp(rec, "environment")) : undefined;
       if (name && service) {
         bindings.push({
           name,
@@ -165,15 +184,16 @@ function extractBindingsFromObject(obj: Record<string, unknown>): Array<WorkerBi
 
 function extractRoutesFromObject(obj: Record<string, unknown>): Array<string> {
   const routes: Array<string> = [];
-  const single = asString(obj.route);
+  const single = asString(ownProp(obj, "route"));
   if (single) routes.push(single);
-  if (Array.isArray(obj.routes)) {
-    for (const entry of obj.routes) {
+  const rawRoutes = ownProp(obj, "routes");
+  if (Array.isArray(rawRoutes)) {
+    for (const entry of rawRoutes) {
       if (typeof entry === "string" && entry.trim().length > 0) {
         routes.push(entry.trim());
       } else {
         const rec = asRecord(entry);
-        const pattern = asString(rec?.pattern);
+        const pattern = rec ? asString(ownProp(rec, "pattern")) : undefined;
         if (pattern) routes.push(pattern);
       }
     }
@@ -182,9 +202,12 @@ function extractRoutesFromObject(obj: Record<string, unknown>): Array<string> {
 }
 
 function fromConfigRecord(raw: Record<string, unknown>, envName?: string): ParsedWranglerConfig {
-  const envs = asRecord(raw.env);
-  const envSection = envName ? asRecord(envs?.[envName]) : undefined;
-  const merged: Record<string, unknown> = envSection ? { ...raw, ...envSection } : raw;
+  const envs = asRecord(ownProp(raw, "env"));
+  const envSection =
+    envName && isSafeKey(envName) && envs ? asRecord(ownProp(envs, envName)) : undefined;
+  const merged: Record<string, unknown> = envSection
+    ? Object.assign(createNullRecord(), raw, envSection)
+    : raw;
 
   const baseBindings = extractBindingsFromObject(raw);
   const envBindings = envSection ? extractBindingsFromObject(envSection) : [];
@@ -192,10 +215,10 @@ function fromConfigRecord(raw: Record<string, unknown>, envName?: string): Parse
   for (const b of baseBindings) bindingsByName.set(b.name, b);
   for (const b of envBindings) bindingsByName.set(b.name, b);
 
-  const name = asString(merged.name);
-  const main = asString(merged.main);
-  const compatibilityDate = asString(merged.compatibility_date);
-  const compatibilityFlags = asStringArray(merged.compatibility_flags);
+  const name = asString(ownProp(merged, "name"));
+  const main = asString(ownProp(merged, "main"));
+  const compatibilityDate = asString(ownProp(merged, "compatibility_date"));
+  const compatibilityFlags = asStringArray(ownProp(merged, "compatibility_flags"));
   const routes = extractRoutesFromObject(merged);
 
   return {
@@ -251,14 +274,15 @@ function stripTomlComment(line: string): string {
 function ensureNestedObject(
   root: Record<string, unknown>,
   path: ReadonlyArray<string>,
-): Record<string, unknown> {
+): Record<string, unknown> | null {
   let current = root;
   for (const segment of path) {
-    const existing = asRecord(current[segment]);
+    if (!isSafeKey(segment)) return null;
+    const existing = asRecord(ownProp(current, segment));
     if (existing) {
       current = existing;
     } else {
-      const next: Record<string, unknown> = {};
+      const next = createNullRecord();
       current[segment] = next;
       current = next;
     }
@@ -271,8 +295,8 @@ function ensureNestedObject(
  * [[d1_databases]], [[r2_buckets]], [[services]], [[routes]], and [env.<name>.*]).
  */
 export function parseWranglerToml(content: string, envName?: string): ParsedWranglerConfig {
-  const root: Record<string, unknown> = {};
-  let currentTable: Record<string, unknown> = root;
+  const root = createNullRecord();
+  let currentTable: Record<string, unknown> | null = root;
 
   for (const rawLine of content.split(/\r?\n/)) {
     const line = stripTomlComment(rawLine).trim();
@@ -285,11 +309,19 @@ export function parseWranglerToml(content: string, envName?: string): ParsedWran
         .split(".")
         .map((s) => s.trim().replace(/^["']|["']$/g, ""))
         .filter((s) => s.length > 0);
-      if (segments.length === 0) continue;
+      if (segments.length === 0 || !segments.every(isSafeKey)) {
+        currentTable = null;
+        continue;
+      }
       const parent = ensureNestedObject(root, segments.slice(0, -1));
+      if (parent === null) {
+        currentTable = null;
+        continue;
+      }
       const leaf = segments[segments.length - 1]!;
-      const list = Array.isArray(parent[leaf]) ? (parent[leaf] as Array<unknown>) : [];
-      const item: Record<string, unknown> = {};
+      const existing = ownProp(parent, leaf);
+      const list = Array.isArray(existing) ? (existing as Array<unknown>) : [];
+      const item = createNullRecord();
       list.push(item);
       parent[leaf] = list;
       currentTable = item;
@@ -303,11 +335,15 @@ export function parseWranglerToml(content: string, envName?: string): ParsedWran
         .split(".")
         .map((s) => s.trim().replace(/^["']|["']$/g, ""))
         .filter((s) => s.length > 0);
-      if (segments.length === 0) continue;
+      if (segments.length === 0 || !segments.every(isSafeKey)) {
+        currentTable = null;
+        continue;
+      }
       currentTable = ensureNestedObject(root, segments);
       continue;
     }
 
+    if (currentTable === null) continue;
     const eqIndex = line.indexOf("=");
     if (eqIndex <= 0) continue;
     const key = line
@@ -315,7 +351,7 @@ export function parseWranglerToml(content: string, envName?: string): ParsedWran
       .trim()
       .replace(/^["']|["']$/g, "");
     const value = parseTomlValue(line.slice(eqIndex + 1));
-    if (key.length > 0) {
+    if (isSafeKey(key)) {
       currentTable[key] = value;
     }
   }
