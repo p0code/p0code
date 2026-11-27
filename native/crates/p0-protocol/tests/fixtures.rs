@@ -35,7 +35,7 @@ fn golden_shell_snapshot_event_roundtrip() {
     let raw = include_str!("../fixtures/shell_snapshot_event.json");
     let decoded: ShellStreamItem = serde_json::from_str(raw).unwrap();
     match &decoded {
-        ShellStreamItem::Snapshot { snapshot } => {
+        ShellStreamItem::Snapshot { snapshot, .. } => {
             assert_eq!(snapshot.snapshot_sequence, 42);
             assert_eq!(snapshot.projects.len(), 1);
             assert_eq!(snapshot.projects[0].title, "p0code");
@@ -102,6 +102,11 @@ fn golden_domain_event_and_commands_roundtrip() {
         dispatch,
         OrchestrationCommand::MessageDispatch { .. }
     ));
+    // Required fields the server rejects without (`Missing key at ["createdBy"]`).
+    assert_eq!(
+        serde_json::to_value(&dispatch).unwrap(),
+        serde_json::from_str::<serde_json::Value>(dispatch_raw).unwrap()
+    );
 
     let respond_raw = include_str!("../fixtures/command_runtime_request_respond.json");
     let respond: OrchestrationCommand = serde_json::from_str(respond_raw).unwrap();
@@ -118,6 +123,12 @@ fn golden_domain_event_and_commands_roundtrip() {
         interrupt,
         OrchestrationCommand::RunInterrupt { .. }
     ));
+    for (command, raw) in [(&respond, respond_raw), (&interrupt, interrupt_raw)] {
+        assert_eq!(
+            serde_json::to_value(command).unwrap(),
+            serde_json::from_str::<serde_json::Value>(raw).unwrap()
+        );
+    }
 
     for cmd in [dispatch, respond, interrupt] {
         let json = serde_json::to_string(&cmd).unwrap();

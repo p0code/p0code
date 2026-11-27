@@ -39,17 +39,29 @@ actions!(
     ]
 );
 
+/// `mod` in the web app's bindings: Cmd on macOS, Ctrl elsewhere. (This gpui cannot parse
+/// `secondary-` without an OS argument, so it is resolved at compile time.)
+macro_rules! mod_key {
+    ($key:literal) => {
+        if cfg!(target_os = "macos") {
+            concat!("cmd-", $key)
+        } else {
+            concat!("ctrl-", $key)
+        }
+    };
+}
+
 /// The web app's default bindings for the same commands (`packages/shared/src/keybindings.ts`).
 fn keybindings() -> Vec<KeyBinding> {
     vec![
-        KeyBinding::new("secondary-k", ToggleCommandPalette, None),
-        KeyBinding::new("secondary-b", ToggleSidebar, None),
-        KeyBinding::new("secondary-shift-]", NextThread, None),
-        KeyBinding::new("secondary-shift-[", PreviousThread, None),
-        KeyBinding::new("secondary-n", NewThread, None),
-        KeyBinding::new("secondary-shift-o", NewThread, None),
-        KeyBinding::new("secondary-,", OpenSettings, None),
-        KeyBinding::new("secondary-l", FocusComposer, None),
+        KeyBinding::new(mod_key!("k"), ToggleCommandPalette, None),
+        KeyBinding::new(mod_key!("b"), ToggleSidebar, None),
+        KeyBinding::new(mod_key!("shift-]"), NextThread, None),
+        KeyBinding::new(mod_key!("shift-["), PreviousThread, None),
+        KeyBinding::new(mod_key!("n"), NewThread, None),
+        KeyBinding::new(mod_key!("shift-o"), NewThread, None),
+        KeyBinding::new(mod_key!(","), OpenSettings, None),
+        KeyBinding::new(mod_key!("l"), FocusComposer, None),
     ]
 }
 
@@ -583,6 +595,7 @@ impl P0App {
                 .inset_0()
                 .flex()
                 .justify_center()
+                .items_start()
                 .pt(px(96.0))
                 .bg(palette.backdrop)
                 .on_click(cx.listener(|this, _, window, cx| {
@@ -1142,4 +1155,15 @@ pub fn run_gui(bridge: Arc<AppBridge>) {
         })
         .expect("failed to open p0-gpui window");
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn keybindings_parse() {
+        // KeyBinding::new panics on a keystroke this gpui cannot parse.
+        assert_eq!(keybindings().len(), 8);
+    }
 }

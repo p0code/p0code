@@ -614,6 +614,8 @@ async fn end_to_end_local_bootstrap_ws_rpc_frame_parts_ack_and_stores() {
     // 5. dispatchCommand (send message + approval respond)
     let res = client
         .dispatch_command(&OrchestrationCommand::MessageDispatch {
+            created_by: "user".to_owned(),
+            creation_source: "web".to_owned(),
             command_id: "cmd-1".to_owned(),
             thread_id: "thread-1".to_owned(),
             message_id: "msg-2".to_owned(),

@@ -518,6 +518,32 @@ impl P0App {
     }
 }
 
+/// One option of a choice group; the chosen one is filled.
+pub fn choice(
+    id: impl Into<SharedString>,
+    label: impl Into<SharedString>,
+    selected: bool,
+    palette: &AppPalette,
+) -> gpui_kit::Stateful<gpui_kit::Div> {
+    let chip = div()
+        .id(gpui_kit::ElementId::Name(id.into()))
+        .px(px(10.0))
+        .py(px(4.0))
+        .rounded(px(6.0))
+        .border_1()
+        .text_sm()
+        .cursor_pointer()
+        .child(label.into());
+    if selected {
+        chip.bg(palette.primary)
+            .border_color(palette.primary)
+            .text_color(palette.primary_foreground)
+    } else {
+        chip.border_color(palette.border)
+            .hover(|s| s.bg(palette.row_hover))
+    }
+}
+
 pub fn card(palette: &AppPalette) -> gpui_kit::Div {
     div()
         .w_full()

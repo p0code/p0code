@@ -95,7 +95,16 @@ impl AppBridge {
                 }
             },
             move |item: ShellStreamItem| {
+                let snapshot = matches!(item, ShellStreamItem::Snapshot { .. });
                 shell_apply.apply(item);
+                if snapshot {
+                    let state = shell_apply.snapshot();
+                    info!(
+                        projects = state.projects.len(),
+                        threads = state.threads.len(),
+                        "shell snapshot"
+                    );
+                }
                 changed.notify_one();
             },
             move |err| {
@@ -268,6 +277,8 @@ impl AppBridge {
         self.dispatch(
             "Send",
             OrchestrationCommand::MessageDispatch {
+                created_by: "user".to_owned(),
+                creation_source: "web".to_owned(),
                 command_id: Uuid::new_v4().to_string(),
                 thread_id,
                 message_id: Uuid::new_v4().to_string(),

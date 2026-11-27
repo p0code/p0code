@@ -11,7 +11,7 @@ use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::{
     AnyElement, AppContext as _, Context, Entity, IntoElement, ParentElement as _, SharedString,
-    Styled as _, Window, div, px,
+    StatefulInteractiveElement as _, Styled as _, Window, div, px,
 };
 use p0_client::ThreadState;
 use p0_client::user_input::{
@@ -24,7 +24,7 @@ use p0_protocol::{
 use zeroize::Zeroizing;
 
 use crate::app::P0App;
-use crate::feed::{caption, card};
+use crate::feed::{caption, card, choice};
 use crate::theme::AppPalette;
 
 /// The web app's options when the provider offers none (`ComposerPendingApprovalActions.tsx`).
@@ -418,28 +418,35 @@ impl P0App {
                 let value = option_value(opt);
                 let selected = is_option_selected(q, draft.as_ref(), &value);
                 let (rid, question) = (request_id.to_owned(), q.clone());
-                let mut chip = Button::new(SharedString::from(format!("q-{request_id}-{qx}-{ox}")))
-                    .label(opt.label.clone())
-                    .compact()
-                    .toggled(selected)
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        let drafts = this.cards.drafts.entry(rid.clone()).or_default();
-                        let current = drafts.get(&question.id).cloned().unwrap_or_default();
-                        drafts.insert(
-                            question.id.clone(),
-                            toggle_option(&question, &current, &value),
-                        );
-                        if let Some(input) = this
-                            .cards
-                            .text_inputs
-                            .get(&(rid.clone(), question.id.clone()))
-                        {
-                            input.update(cx, |s, cx| s.set_value("", window, cx));
-                        }
-                        cx.notify();
-                    }));
+                let mut chip = choice(
+                    format!("q-{request_id}-{qx}-{ox}"),
+                    opt.label.clone(),
+                    selected,
+                    palette,
+                )
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    let drafts = this.cards.drafts.entry(rid.clone()).or_default();
+                    let current = drafts.get(&question.id).cloned().unwrap_or_default();
+                    drafts.insert(
+                        question.id.clone(),
+                        toggle_option(&question, &current, &value),
+                    );
+                    if let Some(input) = this
+                        .cards
+                        .text_inputs
+                        .get(&(rid.clone(), question.id.clone()))
+                    {
+                        input.update(cx, |s, cx| s.set_value("", window, cx));
+                    }
+                    cx.notify();
+                }));
                 if !opt.description.is_empty() {
-                    chip = chip.tooltip(opt.description.clone());
+                    chip = chip.child(
+                        div()
+                            .text_xs()
+                            .opacity(0.7)
+                            .child(SharedString::from(opt.description.clone())),
+                    );
                 }
                 chips = chips.child(chip);
             }

@@ -90,8 +90,20 @@ impl ShellStore {
             ShellStreamItem::SnapshotRequired => {
                 state.snapshot_required = true;
             }
-            ShellStreamItem::Snapshot { snapshot } => {
+            ShellStreamItem::Snapshot {
+                snapshot,
+                resolved_repository_identity_roots: None,
+            } => {
                 apply_shell_snapshot(state, snapshot);
+            }
+            // A project identity refresh: replaces those projects, keeps everything else.
+            ShellStreamItem::Snapshot {
+                snapshot,
+                resolved_repository_identity_roots: Some(_),
+            } => {
+                for project in snapshot.projects {
+                    upsert_by_id(&mut state.projects, project, |p| p.id.as_str());
+                }
             }
             ShellStreamItem::ProjectUpdated { sequence, project } => {
                 state.last_sequence = state.last_sequence.max(sequence);
@@ -516,6 +528,14 @@ mod tests {
             )
             .unwrap()
         };
+        // The identity refresh that follows a snapshot carries no threads and must keep them.
+        store.apply(
+            serde_json::from_value(json!({"kind": "snapshot", "snapshot": {
+                "schemaVersion": 2, "snapshotSequence": 20, "projects": [], "threads": [],
+                "archivedThreads": []}, "resolvedRepositoryIdentityRoots": ["/w"]}))
+            .unwrap(),
+        );
+        assert_eq!(store.snapshot().threads.len(), 1);
         store.apply(update(19, "older than snapshot"));
         assert_eq!(store.snapshot().threads[0].title, "t");
         store.apply(update(21, "new"));

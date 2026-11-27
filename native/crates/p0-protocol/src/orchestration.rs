@@ -209,8 +209,18 @@ pub enum ShellStreamItem {
     Synchronized,
     #[serde(rename = "snapshot-required")]
     SnapshotRequired,
+    /// Authoritative unless `resolved_repository_identity_roots` is set: then it only refreshes
+    /// the projects at those roots and carries no threads (`ShellStream.ts`).
     #[serde(rename = "snapshot")]
-    Snapshot { snapshot: ShellSnapshot },
+    Snapshot {
+        snapshot: ShellSnapshot,
+        #[serde(
+            rename = "resolvedRepositoryIdentityRoots",
+            default,
+            skip_serializing_if = "Option::is_none"
+        )]
+        resolved_repository_identity_roots: Option<Vec<String>>,
+    },
     #[serde(rename = "project.updated")]
     ProjectUpdated {
         sequence: u64,
@@ -1156,6 +1166,12 @@ pub enum DispatchMode {
 pub enum OrchestrationCommand {
     #[serde(rename = "message.dispatch")]
     MessageDispatch {
+        /// `user` for anything the person typed (`OrchestrationV2Actor`).
+        #[serde(rename = "createdBy")]
+        created_by: String,
+        /// The native client reports `web`, as the desktop app does.
+        #[serde(rename = "creationSource")]
+        creation_source: String,
         #[serde(rename = "commandId")]
         command_id: String,
         #[serde(rename = "threadId")]

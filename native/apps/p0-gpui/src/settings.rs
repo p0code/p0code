@@ -15,6 +15,7 @@ use p0_i18n::SUPPORTED_LOCALES;
 use p0_protocol::{RuntimeMode, ServerProviderState};
 use serde::{Deserialize, Serialize};
 
+use crate::feed::choice;
 use crate::theme::{AppPalette, ThemePreference};
 
 pub struct Section {
@@ -295,27 +296,31 @@ impl crate::app::P0App {
         let mut col = div().flex().flex_col().gap(px(4.0));
         let current = self.prefs.language.clone();
         let mut languages = div().flex().flex_wrap().gap(px(6.0));
-        let follow = Button::new("lang-system")
-            .label(self.i18n.tr("Follow system").to_owned())
-            .compact()
-            .toggled(current.is_none())
-            .on_click(cx.listener(|this, _, window, cx| {
-                let mut prefs = this.prefs.clone();
-                prefs.language = None;
-                this.set_prefs(prefs, window, cx);
-            }));
+        let follow = choice(
+            "lang-system",
+            self.i18n.tr("Follow system").to_owned(),
+            current.is_none(),
+            palette,
+        )
+        .on_click(cx.listener(|this, _, window, cx| {
+            let mut prefs = this.prefs.clone();
+            prefs.language = None;
+            this.set_prefs(prefs, window, cx);
+        }));
         languages = languages.child(follow);
         for (code, name) in SUPPORTED_LOCALES {
             languages = languages.child(
-                Button::new(SharedString::from(format!("lang-{code}")))
-                    .label(*name)
-                    .compact()
-                    .toggled(current.as_deref() == Some(*code))
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        let mut prefs = this.prefs.clone();
-                        prefs.language = Some((*code).to_owned());
-                        this.set_prefs(prefs, window, cx);
-                    })),
+                choice(
+                    format!("lang-{code}"),
+                    *name,
+                    current.as_deref() == Some(*code),
+                    palette,
+                )
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    let mut prefs = this.prefs.clone();
+                    prefs.language = Some((*code).to_owned());
+                    this.set_prefs(prefs, window, cx);
+                })),
             );
         }
         col = col.child(setting_row(self.i18n.tr("Language"), languages, palette));
@@ -334,16 +339,18 @@ impl crate::app::P0App {
             RuntimeMode::FullAccess,
         ] {
             modes = modes.child(
-                Button::new(SharedString::from(format!("mode-{}", mode.as_wire_str())))
-                    .label(crate::composer::runtime_mode_label(mode, &self.i18n))
-                    .compact()
-                    .toggled(server.default_runtime_mode == mode)
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.bridge.update_settings(
-                            serde_json::json!({ "defaultRuntimeMode": mode.as_wire_str() }),
-                        );
-                        cx.notify();
-                    })),
+                choice(
+                    format!("mode-{}", mode.as_wire_str()),
+                    crate::composer::runtime_mode_label(mode, &self.i18n),
+                    server.default_runtime_mode == mode,
+                    palette,
+                )
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.bridge.update_settings(
+                        serde_json::json!({ "defaultRuntimeMode": mode.as_wire_str() }),
+                    );
+                    cx.notify();
+                })),
             );
         }
         col = col.child(setting_row(self.i18n.tr("Permissions"), modes, palette));
@@ -375,15 +382,17 @@ impl crate::app::P0App {
             (ThemePreference::Dark, "Dark"),
         ] {
             schemes = schemes.child(
-                Button::new(SharedString::from(format!("theme-{label}")))
-                    .label(self.i18n.tr(label).to_owned())
-                    .compact()
-                    .toggled(self.prefs.theme == pref)
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        let mut prefs = this.prefs.clone();
-                        prefs.theme = pref;
-                        this.set_prefs(prefs, window, cx);
-                    })),
+                choice(
+                    format!("theme-{label}"),
+                    self.i18n.tr(label).to_owned(),
+                    self.prefs.theme == pref,
+                    palette,
+                )
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    let mut prefs = this.prefs.clone();
+                    prefs.theme = pref;
+                    this.set_prefs(prefs, window, cx);
+                })),
             );
         }
         div()
