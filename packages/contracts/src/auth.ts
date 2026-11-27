@@ -48,6 +48,7 @@ export const AuthAccessWriteScope = "access:write" as const;
 export const AuthRelayReadScope = "relay:read" as const;
 export const AuthRelayWriteScope = "relay:write" as const;
 export const AuthRelayConfigureScope = "relay:configure" as const;
+export const AuthPluginsManageScope = "plugins:manage" as const;
 export const AuthEnvironmentScope = Schema.Literals([
   AuthOrchestrationReadScope,
   AuthOrchestrationOperateScope,
@@ -67,13 +68,17 @@ export const AuthEnvironmentScope = Schema.Literals([
   AuthRelayReadScope,
   AuthRelayWriteScope,
   AuthRelayConfigureScope,
+  AuthPluginsManageScope,
 ]);
 export type AuthEnvironmentScope = typeof AuthEnvironmentScope.Type;
 export const AuthEnvironmentScopes = Schema.Array(AuthEnvironmentScope);
 export type AuthEnvironmentScopes = typeof AuthEnvironmentScopes.Type;
 
+// Plugin management is issued to local owners and cannot be included in a pairing request.
 export const AuthGrantScope = Schema.Literals(
-  AuthEnvironmentScope.literals.filter((scope) => scope !== AuthReviewWriteScope),
+  AuthEnvironmentScope.literals.filter(
+    (scope) => scope !== AuthReviewWriteScope && scope !== AuthPluginsManageScope,
+  ),
 );
 export type AuthGrantScope = typeof AuthGrantScope.Type;
 export const AuthGrantScopes = Schema.Array(AuthGrantScope);
@@ -118,7 +123,9 @@ export function authScopeRequiredResponse(requiredPermission: AuthEnvironmentSco
     requiredScope:
       requiredPermission === AuthRelayConfigureScope
         ? AuthRelayWriteScope
-        : (legacyParents[requiredPermission] ?? requiredPermission),
+        : requiredPermission === AuthPluginsManageScope
+          ? AuthOrchestrationOperateScope
+          : (legacyParents[requiredPermission] ?? requiredPermission),
     requiredPermission,
   };
 }
@@ -175,6 +182,7 @@ export const AuthStandardClientScopes = [
 export const AuthAdministrativeClientScopes = [
   ...AuthStandardClientScopes,
   AuthRelayConfigureScope,
+  AuthPluginsManageScope,
 ] as const;
 
 export const AuthTokenExchangeGrantType =

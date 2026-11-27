@@ -130,6 +130,7 @@ export const migrationManifest: Array<readonly [number, string]> = [
   [120, "PublicTunnels"],
   [121, "WorkflowRunSubject"],
   [122, "DeployHost"],
+  [123, "AuthPluginsManageScope"],
 ];
 
 export const FIRST_V2_MIGRATION_ID = 55;

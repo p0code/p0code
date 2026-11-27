@@ -1,6 +1,14 @@
 import * as NodePlatformCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { authScopeResponse, AuthAdministrativeClientScopes } from "@t3tools/contracts";
+import {
+  authScopeResponse,
+  AuthAdministrativeClientScopes,
+  AuthOrchestrationReadScope,
+  AuthPluginsManageScope,
+  AuthRelayConfigureScope,
+  AuthStandardClientScopes,
+} from "@t3tools/contracts";
+import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import { expect, it } from "@effect/vitest";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -11,6 +19,7 @@ import * as TestClock from "effect/testing/TestClock";
 import * as ServerConfig from "../config.ts";
 import { makeDpopKey } from "./dpop.testkit.ts";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
+import { runMigrations } from "../persistence/Migrations.ts";
 import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import * as EnvironmentAuth from "./EnvironmentAuth.ts";
 import * as PairingGrantStore from "./PairingGrantStore.ts";
@@ -34,10 +43,13 @@ const layerServerConfig = (overrides?: Partial<ServerConfig.ServerConfig["Servic
     }),
   ).pipe(Layer.provide(ServerConfig.layerTest(process.cwd(), { prefix: "t3-auth-server-test-" })));
 
-const layerEnvironmentAuth = (overrides?: Partial<ServerConfig.ServerConfig["Service"]>) =>
+const layerEnvironmentAuth = (
+  overrides?: Partial<ServerConfig.ServerConfig["Service"]>,
+  persistence = SqlitePersistence.layerMemory,
+) =>
   EnvironmentAuth.layer.pipe(
     Layer.provide(ManagedPolicy.layerTest()),
-    Layer.provideMerge(SqlitePersistence.layerMemory),
+    Layer.provideMerge(persistence),
     Layer.provide(ServerSecretStore.layer),
     Layer.provide(ServerEnvironment.layerIdentity),
     Layer.provide(layerServerConfig(overrides)),
@@ -551,6 +563,72 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodePlatformCrypto.layer))(
       ),
     );
 
+    it.effect(
+      "upgrades existing owner tokens and startup links without widening paired or narrowed tokens",
+      () =>
+        Effect.gen(function* () {
+          const auth = yield* EnvironmentAuth.EnvironmentAuth;
+          const sessions = yield* SessionStore.SessionStore;
+          const links = yield* PairingGrantStore.PairingGrantStore;
+          const legacyOwnerScopes = [...AuthStandardClientScopes, AuthRelayConfigureScope];
+          const owner = yield* sessions.issue({
+            subject: "desktop-bootstrap",
+            scopes: AuthStandardClientScopes,
+          });
+          const browser = yield* sessions.issue({
+            subject: "administrative-bootstrap",
+            method: "browser-session-cookie",
+            scopes: legacyOwnerScopes,
+          });
+          const narrowed = yield* sessions.issue({
+            subject: "desktop-bootstrap",
+            scopes: [AuthOrchestrationReadScope],
+          });
+          const paired = yield* sessions.issue({
+            subject: "one-time-token",
+            scopes: legacyOwnerScopes,
+          });
+          const startup = yield* links.issueOneTimeToken({
+            subject: "administrative-bootstrap",
+            scopes: legacyOwnerScopes,
+          });
+
+          const verifyBearer = (token: string) =>
+            auth.authenticateHttpRequest(makeBearerRequest(token));
+          expect((yield* verifyBearer(owner.token)).scopes).toEqual(AuthStandardClientScopes);
+
+          yield* runMigrations();
+
+          expect((yield* verifyBearer(owner.token)).scopes).toEqual([
+            ...AuthStandardClientScopes,
+            AuthPluginsManageScope,
+          ]);
+          expect(
+            (yield* auth.authenticateHttpRequest(
+              makeCookieRequest(sessions.cookieName, browser.token),
+            )).scopes,
+          ).toEqual(AuthAdministrativeClientScopes);
+          expect((yield* verifyBearer(narrowed.token)).scopes).toEqual([
+            AuthOrchestrationReadScope,
+          ]);
+          expect((yield* verifyBearer(paired.token)).scopes).toEqual(legacyOwnerScopes);
+          expect(
+            (yield* auth.createBrowserSession(startup.credential, requestMetadata)).response
+              .permissions,
+          ).toEqual(AuthAdministrativeClientScopes);
+        }).pipe(
+          Effect.provide(
+            layerEnvironmentAuth(
+              undefined,
+              Layer.provideMerge(
+                Layer.effectDiscard(runMigrations({ toMigrationInclusive: 122 })),
+                NodeSqliteClient.layer({ filename: ":memory:" }),
+              ),
+            ),
+          ),
+        ),
+    );
+
     it.effect("rotates desktop bearer sessions without accumulating authorized clients", () =>
       Effect.gen(function* () {
         const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
@@ -593,6 +671,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodePlatformCrypto.layer))(
           makeBearerRequest(second.access_token),
         );
 
+        expect(secondSession.scopes).toEqual(AuthAdministrativeClientScopes);
         expect(active).toHaveLength(3);
         expect(active.map((entry) => entry.sessionId)).toContain(browserSession.sessionId);
         expect(active.map((entry) => entry.sessionId)).toContain(secondSession.sessionId);
@@ -606,6 +685,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodePlatformCrypto.layer))(
           makeBearerRequest(paired.access_token),
         );
         expect(pairedSession.subject).toBe("one-time-token");
+        expect(pairedSession.scopes).not.toContain(AuthPluginsManageScope);
         expect(active.map((entry) => entry.sessionId)).toContain(pairedSession.sessionId);
       }).pipe(
         Effect.provide(

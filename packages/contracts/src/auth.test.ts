@@ -2,10 +2,12 @@ import { describe, expect, it } from "vite-plus/test";
 import * as Schema from "effect/Schema";
 
 import {
+  AuthAdministrativeClientScopes,
   AuthEnvironmentScopes,
   AuthEnvironmentScope,
   authScopeRequiredResponse,
   AuthGrantScopes,
+  AuthPluginsManageScope,
   AuthStandardClientScopes,
   authScopeResponse,
   AuthSessionState,
@@ -13,13 +15,14 @@ import {
 } from "./auth.ts";
 
 describe("authorization grants", () => {
-  it("decodes legacy review credentials without offering them in new grants", () => {
+  it("keeps retired and owner-only permissions out of pairing grants", () => {
     const decodeAuthEnvironmentScopes = Schema.decodeSync(AuthEnvironmentScopes);
 
     expect(decodeAuthEnvironmentScopes(["review:write"])).toEqual(["review:write"]);
     const decodeAuthGrantScopes = Schema.decodeUnknownSync(AuthGrantScopes);
 
     expect(() => decodeAuthGrantScopes(["review:write"])).toThrow();
+    expect(() => decodeAuthGrantScopes([AuthPluginsManageScope])).toThrow();
     expect(AuthStandardClientScopes).not.toContain("review:write");
   });
 
@@ -126,7 +129,25 @@ describe("authorization grants", () => {
       scope: "access:write",
       expected: false,
     },
+    {
+      label: "no legacy parent expansion for plugins:manage",
+      session: {
+        authenticated: true,
+        scopes: ["orchestration:operate", "relay:write"],
+        auth: {},
+      },
+      scope: AuthPluginsManageScope,
+      expected: false,
+    },
   ] as const)("sessionGrantsScope accepts $label", ({ session, scope, expected }) => {
     expect(sessionGrantsScope(session, scope)).toBe(expected);
+  });
+
+  it("includes plugins:manage only in administrative client scopes, not standard scopes", () => {
+    expect(AuthAdministrativeClientScopes).toContain(AuthPluginsManageScope);
+    expect(AuthStandardClientScopes).not.toContain(AuthPluginsManageScope);
+    const response = authScopeResponse(AuthAdministrativeClientScopes);
+    expect(response.permissions).toContain(AuthPluginsManageScope);
+    expect(response.scopes).not.toContain(AuthPluginsManageScope);
   });
 });

@@ -44,3 +44,14 @@ func TestDecodeFrame(t *testing.T) {
 		t.Fatalf("single: %v %v", msgs, err)
 	}
 }
+
+func TestAuthorizationError(t *testing.T) {
+	plugins := authorizationError("plugins:manage")
+	if plugins["requiredScope"] != "orchestration:operate" || plugins["requiredPermission"] != "plugins:manage" {
+		t.Fatalf("plugins:manage auth error: %v", plugins)
+	}
+	relay := authorizationError("relay:configure")
+	if relay["requiredScope"] != "relay:write" || relay["requiredPermission"] != "relay:configure" {
+		t.Fatalf("relay:configure auth error: %v", relay)
+	}
+}

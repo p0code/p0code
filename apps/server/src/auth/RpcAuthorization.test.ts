@@ -1,5 +1,11 @@
 import {
   AuthEnvironmentMaintainScope,
+  AuthAdministrativeClientScopes,
+  AuthPluginsManageScope,
+  AuthRelayConfigureScope,
+  AuthStandardClientScopes,
+  mcpClientScopes,
+  PluginOperationError,
   AuthDiagnosticsReadScope,
   AuthFilesystemReadScope,
   AuthProvidersManageScope,
@@ -1041,6 +1047,98 @@ describe("RPC authorization scopes", () => {
     }
   });
 });
+
+it.effect(
+  "allows local owners to use plugin RPCs and stops shared clients before the handlers",
+  () =>
+    Effect.gen(function* () {
+      const tags = [
+        WS_METHODS.pluginsInstalledList,
+        WS_METHODS.pluginsShopList,
+        WS_METHODS.pluginsInstall,
+        WS_METHODS.pluginsSetEnabled,
+        WS_METHODS.pluginsConsent,
+        WS_METHODS.pluginsInvoke,
+        WS_METHODS.pluginsSubscribe,
+      ] as const;
+      const group = WsRpcGroup.omit(
+        ...[...WsRpcGroup.requests.keys()].filter(
+          (tag): tag is Exclude<keyof typeof RPC_REQUIRED_SCOPES, (typeof tags)[number]> =>
+            !(tags as ReadonlyArray<string>).includes(tag),
+        ),
+      );
+      const snapshot = { plugins: [] };
+      const handlerReached = new PluginOperationError({
+        pluginId: "example",
+        message: "Handler reached",
+      });
+      const handlers = group.toLayer({
+        [WS_METHODS.pluginsInstalledList]: () =>
+          Effect.succeed({ snapshot, installations: [], stagedManifests: [] }),
+        [WS_METHODS.pluginsShopList]: () =>
+          Effect.succeed({
+            entries: [],
+            categories: [],
+            fetchedAt: null,
+            stale: false,
+            skippedEntries: 0,
+            error: null,
+          }),
+        [WS_METHODS.pluginsInstall]: () => Effect.fail(handlerReached),
+        [WS_METHODS.pluginsSetEnabled]: () => Effect.succeed(snapshot),
+        [WS_METHODS.pluginsConsent]: () => Effect.fail(handlerReached),
+        [WS_METHODS.pluginsInvoke]: () => Effect.succeed("invoked"),
+        [WS_METHODS.pluginsSubscribe]: () => Stream.make(snapshot),
+      });
+      const clientWith = (scopes: Parameters<typeof RpcAuthorization.layer>[0]) =>
+        RpcTest.makeClient(group).pipe(
+          Effect.provide(Layer.merge(handlers, RpcAuthorization.layer(scopes))),
+        );
+      const install = { source: "example" };
+      const enable = { pluginId: "example", enabled: true };
+      const consent = { id: "example", version: "1.0.0", capabilities: [] };
+      const invoke = { pluginId: "example", action: "example", input: {} };
+      const owner = yield* clientWith(AuthAdministrativeClientScopes);
+      expect((yield* owner[WS_METHODS.pluginsInstalledList]({})).snapshot).toEqual(snapshot);
+      expect((yield* owner[WS_METHODS.pluginsShopList]({})).entries).toEqual([]);
+      expect(yield* owner[WS_METHODS.pluginsInstall](install).pipe(Effect.flip)).toEqual(
+        handlerReached,
+      );
+      expect(yield* owner[WS_METHODS.pluginsSetEnabled](enable)).toEqual(snapshot);
+      expect(yield* owner[WS_METHODS.pluginsConsent](consent).pipe(Effect.flip)).toEqual(
+        handlerReached,
+      );
+      expect(yield* owner[WS_METHODS.pluginsInvoke](invoke)).toBe("invoked");
+      expect(yield* owner[WS_METHODS.pluginsSubscribe]({}).pipe(Stream.runCollect)).toEqual([
+        snapshot,
+      ]);
+
+      for (const scopes of [
+        AuthStandardClientScopes,
+        mcpClientScopes("auto"),
+        [AuthRelayConfigureScope],
+      ]) {
+        const client = yield* clientWith(scopes);
+        for (const call of [
+          client[WS_METHODS.pluginsInstalledList]({}),
+          client[WS_METHODS.pluginsShopList]({}),
+          client[WS_METHODS.pluginsInstall](install),
+          client[WS_METHODS.pluginsSetEnabled](enable),
+          client[WS_METHODS.pluginsConsent](consent),
+          client[WS_METHODS.pluginsInvoke](invoke),
+          client[WS_METHODS.pluginsSubscribe]({}).pipe(Stream.runCollect),
+        ] as const) {
+          expect(yield* Effect.result(call)).toMatchObject({
+            _tag: "Failure",
+            failure: {
+              _tag: "EnvironmentAuthorizationError",
+              requiredPermission: AuthPluginsManageScope,
+            },
+          });
+        }
+      }
+    }),
+);
 
 it("requires relay configuration and access scopes consistently on WS RPC", () => {
   for (const method of [WS_METHODS.serverRelayLink, WS_METHODS.serverRelayUnlink])
