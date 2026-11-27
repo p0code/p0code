@@ -1,6 +1,6 @@
 // Package auth validates the session credentials the legacy server issues, reading
-// the same signing key and auth_sessions table. Issuing, pairing and renewal still
-// happen in the legacy server.
+// the same signing key and auth_sessions table, and issues desktop sessions the same
+// way. Pairing, renewal and every other grant still happen in the legacy server.
 package auth
 
 import (
@@ -79,6 +79,8 @@ type Authenticator struct {
 	secretsDir string
 	keyMu      sync.Mutex
 	key        []byte
+	writeMu    sync.Mutex
+	rw         *sql.DB
 }
 
 // New opens the state database read-only. It need not exist yet.
@@ -101,7 +103,14 @@ func New(home string) (*Authenticator, error) {
 	}, nil
 }
 
-func (a *Authenticator) Close() error { return a.db.Close() }
+func (a *Authenticator) Close() error {
+	a.writeMu.Lock()
+	defer a.writeMu.Unlock()
+	if a.rw != nil {
+		a.rw.Close()
+	}
+	return a.db.Close()
+}
 
 // CookieName mirrors resolveSessionCookieName for "web" mode.
 func CookieName(port int, host, instanceKey, environmentID string) (name, legacy string) {

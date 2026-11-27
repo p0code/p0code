@@ -2,11 +2,13 @@ package server
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"io"
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -28,11 +30,26 @@ func TestMain(m *testing.M) {
 }
 
 func runFakeLegacy() {
-	var port string
+	var port, baseDir string
 	for i, arg := range os.Args {
-		if arg == "--port" {
+		switch arg {
+		case "--port":
 			port = os.Args[i+1]
+		case "--base-dir":
+			baseDir = os.Args[i+1]
 		}
+	}
+	if os.Getenv("P0D_FAKE_LEGACY_MIGRATE") == "1" {
+		// Stands in for the real server's startup migrations.
+		os.MkdirAll(filepath.Join(baseDir, "userdata"), 0o700)
+		db, err := sql.Open("sqlite", filepath.Join(baseDir, "userdata", "statev2.sqlite"))
+		if err == nil {
+			_, err = db.Exec(authtest.SessionsSchema)
+		}
+		if err != nil {
+			log.Fatal(err)
+		}
+		db.Close()
 	}
 	token := os.Getenv("P0D_INTERNAL_TOKEN")
 	mux := http.NewServeMux()
@@ -46,6 +63,11 @@ func runFakeLegacy() {
 			"host":          r.Host,
 			"forwardedFor":  r.Header.Get("X-Forwarded-For"),
 		})
+	})
+	mux.HandleFunc("/oauth/token", func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		w.WriteHeader(http.StatusTeapot)
+		json.NewEncoder(w).Encode(map[string]string{"body": string(body), "dpop": r.Header.Get("DPoP")})
 	})
 	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("X-P0d-Internal-Token") != token {
@@ -111,10 +133,18 @@ type harness struct {
 
 func start(t *testing.T, legacy bool) *harness {
 	t.Helper()
+	return startWith(t, legacy, nil)
+}
+
+func startWith(t *testing.T, legacy bool, configure func(*authtest.Home, *Config)) *harness {
+	t.Helper()
 	home := authtest.New(t)
 	home.AddSession(t, "s1", "client", authtest.AllScopes, "")
 	cfg := Config{Home: home.Dir, Host: "127.0.0.1", ReadyFile: home.Dir + "/ready.json", Version: "test", LegacyIdle: 200 * time.Millisecond,
 		Logger: log.New(io.Discard, "", 0)}
+	if configure != nil {
+		configure(home, &cfg)
+	}
 	if legacy {
 		t.Setenv("P0D_FAKE_LEGACY", "1")
 		cfg.Legacy = []string{os.Args[0]}

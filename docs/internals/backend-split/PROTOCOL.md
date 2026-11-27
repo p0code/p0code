@@ -110,7 +110,16 @@ token or ticket))`; the signature (raw `r‖s`, 64 bytes) over `sha256(header.pa
 `<home>/secrets/dpop-proof-<base64url(sha256("<thumbprint>:<jti>"))>.bin`; if it exists,
 the proof is a replay.
 
-### 2.5 Socket lifetime
+### 2.5 Desktop bootstrap tokens
+
+The desktop GUI owns a random secret (base64url text, at least 32 bytes; the Electron
+app writes 64 hex characters). Clients never send it. They exchange
+`hex(HMAC-SHA256(key = UTF-8 secret text, "t3-desktop-bootstrap:<floor(now_ms / 43200000)>"))`
+as the `subject_token` of an environment-bootstrap exchange on `/oauth/token`; the
+previous, current and next 12-hour windows are accepted
+(`packages/shared/src/desktopBootstrapToken.ts`).
+
+### 2.6 Socket lifetime
 
 A `/ws` socket closes when its session is revoked, or expires without a newer live
 session for the same DPoP key (renewal keeps the socket). Clients reconnect with fresh
@@ -250,6 +259,21 @@ required scope: settings:write.","requiredScope":"orchestration:operate",
   request whose credential p0d verifies goes through as that session; any other request
   goes through untouched and the legacy server applies its own rules (pairing, OAuth,
   `/mcp`, token renewal with an expired DPoP token).
+- **Desktop sign-in** (`--desktop-bootstrap-secret-file`) is the one `/oauth/token` grant
+  p0d answers itself, so the GUI never wakes Node to sign in. It takes only a loopback
+  request with no forwarding headers (`X-Forwarded-For`, `Forwarded`, `X-Real-IP`,
+  `Tailscale-*`), form fields `grant_type` token-exchange, `subject_token_type`
+  environment-bootstrap, `requested_token_type` access_token, no `scope`, no `DPoP`
+  header, and a `subject_token` that is a §2.5 token for the file's secret. It issues
+  what the legacy server issues for that grant: a 30-day `bearer-access-token` session
+  for subject `desktop-bootstrap` with `AuthAdministrativeClientScopes`, revoking that
+  subject's earlier live bearer sessions in the same transaction, and answers
+  `{access_token, issued_token_type, token_type:"Bearer", expires_in, scope}`. Any other
+  request, including a wrong `subject_token` (it may be a pairing credential), goes to
+  the legacy server untouched; ten wrong tokens from one address within a minute close
+  the native path to it for a minute (`429`, `Retry-After`). On a home the legacy server
+  has never migrated, p0d starts it once to create the schema, and creates
+  `server-signing-key.bin` itself when the file backend has none.
 
 ## 7. Gotchas for porters
 
@@ -276,4 +300,6 @@ required scope: settings:write.","requiredScope":"orchestration:operate",
 - `/ws` must not enforce `Origin` itself (cookie credentials already did); Go's
   `coder/websocket` rejects cross-origin upgrades unless `InsecureSkipVerify` is set.
 - The session store's "connected" flag lives in the legacy server's memory and only
-  sees sockets that made a proxied call.
+  sees sockets that made a proxied call. Likewise a running legacy server's live
+  client list does not hear about sessions p0d issues or revokes until it re-reads
+  `auth_sessions`.

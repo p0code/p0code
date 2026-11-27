@@ -20,6 +20,7 @@ var version = "dev"
 
 const usage = `usage:
   p0d serve --home <dir> [--host 127.0.0.1] [--port 0] [--ready-file <path>] [--legacy-server <cmd>]
+            [--desktop-bootstrap-secret-file <path>]
   p0d version
   p0d service install|uninstall|start|stop|status
 `
@@ -57,6 +58,7 @@ func serve(args []string) error {
 	readyFile := fs.String("ready-file", "", "write {pid,port,url} JSON here once listening")
 	legacy := fs.String("legacy-server", "", "command that starts the legacy Node server")
 	legacyIdle := fs.Duration("legacy-idle-timeout", 5*time.Minute, "stop the legacy server after it is unused this long")
+	desktopSecret := fs.String("desktop-bootstrap-secret-file", "", "mode-0600 file with the GUI's base64url desktop secret; enables native desktop sign-in")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -71,6 +73,7 @@ func serve(args []string) error {
 	s, err := server.Start(server.Config{
 		Home: *home, Host: *host, Port: *port, ReadyFile: *readyFile,
 		Legacy: command, LegacyIdle: *legacyIdle, Version: version, Logger: logger,
+		DesktopSecretFile: *desktopSecret,
 	})
 	if err != nil {
 		return err
