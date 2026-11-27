@@ -4,6 +4,7 @@ members = [
   "crates/p0-protocol",
   "crates/p0-i18n",
   "crates/p0-client",
+  "crates/p0-terminal",
   "apps/p0-gpui",
 ]
 exclude = ["resource-monitor"]
@@ -15,6 +16,7 @@ license = "MIT"
 publish = false
 
 [workspace.dependencies]
+alacritty_terminal = "0.26.0"
 base64 = "0.23.1"
 clap = { version = "4.6.10", features = ["derive", "env"] }
 dirs = "7.0.0"
@@ -22,7 +24,9 @@ futures-util = "0.3.34"
 gpui-kit = "0.11.0"
 hex = "0.4.3"
 hmac = "0.12.1"
+libc = "0.2.191"
 http = "1.5.0"
+nucleo-matcher = "0.3.1"
 pulldown-cmark = "0.13.6"
 rand = "0.10.4"
 reqwest = { version = "0.13.5", default-features = false, features = ["json", "form", "rustls"] }
@@ -37,6 +41,7 @@ tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 url = "2.5.9"
 uuid = { version = "1.29.3", features = ["v4"] }
+zeroize = "1.9.2"
 
 [profile.dev]
 debug = "line-tables-only"
