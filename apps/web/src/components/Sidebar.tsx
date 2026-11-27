@@ -40,10 +40,7 @@ import {
   threadWokeAt,
 } from "@t3tools/client-runtime/state/thread-settled";
 import { activeThreadSortKey, sortSettledThreads } from "@t3tools/client-runtime/state/thread-sort";
-import {
-  resolveListedAncestorThreadRef,
-  type OlderSettledScope,
-} from "@t3tools/client-runtime/state/threads";
+import { resolveListedAncestorThreadRef } from "@t3tools/client-runtime/state/threads";
 import {
   AuthOrchestrationOperateScope,
   isOpenEndedSnooze,
@@ -179,9 +176,14 @@ import {
   setThreadAccountProfile,
   withAccountProfileMenu,
 } from "../state/accountProfiles";
-import { useOlderSettledShelf, useOlderSettledShelfGrowth } from "../state/olderSettledShelf";
+import {
+  olderSettledScopesForProfile,
+  unloadedOlderSettledCountForProfile,
+  useOlderSettledShelf,
+  useOlderSettledShelfGrowth,
+} from "../state/olderSettledShelf";
 import { environmentPresentations } from "../state/presentation";
-import { environmentProjects } from "../state/projects";
+import { activeProfileThreadVisibilityAtom, environmentProjects } from "../state/projects";
 import { useThreadSearch } from "../state/queries";
 import { primaryServerKeybindingsAtom } from "../state/server";
 import { readEnvironmentScope, useEnvironmentScope } from "../state/session";
@@ -454,10 +456,17 @@ function routeThreadOnly(
 function useSidebarThreads(input: {
   readonly projectScopeKey: string | null;
   readonly scopedProjectKeys: ReadonlySet<string> | null;
+  readonly projects: ReadonlyArray<{
+    readonly environmentId: EnvironmentId;
+    readonly id: ProjectId;
+    readonly isScratch?: boolean | undefined;
+  }>;
   readonly serverConfigs: ReadonlyMap<EnvironmentId, EnvironmentServerConfig>;
   readonly connectedEnvironmentIds: readonly EnvironmentId[];
   readonly optimisticDrop: SidebarOptimisticDrop | null;
   readonly threads: readonly EnvironmentThreadShell[];
+  /** Every loaded thread across all profiles, for accurate older-settled count subtraction. */
+  readonly allThreads: readonly EnvironmentThreadShell[];
   readonly delegatedUnderParent: ReadonlySet<string>;
   readonly routeRowThreadKey: string | null;
   readonly departingThreadKey: string | null;
@@ -469,10 +478,12 @@ function useSidebarThreads(input: {
   const {
     projectScopeKey,
     scopedProjectKeys,
+    projects,
     serverConfigs,
     connectedEnvironmentIds,
     optimisticDrop,
     threads,
+    allThreads,
     delegatedUnderParent,
     routeRowThreadKey,
     departingThreadKey,
@@ -480,6 +491,7 @@ function useSidebarThreads(input: {
     keepEmptyFolders: keepEmpty,
   } = input;
   const hiddenEnvironments = useProfileHiddenEnvironmentIds();
+  const profileVisibility = useAtomValue(activeProfileThreadVisibilityAtom);
   const shelfRouteThreadKey = routeRowThreadKey === departingThreadKey ? null : routeRowThreadKey;
   // Folders already separate the work, so boring mode has no Working shelf.
   const workingShelfEnabled =
@@ -545,18 +557,31 @@ function useSidebarThreads(input: {
     settledThreads,
   } = partition;
   // Older settled threads load in pages; the shelf lists them only as far as they are loaded.
-  const olderSettledShelf = useOlderSettledShelf({
-    scopes: olderSettledScopes(
-      [...serverConfigs.keys()].filter((environmentId) => !hiddenEnvironments.has(environmentId)),
-      scopedProjectKeys,
+  const olderScopes = olderSettledScopesForProfile({
+    environmentIds: [...serverConfigs.keys()].filter(
+      (environmentId) => !hiddenEnvironments.has(environmentId),
     ),
+    scopedProjectKeys,
+    projects,
+    loadedThreads: allThreads,
+    visibility: profileVisibility,
+  });
+  const olderSettledShelf = useOlderSettledShelf({
+    scopes: olderScopes,
     expanded: settledShelfExpanded,
     visibleCount: settledVisibleCount,
   });
   const listedSettledThreads = settledThreads.filter(olderSettledShelf.isListed);
   useOlderSettledShelfGrowth(olderSettledShelf, listedSettledThreads);
   const settledCount =
-    settledThreads.length + olderSettledShelf.unloadedCount(partition.visibleThreads);
+    settledThreads.length +
+    unloadedOlderSettledCountForProfile({
+      olderSettled: (environmentId) =>
+        olderSettledShelf.environments.get(environmentId)?.older ?? null,
+      scopes: olderScopes,
+      allLoadedThreads: allThreads,
+      visibility: profileVisibility,
+    });
   const visibleSettledThreads = (() => {
     const visible = listedSettledThreads.slice(0, settledVisibleCount);
     if (
@@ -790,23 +815,6 @@ function partitionSidebarThreads(input: SidebarThreadPartitionInput) {
     visibleThreads: visible,
     snoozeNow: preciseNow,
   };
-}
-
-/** The sidebar's scope per environment: the scoped projects there, or every project. */
-function olderSettledScopes(
-  environmentIds: ReadonlyArray<EnvironmentId>,
-  scopedProjectKeys: ReadonlySet<string> | null,
-): ReadonlyArray<OlderSettledScope> {
-  if (scopedProjectKeys === null) {
-    return environmentIds.map((environmentId) => ({ environmentId, projectIds: null }));
-  }
-  return environmentIds.flatMap((environmentId) => {
-    const prefix = `${environmentId}:`;
-    const projectIds = [...scopedProjectKeys].flatMap((key) =>
-      key.startsWith(prefix) ? [ProjectId.make(key.slice(prefix.length))] : [],
-    );
-    return projectIds.length === 0 ? [] : [{ environmentId, projectIds }];
-  });
 }
 
 function isOptimisticDropReleased(input: {
@@ -1194,10 +1202,11 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   // The active account profile narrows every list the way a project scope does.
   const profileProjects = useProfileProjects(projects);
   const profileScopeProjectKeys =
-    profileProjects === projects
+    profileProjects === projects && hiddenEnvironments.size === 0
       ? null
       : new Set(profileProjects.map((project) => `${project.environmentId}:${project.id}`));
-  const threads = useProfileThreads(useQuietThreadShells());
+  const allQuietThreads = useQuietThreadShells();
+  const threads = useProfileThreads(allQuietThreads);
   const promotingDraftThreadKeys = usePromotingDraftThreadKeys();
   const listedThreads =
     promotingDraftThreadKeys.length === 0
@@ -1277,14 +1286,16 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const scopedProjectRefs = scopedProjectGroups.flatMap((project) => project.memberProjectRefs);
   const scopedProjectKeys =
     (revealWidensScope ? null : chosenScopeProjectKeys) ?? profileScopeProjectKeys;
-  const threadSearch = useThreadSearch(
-    connectedEnvironmentIds,
-    threadSearchQuery,
+  const searchProjectIds =
     scopedProjectGroups.length > 0
-      ? { projectIds: scopedProjectRefs.map((projectRef) => projectRef.projectId) }
+      ? scopedProjectRefs.map((projectRef) => projectRef.projectId)
       : profileScopeProjectKeys !== null
-        ? { projectIds: profileProjects.map((project) => project.id) }
-        : {},
+        ? profileProjects.map((project) => project.id)
+        : undefined;
+  const threadSearch = useThreadSearch(
+    searchProjectIds !== undefined && searchProjectIds.length === 0 ? [] : connectedEnvironmentIds,
+    threadSearchQuery,
+    searchProjectIds !== undefined ? { projectIds: searchProjectIds } : {},
   );
   const routeDraftIdForRows = routeTarget?.kind === "draft" ? routeTarget.draftId : null;
   const draftTerminalLabels = useDraftTerminalLabels();
@@ -1460,10 +1471,12 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   } = useSidebarThreads({
     projectScopeKey,
     scopedProjectKeys,
+    projects,
     serverConfigs,
     connectedEnvironmentIds,
     optimisticDrop,
     threads: listedThreads,
+    allThreads: allQuietThreads,
     delegatedUnderParent,
     routeRowThreadKey,
     departingThreadKey,
@@ -3563,7 +3576,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             0 &&
           (settledCount === 0 || scopedProjectGroups.length > 0) ? (
             <div className="flex flex-col items-center gap-2 px-2 py-6 text-center text-xs text-muted-foreground/60">
-              {projects.length === 0 ? (
+              {profileProjects.length === 0 ? (
                 <>
                   <span>
                     <T>No projects yet</T>

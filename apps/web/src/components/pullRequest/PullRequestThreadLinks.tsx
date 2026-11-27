@@ -22,6 +22,10 @@ import {
   useThreadShell,
 } from "~/state/entities";
 import { pullRequestEnvironment } from "~/state/pullRequests";
+import {
+  activeProfileThreadVisibilityAtom,
+  isThreadVisibleInActiveProfile,
+} from "~/state/projects";
 import { environmentThreadShells } from "~/state/threads";
 import { useEnvironmentQuery } from "~/state/query";
 import { appAtomRegistry } from "~/rpc/atomRegistry";
@@ -133,6 +137,7 @@ function EnabledPullRequestThreadLinks({
     onPickerOpenChange?.(false);
   };
 
+  const profileVisibility = useAtomValue(activeProfileThreadVisibilityAtom);
   if (parsed === null || (!linkedHere && !linking.canLink(url))) return null;
   const linkedThreads = visibleLinkedThreads(
     linking.mode === "multiple" ? ((relations.data ?? lastRelations)?.threads ?? []) : [],
@@ -140,6 +145,11 @@ function EnabledPullRequestThreadLinks({
     loadedThreadRefs,
     hiddenKeys,
     hidingAnywhere,
+  ).filter((linked) =>
+    isThreadVisibleInActiveProfile(
+      { environmentId, id: linked.id, projectId: linked.projectId },
+      profileVisibility,
+    ),
   );
   const linkedThreadsLabel =
     linkedThreads.length > 0

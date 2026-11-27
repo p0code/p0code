@@ -70,6 +70,7 @@ import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
 import { useNowMinute } from "../../hooks/useNowMinute";
 import {
   useProfileProjects,
+  useProfileThreads,
   useProjects,
   useQuietThreadShell,
   useThreadShell,
@@ -1355,7 +1356,7 @@ function ScheduledTaskDestination({
       : threadMode === "new_thread"
         ? gt("New thread each run")
         : gt("Started by the first run");
-  const shells = useVisibleThreadShells(open);
+  const shells = useProfileThreads(useVisibleThreadShells(open));
   // Mounts older settled threads matching the query, which shells may leave out.
   useThreadSearch(open && projectId ? [environmentId] : [], query, {
     titlesOnly: true,

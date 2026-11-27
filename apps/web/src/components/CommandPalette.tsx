@@ -206,7 +206,11 @@ import {
   usePrimaryEnvironmentId,
 } from "../state/environments";
 import { filesystemEnvironment, useFilesystemReadAccess } from "../state/filesystem";
-import { projectEnvironment } from "../state/projects";
+import {
+  activeProfileThreadVisibilityAtom,
+  isThreadVisibleInActiveProfile,
+  projectEnvironment,
+} from "../state/projects";
 import { useEnvironmentQuery } from "../state/query";
 import { primaryServerKeybindingsAtom, serverEnvironment } from "../state/server";
 import { sourceControlEnvironment } from "../state/sourceControl";
@@ -530,6 +534,7 @@ function OpenCommandPaletteDialog(props: {
   });
   const { environments } = useEnvironments();
   const profileEnvironments = useProfileEnvironments(environments);
+  const profileVisibility = useAtomValue(activeProfileThreadVisibilityAtom);
   const desktopLocalBootstraps = useDesktopLocalBootstraps();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const settingsSearchItems = useCommandPaletteSettingsItems(deferredQuery.trim().length > 0);
@@ -798,9 +803,19 @@ function OpenCommandPaletteDialog(props: {
     environments.find((environment) => environment.environmentId === environmentId)?.serverConfig
       ?.environment.capabilities.triage === true;
   const triageEnvironmentId = pickTriageEnvironment({
-    onScreen: currentProjectEnvironmentId,
-    primary: primaryEnvironmentId,
-    connected: environments
+    onScreen:
+      currentProjectEnvironmentId !== null &&
+      profileEnvironments.some(
+        (environment) => environment.environmentId === currentProjectEnvironmentId,
+      )
+        ? currentProjectEnvironmentId
+        : null,
+    primary:
+      primaryEnvironmentId !== null &&
+      profileEnvironments.some((environment) => environment.environmentId === primaryEnvironmentId)
+        ? primaryEnvironmentId
+        : null,
+    connected: profileEnvironments
       .filter((environment) => environment.connection.phase === "connected")
       .map((environment) => environment.environmentId),
     supportsTriage,
@@ -1783,7 +1798,7 @@ function OpenCommandPaletteDialog(props: {
 
   actionItems.push(themeEditorItem);
 
-  if (environments.some((environment) => environment.serverConfig !== null)) {
+  if (profileEnvironments.some((environment) => environment.serverConfig !== null)) {
     actionItems.push({
       kind: "action",
       value: "action:pull-requests",
@@ -1812,7 +1827,7 @@ function OpenCommandPaletteDialog(props: {
   }
 
   if (
-    environments.some(
+    profileEnvironments.some(
       (environment) => environment.serverConfig?.environment.capabilities.issues === true,
     )
   ) {
@@ -2022,6 +2037,15 @@ function OpenCommandPaletteDialog(props: {
                   linkedThreadRefs,
                   hiddenKeys,
                   hidingAnywhere,
+                ).filter((thread) =>
+                  isThreadVisibleInActiveProfile(
+                    {
+                      environmentId: linkedThreadSearch.linkedThreads!.environmentId,
+                      id: thread.id,
+                      projectId: thread.projectId,
+                    },
+                    profileVisibility,
+                  ),
                 ),
                 query: linkedThreadSearch.query,
                 icon: <MessageSquareIcon className={ITEM_ICON_CLASS} />,

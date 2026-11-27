@@ -28,7 +28,7 @@ import { useState } from "react";
 
 import { useEnvironmentSettings } from "../../hooks/useSettings";
 import { deployEnvironment } from "../../state/deploy";
-import { useProjects } from "../../state/entities";
+import { useProfileProjects, useProjects } from "../../state/entities";
 import { useEnvironmentQuery } from "../../state/query";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { Badge } from "../ui/badge";
@@ -107,7 +107,7 @@ function EnvironmentDeploy({
 }) {
   const gt = useGT();
   const query = useEnvironmentQuery(deployEnvironment.overview({ environmentId, input: {} }));
-  const projects = useProjects().filter(
+  const projects = useProfileProjects(useProjects()).filter(
     (project) => project.environmentId === environmentId && project.archivedAt == null,
   );
   const accountProfiles = useEnvironmentSettings(

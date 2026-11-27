@@ -39,7 +39,11 @@ import { useEnvironments, usePrimaryEnvironmentId } from "../../state/environmen
 import { useThreadShells, waitForProjectRemoval } from "../../state/entities";
 import { refreshProjectFaviconUrl } from "../../state/assets";
 import { projectEnvironment } from "../../state/projects";
-import { serverEnvironment } from "../../state/server";
+import {
+  primarySeparatingAccountProfileSettingsAtom,
+  profileSeparatingSettingsAtom,
+  resolveEffectiveProfileSettings,
+} from "../../state/projects";
 import {
   projectAccountProfileChoices,
   setProjectAccountProfile,
@@ -168,7 +172,13 @@ function ProjectAccountProfileRow({
 }) {
   const gt = useGT();
   const first = members[0]!;
-  const settings = useAtomValue(serverEnvironment.settingsValueAtom(first.environmentId));
+  const separating = useAtomValue(profileSeparatingSettingsAtom);
+  const primarySeparating = useAtomValue(primarySeparatingAccountProfileSettingsAtom);
+  const settings = resolveEffectiveProfileSettings(
+    first.environmentId,
+    separating,
+    primarySeparating,
+  );
   const choices = projectAccountProfileChoices(settings, first.id);
   if (choices === null || members.every((member) => member.isScratch)) return null;
   const assigned = choices.profiles.find((profile) => profile.id === choices.assignedId);
