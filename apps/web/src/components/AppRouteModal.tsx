@@ -55,16 +55,19 @@ export function AppRouteModal({
   // 1.5rem inset is shorter than the strip.
   const nativeTitlebarHeight = useNativeTitlebarHeight();
   const router = useRouter();
-  // Leaving the page without closing (Navigation: Back) unmounts a focused field during a
-  // commit, when React no longer delivers its blur, so commit-on-blur rows would drop what was
-  // typed. Blur text fields before the navigation renders; other controls keep their focus.
+  // Changing sections or scope can unmount a focused field without a React blur event.
+  // Blur before navigation renders so commit-on-blur rows save their drafts.
   // Not onBeforeNavigate: the router skips it while a past redirect is still recorded.
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- router listener that blurs a field before navigation unmounts it
   useEffect(
     () =>
-      router.subscribe("onBeforeLoad", ({ pathChanged }) => {
+      router.subscribe("onBeforeLoad", ({ pathChanged, fromLocation, toLocation }) => {
+        const searchChanged = fromLocation?.searchStr !== toLocation.searchStr;
         const focused = document.activeElement;
-        if (pathChanged && focused?.matches("input, textarea, [contenteditable]")) {
+        if (
+          (pathChanged || searchChanged) &&
+          focused?.matches("input, textarea, [contenteditable]")
+        ) {
           blurFocusedWithin(popupRef.current);
         }
       }),

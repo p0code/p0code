@@ -56,6 +56,35 @@ describe("AppRouteModal", () => {
     expect(onCommit).toHaveBeenCalledWith("Keep titles short");
   });
 
+  it("commits a focused field before Back changes the scope on the same path", async () => {
+    const onCommit = vi.fn();
+    function SettingsRoute() {
+      const machine = useLocation({
+        select: (location) => new URLSearchParams(location.searchStr).get("machine"),
+      });
+      return (
+        <AppRouteModal label="Settings">
+          <p>Machine {machine}</p>
+          <CommitOnBlurField key={machine} onCommit={(value) => onCommit(machine, value)} />
+        </AppRouteModal>
+      );
+    }
+    await using screen = await render(<SettingsRoute />, { router: "/settings/general?machine=a" });
+    await screen.router!.navigate({ href: "/settings/general?machine=b" });
+    await expect.element(page.getByText("Machine b")).toBeVisible();
+    const field = page.getByRole("textbox", { name: "Instructions" });
+    const text = "Keep titles short";
+    await field.fill(text);
+    await expect.element(field).toHaveFocus();
+    expect(onCommit).not.toHaveBeenCalled();
+
+    screen.router!.history.back();
+
+    await expect.element(page.getByText("Machine a")).toBeVisible();
+    await expect.element(field).toHaveValue("");
+    expect(onCommit).toHaveBeenCalledExactlyOnceWith("b", text);
+  });
+
   it("returns focus to the opener when Esc closes it", async () => {
     const opener = <button type="button">Open usage</button>;
     await using screen = await render(opener, { router: "/" });
