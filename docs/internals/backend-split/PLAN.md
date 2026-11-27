@@ -28,6 +28,7 @@ Rewriting everything at once is not realistic. So:
 
 ```
 p0d serve --home <dir> [--host 127.0.0.1] [--port 0] [--ready-file <path>] [--legacy-server <cmd>]
+          [--desktop-bootstrap-secret-file <path>]
 p0d version
 p0d service install|uninstall|start|stop|status   # launchd (mac), systemd --user (linux), Task Scheduler/service (windows)
 ```
@@ -37,6 +38,10 @@ p0d service install|uninstall|start|stop|status   # launchd (mac), systemd --use
   and answers `GET /healthz` with 200.
 - `--legacy-server` is the command that starts the Node sidecar. Packaging fills it in. Unset means
   run with no sidecar (unported methods fail).
+- `--desktop-bootstrap-secret-file` names the GUI's desktop secret (base64url text of at least 32
+  bytes, mode 0600 on macOS/Linux). p0d reads it once at startup and refuses to start if it is
+  missing, empty, too short or readable by others; rotating it means restarting p0d. With it, p0d
+  signs the desktop in on `/oauth/token` without the sidecar (PROTOCOL.md §2.5, §6).
 
 ## Desktop split
 
