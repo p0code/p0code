@@ -35,7 +35,6 @@ import { removeObsoleteRouteSecrets, routeSecret } from "./routeSecret.ts";
 
 const NO_STORE = { "cache-control": "no-store", pragma: "no-cache" };
 const ROUTE_SECRET_HEADER = "x-p0code-plugin-route-secret";
-// Switch to AuthPluginsManageScope (`plugins:manage`) once fix/plugins-relay-scope lands.
 const PLUGIN_HTTP_REQUIRED_SCOPE = AuthRelayConfigureScope;
 
 // Provide outside HttpRouter.serve so its logger and root request spans share these names.
