@@ -6,6 +6,8 @@ import {
   AuthOrchestrationReadScope,
   AuthPluginsManageScope,
   AuthRelayConfigureScope,
+  AuthRelayReadScope,
+  AuthRelayWriteScope,
   AuthStandardClientScopes,
 } from "@t3tools/contracts";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
@@ -14,12 +16,14 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
+import * as SqlClient from "effect/sql/SqlClient";
 import * as TestClock from "effect/testing/TestClock";
 
 import * as ServerConfig from "../config.ts";
 import { makeDpopKey } from "./dpop.testkit.ts";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import { runMigrations } from "../persistence/Migrations.ts";
+import migration123 from "../persistence/Migrations/123_AuthPluginsManageScope.ts";
 import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import * as EnvironmentAuth from "./EnvironmentAuth.ts";
 import * as PairingGrantStore from "./PairingGrantStore.ts";
@@ -627,6 +631,163 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodePlatformCrypto.layer))(
             ),
           ),
         ),
+    );
+
+    it.effect(
+      "migration 123 is idempotent, skips revoked/consumed/malformed/relay-only rows, and upgrades dev token sessions",
+      () =>
+        Effect.gen(function* () {
+          const auth = yield* EnvironmentAuth.EnvironmentAuth;
+          const sessions = yield* SessionStore.SessionStore;
+          const links = yield* PairingGrantStore.PairingGrantStore;
+          const sql = yield* SqlClient.SqlClient;
+          const legacyOwnerScopes = [...AuthStandardClientScopes, AuthRelayConfigureScope];
+          const legacyOwnerJson = JSON.stringify(legacyOwnerScopes);
+
+          const devParent = yield* sessions.issue({
+            subject: "reusable-dev-token",
+            scopes: legacyOwnerScopes,
+          });
+          const devChild = yield* sessions.issue({
+            subject: "reusable-dev-token-child",
+            scopes: legacyOwnerScopes,
+          });
+          const relayConfigureOnly = yield* sessions.issue({
+            subject: "desktop-bootstrap",
+            scopes: [AuthRelayConfigureScope],
+          });
+          const relayBundle = yield* sessions.issue({
+            subject: "desktop-bootstrap",
+            scopes: [AuthRelayReadScope, AuthRelayWriteScope, AuthRelayConfigureScope],
+          });
+          const revokedOwner = yield* sessions.issue({
+            subject: "desktop-bootstrap",
+            scopes: legacyOwnerScopes,
+          });
+          yield* sessions.revoke(revokedOwner.sessionId);
+
+          const revokedLink = yield* links.issueOneTimeToken({
+            subject: "administrative-bootstrap",
+            scopes: legacyOwnerScopes,
+          });
+          yield* links.revoke(revokedLink.id);
+          const consumedLink = yield* links.issueOneTimeToken({
+            subject: "administrative-bootstrap",
+            scopes: legacyOwnerScopes,
+          });
+          yield* sql`
+            UPDATE auth_pairing_links
+            SET consumed_at = '2026-01-01T00:00:00.000Z'
+            WHERE id = ${consumedLink.id}
+          `;
+
+          // Malformed and empty scopes JSON must not fail or be mutated.
+          yield* sql`
+            INSERT INTO auth_sessions (
+              session_id, subject, scopes, method, issued_at, expires_at
+            ) VALUES
+              ('empty-scopes-session', 'desktop-bootstrap', '', 'bearer-access-token', '2026-01-01T00:00:00.000Z', '2099-01-01T00:00:00.000Z'),
+              ('invalid-json-session', 'desktop-bootstrap', '{not-json', 'bearer-access-token', '2026-01-01T00:00:00.000Z', '2099-01-01T00:00:00.000Z')
+          `;
+          yield* sql`
+            INSERT INTO auth_pairing_links (
+              id, credential, method, scopes, subject, created_at, expires_at
+            ) VALUES
+              ('empty-scopes-link', 'cred-empty', 'one-time-token', '', 'administrative-bootstrap', '2026-01-01T00:00:00.000Z', '2099-01-01T00:00:00.000Z'),
+              ('invalid-json-link', 'cred-invalid', 'one-time-token', '{not-json', 'administrative-bootstrap', '2026-01-01T00:00:00.000Z', '2099-01-01T00:00:00.000Z')
+          `;
+
+          // Run migration 123 twice to verify idempotency.
+          yield* runMigrations();
+          yield* migration123;
+
+          const verifyBearer = (token: string) =>
+            auth.authenticateHttpRequest(makeBearerRequest(token));
+          expect((yield* verifyBearer(devParent.token)).scopes).toEqual(
+            AuthAdministrativeClientScopes,
+          );
+          expect((yield* verifyBearer(devChild.token)).scopes).toEqual(
+            AuthAdministrativeClientScopes,
+          );
+          expect((yield* verifyBearer(relayConfigureOnly.token)).scopes).toEqual([
+            AuthRelayConfigureScope,
+          ]);
+          expect((yield* verifyBearer(relayBundle.token)).scopes).toEqual([
+            AuthRelayReadScope,
+            AuthRelayWriteScope,
+            AuthRelayConfigureScope,
+          ]);
+
+          const sessionScopes = (id: string) =>
+            sql<{ readonly scopes: string }>`
+              SELECT scopes FROM auth_sessions WHERE session_id = ${id}
+            `.pipe(Effect.map((rows) => rows[0]?.scopes));
+          const linkScopes = (id: string) =>
+            sql<{ readonly scopes: string }>`
+              SELECT scopes FROM auth_pairing_links WHERE id = ${id}
+            `.pipe(Effect.map((rows) => rows[0]?.scopes));
+
+          expect(yield* sessionScopes(revokedOwner.sessionId)).toBe(legacyOwnerJson);
+          expect(yield* sessionScopes("empty-scopes-session")).toBe("");
+          expect(yield* sessionScopes("invalid-json-session")).toBe("{not-json");
+          expect(yield* linkScopes(revokedLink.id)).toBe(legacyOwnerJson);
+          expect(yield* linkScopes(consumedLink.id)).toBe(legacyOwnerJson);
+          expect(yield* linkScopes("empty-scopes-link")).toBe("");
+          expect(yield* linkScopes("invalid-json-link")).toBe("{not-json");
+        }).pipe(
+          Effect.provide(
+            layerEnvironmentAuth(
+              undefined,
+              Layer.provideMerge(
+                Layer.effectDiscard(runMigrations({ toMigrationInclusive: 122 })),
+                NodeSqliteClient.layer({ filename: ":memory:" }),
+              ),
+            ),
+          ),
+        ),
+    );
+
+    it.effect("migration 123 safely skips NULL scopes rows", () =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        yield* sql`
+          CREATE TABLE auth_sessions (
+            session_id TEXT PRIMARY KEY,
+            subject TEXT NOT NULL,
+            scopes TEXT,
+            revoked_at TEXT
+          )
+        `;
+        yield* sql`
+          CREATE TABLE auth_pairing_links (
+            id TEXT PRIMARY KEY,
+            subject TEXT NOT NULL,
+            scopes TEXT,
+            consumed_at TEXT,
+            revoked_at TEXT
+          )
+        `;
+        yield* sql`
+          INSERT INTO auth_sessions (session_id, subject, scopes, revoked_at)
+          VALUES ('null-session', 'desktop-bootstrap', NULL, NULL)
+        `;
+        yield* sql`
+          INSERT INTO auth_pairing_links (id, subject, scopes, consumed_at, revoked_at)
+          VALUES ('null-link', 'administrative-bootstrap', NULL, NULL, NULL)
+        `;
+
+        yield* migration123;
+        yield* migration123;
+
+        const sessionRows = yield* sql<{ readonly scopes: string | null }>`
+          SELECT scopes FROM auth_sessions WHERE session_id = 'null-session'
+        `;
+        const linkRows = yield* sql<{ readonly scopes: string | null }>`
+          SELECT scopes FROM auth_pairing_links WHERE id = 'null-link'
+        `;
+        expect(sessionRows[0]?.scopes).toBeNull();
+        expect(linkRows[0]?.scopes).toBeNull();
+      }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
     );
 
     it.effect("rotates desktop bearer sessions without accumulating authorized clients", () =>

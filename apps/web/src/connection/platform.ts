@@ -434,7 +434,7 @@ const loadPrimaryConnectionRegistration = Effect.fn(
   });
 });
 
-const loadSecondaryConnectionRegistration = Effect.fn(
+export const loadSecondaryConnectionRegistration = Effect.fn(
   "web.connectionPlatform.loadSecondaryConnectionRegistration",
 )(function* (entry: DesktopEnvironmentBootstrap) {
   if (

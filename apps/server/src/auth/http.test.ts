@@ -346,6 +346,26 @@ it.effect("lets owners request plugins:manage on /oauth/token while denying non-
           );
           expect(nonOwnerCombined.status).toBe(200);
           expect(await nonOwnerCombined.json()).toMatchObject({ scope: "orchestration:read" });
+
+          const pairingRejectsPluginScope = await environment.handler(
+            postJson(
+              "/api/auth/pairing-token",
+              { scopes: [AuthPluginsManageScope] },
+              { cookie: ownerCookie },
+            ),
+            requestContext,
+          );
+          expect(pairingRejectsPluginScope.status).toBe(400);
+
+          const pairingRejectsCombinedPluginScope = await environment.handler(
+            postJson(
+              "/api/auth/pairing-token",
+              { scopes: ["orchestration:read", AuthPluginsManageScope] },
+              { cookie: ownerCookie },
+            ),
+            requestContext,
+          );
+          expect(pairingRejectsCombinedPluginScope.status).toBe(400);
         }),
       (environment) => Effect.promise(() => environment.dispose()),
     );
