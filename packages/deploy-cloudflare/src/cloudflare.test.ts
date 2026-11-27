@@ -12,6 +12,7 @@ import { assert, describe, it } from "@effect/vitest";
 import type { PluginError, StartedDeployProvider } from "@t3tools/plugin-api";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
+import * as Logger from "effect/Logger";
 import * as Stream from "effect/Stream";
 
 import {
@@ -661,6 +662,73 @@ describe("Pages", () => {
           source: { kind: "local-build", projectRoot: projectDir, directory: distDir },
         });
         assert.deepStrictEqual(Object.keys(manifest), ["/index.html"]);
+      }).pipe(Effect.scoped),
+  );
+
+  it.effect(
+    "excludes secret dotfiles and key files from Cloudflare Pages uploads and logs a warning listing them",
+    () =>
+      Effect.gen(function* () {
+        const tmpDir = yield* Effect.promise(() =>
+          NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "cf-pages-secrets-")),
+        );
+        yield* Effect.addFinalizer(() =>
+          Effect.promise(() => NodeFSP.rm(tmpDir, { recursive: true, force: true })),
+        );
+        yield* Effect.promise(async () => {
+          await NodeFSP.mkdir(NodePath.join(tmpDir, ".ssh"), { recursive: true });
+          await NodeFSP.mkdir(NodePath.join(tmpDir, ".aws"), { recursive: true });
+          await NodeFSP.writeFile(NodePath.join(tmpDir, "index.html"), "<h1>Safe</h1>");
+          await NodeFSP.writeFile(NodePath.join(tmpDir, ".env"), "SECRET=1");
+          await NodeFSP.writeFile(NodePath.join(tmpDir, ".env.local"), "SECRET=2");
+          await NodeFSP.writeFile(NodePath.join(tmpDir, ".dev.vars"), "CF_SECRET=3");
+          await NodeFSP.writeFile(NodePath.join(tmpDir, ".npmrc"), "//registry/:_authToken=x");
+          await NodeFSP.writeFile(NodePath.join(tmpDir, ".netrc"), "password x");
+          await NodeFSP.writeFile(NodePath.join(tmpDir, "cert.pem"), "PEM");
+          await NodeFSP.writeFile(NodePath.join(tmpDir, "server.key"), "KEY");
+          await NodeFSP.writeFile(NodePath.join(tmpDir, "id_rsa"), "RSA");
+          await NodeFSP.writeFile(NodePath.join(tmpDir, ".ssh", "id_rsa"), "SSH");
+          await NodeFSP.writeFile(NodePath.join(tmpDir, ".aws", "credentials"), "AWS");
+        });
+
+        let manifest: Record<string, string> = {};
+        const warnings: Array<string> = [];
+        const captureLogger = Logger.make(({ message }) => {
+          warnings.push(String(message));
+        });
+
+        const provider = yield* startWithHandler((req) => {
+          if (req.url.endsWith("/upload-token")) return cfSuccess({ jwt: "jwt-1" });
+          if (req.url.endsWith("/pages/assets/check-missing")) return cfSuccess([]);
+          if (req.url.endsWith("/pages/assets/upsert-hashes")) return cfSuccess(null);
+          if (req.method === "POST" && req.url.endsWith("/deployments")) {
+            if (req.body._tag === "FormData") {
+              const raw = req.body.formData.get("manifest");
+              if (typeof raw === "string") manifest = JSON.parse(raw) as Record<string, string>;
+            }
+            return cfSuccess({ ...FIXTURE_PAGES_DEPLOYMENT_READY, id: "dep-clean" });
+          }
+          return cfError([{ code: 404, message: `unmatched ${req.url}` }], 404);
+        }, linkedStorage()).start;
+
+        yield* provider
+          .deploy({
+            account: TEST_ACCOUNT,
+            target: { kind: "pages", id: "pages:marketing-site" },
+            environment: "production",
+            source: { kind: "local-build", projectRoot: tmpDir, directory: tmpDir },
+          })
+          .pipe(Effect.provide(Logger.layer([captureLogger])));
+
+        assert.deepStrictEqual(Object.keys(manifest), ["/index.html"]);
+        const warningText = warnings.join("\n");
+        assert.include(warningText, ".env");
+        assert.include(warningText, ".dev.vars");
+        assert.include(warningText, ".npmrc");
+        assert.include(warningText, "cert.pem");
+        assert.include(warningText, "id_rsa");
+        assert.include(warningText, ".ssh");
+        assert.include(warningText, ".aws");
       }).pipe(Effect.scoped),
   );
 });

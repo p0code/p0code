@@ -18,6 +18,7 @@ import * as HttpClient from "effect/http/HttpClient";
 import type * as HttpClientRequest from "effect/http/HttpClientRequest";
 import * as HttpClientResponse from "effect/http/HttpClientResponse";
 import * as Layer from "effect/Layer";
+import * as Logger from "effect/Logger";
 import * as Option from "effect/Option";
 import * as Stream from "effect/Stream";
 
@@ -976,6 +977,76 @@ describe("account isolation and env targets", () => {
           payload.files?.map((file) => file.file),
           ["index.html"],
         );
+      }).pipe(Effect.scoped),
+  );
+
+  it.effect(
+    "excludes secret dotfiles and key files from local-build uploads and logs a warning listing them",
+    () =>
+      Effect.gen(function* () {
+        const fixture = makeStandardFixture();
+        const http = makeFakeHttpLayer(fixture.handler);
+        const { storage } = fakeStorage();
+        const warnings: Array<string> = [];
+        const captureLogger = Logger.make(({ message }) => {
+          warnings.push(String(message));
+        });
+
+        const tmpDir = yield* Effect.promise(() =>
+          NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "p0-vercel-secrets-")),
+        );
+        yield* Effect.addFinalizer(() =>
+          Effect.promise(() => NodeFSP.rm(tmpDir, { recursive: true, force: true })),
+        );
+        yield* Effect.promise(async () => {
+          await NodeFSP.mkdir(NodePath.join(tmpDir, ".ssh"), { recursive: true });
+          await NodeFSP.mkdir(NodePath.join(tmpDir, ".aws"), { recursive: true });
+          await NodeFSP.mkdir(NodePath.join(tmpDir, ".git"), { recursive: true });
+          await NodeFSP.writeFile(NodePath.join(tmpDir, "index.html"), "<h1>Public</h1>");
+          await NodeFSP.writeFile(NodePath.join(tmpDir, ".env"), "SECRET=1");
+          await NodeFSP.writeFile(NodePath.join(tmpDir, ".env.production"), "SECRET=2");
+          await NodeFSP.writeFile(NodePath.join(tmpDir, ".dev.vars"), "CF_SECRET=3");
+          await NodeFSP.writeFile(NodePath.join(tmpDir, ".npmrc"), "//registry/:_authToken=x");
+          await NodeFSP.writeFile(NodePath.join(tmpDir, ".netrc"), "password x");
+          await NodeFSP.writeFile(NodePath.join(tmpDir, "tls.pem"), "PEM");
+          await NodeFSP.writeFile(NodePath.join(tmpDir, "private.key"), "KEY");
+          await NodeFSP.writeFile(NodePath.join(tmpDir, "id_rsa"), "RSA");
+          await NodeFSP.writeFile(NodePath.join(tmpDir, ".ssh", "id_ed25519"), "SSH");
+          await NodeFSP.writeFile(NodePath.join(tmpDir, ".aws", "credentials"), "AWS");
+          await NodeFSP.writeFile(NodePath.join(tmpDir, ".git", "config"), "GIT");
+        });
+
+        const provider = yield* createVercelDeployProvider({ storage }).pipe(
+          Effect.provide(makeTestPlatform(http.layer)),
+        );
+        yield* provider.link({ account: TEST_ACCOUNT, token: TEST_TOKEN });
+        yield* provider
+          .deploy({
+            account: TEST_ACCOUNT,
+            target: { kind: "vercel-project", id: "prj_static_2" },
+            source: { kind: "local-build", projectRoot: tmpDir, directory: tmpDir },
+            environment: "production",
+          })
+          .pipe(Effect.provide(Logger.layer([captureLogger])));
+
+        const createReq = http.requests.find(
+          (req) => req.method === "POST" && req.url.pathname === "/v13/deployments",
+        );
+        const payload = JSON.parse(createReq?.bodyText ?? "{}") as {
+          readonly files?: ReadonlyArray<{ readonly file: string }>;
+        };
+        assert.deepStrictEqual(
+          payload.files?.map((file) => file.file),
+          ["index.html"],
+        );
+        const warningText = warnings.join("\n");
+        assert.include(warningText, ".env");
+        assert.include(warningText, ".dev.vars");
+        assert.include(warningText, ".npmrc");
+        assert.include(warningText, "tls.pem");
+        assert.include(warningText, "id_rsa");
+        assert.include(warningText, ".ssh");
+        assert.include(warningText, ".aws");
       }).pipe(Effect.scoped),
   );
 });

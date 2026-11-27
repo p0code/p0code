@@ -17,6 +17,37 @@ import {
 } from "./wranglerConfig.ts";
 
 const IGNORED_ENTRIES = new Set([".git", "node_modules", ".DS_Store"]);
+const EXCLUDED_SECRET_DIRS = new Set([
+  ".ssh",
+  ".aws",
+  ".gnupg",
+  ".gcloud",
+  ".azure",
+  ".kube",
+  ".wrangler",
+  ".vercel",
+]);
+const EXCLUDED_SECRET_FILES = new Set([
+  ".npmrc",
+  ".netrc",
+  ".yarnrc",
+  ".yarnrc.yml",
+  ".pypirc",
+  ".dockercfg",
+  ".pgpass",
+  ".htpasswd",
+  ".credentials",
+  "credentials.json",
+]);
+
+function isExcludedSecretEntry(name: string): boolean {
+  const lower = name.toLowerCase();
+  if (EXCLUDED_SECRET_DIRS.has(lower) || EXCLUDED_SECRET_FILES.has(lower)) return true;
+  if (/^\.env(?:\..+)?$/.test(lower) || /^\.dev\.vars(?:\..+)?$/.test(lower)) return true;
+  if (/^id_(?:rsa|ed25519|ecdsa|dsa)(?:\..+)?$/.test(lower)) return true;
+  if (/\.(?:pem|key|p12|pfx|jks|keystore|kdbx)$/.test(lower)) return true;
+  return false;
+}
 
 const CONTENT_TYPES: Readonly<Record<string, string>> = {
   ".html": "text/html; charset=utf-8",
@@ -129,6 +160,7 @@ export const collectPagesAssets = Effect.fn("deployFiles.collectPagesAssets")(fu
   }
 
   const assets: Array<CollectedPageAsset> = [];
+  const excludedFiles: Array<string> = [];
   const queue: Array<string> = [rootDir];
   const visitedDirs = new Set<string>([rootDir]);
 
@@ -144,6 +176,11 @@ export const collectPagesAssets = Effect.fn("deployFiles.collectPagesAssets")(fu
     for (const entry of [...entries].sort()) {
       if (IGNORED_ENTRIES.has(entry)) continue;
       const fullPath = path.join(current, entry);
+      if (isExcludedSecretEntry(entry)) {
+        const relExcluded = path.relative(rootDir, fullPath).split(path.sep).join("/");
+        excludedFiles.push(relExcluded);
+        continue;
+      }
       const info = yield* fs
         .lstat(fullPath)
         .pipe(
@@ -195,9 +232,25 @@ export const collectPagesAssets = Effect.fn("deployFiles.collectPagesAssets")(fu
     }
   }
 
+  if (excludedFiles.length > 0) {
+    const preview = excludedFiles.slice(0, 20);
+    const suffix =
+      excludedFiles.length > preview.length
+        ? ` (+${excludedFiles.length - preview.length} more)`
+        : "";
+    yield* Effect.logWarning(
+      `Excluded ${excludedFiles.length} sensitive file(s) from Cloudflare Pages local-build upload: ${preview.join(", ")}${suffix}`,
+      { provider: "cloudflare", excludedCount: excludedFiles.length, excludedFiles: preview },
+    );
+  }
+
   if (assets.length === 0) {
+    const detail =
+      excludedFiles.length > 0
+        ? ` Excluded sensitive files: ${excludedFiles.slice(0, 20).join(", ")}.`
+        : "";
     return yield* new PluginError({
-      message: `Build directory "${directory}" contains no uploadable files.`,
+      message: `Build directory "${directory}" contains no uploadable files.${detail}`,
     });
   }
 
