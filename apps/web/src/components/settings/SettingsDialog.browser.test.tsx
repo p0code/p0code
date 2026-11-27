@@ -100,10 +100,10 @@ function createSettingsModalRouter(initialPath: string) {
           label="Settings"
           popupClassName="sm:max-h-[min(80dvh,60rem)] sm:max-w-[68rem]"
         >
-          <div className="relative flex min-h-0 flex-1">
+          <div className="relative flex min-h-0 flex-1 [--settings-header-height:3rem]">
             <SettingsSidebarNav pathname={navPathname} />
             <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-              <header className="flex h-12 shrink-0 items-center gap-3 border-b ps-5 pe-2">
+              <header className="flex h-(--settings-header-height) shrink-0 items-center gap-3 border-b ps-5 pe-2">
                 <SettingsBreadcrumb pathname={pathname} />
                 <div className="ms-auto flex shrink-0 items-center gap-1">
                   <AppRouteModalClose />
@@ -215,6 +215,43 @@ describe("Settings centered dialog", () => {
     });
     await expect.element(page.getByRole("dialog", { name: "Settings" })).not.toBeInTheDocument();
     await vi.waitFor(() => expect(router.state.location.pathname).toBe(THREAD_PATH));
+  });
+
+  it.each([390, 700])("keeps the header usable during search at %ipx", async (width) => {
+    await page.viewport(width, 844);
+    const router = createSettingsModalRouter("/settings/general");
+    await router.load();
+    using _tracking = { [Symbol.dispose]: startMainAppLocationTracking(router) };
+    // Use the Settings modal route tree to exercise the dialog and its sidebar together.
+    await using _screen = await render(<RouterProvider router={router} />, { router: false });
+
+    const dialog = page.getByRole("dialog", { name: "Settings" });
+    const searchButton = page.getByRole("button", { name: "Search settings" });
+    const search = page.getByRole("combobox", { name: "Search settings" });
+    await expect.element(dialog).toHaveFocus();
+    await userEvent.click(searchButton);
+    await expect.element(search).toHaveFocus();
+
+    await search.fill("theme");
+    await userEvent.keyboard("{Escape}");
+    await expect.element(search).toHaveValue("");
+    await expect.element(search).toHaveFocus();
+    await userEvent.keyboard("{Escape}");
+    await expect.element(dialog).toHaveAttribute("data-open");
+    await expect.element(searchButton).toHaveFocus();
+    expect(search.query()).toBeNull();
+
+    await userEvent.keyboard("/");
+    await expect.element(search).toHaveFocus();
+    await search.fill("theme");
+    const close = page.getByRole("button", { name: "Close" });
+    const header = close.element().closest("header")!;
+    const nav = page.getByRole("navigation", { name: "Settings sections" }).element();
+    expect(nav.getBoundingClientRect().top).toBeGreaterThanOrEqual(
+      header.getBoundingClientRect().bottom - 1,
+    );
+    await userEvent.click(close);
+    await expect.element(dialog).not.toBeInTheDocument();
   });
 
   it("traps focus inside the dialog", async () => {

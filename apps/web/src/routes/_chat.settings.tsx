@@ -144,10 +144,10 @@ function SettingsContentLayout() {
       label={gt("Settings")}
       popupClassName="sm:max-h-[min(80dvh,60rem)] sm:max-w-[68rem]"
     >
-      <div className="relative flex min-h-0 flex-1">
+      <div className="relative flex min-h-0 flex-1 [--settings-header-height:3rem]">
         <SettingsSidebarNav pathname={navPathname} />
         <div {...contentArea} className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <header className="flex h-12 shrink-0 items-center gap-3 border-b ps-5 pe-2">
+          <header className="flex h-(--settings-header-height) shrink-0 items-center gap-3 border-b ps-5 pe-2">
             <SettingsBreadcrumb pathname={pathname} />
             <div className="ms-auto flex shrink-0 items-center gap-1">
               {pathname === "/settings/general" ? (
