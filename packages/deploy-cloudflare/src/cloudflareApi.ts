@@ -4,6 +4,7 @@
  * Ported from https://github.com/p0code/deploy-cloudflare (v0.3.0)
  */
 import { PluginError } from "@t3tools/plugin-api";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
@@ -13,6 +14,7 @@ import { redactSecrets, safeErrorMessage } from "./redact.ts";
 import type { WorkerBinding } from "./wranglerConfig.ts";
 
 const CLOUDFLARE_API_BASE = "https://api.cloudflare.com/client/v4";
+const REQUEST_TIMEOUT = Duration.seconds(20);
 
 export class CloudflareApiError extends Schema.TaggedError<CloudflareApiError>()(
   "CloudflareApiError",
@@ -276,6 +278,7 @@ const sendRequest = Effect.fn("cloudflareApi.sendRequest")(function* <A, I>(
   const authed = HttpClientRequest.bearerToken(request, options.token);
 
   const response = yield* client.execute(authed).pipe(
+    Effect.timeout(REQUEST_TIMEOUT),
     Effect.mapError(
       (cause) =>
         new CloudflareApiError({
@@ -290,6 +293,7 @@ const sendRequest = Effect.fn("cloudflareApi.sendRequest")(function* <A, I>(
   );
 
   const rawText = yield* response.text.pipe(
+    Effect.timeout(REQUEST_TIMEOUT),
     Effect.mapError(
       (cause) =>
         new CloudflareApiError({

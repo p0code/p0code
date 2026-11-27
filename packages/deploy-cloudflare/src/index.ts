@@ -43,6 +43,11 @@ const CLOUDFLARE_PROVIDER_DESCRIPTOR: DeployProviderDescriptor = {
 
 export interface CreateCloudflareDeployProviderOptions {
   readonly storage: DeployProviderStorage;
+  readonly logsPollIntervalMs?: number;
+  readonly logsMaxPolls?: number;
+  readonly maxLogLines?: number;
+  readonly maxPagesFiles?: number;
+  readonly maxPagesBytes?: number;
 }
 
 /**
@@ -57,7 +62,7 @@ export const createCloudflareDeployProvider = Effect.fn("createCloudflareDeployP
     never,
     HttpClient.HttpClient | FileSystem.FileSystem | Path.Path | Digest.Digest
   > {
-    const provider = yield* makeCloudflareProvider(options.storage);
+    const provider = yield* makeCloudflareProvider(options);
     return checkDeployProvider(CLOUDFLARE_PROVIDER_DESCRIPTOR, provider);
   },
 );

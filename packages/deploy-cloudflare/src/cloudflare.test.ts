@@ -12,8 +12,12 @@ import { assert, describe, it } from "@effect/vitest";
 import type { PluginError, StartedDeployProvider } from "@t3tools/plugin-api";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as HttpClient from "effect/http/HttpClient";
+import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
 import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
 
 import {
   FIXTURE_ACCOUNTS,
@@ -38,16 +42,24 @@ import {
   makeTestPlatform,
   type MockRouteHandler,
 } from "./fixtures.ts";
-import { CLOUDFLARE_PROVIDER_INFO, createCloudflareDeployProvider } from "./index.ts";
+import {
+  CLOUDFLARE_PROVIDER_INFO,
+  createCloudflareDeployProvider,
+  type CreateCloudflareDeployProviderOptions,
+} from "./index.ts";
 import { parseWranglerJsonc, parseWranglerToml } from "./wranglerConfig.ts";
 
 const TEST_ACCOUNT = { accountId: "fixture-account" };
 
 /** Creates the built-in Cloudflare provider against an in-memory HTTP client and storage. */
-function startWithHandler(handler: MockRouteHandler, initialStorage?: Record<string, string>) {
+function startWithHandler(
+  handler: MockRouteHandler,
+  initialStorage?: Record<string, string>,
+  extraOptions?: Omit<CreateCloudflareDeployProviderOptions, "storage">,
+) {
   const mock = makeMockHttpClient(handler);
   const store = fakeStorage(initialStorage);
-  const start = createCloudflareDeployProvider({ storage: store.storage }).pipe(
+  const start = createCloudflareDeployProvider({ storage: store.storage, ...extraOptions }).pipe(
     Effect.provide(makeTestPlatform(mock.layer)),
   );
   return { mock, store, start };
@@ -729,6 +741,96 @@ describe("Pages", () => {
         assert.include(warningText, "id_rsa");
         assert.include(warningText, ".ssh");
         assert.include(warningText, ".aws");
+      }).pipe(Effect.scoped),
+  );
+
+  it.effect(
+    "enforces file-count and total-byte limits on Pages uploads, times out hung requests, and caps log polling",
+    () =>
+      Effect.gen(function* () {
+        const tmpDir = yield* Effect.promise(() =>
+          NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "cf-pages-limits-")),
+        );
+        yield* Effect.addFinalizer(() =>
+          Effect.promise(() => NodeFSP.rm(tmpDir, { recursive: true, force: true })),
+        );
+        yield* Effect.promise(async () => {
+          await NodeFSP.writeFile(NodePath.join(tmpDir, "a.txt"), "a".repeat(60));
+          await NodeFSP.writeFile(NodePath.join(tmpDir, "b.txt"), "b".repeat(60));
+          await NodeFSP.writeFile(NodePath.join(tmpDir, "c.txt"), "c".repeat(60));
+        });
+
+        const fileCapped = yield* startWithHandler(() => cfSuccess(null), linkedStorage(), {
+          maxPagesFiles: 2,
+        }).start;
+        assert.include(
+          yield* failureOf(
+            fileCapped.deploy({
+              account: TEST_ACCOUNT,
+              target: { kind: "pages", id: "pages:marketing-site" },
+              environment: "production",
+              source: { kind: "local-build", projectRoot: tmpDir, directory: tmpDir },
+            }),
+          ),
+          "2-file upload limit",
+        );
+
+        const byteCapped = yield* startWithHandler(() => cfSuccess(null), linkedStorage(), {
+          maxPagesBytes: 100,
+        }).start;
+        assert.include(
+          yield* failureOf(
+            byteCapped.deploy({
+              account: TEST_ACCOUNT,
+              target: { kind: "pages", id: "pages:marketing-site" },
+              environment: "production",
+              source: { kind: "local-build", projectRoot: tmpDir, directory: tmpDir },
+            }),
+          ),
+          "100 bytes upload limit",
+        );
+
+        // Follow polling stops once logsMaxPolls or maxLogLines is reached.
+        let polls = 0;
+        const pollCapped = yield* startWithHandler(
+          (req) => {
+            if (req.url.endsWith("/history/logs")) return cfSuccess({ data: [] });
+            if (req.url.endsWith("/deployments/dep-stuck")) {
+              polls += 1;
+              return cfSuccess({
+                ...FIXTURE_PAGES_DEPLOYMENT_READY,
+                id: "dep-stuck",
+                latest_stage: { name: "build", status: "active" },
+              });
+            }
+            return cfError([{ code: 404, message: `unmatched ${req.url}` }], 404);
+          },
+          linkedStorage(),
+          { logsPollIntervalMs: 0, logsMaxPolls: 3 },
+        ).start;
+        yield* collect(
+          pollCapped.logs({
+            account: TEST_ACCOUNT,
+            deploymentId: "pages:marketing-site:dep-stuck",
+            follow: true,
+          }),
+        );
+        assert.strictEqual(polls, 3);
+
+        // Hung HTTP requests time out via Effect.timeout in cloudflareApi.
+        const hungHttp = Layer.succeed(
+          HttpClient.HttpClient,
+          HttpClient.make(() => Effect.never),
+        );
+        const store = fakeStorage(linkedStorage());
+        const hungProvider = yield* createCloudflareDeployProvider({
+          storage: store.storage,
+        }).pipe(Effect.provide(makeTestPlatform(hungHttp)));
+        const fiber = yield* Effect.forkChild(hungProvider.listProjects(TEST_ACCOUNT));
+        yield* TestClock.adjust("25 seconds");
+        const exit = yield* Fiber.await(fiber);
+        assert.isTrue(Exit.isFailure(exit));
+        assert.include(String(exit), "Failed to reach Cloudflare API");
       }).pipe(Effect.scoped),
   );
 });

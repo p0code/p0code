@@ -24,6 +24,7 @@ import type {
 import { PluginError } from "@t3tools/plugin-api";
 import type * as Digest from "effect/crypto/Digest";
 import * as DateTime from "effect/DateTime";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import type * as FileSystem from "effect/FileSystem";
 import type * as HttpClient from "effect/http/HttpClient";
@@ -33,7 +34,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 
 import * as Cf from "./cloudflareApi.ts";
-import { collectPagesAssets, loadWorkerBundle } from "./deployFiles.ts";
+import { collectPagesAssets, loadWorkerBundle, readPageAssetBase64 } from "./deployFiles.ts";
 import { redactSecrets } from "./redact.ts";
 
 /** Scopes a Cloudflare API token should grant depending on which products you deploy. */
@@ -48,7 +49,11 @@ const STORAGE_META_KEY = "account_meta";
 const storageKey = (account: DeployAccountRef, key: string) => `${account.accountId}:${key}`;
 
 const LINK_AGAIN = "Link Cloudflare again in Settings → Deploy with a new API token.";
-const LOG_POLL_INTERVAL = "3 seconds";
+const DEFAULT_LOG_POLL_INTERVAL_MS = 3_000;
+const DEFAULT_FOLLOW_MAX_POLLS = 240;
+const DEFAULT_MAX_LOG_LINES = 1_000;
+const UPLOAD_BATCH_MAX_FILES = 50;
+const UPLOAD_BATCH_MAX_BYTES = 10 * 1024 * 1024;
 
 const StoredAccountMeta = Schema.Struct({
   accountId: Schema.String,
@@ -144,9 +149,22 @@ const pagesDashboardUrl = (accountId: string, project: string, deploymentId: str
 const workerLogsDashboardUrl = (accountId: string, script: string) =>
   `https://dash.cloudflare.com/${encodeURIComponent(accountId)}/workers/services/view/${encodeURIComponent(script)}/production/observability/logs`;
 
+export interface CloudflareProviderOptions {
+  readonly storage: DeployProviderStorage;
+  readonly logsPollIntervalMs?: number;
+  readonly logsMaxPolls?: number;
+  readonly maxLogLines?: number;
+  readonly maxPagesFiles?: number;
+  readonly maxPagesBytes?: number;
+}
+
 export const makeCloudflareProvider = Effect.fn("CloudflareProvider.make")(function* (
-  storage: DeployProviderStorage,
+  options: CloudflareProviderOptions,
 ) {
+  const { storage } = options;
+  const logPollIntervalMs = options.logsPollIntervalMs ?? DEFAULT_LOG_POLL_INTERVAL_MS;
+  const followMaxPolls = options.logsMaxPolls ?? DEFAULT_FOLLOW_MAX_POLLS;
+  const maxLogLines = options.maxLogLines ?? DEFAULT_MAX_LOG_LINES;
   const pathService = yield* Path.Path;
   const services = yield* Effect.context<Lent>();
 
@@ -448,12 +466,13 @@ export const makeCloudflareProvider = Effect.fn("CloudflareProvider.make")(funct
     let manifest: Record<string, string> | undefined;
     if (input.source.kind === "local-build") {
       const directory = yield* requireBuildDirectory(input, "A Cloudflare Pages Direct Upload");
-      const assets = yield* collectPagesAssets(
-        directory,
-        input.source.projectRoot !== undefined
+      const assets = yield* collectPagesAssets(directory, {
+        ...(input.source.projectRoot !== undefined
           ? { projectRoot: input.source.projectRoot }
-          : undefined,
-      );
+          : {}),
+        ...(options.maxPagesFiles !== undefined ? { maxFiles: options.maxPagesFiles } : {}),
+        ...(options.maxPagesBytes !== undefined ? { maxTotalBytes: options.maxPagesBytes } : {}),
+      });
       const hashes = assets.map((asset) => asset.hash);
       const upload = yield* Cf.getPagesUploadToken(token, meta.accountId, project).pipe(
         Effect.mapError(cfError),
@@ -461,17 +480,39 @@ export const makeCloudflareProvider = Effect.fn("CloudflareProvider.make")(funct
       const missingHashes = new Set(
         yield* Cf.checkMissingPagesAssets(upload.jwt, hashes, token).pipe(Effect.mapError(cfError)),
       );
-      const toUpload = assets
-        .filter((asset) => missingHashes.has(asset.hash))
-        .map((asset) => ({
+      const missingAssets = assets.filter((asset) => missingHashes.has(asset.hash));
+      // Read and upload missing assets in bounded batches so peak memory stays small.
+      let batch: Array<Cf.PagesAssetUploadItem> = [];
+      let batchBytes = 0;
+      const flushBatch = () =>
+        batch.length === 0
+          ? Effect.void
+          : Cf.uploadPagesAssets(upload.jwt, batch, token).pipe(
+              Effect.mapError(cfError),
+              Effect.tap(() =>
+                Effect.sync(() => {
+                  batch = [];
+                  batchBytes = 0;
+                }),
+              ),
+            );
+      for (const asset of missingAssets) {
+        if (
+          batch.length >= UPLOAD_BATCH_MAX_FILES ||
+          (batch.length > 0 && batchBytes + asset.size > UPLOAD_BATCH_MAX_BYTES)
+        ) {
+          yield* flushBatch();
+        }
+        const base64 = yield* readPageAssetBase64(asset.filePath);
+        batch.push({
           key: asset.hash,
-          value: asset.base64,
+          value: base64,
           metadata: { contentType: asset.contentType },
           base64: true as const,
-        }));
-      if (toUpload.length > 0) {
-        yield* Cf.uploadPagesAssets(upload.jwt, toUpload, token).pipe(Effect.mapError(cfError));
+        });
+        batchBytes += asset.size;
       }
+      yield* flushBatch();
       yield* Cf.upsertPagesHashes(upload.jwt, hashes, token).pipe(Effect.mapError(cfError));
       manifest = Object.fromEntries(assets.map((asset) => [asset.routePath, asset.hash]));
     }
@@ -628,11 +669,19 @@ export const makeCloudflareProvider = Effect.fn("CloudflareProvider.make")(funct
 
           if (!input.follow) {
             const lines = yield* readLines;
-            return Stream.fromIterable(lines === null || lines.length === 0 ? [noLogs] : lines);
+            return Stream.fromIterable(
+              lines === null || lines.length === 0 ? [noLogs] : lines.slice(0, maxLogLines),
+            );
           }
 
-          // Follow: poll the build log and stop once the deployment settles.
-          const poll = Effect.fn("CloudflareProvider.pollPagesLogs")(function* (seen: number) {
+          interface PollState {
+            readonly seen: number;
+            readonly polls: number;
+            readonly emitted: number;
+          }
+
+          // Follow: poll the build log and stop once settled or poll/line caps are reached.
+          const poll = Effect.fn("CloudflareProvider.pollPagesLogs")(function* (state: PollState) {
             const lines = (yield* readLines) ?? [];
             const dep = yield* Cf.getPagesDeployment(
               token,
@@ -640,15 +689,29 @@ export const makeCloudflareProvider = Effect.fn("CloudflareProvider.make")(funct
               ref.name,
               ref.rawId,
             ).pipe(Effect.mapError(cfError));
-            const fresh = lines.slice(seen);
+            const remaining = Math.max(0, maxLogLines - state.emitted);
+            const fresh = lines.slice(state.seen, state.seen + remaining);
             const done = isFinal(pagesState(dep.latest_stage).state);
-            if (done && seen === 0 && lines.length === 0) {
-              return [[noLogs], Option.none()] as const;
+            if (done && state.seen === 0 && lines.length === 0) {
+              return [[noLogs], Option.none<PollState>()] as const;
             }
-            if (!done && fresh.length === 0) yield* Effect.sleep(LOG_POLL_INTERVAL);
-            return [fresh, done ? Option.none() : Option.some(seen + fresh.length)] as const;
+            const emitted = state.emitted + fresh.length;
+            const polls = state.polls + 1;
+            const capped = emitted >= maxLogLines || polls >= followMaxPolls;
+            if (!done && !capped && fresh.length === 0 && logPollIntervalMs > 0) {
+              yield* Effect.sleep(Duration.millis(logPollIntervalMs));
+            }
+            return [
+              fresh,
+              done || capped
+                ? Option.none<PollState>()
+                : Option.some<PollState>({ seen: state.seen + fresh.length, polls, emitted }),
+            ] as const;
           }, Effect.provideContext(services));
-          return Stream.paginate(0, poll);
+          return Stream.paginate<PollState, string, PluginError>(
+            { seen: 0, polls: 0, emitted: 0 },
+            poll,
+          );
         }),
       ),
     );

@@ -16,6 +16,9 @@ import {
   parseWranglerToml,
 } from "./wranglerConfig.ts";
 
+const MAX_PAGES_ASSET_FILES = 500;
+const MAX_PAGES_ASSET_BYTES = 50 * 1024 * 1024;
+const MAX_WORKER_SCRIPT_BYTES = 10 * 1024 * 1024;
 const IGNORED_ENTRIES = new Set([".git", "node_modules", ".DS_Store"]);
 const EXCLUDED_SECRET_DIRS = new Set([
   ".ssh",
@@ -100,10 +103,29 @@ function guessContentType(relativePath: string): string {
 export interface CollectedPageAsset {
   /** Leading-slash POSIX path expected in Cloudflare Pages manifests, e.g. `/index.html`. */
   readonly routePath: string;
+  /** Canonical path on disk, read on demand only when Cloudflare reports the hash missing. */
+  readonly filePath: string;
   readonly hash: string;
-  readonly base64: string;
+  readonly size: number;
   readonly contentType: string;
 }
+
+export const readPageAssetBase64 = Effect.fn("deployFiles.readPageAssetBase64")(function* (
+  filePath: string,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const bytes = yield* fs
+    .readFile(filePath)
+    .pipe(
+      Effect.mapError(
+        () => new PluginError({ message: `Could not read asset file for upload: ${filePath}` }),
+      ),
+    );
+  return encodeBase64(bytes);
+});
+
+const formatByteLimit = (bytes: number): string =>
+  bytes >= 1024 * 1024 ? `${Math.round(bytes / (1024 * 1024))} MiB` : `${bytes} bytes`;
 
 const isInsideDir = (path: Path.Path, baseDir: string, candidate: string): boolean => {
   const rel = path.relative(baseDir, candidate);
@@ -112,15 +134,21 @@ const isInsideDir = (path: Path.Path, baseDir: string, candidate: string): boole
 
 /**
  * Recursively collects regular files inside a local build directory for Cloudflare Pages
- * Direct Upload. Enforces realPath containment and skips symbolic links.
+ * Direct Upload. Enforces realPath containment, file/byte caps, and skips symbolic links.
  */
 export const collectPagesAssets = Effect.fn("deployFiles.collectPagesAssets")(function* (
   directory: string,
-  options?: { readonly projectRoot?: string },
+  options?: {
+    readonly projectRoot?: string;
+    readonly maxFiles?: number;
+    readonly maxTotalBytes?: number;
+  },
 ) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const digest = yield* Digest.Digest;
+  const maxFiles = options?.maxFiles ?? MAX_PAGES_ASSET_FILES;
+  const maxTotalBytes = options?.maxTotalBytes ?? MAX_PAGES_ASSET_BYTES;
 
   const resolvedRoot = path.resolve(directory);
   const rootDir = yield* fs
@@ -161,6 +189,7 @@ export const collectPagesAssets = Effect.fn("deployFiles.collectPagesAssets")(fu
 
   const assets: Array<CollectedPageAsset> = [];
   const excludedFiles: Array<string> = [];
+  let totalBytes = 0;
   const queue: Array<string> = [rootDir];
   const visitedDirs = new Set<string>([rootDir]);
 
@@ -210,6 +239,17 @@ export const collectPagesAssets = Effect.fn("deployFiles.collectPagesAssets")(fu
         continue;
       }
       if (info.type !== "File") continue;
+      if (assets.length >= maxFiles) {
+        return yield* new PluginError({
+          message: `Cloudflare Pages local build exceeds the ${maxFiles}-file upload limit.`,
+        });
+      }
+      const declaredSize = Number(info.size);
+      if (totalBytes + declaredSize > maxTotalBytes) {
+        return yield* new PluginError({
+          message: `Cloudflare Pages local build exceeds the ${formatByteLimit(maxTotalBytes)} upload limit.`,
+        });
+      }
       const bytes = yield* fs
         .readFile(entryReal)
         .pipe(
@@ -217,6 +257,12 @@ export const collectPagesAssets = Effect.fn("deployFiles.collectPagesAssets")(fu
             () => new PluginError({ message: `Could not read asset file: ${entry}` }),
           ),
         );
+      totalBytes += bytes.byteLength;
+      if (totalBytes > maxTotalBytes) {
+        return yield* new PluginError({
+          message: `Cloudflare Pages local build exceeds the ${formatByteLimit(maxTotalBytes)} upload limit.`,
+        });
+      }
       const rel = path.relative(rootDir, entryReal).split(path.sep).join("/");
       const routePath = `/${rel}`;
       const base64 = encodeBase64(bytes);
@@ -225,8 +271,9 @@ export const collectPagesAssets = Effect.fn("deployFiles.collectPagesAssets")(fu
       const fullHash = yield* digest.digestHex(Digest.sha256, hashInput);
       assets.push({
         routePath,
+        filePath: entryReal,
         hash: fullHash.slice(0, 32),
-        base64,
+        size: bytes.byteLength,
         contentType: guessContentType(rel),
       });
     }
@@ -423,6 +470,11 @@ export const loadWorkerBundle = Effect.fn("deployFiles.loadWorkerBundle")(functi
     if (stat.type !== "File") {
       return yield* new PluginError({
         message: `Worker entrypoint is not a regular file: ${label}`,
+      });
+    }
+    if (Number(stat.size) > MAX_WORKER_SCRIPT_BYTES) {
+      return yield* new PluginError({
+        message: `Worker entrypoint "${label}" exceeds the ${formatByteLimit(MAX_WORKER_SCRIPT_BYTES)} upload limit.`,
       });
     }
     return real;
