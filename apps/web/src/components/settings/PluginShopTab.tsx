@@ -169,7 +169,9 @@ export function PluginShopTab({
     ...(category ? { category } : {}),
     ...(installedOnly ? { installedOnly: true } : {}),
   };
-  const shop = useEnvironmentQuery(serverEnvironment.pluginsShopList({ environmentId, input }));
+  const shop = useEnvironmentQuery(
+    allowed ? serverEnvironment.pluginsShopList({ environmentId, input }) : null,
+  );
   const refresh = useAtomCommand(serverEnvironment.pluginsShopRefresh, { reportFailure: false });
   const install = useAtomCommand(serverEnvironment.pluginsShopInstall, { reportFailure: false });
   const update = useAtomCommand(serverEnvironment.pluginsShopUpdate, { reportFailure: false });
@@ -257,7 +259,7 @@ export function PluginShopTab({
           <T>Refresh</T>
         </Button>
       </div>
-      {shop.error ? <p role="alert">{m(pluginInstallError(shop.error))}</p> : null}
+      {shop.error ? <p role="alert">{m(pluginInstallError(shop.failure ?? shop.error))}</p> : null}
       {error ? (
         <p role="alert" className="text-sm text-destructive">
           {error}
@@ -372,7 +374,7 @@ function ShopEntryDialog({
   const gt = useGT();
   const m = useMessages();
   const detail = useEnvironmentQuery(
-    serverEnvironment.pluginsShopEntry({ environmentId, input: { id } }),
+    allowed ? serverEnvironment.pluginsShopEntry({ environmentId, input: { id } }) : null,
   );
   const install = useAtomCommand(serverEnvironment.pluginsShopInstall, { reportFailure: false });
   const update = useAtomCommand(serverEnvironment.pluginsShopUpdate, { reportFailure: false });
@@ -427,7 +429,9 @@ function ShopEntryDialog({
           </DialogHeader>
           <DialogPanel>
             <div className="space-y-4">
-              {detail.error ? <p role="alert">{m(pluginInstallError(detail.error))}</p> : null}
+              {detail.error ? (
+                <p role="alert">{m(pluginInstallError(detail.failure ?? detail.error))}</p>
+              ) : null}
               {error ? (
                 <p role="alert" className="text-sm text-destructive">
                   {error}

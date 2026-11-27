@@ -44,6 +44,7 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
   [WS_METHODS.dataRestorePending]: AuthPluginsManageScope,
   [WS_METHODS.dataRestoreApprove]: AuthPluginsManageScope,
   [WS_METHODS.dataRestoreCancel]: AuthPluginsManageScope,
+  [WS_METHODS.pluginsSubscribe]: AuthPluginsManageScope,
   [WS_METHODS.pluginsInstalledList]: AuthPluginsManageScope,
   [WS_METHODS.pluginsShopList]: AuthPluginsManageScope,
   [WS_METHODS.pluginsShopEntry]: AuthPluginsManageScope,

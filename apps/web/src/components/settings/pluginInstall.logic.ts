@@ -1,7 +1,17 @@
+import { EnvironmentAuthorizationError } from "@t3tools/contracts";
+import * as Schema from "effect/Schema";
 import { msg } from "gt-react";
 
+const isEnvironmentAuthorizationError = Schema.is(EnvironmentAuthorizationError);
+
 export function pluginInstallError(error: unknown) {
+  if (isEnvironmentAuthorizationError(error)) {
+    return msg("Managing plugins requires owner access on this environment.");
+  }
   const text = error instanceof Error ? error.message : typeof error === "string" ? error : "";
+  if (/missing required scope|requires plugins:manage|EnvironmentAuthorizationError/i.test(text)) {
+    return msg("Managing plugins requires owner access on this environment.");
+  }
   if (/shop could not be reached|plugin shop returned a catalog|plugin shop answered/i.test(text))
     return msg(
       "The plugin shop is unavailable. Check the server's internet connection, then Refresh. Nothing was installed.",

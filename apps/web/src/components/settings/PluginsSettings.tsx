@@ -50,7 +50,7 @@ export function PluginsSettingsPanel() {
   return (
     <SettingsPageContainer>
       {supported ? (
-        <EnvironmentPlugins
+        <AuthorizedEnvironmentPlugins
           key={environment.environmentId}
           environmentId={environment.environmentId}
           nativeTarget={desktopLocalBackendId(environment.entry.target)}
@@ -64,6 +64,27 @@ export function PluginsSettingsPanel() {
       )}
     </SettingsPageContainer>
   );
+}
+
+function AuthorizedEnvironmentPlugins({
+  environmentId,
+  nativeTarget,
+}: {
+  readonly environmentId: EnvironmentId;
+  readonly nativeTarget: string | null;
+}) {
+  const gt = useGT();
+  const canManage = useAtomValue(serverEnvironment.pluginsSetEnabled.permissionAtom(environmentId));
+  if (!canManage) {
+    return (
+      <SettingsSection title={gt("Plugins")}>
+        <p className="px-4 py-3 text-sm text-muted-foreground">
+          <T>Managing plugins requires owner access on this environment.</T>
+        </p>
+      </SettingsSection>
+    );
+  }
+  return <EnvironmentPlugins environmentId={environmentId} nativeTarget={nativeTarget} />;
 }
 
 function EnvironmentPlugins({
@@ -111,7 +132,9 @@ function EnvironmentPlugins({
       )}
       {tab === "installed" ? (
         <>
-          {snapshot.error ? <p role="alert">{m(pluginInstallError(snapshot.error))}</p> : null}
+          {snapshot.error ? (
+            <p role="alert">{m(pluginInstallError(snapshot.failure ?? snapshot.error))}</p>
+          ) : null}
           {snapshot.data?.plugins.map((plugin) => (
             <PluginSection key={plugin.manifest.id} environmentId={environmentId} plugin={plugin} />
           ))}

@@ -1,5 +1,5 @@
 import { hasFeatureFlag } from "@t3tools/client-runtime/state/server";
-import { AuthEnvironmentMaintainScope } from "@t3tools/contracts";
+import { AuthEnvironmentMaintainScope, AuthPluginsManageScope } from "@t3tools/contracts";
 import { useMessages } from "gt-react";
 
 import { isElectron } from "~/env";
@@ -8,7 +8,7 @@ import { desktopWslStateAtom } from "~/state/desktopWslState";
 import { useEnvironments, usePrimaryEnvironmentId } from "~/state/environments";
 import { usePeerLinkHosts } from "~/state/peerLinks";
 import { useEnvironmentQuery } from "~/state/query";
-import { useEnvironmentScope } from "~/state/session";
+import { useEnvironmentScope, useEnvironmentsWithScope } from "~/state/session";
 import { isWslSettingsRowVisible } from "./ConnectionsSettings.logic";
 import { isProviderSettingsEnvironmentAvailable } from "./ProviderSettingsPanel.logic";
 import {
@@ -26,8 +26,11 @@ export function useHasSecretProvidersEnvironment() {
 
 export function useHasPluginsEnvironment() {
   const { environments } = useEnvironments();
+  const pluginManagers = useEnvironmentsWithScope(environments, AuthPluginsManageScope);
   return environments.some(
-    (environment) => environment.serverConfig?.environment.capabilities.plugins === true,
+    (environment) =>
+      environment.serverConfig?.environment.capabilities.plugins === true &&
+      pluginManagers.has(environment.environmentId),
   );
 }
 
