@@ -7,71 +7,94 @@ import * as NodeURL from "node:url";
 import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
 
+import { readWorkspace } from "../.github/scripts/ci-changes.cjs";
+
 const repoRoot = NodePath.resolve(NodePath.dirname(NodeURL.fileURLToPath(import.meta.url)), "..");
 
-const workspaceFiles = [
+const rootWorkspaceFiles = [
   "package.json",
   "pnpm-lock.yaml",
   "pnpm-workspace.yaml",
-  "apps/server/package.json",
-  "apps/desktop/package.json",
-  "apps/web/package.json",
-  "apps/mobile/package.json",
-  "apps/mobile/modules/t3-highlights/package.json",
-  "apps/mobile/modules/t3-source-text/package.json",
-  "apps/mobile/modules/t3-review-diff/package.json",
-  "apps/mobile/modules/t3-terminal/package.json",
-  "infra/relay/package.json",
-  "oxlint-plugin-t3code/package.json",
-  "packages/client-runtime/package.json",
-  "packages/contracts/package.json",
-  "packages/shared/package.json",
-  "packages/ssh/package.json",
-  "packages/tailscale/package.json",
-  "packages/provider-core/package.json",
-  "packages/provider-testing/package.json",
-  "packages/provider-pi/package.json",
-  "packages/provider-acp/package.json",
-  "packages/provider-acp-registry/package.json",
-  "packages/provider-cursor/package.json",
-  "packages/provider-fx/package.json",
-  "packages/provider-grok/package.json",
-  "packages/provider-kiro/package.json",
-  "packages/provider-muse/package.json",
-  "packages/provider-opencode/package.json",
-  "packages/issue-tracker-linear/package.json",
-  "packages/secret-provider-core/package.json",
-  "packages/secret-provider-definitions/package.json",
-  "packages/secret-provider-onepassword/package.json",
-  "packages/source-control-azure-devops/package.json",
-  "packages/source-control-bitbucket/package.json",
-  "packages/source-control-core/package.json",
-  "packages/source-control-cursor-origin/package.json",
-  "packages/source-control-definitions/package.json",
-  "packages/source-control-forgejo/package.json",
-  "packages/source-control-gitcafe/package.json",
-  "packages/source-control-github/package.json",
-  "packages/source-control-gitlab/package.json",
-  "packages/source-control-tanstack-source/package.json",
-  "packages/source-control-testing/package.json",
-  "packages/effect-acp/package.json",
-  "packages/effect-codex-app-server/package.json",
-  "scripts/package.json",
+  ".pnpmfile.cjs",
 ] as const;
 
-function copyWorkspaceManifestFixture(targetRoot: string): void {
-  for (const relativePath of workspaceFiles) {
-    const sourcePath = NodePath.resolve(repoRoot, relativePath);
-    const destinationPath = NodePath.resolve(targetRoot, relativePath);
-    NodeFS.mkdirSync(NodePath.dirname(destinationPath), { recursive: true });
-    NodeFS.cpSync(sourcePath, destinationPath);
+function copyRelativePath(targetRoot: string, relativePath: string): void {
+  const sourcePath = NodePath.resolve(repoRoot, relativePath);
+  const destinationPath = NodePath.resolve(targetRoot, relativePath);
+  NodeFS.mkdirSync(NodePath.dirname(destinationPath), { recursive: true });
+  NodeFS.cpSync(sourcePath, destinationPath);
+}
+
+function collectFileDependencyPaths(manifestPath: string): ReadonlyArray<string> {
+  const manifest = JSON.parse(NodeFS.readFileSync(manifestPath, "utf8")) as {
+    readonly dependencies?: Readonly<Record<string, unknown>>;
+    readonly devDependencies?: Readonly<Record<string, unknown>>;
+    readonly optionalDependencies?: Readonly<Record<string, unknown>>;
+  };
+  const manifestDir = NodePath.dirname(manifestPath);
+  const resolvedPaths: Array<string> = [];
+
+  for (const section of [
+    manifest.dependencies,
+    manifest.devDependencies,
+    manifest.optionalDependencies,
+  ]) {
+    if (!section) continue;
+    for (const specifier of Object.values(section)) {
+      if (typeof specifier !== "string" || !specifier.startsWith("file:")) continue;
+      resolvedPaths.push(NodePath.resolve(manifestDir, specifier.slice("file:".length)));
+    }
   }
 
-  // Fork tarballs that file: dependencies install from.
-  for (const forks of ["apps/mobile/deps", "apps/web/deps"]) {
-    const source = NodePath.resolve(repoRoot, forks);
-    if (NodeFS.existsSync(source)) {
-      NodeFS.cpSync(source, NodePath.resolve(targetRoot, forks), { recursive: true });
+  return resolvedPaths;
+}
+
+function copyWorkspaceManifestFixture(targetRoot: string): void {
+  const copied = new Set<string>();
+  const copyOnce = (relativePath: string): void => {
+    const normalized = relativePath.replaceAll("\\", "/");
+    if (copied.has(normalized)) return;
+    copied.add(normalized);
+    copyRelativePath(targetRoot, normalized);
+  };
+
+  for (const relativePath of rootWorkspaceFiles) {
+    copyOnce(relativePath);
+  }
+
+  const manifestQueue: Array<string> = [NodePath.resolve(repoRoot, "package.json")];
+  for (const pkg of readWorkspace()) {
+    const relativeManifest = `${pkg.dir}/package.json`;
+    copyOnce(relativeManifest);
+    manifestQueue.push(NodePath.resolve(repoRoot, relativeManifest));
+  }
+
+  // Follow local file: dependencies (fork tarballs and non-workspace native modules) so the fixture
+  // mirrors pnpm resolution without duplicating a hardcoded list that drifts.
+  while (manifestQueue.length > 0) {
+    const manifestPath = manifestQueue.shift()!;
+    for (const dependencyPath of collectFileDependencyPaths(manifestPath)) {
+      const relativeToRepo = NodePath.relative(repoRoot, dependencyPath);
+      if (
+        relativeToRepo === ".." ||
+        relativeToRepo.startsWith(`..${NodePath.sep}`) ||
+        NodePath.isAbsolute(relativeToRepo)
+      ) {
+        throw new Error(
+          `Expected file: dependency in ${manifestPath} to stay inside repo root: ${dependencyPath}`,
+        );
+      }
+
+      if (NodeFS.statSync(dependencyPath).isDirectory()) {
+        const nestedManifest = NodePath.join(dependencyPath, "package.json");
+        const relativeNestedManifest = NodePath.relative(repoRoot, nestedManifest);
+        if (!copied.has(relativeNestedManifest.replaceAll("\\", "/"))) {
+          copyOnce(relativeNestedManifest);
+          manifestQueue.push(nestedManifest);
+        }
+      } else {
+        copyOnce(relativeToRepo);
+      }
     }
   }
 
@@ -221,12 +244,6 @@ function assertMissing(path: string, message: string): void {
 const tempRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-release-smoke-"));
 
 try {
-  NodeChildProcess.execFileSync(
-    process.execPath,
-    ["--test", NodePath.resolve(repoRoot, ".github/scripts/relay-state-output.test.cjs")],
-    { stdio: "inherit" },
-  );
-
   copyWorkspaceManifestFixture(tempRoot);
 
   NodeChildProcess.execFileSync(

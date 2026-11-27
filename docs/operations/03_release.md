@@ -5,17 +5,15 @@ Unified release workflow: `.github/workflows/release.yml`. Beta is a product lab
 ## Channels and triggers
 
 - **Stable (`channel=stable` on `main`, or pushing a `vX.Y.Z` tag):** Manual dispatch promotes the **latest published nightly commit** (not `main` HEAD) using its base version unless overridden. Pushing a `vX.Y.Z` tag ships that exact commit. Finalization commits version bumps to `main` using `RELEASE_APP_ID` / `RELEASE_APP_PRIVATE_KEY`.
-- **Nightly (scheduled every 30 min when new commits exist and >=6 h elapsed, or manual `channel=nightly` on `main`):** Publishes a GitHub prerelease, `nightly` desktop updater channel, `nightly` npm dist-tag, and hosted `nightly` web alias. Does not bump versions on `main`.
-  - Pause/resume automatic nightlies: `gh variable set PAUSE_NIGHTLY -b true -R pingdotgg/t3code` / `gh variable delete PAUSE_NIGHTLY -R pingdotgg/t3code`.
-- **Preview (`channel=preview`, any branch—default dispatch channel):** Exercises build, signing, notarization, and smoke tests into a **draft** GitHub release and skips npm, web, AUR, and announcements. **Never publish a preview draft or push a test tag**—there is no dry-run tag path (any non-nightly `v*` tag publishes stable), and published preview tags hide nightlies from the update feed. Rebase onto `main` before dispatching `preview`.
+- **Nightly (manual `channel=nightly` on `main`):** There is no automatic schedule. A nightly publishes a GitHub prerelease, the `nightly` desktop updater channel and the `nightly` npm dist-tag. It does not bump versions on `main`.
+- **Preview (`channel=preview`, any branch—default dispatch channel):** Exercises build, signing, notarization, and smoke tests into a **draft** GitHub release and skips npm. **Never publish a preview draft or push a test tag**—there is no dry-run tag path (any non-nightly `v*` tag publishes stable), and published preview tags hide nightlies from the update feed. Rebase onto `main` before dispatching `preview`.
 - **PR macOS previews:** Applying the `preview:mac` label triggers a two-workflow split (`desktop-macos-preview.yml` builds the untrusted JS bundle; `desktop-macos-preview-publish.yml` checks author trust, packages/signs using `main`, and publishes to rolling `desktop-preview`). One-shot per commit; label is removed automatically.
 
 ## Critical release invariants
 
-- **Server self-update ordering:** Connected servers update to the exact client version by downloading the GitHub Release CLI archive (or `npx p0@<version>`). Keep the release graph order strictly: `release` (CLI archives + `SHA256SUMS` + desktop installers) → `publish_cli` (`p0` npm launcher) → `deploy_web` (hosted channel alias). Never publish clients before the archives and npm launcher exist.
+- **Server self-update ordering:** Connected servers update to the exact client version by downloading the GitHub Release CLI archive (or `npx p0@<version>`). Keep the release graph order strictly: `release` (CLI archives + `SHA256SUMS` + desktop installers) → `publish_cli` (`p0` npm launcher). Never publish the npm launcher before the archives exist.
 - **Standalone CLI archives & Node pin:** `engines.node` in root `package.json` must stay exact (Node SEA builds reject mismatches). There is no macOS x64 CLI archive (SEA is unsupported there; x64 desktop uses Electron).
 - **Smoke fixture:** `scripts/fixtures/desktop-launch` is intentionally an old SQLite snapshot to verify forward migrations on packaged builds—never regenerate it on schema changes.
-- **Hosted web:** Vercel Git auto-deployments stay disabled (`apps/web/vercel.ts`). Releases build with `--skip-domain` and alias `app.t3.codes` / `latest.app.t3.codes` (stable) or `nightly.app.t3.codes` (nightly) only after publication.
 
 ## Update feed
 
@@ -37,8 +35,7 @@ The app here is not the one that ships from the store, so nothing mobile runs on
 push or a pull request: every mobile workflow is `workflow_dispatch` only, and the
 macOS mobile native lint in CI runs only when CI is dispatched.
 
-- **iOS TestFlight / App Store:** dispatch **Mobile EAS Production** (`mode=build`, `profile=production`, `platform=ios`, explicit version) to cut a build, or `mode=update` to publish an OTA. Before shipping `3.0.0` to the App Store, advance `build.testflight.env.T3CODE_MOBILE_VERSION` in `apps/mobile/eas.json` to the next unreleased major.
-- **Android APK mirror:** dispatch `.github/workflows/mobile-android-apk.yml` to check Google Play Alpha and mirror a new Play-signed universal APK to an `android-beta-<build-number>` prerelease (`GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`). Nightlies attach the latest internal-testing APK when available.
+- **Store binaries:** this fork keeps the development and preview mobile tooling (preview builds, OTA updates and native client installs) but does not publish builds to the App Store, TestFlight or Google Play.
 
 ## Windows payload topology and update validation
 
@@ -64,5 +61,5 @@ Set secrets `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_
 
 1. Verify the latest nightly (desktop launch, `npm view p0@<version> version`, remote server update + DB migration smoke test).
 2. Dispatch **Release** on `main` with `channel=stable` (leave `version` blank unless overriding the nightly's base version).
-3. Confirm `Resolve release commit` matches the verified nightly, then verify `release` → `publish_cli` → `deploy_web` all succeed.
+3. Confirm `Resolve release commit` matches the verified nightly, then verify `release` and `publish_cli` both succeed.
 4. Smoke-test the published artifacts.
