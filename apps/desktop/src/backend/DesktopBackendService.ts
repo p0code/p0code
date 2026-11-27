@@ -30,6 +30,7 @@ import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import * as DesktopObservability from "../app/DesktopObservability.ts";
+import { resolveHeadlessNodeExecutable } from "../app/resolveHeadlessNodeExecutable.ts";
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
 
 const DEFAULT_SERVICE_HOST = "127.0.0.1";
@@ -1108,7 +1109,7 @@ export const make = Effect.gen(function* () {
       });
     }
     return makeLegacyNodeServiceDriver({
-      executablePath: process.execPath,
+      executablePath: resolveHeadlessNodeExecutable({ platform: environment.platform }),
       entryPath: environment.backendEntryPath,
       cwd: environment.backendCwd,
       stateDir: environment.stateDir,

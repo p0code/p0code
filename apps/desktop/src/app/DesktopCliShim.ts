@@ -6,6 +6,7 @@ import * as Random from "effect/Random";
 
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
 import { makeComponentLogger } from "./DesktopObservability.ts";
+import { resolveHeadlessNodeExecutable } from "./resolveHeadlessNodeExecutable.ts";
 
 // AppImage mounts change each run; the launcher must mount the image itself.
 const { logInfo, logWarning } = makeComponentLogger("desktop-cli-shim");
@@ -175,7 +176,11 @@ export const install = Effect.gen(function* () {
           appImage,
           executableName: path.basename(process.execPath),
         }),
-        onNone: () => ({ kind: "direct" as const, executable: process.execPath, entry }),
+        onNone: () => ({
+          kind: "direct" as const,
+          executable: resolveHeadlessNodeExecutable({ platform: environment.platform }),
+          entry,
+        }),
       });
   const content = renderCliShim({ target, shimPath, t3Home: environment.baseDir });
 

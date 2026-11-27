@@ -4,6 +4,7 @@ import * as NodeChildProcess from "node:child_process";
 
 import * as Electron from "electron";
 
+import { resolveHeadlessNodeExecutable } from "../app/resolveHeadlessNodeExecutable.ts";
 import type { ActiveWindow } from "./ActiveWindow.ts";
 
 const CAPTURE_TIMEOUT_MS = 15_000;
@@ -32,6 +33,7 @@ export type RegionSnapShotChild = {
 
 function forkRegionSnapShotChild(workerPath: string): RegionSnapShotChild {
   const child = NodeChildProcess.fork(workerPath, [], {
+    execPath: resolveHeadlessNodeExecutable(),
     env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
     execArgv: [],
     stdio: ["ignore", "ignore", "inherit", "ipc"],

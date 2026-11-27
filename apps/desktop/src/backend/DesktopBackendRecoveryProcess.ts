@@ -4,6 +4,8 @@ import * as NodeChildProcess from "node:child_process";
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
 
+import { resolveHeadlessNodeExecutable } from "../app/resolveHeadlessNodeExecutable.ts";
+
 export type RecoveryWorkerMessage =
   | { readonly type: "recovering"; readonly pid: number }
   | { readonly type: "error"; readonly operation: string }
@@ -40,8 +42,8 @@ export function make(input: {
             ...(options.backendPid === undefined ? [] : [String(options.backendPid)]),
           ],
           {
-            // The default macOS Helper executable would not match the backend's recorded executable.
-            execPath: process.execPath,
+            // Match the headless executable used to launch the backend so ownership verification succeeds.
+            execPath: resolveHeadlessNodeExecutable(),
             env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
             execArgv: [],
             stdio: ["ignore", "ignore", "inherit", "ipc"],

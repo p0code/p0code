@@ -5,6 +5,8 @@ import * as NodeChildProcess from "node:child_process";
 
 import type { SnapShotModifier } from "@t3tools/contracts";
 
+import { resolveHeadlessNodeExecutable } from "../app/resolveHeadlessNodeExecutable.ts";
+
 export function startGlobalShiftShortcutProcess(
   workerPath: string,
   modifier: SnapShotModifier,
@@ -12,6 +14,7 @@ export function startGlobalShiftShortcutProcess(
   onFailure: (error: Error) => void,
 ): Promise<() => void> {
   const worker = NodeChildProcess.fork(workerPath, [modifier], {
+    execPath: resolveHeadlessNodeExecutable(),
     env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
     execArgv: [],
     stdio: ["ignore", "ignore", "inherit", "ipc"],
