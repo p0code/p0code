@@ -71,6 +71,13 @@ export interface UsageDailyTotal {
   readonly unpricedRecords: number;
 }
 
+/** Key-value credential storage backed by the host's secret store. */
+export interface DeployProviderStorage {
+  readonly get: (key: string) => Effect.Effect<Option.Option<string>, PluginError>;
+  readonly set: (key: string, value: string) => Effect.Effect<void, PluginError>;
+  readonly remove: (key: string) => Effect.Effect<void, PluginError>;
+}
+
 /** Everything the host lends a running plugin. It lives as long as the plugin stays enabled. */
 export class PluginContext extends Context.Service<
   PluginContext,
@@ -79,11 +86,7 @@ export class PluginContext extends Context.Service<
     /** A directory only this plugin writes, kept across restarts. */
     readonly dataDir: string;
     /** Values kept in the server's secret store, namespaced to the plugin. */
-    readonly storage: {
-      readonly get: (key: string) => Effect.Effect<Option.Option<string>, PluginError>;
-      readonly set: (key: string, value: string) => Effect.Effect<void, PluginError>;
-      readonly remove: (key: string) => Effect.Effect<void, PluginError>;
-    };
+    readonly storage: DeployProviderStorage;
     /**
      * Present only with http:routes. Host-issued per-plugin bearer secret, stable across
      * restarts and enable/disable; removed with the plugin's installation. Give callers
@@ -374,8 +377,8 @@ const rollbackInput = input(DeployRollbackInput);
 const envInput = input(DeployProviderSetEnvInput);
 const decodeLogsInput = Schema.decodeUnknownEffect(DeployLogsRequest);
 
-/** Wraps a provider so a plugin cannot hand the host data outside the contract. */
-const checkProvider = (
+/** Wraps a deploy provider so inputs and outputs are schema-checked at the host boundary. */
+export const checkDeployProvider = (
   descriptor: DeployProviderDescriptor,
   provider: DeployProvider,
 ): StartedDeployProvider => ({
@@ -446,7 +449,7 @@ export function defineDeployProvider<Actions extends PluginActionSchemas = {}>(d
         }).pipe(
           Effect.map((started): StartedPlugin => ({
             ...started,
-            deployProvider: checkProvider(definition.provider, deploy),
+            deployProvider: checkDeployProvider(definition.provider, deploy),
           })),
         );
       }),

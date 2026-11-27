@@ -1,10 +1,11 @@
 /**
- * Settings → Deploy host service. Providers are `deploy:provider` plugins storing credentials per
- * `accountId`; accounts are profile-scoped and refused when out of profile, and non-full-access
- * threads require approval. Own-server (`./ownServer.ts`) is not wired yet.
+ * Settings → Deploy host service. Provider ids resolve to a built-in (Vercel, Cloudflare) first,
+ * then a `deploy:provider` plugin. Accounts are profile-scoped; non-full-access threads need
+ * approval. Own-server (`./ownServer.ts`) is a non-functional stub and is not wired.
  */
 import {
   type AccountProfileId,
+  ALL_DEPLOY_PROVIDER_OPERATIONS,
   type DeployAccount,
   type DeployAccountRef,
   type DeployAccountSummary,
@@ -50,6 +51,7 @@ import * as Orchestrator from "../orchestration-v2/Orchestrator.ts";
 import { PluginHost } from "../plugins/PluginHost.ts";
 import { ProjectService } from "../project/ProjectService.ts";
 import * as ServerSettings from "../serverSettings.ts";
+import { BuiltinDeployProviders } from "./BuiltinDeployProviders.ts";
 import { DeployStore } from "./DeployStore.ts";
 
 /** What the deploy gate and the folder check need to know about threads and projects. */
@@ -108,6 +110,7 @@ const refOf = (account: DeployAccount): DeployAccountRef => ({
 
 const make = Effect.gen(function* () {
   const host = yield* PluginHost;
+  const builtins = yield* BuiltinDeployProviders;
   const settings = yield* ServerSettings.ServerSettingsService;
   const workspace = yield* DeployWorkspace;
   const store = yield* DeployStore;
@@ -128,11 +131,36 @@ const make = Effect.gen(function* () {
     Effect.orElseSucceed(() => null),
   );
 
+  const builtinFor = (providerId: string) =>
+    builtins.find((builtin) => builtin.info.id === providerId);
+
+  /** Plugin providers whose id a built-in does not already claim. */
+  const pluginProviders = host.deployProviders.pipe(
+    Effect.map((entries) => entries.filter((entry) => builtinFor(entry.manifest.id) === undefined)),
+  );
+
+  /** The running provider for an id (built-in first, then plugins); null when off or unknown. */
+  const runningProvider = Effect.fn("DeployService.runningProvider")(function* (
+    providerId: string,
+  ) {
+    const builtin = builtinFor(providerId);
+    if (builtin !== undefined) return builtin.provider;
+    const entry = (yield* pluginProviders).find(
+      (candidate) => candidate.manifest.id === providerId,
+    );
+    return entry?.provider ?? null;
+  });
+
   const requireProvider = Effect.fn("DeployService.requireProvider")(function* (pluginId: string) {
-    const entries = yield* host.deployProviders;
+    const builtin = builtinFor(pluginId);
+    if (builtin !== undefined) return builtin.provider;
+    const entries = yield* pluginProviders;
     const entry = entries.find((candidate) => candidate.manifest.id === pluginId);
     if (entry === undefined) {
-      return yield* fail("unknown-provider", "No installed plugin provides this deploy target.");
+      return yield* fail(
+        "unknown-provider",
+        "No built-in provider or installed plugin provides this deploy target.",
+      );
     }
     if (entry.provider === null) {
       return yield* fail("provider-off", `Turn on ${entry.manifest.name} in Plugins first.`);
@@ -201,13 +229,31 @@ const make = Effect.gen(function* () {
     return { projectRoot, directory, thread };
   });
 
-  const summarizeProvider = (
+  const builtinSummaries: ReadonlyArray<DeployProviderSummary> = builtins.map(({ info }) => ({
+    pluginId: info.id,
+    label: info.label,
+    icon: info.icon,
+    running: true,
+    origin: "builtin",
+    version: info.version,
+    description: info.description,
+    supportedOperations: info.supportedOperations,
+    supportedTargetKinds: info.supportedTargetKinds,
+    supportedSourceKinds: info.supportedSourceKinds,
+  }));
+
+  const summarizePlugin = (
     entry: Effect.Success<typeof host.deployProviders>[number],
   ): DeployProviderSummary => ({
     pluginId: entry.manifest.id,
     label: entry.provider?.descriptor.label ?? entry.manifest.name,
     icon: entry.provider?.descriptor.icon ?? null,
     running: entry.provider !== null,
+    origin: "plugin",
+    version: entry.manifest.version,
+    description: entry.manifest.description,
+    // The plugin API requires every operation.
+    supportedOperations: ALL_DEPLOY_PROVIDER_OPERATIONS,
   });
 
   const summarizeAccount = (
@@ -302,16 +348,15 @@ const make = Effect.gen(function* () {
   return DeployService.of({
     overview: Effect.gen(function* () {
       const activeProfileId = yield* activeProfile;
-      const entries = yield* host.deployProviders;
+      const entries = yield* pluginProviders;
       const visible = (yield* store.listAccounts).filter((account) =>
         isDeployAccountInProfile(account, activeProfileId),
       );
       const accounts = yield* Effect.forEach(
         visible,
         (account) =>
-          summarizeAccount(
-            account,
-            entries.find((entry) => entry.manifest.id === account.pluginId)?.provider ?? null,
+          runningProvider(account.pluginId).pipe(
+            Effect.flatMap((provider) => summarizeAccount(account, provider)),
           ),
         { concurrency: "unbounded" },
       );
@@ -322,7 +367,7 @@ const make = Effect.gen(function* () {
       }
       return {
         activeProfileId,
-        providers: entries.map(summarizeProvider),
+        providers: [...builtinSummaries, ...entries.map(summarizePlugin)],
         accounts,
         mappings,
         deployments: (yield* store.listRecords).filter((record) => shown.has(record.accountId)),
@@ -382,11 +427,11 @@ const make = Effect.gen(function* () {
     }),
     unlink: Effect.fn("DeployService.unlink")(function* (accountId) {
       const account = yield* requireAccount(accountId);
-      const entry = (yield* host.deployProviders).find(
-        (candidate) => candidate.manifest.id === account.pluginId,
-      );
+      const known =
+        builtinFor(account.pluginId) !== undefined ||
+        (yield* pluginProviders).some((candidate) => candidate.manifest.id === account.pluginId);
       // A removed plugin took its storage with it; only the record is left to forget.
-      if (entry !== undefined) {
+      if (known) {
         const provider = yield* requireProvider(account.pluginId);
         yield* provider.unlink(refOf(account)).pipe(Effect.mapError(providerFailed()));
       }
