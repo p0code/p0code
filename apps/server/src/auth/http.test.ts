@@ -1,6 +1,7 @@
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
+  AuthPluginsManageScope,
   AuthTokenExchangeGrantType,
   AuthEnvironmentBootstrapTokenType,
   AuthAccessTokenType,
@@ -260,6 +261,91 @@ it.live("checks token-endpoint DPoP proofs without writing replay state", () =>
           expect(badProof.status).toBe(401);
           expect(badProof.headers.get("www-authenticate")).toBe("DPoP");
           expect(written).toEqual([]);
+        }),
+      (environment) => Effect.promise(() => environment.dispose()),
+    );
+  }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
+);
+
+it.effect("lets owners request plugins:manage on /oauth/token while denying non-owners", () =>
+  Effect.gen(function* () {
+    const random = yield* SecureRandom.SecureRandom;
+    const unusedSecretStore = ServerSecretStore.ServerSecretStore.of({
+      get: () => Effect.succeedNone,
+      set: () => Effect.void,
+      create: () => Effect.void,
+      getOrCreateRandom: () => Effect.die("Not used by these routes."),
+      remove: () => Effect.void,
+    });
+    const requestContext = Context.make(SecureRandom.SecureRandom, random).pipe(
+      Context.add(ServerSecretStore.ServerSecretStore, unusedSecretStore),
+    );
+    const exchangeScope = (subjectToken: string, scope: string) =>
+      new Request("http://127.0.0.1/oauth/token", {
+        method: "POST",
+        body: new URLSearchParams({
+          grant_type: AuthTokenExchangeGrantType,
+          subject_token: subjectToken,
+          subject_token_type: AuthEnvironmentBootstrapTokenType,
+          requested_token_type: AuthAccessTokenType,
+          scope,
+        }),
+      });
+    return yield* Effect.acquireUseRelease(
+      Effect.sync(() => HttpRouter.toWebHandler(layerRoutes, { disableLogger: true })),
+      (environment) =>
+        Effect.promise(async () => {
+          const ownerOnly = await environment.handler(
+            exchangeScope(DEV_TOKEN, AuthPluginsManageScope),
+            requestContext,
+          );
+          expect(ownerOnly.status).toBe(200);
+          expect(await ownerOnly.json()).toMatchObject({ scope: AuthPluginsManageScope });
+
+          const ownerCombined = await environment.handler(
+            exchangeScope(DEV_TOKEN, `orchestration:read ${AuthPluginsManageScope}`),
+            requestContext,
+          );
+          expect(ownerCombined.status).toBe(200);
+          expect(await ownerCombined.json()).toMatchObject({
+            scope: `orchestration:read ${AuthPluginsManageScope}`,
+          });
+
+          const ownerSession = await environment.handler(
+            postJson("/api/auth/browser-session", { credential: DEV_TOKEN }),
+            requestContext,
+          );
+          const ownerCookie =
+            ownerSession.headers
+              .getSetCookie()
+              .find((cookie) => cookie.startsWith("t3_dev_session_"))
+              ?.split(";", 1)[0] ?? "";
+          const issuePairing = async () => {
+            const response = await environment.handler(
+              postJson(
+                "/api/auth/pairing-token",
+                { scopes: ["orchestration:read"] },
+                { cookie: ownerCookie },
+              ),
+              requestContext,
+            );
+            expect(response.status).toBe(200);
+            return ((await response.json()) as { credential: string }).credential;
+          };
+
+          const nonOwnerOnly = await environment.handler(
+            exchangeScope(await issuePairing(), AuthPluginsManageScope),
+            requestContext,
+          );
+          expect(nonOwnerOnly.status).toBe(400);
+          expect(await nonOwnerOnly.json()).toMatchObject({ reason: "scope_not_granted" });
+
+          const nonOwnerCombined = await environment.handler(
+            exchangeScope(await issuePairing(), `orchestration:read ${AuthPluginsManageScope}`),
+            requestContext,
+          );
+          expect(nonOwnerCombined.status).toBe(200);
+          expect(await nonOwnerCombined.json()).toMatchObject({ scope: "orchestration:read" });
         }),
       (environment) => Effect.promise(() => environment.dispose()),
     );
