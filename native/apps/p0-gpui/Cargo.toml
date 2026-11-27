@@ -12,6 +12,7 @@ gpui-kit.workspace = true
 p0-client = { path = "../../crates/p0-client" }
 p0-i18n = { path = "../../crates/p0-i18n" }
 p0-protocol = { path = "../../crates/p0-protocol" }
+pulldown-cmark.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
 tracing.workspace = true

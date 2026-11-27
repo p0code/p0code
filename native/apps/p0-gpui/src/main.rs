@@ -1,6 +1,8 @@
 mod app;
 mod bridge;
 mod cli;
+mod feed;
+mod markdown;
 mod theme;
 
 use clap::Parser as _;
