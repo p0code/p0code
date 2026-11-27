@@ -5,14 +5,51 @@ import { IsoDateTime, ProjectId, ThreadId, TrimmedNonEmptyString } from "./baseS
 import { PluginId } from "./plugins.ts";
 
 /**
- * Deploys run through `deploy:provider` plugins. The host owns account names, profiles, mappings,
- * history and approvals; each plugin keeps credentials in its own storage keyed by `accountId`.
+ * Deploys run through built-in deploy providers (such as Vercel and Cloudflare) or third-party
+ * `deploy:provider` plugins. The host owns account names, profiles, mappings, history and
+ * approvals; credentials stay in the host's secret store keyed by provider and `accountId`.
  * Tokens only travel inward once in `DeployLinkInput` and are never stored or returned here.
  */
 
 /** Where a deployment goes. */
 export const DeployEnvironment = Schema.Literals(["preview", "production"]);
 export type DeployEnvironment = typeof DeployEnvironment.Type;
+
+/** How deployment artifacts are supplied to a provider. */
+export const DeploySourceKind = Schema.Literals(["local-build", "git"]);
+export type DeploySourceKind = typeof DeploySourceKind.Type;
+
+/** Where a deploy provider comes from. */
+export const DeployProviderOrigin = Schema.Literals(["builtin", "plugin"]);
+export type DeployProviderOrigin = typeof DeployProviderOrigin.Type;
+
+/** Operations a deploy provider can advertise support for. */
+export const DeployProviderOperation = Schema.Literals([
+  "link",
+  "unlink",
+  "status",
+  "list-projects",
+  "deploy",
+  "deployment-status",
+  "logs",
+  "rollback",
+  "list-domains",
+  "set-env",
+]);
+export type DeployProviderOperation = typeof DeployProviderOperation.Type;
+
+export const ALL_DEPLOY_PROVIDER_OPERATIONS: ReadonlyArray<DeployProviderOperation> = [
+  "link",
+  "unlink",
+  "status",
+  "list-projects",
+  "deploy",
+  "deployment-status",
+  "logs",
+  "rollback",
+  "list-domains",
+  "set-env",
+];
 
 /** Which environment a variable applies to; `development` is never deployed to. */
 export const DeployEnvTarget = Schema.Literals(["production", "preview", "development"]);
@@ -92,7 +129,7 @@ export const DeployTarget = Schema.Struct({ kind: DeployTargetKind, id: TrimmedN
 export type DeployTarget = typeof DeployTarget.Type;
 
 export const DeploySource = Schema.Struct({
-  kind: Schema.Literals(["local-build", "git"]),
+  kind: DeploySourceKind,
   branch: Schema.optionalKey(TrimmedNonEmptyString),
   /** Absolute: the project's (or the thread's worktree's) root on this machine. */
   projectRoot: Schema.optionalKey(TrimmedNonEmptyString),
@@ -227,8 +264,20 @@ export const DeployProviderSummary = Schema.Struct({
   pluginId: PluginId,
   label: TrimmedNonEmptyString,
   icon: Schema.NullOr(Schema.String),
-  /** Off in Plugins, or failed to start: listed so the card can say so. */
+  /** Always true for built-in providers; for plugins, false when off in Plugins or failed to start. */
   running: Schema.Boolean,
+  /** Whether this provider ships built into p0code or comes from an installed/bundled plugin. */
+  origin: Schema.optionalKey(DeployProviderOrigin),
+  /** Provider version (built-in package version or plugin manifest version). */
+  version: Schema.optionalKey(TrimmedNonEmptyString),
+  /** Short description shown in Settings → Deploy. */
+  description: Schema.optionalKey(TrimmedNonEmptyString),
+  /** Operations the provider supports. */
+  supportedOperations: Schema.optionalKey(Schema.Array(DeployProviderOperation)),
+  /** Target kinds this provider can deploy to (e.g. `vercel-project`, `pages`, `worker`). */
+  supportedTargetKinds: Schema.optionalKey(Schema.Array(DeployTargetKind)),
+  /** Source kinds this provider accepts (e.g. `git`, `local-build`). */
+  supportedSourceKinds: Schema.optionalKey(Schema.Array(DeploySourceKind)),
 });
 export type DeployProviderSummary = typeof DeployProviderSummary.Type;
 
@@ -318,7 +367,7 @@ export const DeployStartInput = Schema.Struct({
   accountId: DeployAccountId,
   /** Absent uses the mapping's default environment. */
   environment: Schema.optionalKey(DeployEnvironment),
-  sourceKind: Schema.Literals(["local-build", "git"]),
+  sourceKind: DeploySourceKind,
   branch: Schema.optionalKey(TrimmedNonEmptyString),
   /** Relative to the project root (or absolute inside it); absent uses the mapping's. */
   directory: Schema.optionalKey(TrimmedNonEmptyString),

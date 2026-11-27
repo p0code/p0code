@@ -16,6 +16,7 @@ import * as NodeURL from "node:url";
 import { ServerConfig, layerTest } from "../config.ts";
 import { ServerSettingsService } from "../serverSettings.ts";
 import { ServerSecretStore } from "../auth/ServerSecretStore.ts";
+import { builtinSecretName } from "../deploy/BuiltinDeployProviders.ts";
 import { requiredScopesForRpcCall } from "../auth/RpcAuthorization.ts";
 import {
   BundledPlugins,
@@ -331,6 +332,27 @@ describe("plugin installer", () => {
             (yield* installer.install({ source }).pipe(Effect.flip)).message,
             "built into",
           );
+          for (const builtinId of ["vercel", "cloudflare"]) {
+            const builtinManifest = manifest("1.0.0", [], builtinId);
+            const builtinSource = yield* fixture(stateDir, builtinManifest);
+            assert.include(
+              (yield* installer.install({ source: builtinSource }).pipe(Effect.flip)).message,
+              "built into",
+            );
+            assert.include(
+              (yield* installer
+                .installBundle({
+                  bundle: {
+                    manifest: JSON.stringify(builtinManifest),
+                    code: new TextEncoder().encode(code(builtinManifest)),
+                  },
+                  origin: { kind: "catalog", id: builtinId },
+                  expected: { id: builtinId, version: "1.0.0" },
+                })
+                .pipe(Effect.flip)).message,
+              "built into",
+            );
+          }
           const bad = { ...manifest("9.0.0", [], "incompatible"), apiVersion: 999 };
           assert.include(
             (yield* installer.install({ source: yield* fixture(stateDir, bad) }).pipe(Effect.flip))
@@ -338,6 +360,46 @@ describe("plugin installer", () => {
             "Incompatible",
           );
         }),
+    );
+    it.effect("never lets purgeData touch built-in deploy provider secrets", () =>
+      Effect.gen(function* () {
+        const { stateDir } = yield* ServerConfig;
+        const installer = yield* makeInstaller();
+        const secrets = yield* ServerSecretStore;
+        const builtinKey = builtinSecretName(
+          "vercel",
+          "550e8400-e29b-41d4-a716-446655440000:token",
+        );
+        yield* secrets.set(builtinKey, new TextEncoder().encode("super-secret-vercel-token"));
+
+        // Reserved built-in id cannot be purged.
+        assert.include(
+          (yield* installer.remove({ id: "vercel", purgeData: true }).pipe(Effect.flip)).message,
+          "built into",
+        );
+        assert.isTrue(Option.isSome(yield* secrets.get(builtinKey)));
+
+        // Delimiter-collision plugin id ("vercel-550e8400") purges only its own plugin secrets.
+        const collisionId = "vercel-550e8400";
+        const collisionManifest = { ...manifest("1.0.0", [], collisionId), httpRoutes: [] };
+        yield* installer.install({ source: yield* fixture(stateDir, collisionManifest) });
+        yield* installer.consent({ id: collisionId, version: "1.0.0", capabilities: [] });
+        yield* secrets.set(
+          `plugin-${collisionId}-e29b-41d4-a716-446655440000:token`,
+          new TextEncoder().encode("plugin-value"),
+        );
+        yield* installer.remove({ id: collisionId, purgeData: true });
+        assert.isTrue(
+          Option.isNone(
+            yield* secrets.get(`plugin-${collisionId}-e29b-41d4-a716-446655440000:token`),
+          ),
+        );
+        const retained = yield* secrets.get(builtinKey);
+        assert.isTrue(Option.isSome(retained));
+        if (Option.isSome(retained)) {
+          assert.strictEqual(new TextDecoder().decode(retained.value), "super-secret-vercel-token");
+        }
+      }),
     );
     it.effect(
       "keeps even zero-capability stages inactive and rolls back a corrupted active bundle at boot",

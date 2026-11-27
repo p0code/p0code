@@ -1,7 +1,8 @@
 /**
- * Not wired yet (p0deploy): the built-in "own server" deploy path, driving `packages/p0deploy`
- * (SSH + Docker) behind the plugin providers' `StartedDeployProvider` interface. Nothing imports
- * or lists it until it is wired into `DeployService`.
+ * NON-FUNCTIONAL STUB (p0deploy): the planned "own server" deploy path, driving
+ * `packages/p0deploy` (SSH + Docker) behind the `StartedDeployProvider` interface. Every call
+ * refuses. It is deliberately absent from `BuiltinDeployProviders` and the deploy overview; nothing
+ * outside tests imports it until it is implemented and wired into `DeployService`.
  */
 import { PluginError, type StartedDeployProvider } from "@t3tools/plugin-api";
 import * as Effect from "effect/Effect";

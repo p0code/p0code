@@ -376,6 +376,34 @@ describe("plugin shop", () => {
         assert.include(stale.error ?? "", "could not be reached");
       }),
     );
+    it.effect("hides and refuses reserved built-in deploy provider ids from the shop", () =>
+      Effect.gen(function* () {
+        const installer = yield* makeInstaller();
+        const vercelManifest = manifest("1.0.0", [], "vercel");
+        const vercelBytes = bundle(vercelManifest);
+        const otherManifest = manifest("1.0.0", [], "allowed-plugin");
+        const otherBytes = bundle(otherManifest);
+        const shop = yield* openShop(installer, {
+          fetchCatalog: catalogFetch(
+            catalog([
+              shopEntry(vercelManifest, [shopVersion(vercelManifest, vercelBytes)]),
+              shopEntry(otherManifest, [shopVersion(otherManifest, otherBytes)]),
+            ]),
+          ),
+          downloadBundle: async () => vercelBytes,
+        });
+        const listed = yield* shop.list({});
+        assert.deepEqual(
+          listed.entries.map((item) => item.entry.id),
+          ["allowed-plugin"],
+        );
+        assert.isNull((yield* shop.entry({ id: "vercel" })).entry);
+        assert.include(
+          (yield* shop.install({ id: "vercel" }).pipe(Effect.flip)).message,
+          "built into",
+        );
+      }),
+    );
     it.effect("skips entries that claim a publisher they do not have", () =>
       Effect.gen(function* () {
         const installer = yield* makeInstaller();

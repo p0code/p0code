@@ -1,3 +1,8 @@
+// @effect-diagnostics nodeBuiltinImport:off -- Symlink containment tests create real temp directories.
+import * as NodeFSP from "node:fs/promises";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
+
 import {
   AccountProfileId,
   AuthOrchestrationOperateScope,
@@ -13,6 +18,7 @@ import {
   WS_METHODS,
 } from "@t3tools/contracts";
 import {
+  checkDeployProvider,
   defineDeployProvider,
   PluginContext,
   PluginError,
@@ -31,6 +37,7 @@ import * as Option from "effect/Option";
 import * as Stream from "effect/Stream";
 
 import { requiredScopesForRpcCall } from "../auth/RpcAuthorization.ts";
+import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
 import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import {
   BundledPlugins,
@@ -39,6 +46,13 @@ import {
   PluginHostBindings,
 } from "../plugins/PluginHost.ts";
 import * as ServerSettings from "../serverSettings.ts";
+import {
+  type BuiltinDeployProvider,
+  BuiltinDeployProviders,
+  builtinSecretName,
+  layer as builtinsLayer,
+  legacyPluginSecretName,
+} from "./BuiltinDeployProviders.ts";
 import { DeployService, DeployWorkspace, layer as deployLayer, redact } from "./DeployService.ts";
 import * as DeployStore from "./DeployStore.ts";
 import { ownServerDeployProvider } from "./ownServer.ts";
@@ -280,8 +294,12 @@ const layerWorkspace = Layer.succeed(
 
 const layerDb = SqlitePersistence.layerMemory.pipe(Layer.provide(NodeServices.layer));
 
-const layerFor = (plugins: ReadonlyArray<typeof fakeProvider>) =>
+const layerFor = (
+  plugins: ReadonlyArray<typeof fakeProvider>,
+  builtins: Layer.Layer<BuiltinDeployProviders> = Layer.succeed(BuiltinDeployProviders, []),
+) =>
   deployLayer.pipe(
+    Layer.provideMerge(builtins),
     Layer.provideMerge(DeployStore.layer),
     Layer.provideMerge(
       pluginHostLayer.pipe(
@@ -612,6 +630,75 @@ describe("DeployService", () => {
       }),
     );
 
+    it.effect("refuses a symlinked directory inside projectRoot that resolves outside it", () =>
+      Effect.gen(function* () {
+        const tmpBase = yield* Effect.promise(() =>
+          NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "p0-deploy-symlink-")),
+        );
+        yield* Effect.addFinalizer(() =>
+          Effect.promise(() => NodeFSP.rm(tmpBase, { recursive: true, force: true })),
+        );
+        const realProject = NodePath.join(tmpBase, "project");
+        const outside = NodePath.join(tmpBase, "outside");
+        yield* Effect.promise(async () => {
+          await NodeFSP.mkdir(realProject, { recursive: true });
+          await NodeFSP.mkdir(outside, { recursive: true });
+          await NodeFSP.symlink(outside, NodePath.join(realProject, "dist"));
+        });
+
+        const symProjectId = ProjectId.make("project-symlink");
+        const customWorkspace = Layer.succeed(
+          DeployWorkspace,
+          DeployWorkspace.of({
+            thread: () => Effect.succeed(null),
+            projectRoot: (projectId) =>
+              Effect.succeed(projectId === symProjectId ? realProject : null),
+          }),
+        );
+        const scopedDeploy = yield* Layer.build(
+          Layer.fresh(deployLayer).pipe(
+            Layer.provide(customWorkspace),
+            Layer.provide(
+              Layer.mergeAll(
+                Layer.succeed(BuiltinDeployProviders, []),
+                Layer.succeed(DeployStore.DeployStore, yield* DeployStore.DeployStore),
+                Layer.succeed(PluginHost, yield* PluginHost),
+                Layer.succeed(
+                  ServerSettings.ServerSettingsService,
+                  yield* ServerSettings.ServerSettingsService,
+                ),
+                NodeCrypto.layer,
+                NodeServices.layer,
+              ),
+            ),
+          ),
+        ).pipe(Effect.map((ctx) => Context.get(ctx, DeployService)));
+
+        const { accountId } = yield* linkAccount();
+        yield* scopedDeploy.mapProject({
+          projectId: symProjectId,
+          mapping: target(accountId, { directory: "dist" }),
+        });
+        assert.strictEqual(
+          yield* reasonOf(
+            scopedDeploy.start({
+              projectId: symProjectId,
+              accountId,
+              sourceKind: "local-build",
+            }),
+          ),
+          "outside-project",
+        );
+        const allowed = yield* scopedDeploy.start({
+          projectId: symProjectId,
+          accountId,
+          sourceKind: "local-build",
+          allowOutsideProject: true,
+        });
+        assert.strictEqual(allowed._tag, "started");
+      }).pipe(Effect.scoped),
+    );
+
     it.effect("holds a deploy from a thread below Full access until someone approves it", () =>
       Effect.gen(function* () {
         const { accountId } = yield* linkAccount();
@@ -700,7 +787,7 @@ describe("DeployService", () => {
       Effect.gen(function* () {
         const deploy = yield* DeployService;
         assert.include(yield* failureOf(deploy.link({ pluginId: "off-deploy" })), "Turn on");
-        assert.include(yield* failureOf(deploy.link({ pluginId: "nope" })), "No installed plugin");
+        assert.strictEqual(yield* reasonOf(deploy.link({ pluginId: "nope" })), "unknown-provider");
       }),
     );
   });
@@ -844,6 +931,263 @@ describe("DeployService", () => {
         // Not declaring the capability also keeps it out of the deploy list.
         const listed = (yield* deploy.overview).providers.map((provider) => provider.pluginId);
         assert.deepStrictEqual(listed, ["liar-deploy"]);
+      }),
+    );
+  });
+
+  /** A built-in claiming the same id as an installed plugin. */
+  const builtinCalls: Array<string> = [];
+  const shadowingBuiltin: BuiltinDeployProvider = {
+    info: {
+      id: "fake-deploy",
+      label: "Built-in Fake",
+      icon: "cloud",
+      version: "9.9.9",
+      description: "Ships with p0code.",
+      supportedOperations: ["link", "status"],
+      supportedTargetKinds: ["pages"],
+      supportedSourceKinds: ["git"],
+    },
+    provider: checkDeployProvider(
+      { id: "fake-deploy", label: "Built-in Fake", icon: "cloud" },
+      {
+        ...offStub(),
+        link: () =>
+          Effect.sync(() => {
+            builtinCalls.push("link");
+            return { _tag: "linked" as const, accountLabel: "builtin" };
+          }),
+        status: () =>
+          Effect.succeed({ state: "linked" as const, accountLabel: "builtin", message: null }),
+      },
+    ),
+  };
+
+  it.layer(
+    layerFor(
+      [fakeProvider, offProvider],
+      Layer.succeed(BuiltinDeployProviders, [shadowingBuiltin]),
+    ),
+  )((it) => {
+    it.effect(
+      "resolves a built-in before a plugin, falls back to plugins, refuses unknown ids",
+      () =>
+        Effect.gen(function* () {
+          const deploy = yield* DeployService;
+          // The built-in answers without the same-id plugin ever being turned on.
+          const linked = yield* deploy.link({ pluginId: "fake-deploy", token: TOKEN });
+          assert.deepStrictEqual(linked.result, { _tag: "linked", accountLabel: "builtin" });
+          assert.deepStrictEqual(builtinCalls, ["link"]);
+          assert.isUndefined(storageByPlugin.get("fake-deploy")?.get(`token:${linked.accountId}`));
+
+          const overview = yield* deploy.overview;
+          assert.deepStrictEqual(overview.providers, [
+            {
+              pluginId: "fake-deploy",
+              label: "Built-in Fake",
+              icon: "cloud",
+              running: true,
+              origin: "builtin",
+              version: "9.9.9",
+              description: "Ships with p0code.",
+              supportedOperations: ["link", "status"],
+              supportedTargetKinds: ["pages"],
+              supportedSourceKinds: ["git"],
+            },
+            {
+              pluginId: "off-deploy",
+              label: "off-deploy plugin",
+              icon: null,
+              running: false,
+              origin: "plugin",
+              version: "1.0.0",
+              description: "Test deploy provider.",
+              supportedOperations: [
+                "link",
+                "unlink",
+                "status",
+                "list-projects",
+                "deploy",
+                "deployment-status",
+                "logs",
+                "rollback",
+                "list-domains",
+                "set-env",
+              ],
+            },
+          ]);
+          assert.strictEqual(
+            overview.accounts.find((account) => account.id === linked.accountId)?.status
+              .accountLabel,
+            "builtin",
+          );
+
+          // Plugin providers no built-in claims still resolve.
+          assert.include(yield* failureOf(deploy.link({ pluginId: "off-deploy" })), "Turn on");
+          assert.strictEqual(
+            yield* reasonOf(deploy.link({ pluginId: "nope" })),
+            "unknown-provider",
+          );
+        }),
+    );
+  });
+
+  const memorySecrets = new Map<string, Uint8Array>();
+  const layerMemorySecrets = Layer.succeed(
+    ServerSecretStore.ServerSecretStore,
+    ServerSecretStore.ServerSecretStore.of({
+      get: (name) => Effect.sync(() => Option.fromNullishOr(memorySecrets.get(name))),
+      set: (name, value) => Effect.sync(() => void memorySecrets.set(name, value)),
+      create: (name, value) => Effect.sync(() => void memorySecrets.set(name, value)),
+      getOrCreateRandom: () => Effect.die("unused"),
+      remove: (name) => Effect.sync(() => void memorySecrets.delete(name)),
+    }),
+  );
+  const layerRealBuiltins = builtinsLayer.pipe(
+    Layer.provide(
+      Layer.mergeAll(
+        layerMemorySecrets,
+        FetchHttpClient.layer,
+        NodeServices.layer,
+        NodeCrypto.layer,
+      ),
+    ),
+  );
+
+  it.layer(layerFor([], layerRealBuiltins))((it) => {
+    it.effect("lists Vercel and Cloudflare as built-ins with their metadata", () =>
+      Effect.gen(function* () {
+        const providers = (yield* (yield* DeployService).overview).providers;
+        assert.deepStrictEqual(
+          providers.map((provider) => [provider.pluginId, provider.origin, provider.running]),
+          [
+            ["vercel", "builtin", true],
+            ["cloudflare", "builtin", true],
+          ],
+        );
+        assert.deepStrictEqual(providers[0]?.supportedTargetKinds, ["vercel-project"]);
+        assert.deepStrictEqual(providers[1]?.supportedTargetKinds, ["pages", "worker"]);
+        assert.strictEqual(providers[0]?.version, "0.2.0");
+        assert.strictEqual(providers[1]?.version, "0.3.0");
+      }),
+    );
+
+    it.effect("keeps an account linked through the former vercel plugin working", () =>
+      Effect.gen(function* () {
+        // What the `vercel` plugin left behind: its account row and its legacy plugin secrets.
+        const store = yield* DeployStore.DeployStore;
+        yield* store.insertAccount({
+          id: "legacy-vercel",
+          pluginId: "vercel",
+          label: "Old plugin",
+          teamId: null,
+          profileIds: [],
+          createdAt: "2026-01-01T00:00:00.000Z",
+        });
+        const encode = (text: string) => new TextEncoder().encode(text);
+        const legacyTokenKey = legacyPluginSecretName("vercel", "legacy-vercel:token");
+        const legacyAccountKey = legacyPluginSecretName("vercel", "legacy-vercel:account");
+        const builtinTokenKey = builtinSecretName("vercel", "legacy-vercel:token");
+        const builtinAccountKey = builtinSecretName("vercel", "legacy-vercel:account");
+        assert.strictEqual(builtinSecretName("vercel", "k"), "deploy-builtin:vercel:k");
+        assert.strictEqual(legacyPluginSecretName("vercel", "k"), "plugin-vercel-k");
+
+        memorySecrets.set(legacyTokenKey, encode(TOKEN));
+        memorySecrets.set(
+          legacyAccountKey,
+          encode(JSON.stringify({ accountLabel: "acme", userId: "u_1", linkedAt: 1 })),
+        );
+
+        const deploy = yield* DeployService;
+        const account = (yield* deploy.overview).accounts.find(
+          (candidate) => candidate.id === "legacy-vercel",
+        );
+        assert.deepStrictEqual(account?.status, {
+          state: "linked",
+          accountLabel: "acme",
+          message: null,
+          warnings: [],
+        });
+
+        // Read-through migration copies into the dedicated built-in prefix without deleting legacy keys.
+        assert.isTrue(memorySecrets.has(builtinTokenKey));
+        assert.isTrue(memorySecrets.has(builtinAccountKey));
+        assert.isTrue(memorySecrets.has(legacyTokenKey));
+        assert.isTrue(memorySecrets.has(legacyAccountKey));
+
+        // Even if the legacy plugin keys are later gone, the migrated built-in copy keeps working.
+        memorySecrets.delete(legacyTokenKey);
+        memorySecrets.delete(legacyAccountKey);
+        const afterLegacyGone = (yield* deploy.overview).accounts.find(
+          (candidate) => candidate.id === "legacy-vercel",
+        );
+        assert.strictEqual(afterLegacyGone?.status.state, "linked");
+
+        // Re-seed legacy to confirm explicit unlink clears both built-in and legacy entries.
+        memorySecrets.set(legacyTokenKey, encode(TOKEN));
+        memorySecrets.set(
+          legacyAccountKey,
+          encode(JSON.stringify({ accountLabel: "acme", userId: "u_1", linkedAt: 1 })),
+        );
+        yield* deploy.unlink("legacy-vercel");
+        assert.isFalse(memorySecrets.has(builtinTokenKey));
+        assert.isFalse(memorySecrets.has(builtinAccountKey));
+        assert.isFalse(memorySecrets.has(legacyTokenKey));
+        assert.isFalse(memorySecrets.has(legacyAccountKey));
+      }),
+    );
+
+    it.effect("keeps an account linked through the former cloudflare plugin working", () =>
+      Effect.gen(function* () {
+        const store = yield* DeployStore.DeployStore;
+        yield* store.insertAccount({
+          id: "legacy-cloudflare",
+          pluginId: "cloudflare",
+          label: "Old CF plugin",
+          teamId: "cf_acc_123",
+          profileIds: [],
+          createdAt: "2026-01-01T00:00:00.000Z",
+        });
+        const encode = (text: string) => new TextEncoder().encode(text);
+        const legacyTokenKey = legacyPluginSecretName("cloudflare", "legacy-cloudflare:api_token");
+        const legacyMetaKey = legacyPluginSecretName(
+          "cloudflare",
+          "legacy-cloudflare:account_meta",
+        );
+        const builtinTokenKey = builtinSecretName("cloudflare", "legacy-cloudflare:api_token");
+        const builtinMetaKey = builtinSecretName("cloudflare", "legacy-cloudflare:account_meta");
+
+        memorySecrets.set(legacyTokenKey, encode(TOKEN));
+        // An already-past expiresAt lets Cloudflare resolve account metadata offline without HTTP.
+        memorySecrets.set(
+          legacyMetaKey,
+          encode(
+            JSON.stringify({
+              accountId: "cf_acc_123",
+              accountLabel: "Acme Cloudflare",
+              tokenId: "tok_legacy",
+              expiresAt: "1969-12-31T00:00:00Z",
+              accounts: [{ id: "cf_acc_123", name: "Acme Cloudflare" }],
+            }),
+          ),
+        );
+
+        const deploy = yield* DeployService;
+        const account = (yield* deploy.overview).accounts.find(
+          (candidate) => candidate.id === "legacy-cloudflare",
+        );
+        assert.strictEqual(account?.status.state, "expired");
+        assert.strictEqual(account?.status.accountLabel, "Acme Cloudflare");
+        assert.isTrue(memorySecrets.has(builtinTokenKey));
+        assert.isTrue(memorySecrets.has(builtinMetaKey));
+        assert.isTrue(memorySecrets.has(legacyTokenKey));
+        assert.isTrue(memorySecrets.has(legacyMetaKey));
+
+        yield* deploy.unlink("legacy-cloudflare");
+        assert.isFalse(memorySecrets.has(builtinTokenKey));
+        assert.isFalse(memorySecrets.has(builtinMetaKey));
+        assert.isFalse(memorySecrets.has(legacyTokenKey));
+        assert.isFalse(memorySecrets.has(legacyMetaKey));
       }),
     );
   });

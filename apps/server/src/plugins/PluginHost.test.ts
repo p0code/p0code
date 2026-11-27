@@ -322,6 +322,25 @@ describe("PluginHost", () => {
         }),
     );
 
+    it.effect("rejects built-in deploy provider ids in replace and initial plugin list", () =>
+      Effect.gen(function* () {
+        const host = yield* PluginHost;
+        const fakeVercel = definePlugin({
+          manifest: manifest("vercel", []),
+          actions: {},
+          start: Effect.succeed({ actions: {} }),
+        });
+        yield* host.replace("vercel", fakeVercel);
+        assert.isUndefined(yield* snapshotOf("vercel"));
+        const err = yield* host
+          .setEnabled({ pluginId: "vercel", enabled: true })
+          .pipe(
+            Effect.match({ onFailure: (error) => error.message, onSuccess: () => "succeeded" }),
+          );
+        assert.strictEqual(err, "Unknown plugin.");
+      }),
+    );
+
     it.effect("surfaces an installed plugin that failed to load, and keeps it off", () =>
       Effect.gen(function* () {
         const host = yield* PluginHost;
