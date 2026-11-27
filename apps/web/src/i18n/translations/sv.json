@@ -8180,7 +8180,6 @@
   "129164189c938942": "Driftsättningsleverantörer",
   "3813b894c79465cc": "Visar konton i profilen {profile} samt otaggade konton.",
   "3a2e919ca921a60c": "Driftsättningar",
-  "1e80233b9193116f": "Av i Plugins",
   "58b7b0e79013a091": "Länkad",
   "364cae9e608a63d4": "Sign-in expired",
   "4ad258969e361b3c": "Fel",
@@ -8217,21 +8216,8 @@
   "0deabb397a585f0c": "Projektrot",
   "8c74857ecf98c255": "Utveckling",
   "f59d5b9846c2a3c6": "Anslut en miljö som kör den här versionen för att driftsätta från den.",
-  "0c5c6d47c9eec1cd": "Inga driftsättningsleverantörer installerade",
-  "3e68a8b268965f62": [
-    "Driftsättningsmål som Vercel, Cloudflare eller dina egna Docker-värdar kommer från plugins. Installera ett under ",
-    {
-      "t": "Link",
-      "i": 1,
-      "c": "Plugins"
-    },
-    ", slå på det och länka sedan ditt konto här."
-  ],
   "5486b18239ddf78e": "Lägg till ett projekt i den här miljön för att driftsätta det.",
   "7f9c4906e0c768ca": "Driftsättningar som startats från den här miljön visas här.",
-  "7770f2ba0e443fb7": "Slå på det här pluginet under Plugins för att länka ett konto.",
-  "583bcfdd538ebd2d": "Koppla ett eller flera konton för att driftsätta med den här leverantören.",
-  "7245b7d43b25b231": "Lägg till ett namngivet konto för ett annat team eller en annan profil.",
   "6a4c8edee7d78217": "Slutför inloggningen",
   "a4f401eedf02e8ef": [
     "Konto: ",
@@ -13289,5 +13275,53 @@
   "27d76249d09eb69f": "Granskningsguiden är klar",
   "faa3bb26abb39c93": "Granskningsguiden misslyckades",
   "b7df38b7d8792d78": "Öppna guiden",
-  "9e91e9a77b664e4e": "Kunde inte starta en granskningsguide"
+  "9e91e9a77b664e4e": "Kunde inte starta en granskningsguide",
+  "06733861c1f03c73": "Driftsätt webbappar och förhandsgrenar till Vercel-projekt.",
+  "2e24ae788942b986": "Driftsätt Workers och Pages till Cloudflare.",
+  "a6e90bbd4e60eefd": "Egen server (Docker)",
+  "3eb926382e41fcef": "Driftsätt containrar till din egen SSH- eller Docker-värd.",
+  "84ef1e253ce4eaf0": "{provider} är inte tillgänglig ännu",
+  "3d2d6722cf09e29b": "Aktivera {provider} (påverkar alla dess konton)",
+  "3837a204523829ef": "Inte tillgänglig ännu",
+  "91611915dd411366": "Misslyckades",
+  "f55a6fbb3192eed9": "Inte konfigurerad",
+  "8c3f9838f963817d": "Länkade konton: {linked} av {total}",
+  "ec3eae4139018317": "{provider}-kontot {account}",
+  "3422c3be6c74c41b": "Lägg till driftsättningsleverantör",
+  "2e0e8280d5b8c59b": "Från insticksprogram",
+  "66a1b681b85228d6": "Inställningar för {provider}",
+  "02b6d088f04ae679": "{provider}-konto",
+  "6b9b5854e255ecf3": "{provider} är inte tillgänglig i den här versionen ännu och kan inte länkas.",
+  "21d12930f01fe4a0": "Den här driftsättningsleverantören kunde inte starta.",
+  "1ea2a4cf9b195958": "Slå på {provider} för att länka konton eller driftsätta med den.",
+  "93d63f22863a17bf": "Leverantör aktiverad",
+  "948332b727449509": "Att slå på eller av {provider} påverkar alla dess konton.",
+  "c719b6bd1fc31802": "Konton",
+  "5e7aa569caab20e6": "Inga konton är länkade i profilen {profile}.",
+  "03d68ee79cd9a592": "Inga konton länkade ännu.",
+  "a2231e047ea8ddef": "Länka konto",
+  "ec6e8564f5faaf6e": "Visningsnamn för {account}",
+  "62fe78f40530ddd8": "Öppna Insticksprogram",
+  "00513a3b28638818": "Visa",
+  "599406fecc8804a5": "Lägg till ett namngivet konto för att driftsätta projekt med den här leverantören.",
+  "6f48f2bd818d5033": "Välj en driftsättningsleverantör att länka ett konto till.",
+  "0e8eb3f68ed2f69e": [
+    "Länka ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    "-konto"
+  ],
+  "1b905fd0eb58bf12": [
+    "Driftsättningsleverantörer från tredje part kan läggas till i",
+    " ",
+    {
+      "t": "Link",
+      "i": 1,
+      "c": "Insticksprogram"
+    },
+    "."
+  ]
 }

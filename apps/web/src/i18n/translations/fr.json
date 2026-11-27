@@ -8176,7 +8176,6 @@
   "129164189c938942": "Fournisseurs de déploiement",
   "3813b894c79465cc": "Comptes affichés pour le profil {profile} et comptes non associés.",
   "3a2e919ca921a60c": "Déploiements",
-  "1e80233b9193116f": "Désactivé dans Plugins",
   "58b7b0e79013a091": "Associé",
   "364cae9e608a63d4": "Sign-in expired",
   "4ad258969e361b3c": "Erreur",
@@ -8213,21 +8212,8 @@
   "0deabb397a585f0c": "Racine du projet",
   "8c74857ecf98c255": "Développement",
   "f59d5b9846c2a3c6": "Connectez un environnement exécutant cette version pour déployer depuis celui-ci.",
-  "0c5c6d47c9eec1cd": "Aucun fournisseur de déploiement installé",
-  "3e68a8b268965f62": [
-    "Les cibles de déploiement comme Vercel, Cloudflare ou vos propres hôtes Docker viennent de plugins. Installez-en un dans ",
-    {
-      "t": "Link",
-      "i": 1,
-      "c": "Plugins"
-    },
-    ", activez-le, puis associez votre compte ici."
-  ],
   "5486b18239ddf78e": "Ajoutez un projet à cet environnement pour le déployer.",
   "7f9c4906e0c768ca": "Les déploiements lancés depuis cet environnement apparaissent ici.",
-  "7770f2ba0e443fb7": "Activez ce plugin dans Plugins pour associer un compte.",
-  "583bcfdd538ebd2d": "Associez un ou plusieurs comptes pour déployer avec ce fournisseur.",
-  "7245b7d43b25b231": "Ajoutez un autre compte nommé pour une autre équipe ou un autre profil.",
   "6a4c8edee7d78217": "Terminer la connexion",
   "a4f401eedf02e8ef": [
     "Compte : ",
@@ -13283,5 +13269,52 @@
   "27d76249d09eb69f": "Guide de revue prêt",
   "faa3bb26abb39c93": "Échec du guide de revue",
   "b7df38b7d8792d78": "Ouvrir le guide",
-  "9e91e9a77b664e4e": "Impossible de démarrer un guide de revue"
+  "9e91e9a77b664e4e": "Impossible de démarrer un guide de revue",
+  "06733861c1f03c73": "Déployez des applications web et des branches de prévisualisation sur des projets Vercel.",
+  "2e24ae788942b986": "Déployez des Workers et des Pages sur Cloudflare.",
+  "a6e90bbd4e60eefd": "Serveur personnel (Docker)",
+  "3eb926382e41fcef": "Déployez des conteneurs sur votre propre hôte SSH ou Docker.",
+  "84ef1e253ce4eaf0": "{provider} n’est pas encore disponible",
+  "3d2d6722cf09e29b": "Activer {provider} (concerne tous ses comptes)",
+  "3837a204523829ef": "Pas encore disponible",
+  "91611915dd411366": "Échec",
+  "f55a6fbb3192eed9": "Non configuré",
+  "8c3f9838f963817d": "Comptes associés : {linked} sur {total}",
+  "ec3eae4139018317": "Compte {provider} {account}",
+  "3422c3be6c74c41b": "Ajouter un fournisseur de déploiement",
+  "2e0e8280d5b8c59b": "Fournis par des plugins",
+  "66a1b681b85228d6": "Paramètres de {provider}",
+  "02b6d088f04ae679": "Compte {provider}",
+  "6b9b5854e255ecf3": "{provider} n’est pas encore disponible dans cette version et ne peut pas être associé.",
+  "21d12930f01fe4a0": "Ce fournisseur de déploiement n’a pas pu démarrer.",
+  "1ea2a4cf9b195958": "Activez {provider} pour associer des comptes ou déployer avec.",
+  "93d63f22863a17bf": "Fournisseur activé",
+  "948332b727449509": "Activer ou désactiver {provider} concerne tous ses comptes.",
+  "c719b6bd1fc31802": "Comptes",
+  "5e7aa569caab20e6": "Aucun compte associé dans le profil {profile}.",
+  "03d68ee79cd9a592": "Aucun compte associé pour le moment.",
+  "a2231e047ea8ddef": "Associer le compte",
+  "ec6e8564f5faaf6e": "Nom affiché pour {account}",
+  "62fe78f40530ddd8": "Ouvrir Plugins",
+  "00513a3b28638818": "Voir",
+  "599406fecc8804a5": "Ajoutez un compte nommé pour déployer des projets avec ce fournisseur.",
+  "6f48f2bd818d5033": "Choisissez un fournisseur de déploiement pour associer un compte.",
+  "0e8eb3f68ed2f69e": [
+    "Associer un compte ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    }
+  ],
+  "1b905fd0eb58bf12": [
+    "Les fournisseurs de déploiement tiers peuvent être ajoutés depuis",
+    " ",
+    {
+      "t": "Link",
+      "i": 1,
+      "c": "Plugins"
+    },
+    "."
+  ]
 }

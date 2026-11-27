@@ -8175,7 +8175,6 @@
   "129164189c938942": "Proveedores de despliegue",
   "3813b894c79465cc": "Mostrando cuentas del perfil {profile} y cuentas sin perfil asignado.",
   "3a2e919ca921a60c": "Despliegues",
-  "1e80233b9193116f": "Desactivado en Plugins",
   "58b7b0e79013a091": "Vinculado",
   "364cae9e608a63d4": "Sign-in expired",
   "4ad258969e361b3c": "Error",
@@ -8212,21 +8211,8 @@
   "0deabb397a585f0c": "Raíz del proyecto",
   "8c74857ecf98c255": "Desarrollo",
   "f59d5b9846c2a3c6": "Conecta un entorno con esta versión para desplegar desde él.",
-  "0c5c6d47c9eec1cd": "No hay proveedores de despliegue instalados",
-  "3e68a8b268965f62": [
-    "Los destinos de despliegue como Vercel, Cloudflare o tus propios hosts Docker vienen de plugins. Instala uno en ",
-    {
-      "t": "Link",
-      "i": 1,
-      "c": "Plugins"
-    },
-    ", actívalo y vincula tu cuenta aquí."
-  ],
   "5486b18239ddf78e": "Añade un proyecto a este entorno para desplegarlo.",
   "7f9c4906e0c768ca": "Aquí aparecen los despliegues iniciados desde este entorno.",
-  "7770f2ba0e443fb7": "Activa este plugin en Plugins para vincular una cuenta.",
-  "583bcfdd538ebd2d": "Vincula una o más cuentas para desplegar con este proveedor.",
-  "7245b7d43b25b231": "Añade otra cuenta con nombre para un equipo o perfil distinto.",
   "6a4c8edee7d78217": "Terminar de iniciar sesión",
   "a4f401eedf02e8ef": [
     "Cuenta: ",
@@ -13278,5 +13264,52 @@
   "27d76249d09eb69f": "Guía de revisión lista",
   "faa3bb26abb39c93": "Falló la guía de revisión",
   "b7df38b7d8792d78": "Abrir guía",
-  "9e91e9a77b664e4e": "No se pudo iniciar una guía de revisión"
+  "9e91e9a77b664e4e": "No se pudo iniciar una guía de revisión",
+  "06733861c1f03c73": "Despliega aplicaciones web y ramas de vista previa en proyectos de Vercel.",
+  "2e24ae788942b986": "Despliega Workers y Pages en Cloudflare.",
+  "a6e90bbd4e60eefd": "Servidor propio (Docker)",
+  "3eb926382e41fcef": "Despliega contenedores en tu propio host SSH o Docker.",
+  "84ef1e253ce4eaf0": "{provider} aún no está disponible",
+  "3d2d6722cf09e29b": "Activar {provider} (afecta a todas sus cuentas)",
+  "3837a204523829ef": "Aún no disponible",
+  "91611915dd411366": "Error al iniciar",
+  "f55a6fbb3192eed9": "Sin configurar",
+  "8c3f9838f963817d": "Cuentas vinculadas: {linked} de {total}",
+  "ec3eae4139018317": "Cuenta de {provider}: {account}",
+  "3422c3be6c74c41b": "Añadir proveedor de despliegue",
+  "2e0e8280d5b8c59b": "Proporcionados por plugins",
+  "66a1b681b85228d6": "Ajustes de {provider}",
+  "02b6d088f04ae679": "Cuenta de {provider}",
+  "6b9b5854e255ecf3": "{provider} aún no está disponible en esta versión y no se puede vincular.",
+  "21d12930f01fe4a0": "Este proveedor de despliegue no pudo iniciarse.",
+  "1ea2a4cf9b195958": "Activa {provider} para vincular cuentas o desplegar con él.",
+  "93d63f22863a17bf": "Proveedor activado",
+  "948332b727449509": "Activar o desactivar {provider} afecta a todas sus cuentas.",
+  "c719b6bd1fc31802": "Cuentas",
+  "5e7aa569caab20e6": "No hay cuentas vinculadas en el perfil {profile}.",
+  "03d68ee79cd9a592": "Todavía no hay cuentas vinculadas.",
+  "a2231e047ea8ddef": "Vincular cuenta",
+  "ec6e8564f5faaf6e": "Nombre visible de {account}",
+  "62fe78f40530ddd8": "Abrir Plugins",
+  "00513a3b28638818": "Ver",
+  "599406fecc8804a5": "Añade una cuenta con nombre para desplegar proyectos con este proveedor.",
+  "6f48f2bd818d5033": "Elige un proveedor de despliegue para vincular una cuenta.",
+  "0e8eb3f68ed2f69e": [
+    "Vincular cuenta de ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    }
+  ],
+  "1b905fd0eb58bf12": [
+    "Puedes añadir proveedores de despliegue de terceros desde",
+    " ",
+    {
+      "t": "Link",
+      "i": 1,
+      "c": "Plugins"
+    },
+    "."
+  ]
 }

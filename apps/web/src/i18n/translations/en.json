@@ -8184,7 +8184,6 @@
   "129164189c938942": "Deploy providers",
   "3813b894c79465cc": "Showing accounts in profile {profile} and untagged accounts.",
   "3a2e919ca921a60c": "Deployments",
-  "1e80233b9193116f": "Off in Plugins",
   "58b7b0e79013a091": "Linked",
   "364cae9e608a63d4": "Sign-in expired",
   "4ad258969e361b3c": "Error",
@@ -8221,21 +8220,8 @@
   "0deabb397a585f0c": "Project root",
   "8c74857ecf98c255": "Development",
   "f59d5b9846c2a3c6": "Connect an environment running this version to deploy from it.",
-  "0c5c6d47c9eec1cd": "No deploy providers installed",
-  "3e68a8b268965f62": [
-    "Deploy targets such as Vercel, Cloudflare or your own Docker hosts come from plugins. Install one in ",
-    {
-      "t": "Link",
-      "i": 1,
-      "c": "Plugins"
-    },
-    ", turn it on, then link your account here."
-  ],
   "5486b18239ddf78e": "Add a project to this environment to deploy it.",
   "7f9c4906e0c768ca": "Deploys started from this environment appear here.",
-  "7770f2ba0e443fb7": "Turn this plugin on in Plugins to link an account.",
-  "583bcfdd538ebd2d": "Link one or more accounts to deploy with this provider.",
-  "7245b7d43b25b231": "Add another named account for a different team or profile.",
   "6a4c8edee7d78217": "Finish signing in",
   "a4f401eedf02e8ef": [
     "Account: ",
@@ -13298,5 +13284,53 @@
   "27d76249d09eb69f": "Review guide ready",
   "faa3bb26abb39c93": "Review guide failed",
   "b7df38b7d8792d78": "Open guide",
-  "9e91e9a77b664e4e": "Could not start a review guide"
+  "9e91e9a77b664e4e": "Could not start a review guide",
+  "06733861c1f03c73": "Deploy web apps and preview branches to Vercel projects.",
+  "2e24ae788942b986": "Deploy Workers and Pages to Cloudflare.",
+  "a6e90bbd4e60eefd": "Own server (Docker)",
+  "3eb926382e41fcef": "Deploy containers to your own SSH or Docker host.",
+  "84ef1e253ce4eaf0": "{provider} is not available yet",
+  "3d2d6722cf09e29b": "Enable {provider} (affects all its accounts)",
+  "3837a204523829ef": "Not available yet",
+  "91611915dd411366": "Failed",
+  "f55a6fbb3192eed9": "Not set up",
+  "8c3f9838f963817d": "Accounts linked: {linked} of {total}",
+  "ec3eae4139018317": "{provider} account {account}",
+  "3422c3be6c74c41b": "Add deploy provider",
+  "2e0e8280d5b8c59b": "Plugin-provided",
+  "66a1b681b85228d6": "{provider} settings",
+  "02b6d088f04ae679": "{provider} account",
+  "6b9b5854e255ecf3": "{provider} is not available in this version yet and cannot be linked.",
+  "21d12930f01fe4a0": "This deploy provider failed to start.",
+  "1ea2a4cf9b195958": "Turn on {provider} to link accounts or deploy with it.",
+  "93d63f22863a17bf": "Provider enabled",
+  "948332b727449509": "Turning {provider} on or off affects all of its accounts.",
+  "c719b6bd1fc31802": "Accounts",
+  "5e7aa569caab20e6": "No accounts linked in profile {profile}.",
+  "03d68ee79cd9a592": "No accounts linked yet.",
+  "a2231e047ea8ddef": "Link account",
+  "ec6e8564f5faaf6e": "Display name for {account}",
+  "62fe78f40530ddd8": "Open Plugins",
+  "00513a3b28638818": "View",
+  "599406fecc8804a5": "Add a named account to deploy projects with this provider.",
+  "6f48f2bd818d5033": "Choose a deploy provider to link an account.",
+  "0e8eb3f68ed2f69e": [
+    "Link ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " account"
+  ],
+  "1b905fd0eb58bf12": [
+    "Third-party deploy providers can be added from",
+    " ",
+    {
+      "t": "Link",
+      "i": 1,
+      "c": "Plugins"
+    },
+    "."
+  ]
 }
