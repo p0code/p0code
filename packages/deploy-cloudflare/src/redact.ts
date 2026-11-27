@@ -18,7 +18,7 @@ export function redactSecrets(text: string, secrets: ReadonlyArray<string> = [])
     .replace(AUTH_HEADER_PATTERN, "$1[REDACTED]");
   for (const secret of secrets) {
     const trimmed = secret.trim();
-    if (trimmed.length >= 6) {
+    if (trimmed.length >= 4) {
       sanitized = sanitized.split(trimmed).join("[REDACTED]");
     }
   }

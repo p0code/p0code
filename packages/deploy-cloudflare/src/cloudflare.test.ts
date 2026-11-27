@@ -1342,4 +1342,92 @@ describe("account isolation and env targets", () => {
       assert.strictEqual(patches.length, before);
     }),
   );
+
+  it.effect(
+    "rejects dot-segment traversal ids before HTTP requests, redacts Pages logs, and redacts secret setEnv errors",
+    () =>
+      Effect.gen(function* () {
+        const secretVal = "cf_secret_var_echoed_9999";
+        const env = startWithHandler((req) => {
+          if (req.url.endsWith("/history/logs")) {
+            return cfSuccess({
+              data: [
+                {
+                  ts: "2026-06-01T08:00:00Z",
+                  line: `Using ${TEST_TOKEN} and Authorization: Bearer tok_other_123456`,
+                },
+              ],
+            });
+          }
+          if (req.method === "PATCH") {
+            return cfError([{ code: 8000001, message: `Invalid secret ${secretVal}` }], 400);
+          }
+          return cfError([{ code: 404, message: `unmatched ${req.url}` }], 404);
+        }, linkedStorage());
+        const provider = yield* env.start;
+
+        // Traversal identifiers fail before any HTTP request is recorded.
+        assert.include(
+          yield* failureOf(
+            provider.link({ account: { accountId: "bad", teamId: ".." }, token: TEST_TOKEN }),
+          ),
+          "Invalid Cloudflare",
+        );
+        assert.include(
+          yield* failureOf(
+            provider.listDomains({
+              account: TEST_ACCOUNT,
+              target: { kind: "pages", id: "pages:.." },
+            }),
+          ),
+          "Invalid Cloudflare",
+        );
+        assert.include(
+          yield* failureOf(
+            provider.deploymentStatus({
+              account: TEST_ACCOUNT,
+              deploymentId: "pages:..:..",
+            }),
+          ),
+          "not a Cloudflare deployment id",
+        );
+        assert.include(
+          yield* failureOf(
+            provider.rollback({
+              account: TEST_ACCOUNT,
+              target: { kind: "pages", id: "pages:marketing-site" },
+              deploymentId: "..",
+            }),
+          ),
+          "not a valid Cloudflare deployment id",
+        );
+        assert.strictEqual(env.mock.recorded.length, 0);
+
+        // Pages build logs are scrubbed through redactSecrets.
+        const logLines = yield* collect(
+          provider.logs({
+            account: TEST_ACCOUNT,
+            deploymentId: "pages:marketing-site:dep-pages-002",
+          }),
+        );
+        assert.strictEqual(logLines.length, 1);
+        assertNoTokenLeak(logLines);
+        assert.isFalse((logLines[0] ?? "").includes("tok_other_123456"));
+        assert.include(logLines[0] ?? "", "[REDACTED]");
+
+        // Secret setEnv values echoed by Cloudflare errors are redacted.
+        const envErr = yield* failureOf(
+          provider.setEnv({
+            account: TEST_ACCOUNT,
+            target: { kind: "pages", id: "pages:marketing-site" },
+            environment: "production",
+            secret: true,
+            remove: [],
+            vars: { SECRET_KEY: secretVal },
+          }),
+        );
+        assert.isFalse(envErr.includes(secretVal));
+        assert.include(envErr, "[REDACTED]");
+      }),
+  );
 });

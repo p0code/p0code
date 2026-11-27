@@ -41,15 +41,48 @@ export class VercelApiError extends Schema.TaggedError<VercelApiError>()("Vercel
 
 export type VercelClientError = VercelAuthExpiredError | VercelApiError | PluginError;
 
-/** Strips raw tokens and bearer headers so credentials never appear in errors or outputs. */
-export function redactSecrets(text: string, token?: string): string {
+/** Strips raw tokens, bearer headers, and extra secrets so values never leak in errors or logs. */
+export function redactSecrets(
+  text: string,
+  token?: string,
+  extraSecrets: ReadonlyArray<string> = [],
+): string {
   let sanitized = text;
   if (token !== undefined && token.length > 0) {
     sanitized = sanitized.replaceAll(token, "[REDACTED]");
   }
+  for (const secret of extraSecrets) {
+    const trimmed = secret.trim();
+    if (trimmed.length >= 4) {
+      sanitized = sanitized.replaceAll(trimmed, "[REDACTED]");
+    }
+  }
   return sanitized
     .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [REDACTED]")
     .replace(/\bvcp_[A-Za-z0-9_-]{8,}\b/g, "[REDACTED]");
+}
+
+function isSafePathSegment(value: string): boolean {
+  const trimmed = value.trim();
+  return trimmed.length > 0 && trimmed !== "." && trimmed !== ".." && !/[/\\\0]/.test(value);
+}
+
+function encodePathSegment(value: string, label: string): Effect.Effect<string, PluginError> {
+  if (!isSafePathSegment(value)) {
+    return Effect.fail(new PluginError({ message: `Invalid Vercel ${label}.` }));
+  }
+  return Effect.succeed(encodeURIComponent(value.trim()));
+}
+
+function validateOptionalSegment(
+  value: string | undefined,
+  label: string,
+): Effect.Effect<string | undefined, PluginError> {
+  if (value === undefined) return Effect.undefined;
+  if (!isSafePathSegment(value)) {
+    return Effect.fail(new PluginError({ message: `Invalid Vercel ${label}.` }));
+  }
+  return Effect.succeed(value.trim());
 }
 
 function normalizeDeploymentUrl(url: string | null | undefined): string | undefined {
@@ -284,6 +317,7 @@ export function makeVercelClient(
   const execute = Effect.fn("vercel.client.execute")(function* (
     request: HttpClientRequest.HttpClientRequest,
     token: string,
+    extraSecrets: ReadonlyArray<string> = [],
   ) {
     // Never attach the raw HttpClientError as `cause`, because it holds the outgoing request
     // headers including `Authorization: Bearer <token>`.
@@ -312,7 +346,7 @@ export function makeVercelClient(
       return yield* new VercelApiError({
         status: response.status,
         ...(Option.isSome(code) ? { code: code.value } : {}),
-        message: redactSecrets(rawMessage, token),
+        message: redactSecrets(rawMessage, token, extraSecrets),
       });
     }
     return response;
@@ -351,8 +385,9 @@ export function makeVercelClient(
   });
 
   const getTeam = Effect.fn("vercel.client.getTeam")(function* (token: string, teamId: string) {
+    const teamSegment = yield* encodePathSegment(teamId, "teamId");
     const response = yield* execute(
-      HttpClientRequest.get(buildUrl(baseUrl, `/v2/teams/${encodeURIComponent(teamId)}`)),
+      HttpClientRequest.get(buildUrl(baseUrl, `/v2/teams/${teamSegment}`)),
       token,
     );
     const team = yield* decodeJson(
@@ -367,10 +402,11 @@ export function makeVercelClient(
     token: string,
     options?: { readonly limit?: number; readonly search?: string; readonly teamId?: string },
   ) {
+    const teamId = yield* validateOptionalSegment(options?.teamId, "teamId");
     const url = buildUrl(baseUrl, "/v9/projects", {
       limit: options?.limit,
       search: options?.search,
-      teamId: options?.teamId,
+      teamId,
     });
     const response = yield* execute(HttpClientRequest.get(url), token);
     const body = yield* decodeJson(response, VercelProjectsListResponse, "GET /v9/projects");
@@ -384,7 +420,9 @@ export function makeVercelClient(
     projectId: string,
     teamId?: string,
   ) {
-    const url = buildUrl(baseUrl, `/v9/projects/${encodeURIComponent(projectId)}`, { teamId });
+    const projectSegment = yield* encodePathSegment(projectId, "projectId");
+    const validTeamId = yield* validateOptionalSegment(teamId, "teamId");
+    const url = buildUrl(baseUrl, `/v9/projects/${projectSegment}`, { teamId: validTeamId });
     const response = yield* execute(HttpClientRequest.get(url), token);
     const raw = yield* decodeJson(response, VercelProjectResponse, "GET /v9/projects/{id}");
     const link = raw.link ?? null;
@@ -410,7 +448,8 @@ export function makeVercelClient(
     token: string,
     input: { readonly sha1: string; readonly bytes: Uint8Array; readonly teamId?: string },
   ) {
-    const url = buildUrl(baseUrl, "/v2/files", { teamId: input.teamId });
+    const teamId = yield* validateOptionalSegment(input.teamId, "teamId");
+    const url = buildUrl(baseUrl, "/v2/files", { teamId });
     const request = HttpClientRequest.post(url).pipe(
       HttpClientRequest.setHeader("x-vercel-digest", input.sha1),
       HttpClientRequest.setHeader("content-length", String(input.bytes.byteLength)),
@@ -424,7 +463,8 @@ export function makeVercelClient(
     payload: CreateDeploymentBody,
     teamId?: string,
   ) {
-    const url = buildUrl(baseUrl, "/v13/deployments", { teamId });
+    const validTeamId = yield* validateOptionalSegment(teamId, "teamId");
+    const url = buildUrl(baseUrl, "/v13/deployments", { teamId: validTeamId });
     const json = yield* encodeJsonBody(payload).pipe(
       Effect.mapError(() => new PluginError({ message: "Failed to encode deployment request." })),
     );
@@ -451,7 +491,9 @@ export function makeVercelClient(
     id: string,
     teamId?: string,
   ) {
-    const url = buildUrl(baseUrl, `/v13/deployments/${encodeURIComponent(id)}`, { teamId });
+    const depSegment = yield* encodePathSegment(id, "deploymentId");
+    const validTeamId = yield* validateOptionalSegment(teamId, "teamId");
+    const url = buildUrl(baseUrl, `/v13/deployments/${depSegment}`, { teamId: validTeamId });
     const response = yield* execute(HttpClientRequest.get(url), token);
     const raw = yield* decodeJson(response, VercelDeploymentResponse, "GET /v13/deployments/{id}");
     return toDeploymentStatus(raw, id, token);
@@ -467,12 +509,14 @@ export function makeVercelClient(
       readonly teamId?: string;
     },
   ) {
+    const projectId = yield* validateOptionalSegment(options?.projectId, "projectId");
+    const teamId = yield* validateOptionalSegment(options?.teamId, "teamId");
     const url = buildUrl(baseUrl, "/v6/deployments", {
-      projectId: options?.projectId,
+      projectId,
       limit: options?.limit,
       target: options?.target,
       state: options?.state,
-      teamId: options?.teamId,
+      teamId,
     });
     const response = yield* execute(HttpClientRequest.get(url), token);
     const body = yield* decodeJson(response, VercelDeploymentsListResponse, "GET /v6/deployments");
@@ -497,12 +541,14 @@ export function makeVercelClient(
       readonly teamId?: string;
     },
   ) {
-    const url = buildUrl(baseUrl, `/v2/deployments/${encodeURIComponent(id)}/events`, {
+    const depSegment = yield* encodePathSegment(id, "deploymentId");
+    const teamId = yield* validateOptionalSegment(options?.teamId, "teamId");
+    const url = buildUrl(baseUrl, `/v2/deployments/${depSegment}/events`, {
       builds: 1,
       direction: "forward",
       limit: options?.limit,
       since: options?.since,
-      teamId: options?.teamId,
+      teamId,
     });
     const response = yield* execute(HttpClientRequest.get(url), token);
     const rows = yield* decodeJson(
@@ -528,11 +574,12 @@ export function makeVercelClient(
     deploymentId: string,
     teamId?: string,
   ) {
-    const url = buildUrl(
-      baseUrl,
-      `/v1/projects/${encodeURIComponent(projectId)}/rollback/${encodeURIComponent(deploymentId)}`,
-      { teamId },
-    );
+    const projectSegment = yield* encodePathSegment(projectId, "projectId");
+    const depSegment = yield* encodePathSegment(deploymentId, "deploymentId");
+    const validTeamId = yield* validateOptionalSegment(teamId, "teamId");
+    const url = buildUrl(baseUrl, `/v1/projects/${projectSegment}/rollback/${depSegment}`, {
+      teamId: validTeamId,
+    });
     yield* execute(HttpClientRequest.post(url), token);
   });
 
@@ -542,11 +589,12 @@ export function makeVercelClient(
     deploymentId: string,
     teamId?: string,
   ) {
-    const url = buildUrl(
-      baseUrl,
-      `/v10/projects/${encodeURIComponent(projectId)}/promote/${encodeURIComponent(deploymentId)}`,
-      { teamId },
-    );
+    const projectSegment = yield* encodePathSegment(projectId, "projectId");
+    const depSegment = yield* encodePathSegment(deploymentId, "deploymentId");
+    const validTeamId = yield* validateOptionalSegment(teamId, "teamId");
+    const url = buildUrl(baseUrl, `/v10/projects/${projectSegment}/promote/${depSegment}`, {
+      teamId: validTeamId,
+    });
     yield* execute(HttpClientRequest.post(url), token);
   });
 
@@ -555,9 +603,11 @@ export function makeVercelClient(
     projectId: string,
     options?: { readonly limit?: number; readonly teamId?: string },
   ) {
-    const url = buildUrl(baseUrl, `/v9/projects/${encodeURIComponent(projectId)}/domains`, {
+    const projectSegment = yield* encodePathSegment(projectId, "projectId");
+    const teamId = yield* validateOptionalSegment(options?.teamId, "teamId");
+    const url = buildUrl(baseUrl, `/v9/projects/${projectSegment}/domains`, {
       limit: options?.limit,
-      teamId: options?.teamId,
+      teamId,
     });
     const response = yield* execute(HttpClientRequest.get(url), token);
     const body = yield* decodeJson(
@@ -578,10 +628,13 @@ export function makeVercelClient(
     projectId: string,
     entries: ReadonlyArray<UpsertEnvItem>,
     teamId?: string,
+    extraSecrets: ReadonlyArray<string> = [],
   ) {
-    const url = buildUrl(baseUrl, `/v9/projects/${encodeURIComponent(projectId)}/env`, {
+    const projectSegment = yield* encodePathSegment(projectId, "projectId");
+    const validTeamId = yield* validateOptionalSegment(teamId, "teamId");
+    const url = buildUrl(baseUrl, `/v9/projects/${projectSegment}/env`, {
       upsert: true,
-      teamId,
+      teamId: validTeamId,
     });
     const payload = entries.length === 1 ? entries[0] : entries;
     const bodyJson = yield* encodeJsonBody(payload).pipe(
@@ -589,9 +642,13 @@ export function makeVercelClient(
         () => new PluginError({ message: "Failed to encode environment variables payload." }),
       ),
     );
+    const sensitiveValues = entries
+      .filter((entry) => entry.type === "sensitive" || entry.type === "encrypted")
+      .map((entry) => entry.value);
     yield* execute(
       HttpClientRequest.post(url).pipe(HttpClientRequest.bodyText(bodyJson, "application/json")),
       token,
+      [...sensitiveValues, ...extraSecrets],
     );
   });
 
@@ -603,9 +660,11 @@ export function makeVercelClient(
     teamId?: string,
   ) {
     if (keys.length === 0) return;
+    const projectSegment = yield* encodePathSegment(projectId, "projectId");
+    const validTeamId = yield* validateOptionalSegment(teamId, "teamId");
     const response = yield* execute(
       HttpClientRequest.get(
-        buildUrl(baseUrl, `/v9/projects/${encodeURIComponent(projectId)}/env`, { teamId }),
+        buildUrl(baseUrl, `/v9/projects/${projectSegment}/env`, { teamId: validTeamId }),
       ),
       token,
     );
@@ -625,11 +684,10 @@ export function makeVercelClient(
     for (const entry of body.envs) {
       if (!keys.includes(entry.key) || !entry.target.includes(environment)) continue;
       const remaining = entry.target.filter((target) => target !== environment);
-      const url = buildUrl(
-        baseUrl,
-        `/v9/projects/${encodeURIComponent(projectId)}/env/${encodeURIComponent(entry.id)}`,
-        { teamId },
-      );
+      const envIdSegment = yield* encodePathSegment(entry.id, "envId");
+      const url = buildUrl(baseUrl, `/v9/projects/${projectSegment}/env/${envIdSegment}`, {
+        teamId: validTeamId,
+      });
       if (remaining.length === 0) {
         yield* execute(HttpClientRequest.delete(url), token);
       } else {

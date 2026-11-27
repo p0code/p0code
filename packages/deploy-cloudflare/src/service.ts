@@ -91,17 +91,24 @@ function parseProjectId(projectId: string): {
   return { kind: "pages", name: projectId };
 }
 
-const resolveTarget = (target: DeployTarget) => {
+function isSafeIdentifierSegment(value: string): boolean {
+  const trimmed = value.trim();
+  return trimmed.length > 0 && trimmed !== "." && trimmed !== ".." && !/[/\\\0]/.test(value);
+}
+
+const resolveTarget = Effect.fn("resolveTarget")(function* (target: DeployTarget) {
   if (target.kind === "vercel-project")
-    return Effect.fail(
-      new PluginError({ message: "Cloudflare requires a pages or worker target." }),
-    );
+    return yield* new PluginError({ message: "Cloudflare requires a pages or worker target." });
   const parsed = parseProjectId(target.id);
   const prefixed = target.id.startsWith("pages:") || target.id.startsWith("worker:");
   if (prefixed && parsed.kind !== target.kind)
-    return Effect.fail(new PluginError({ message: "Cloudflare target kind and id disagree." }));
-  return Effect.succeed({ kind: target.kind, name: prefixed ? parsed.name : target.id });
-};
+    return yield* new PluginError({ message: "Cloudflare target kind and id disagree." });
+  const name = prefixed ? parsed.name : target.id;
+  if (!isSafeIdentifierSegment(name)) {
+    return yield* new PluginError({ message: "Invalid Cloudflare target id." });
+  }
+  return { kind: target.kind, name: name.trim() };
+});
 
 function parseDeploymentRef(
   id: string,
@@ -109,11 +116,17 @@ function parseDeploymentRef(
 ): { readonly kind: ProjectKind; readonly name: string; readonly rawId: string } | null {
   const match = /^(pages|worker):([^:]+):(.+)$/.exec(id);
   if (match?.[1] && match[2] && match[3]) {
-    return { kind: match[1] === "worker" ? "worker" : "pages", name: match[2], rawId: match[3] };
+    if (!isSafeIdentifierSegment(match[2]) || !isSafeIdentifierSegment(match[3])) return null;
+    return {
+      kind: match[1] === "worker" ? "worker" : "pages",
+      name: match[2].trim(),
+      rawId: match[3].trim(),
+    };
   }
   if (projectId !== undefined) {
     const project = parseProjectId(projectId);
-    return { ...project, rawId: id };
+    if (!isSafeIdentifierSegment(project.name) || !isSafeIdentifierSegment(id)) return null;
+    return { kind: project.kind, name: project.name.trim(), rawId: id.trim() };
   }
   return null;
 }
@@ -274,6 +287,9 @@ export const makeCloudflareProvider = Effect.fn("CloudflareProvider.make")(funct
   // ── link / unlink / status ──────────────────────────────────────────────────────────────────
 
   const link = Effect.fn("CloudflareProvider.link")(function* (input: DeployLinkInput) {
+    if (input.account.teamId !== undefined && !isSafeIdentifierSegment(input.account.teamId)) {
+      return yield* new PluginError({ message: "Invalid Cloudflare account id." });
+    }
     const token = input.token?.trim() ?? "";
     if (token.length === 0) {
       return yield* new PluginError({
@@ -637,7 +653,9 @@ export const makeCloudflareProvider = Effect.fn("CloudflareProvider.make")(funct
   const pagesLogLines = (token: string, accountId: string, project: string, rawId: string) =>
     Cf.getPagesDeploymentLogs(token, accountId, project, rawId).pipe(
       Effect.map((result) =>
-        (result.data ?? []).map((row) => (row.ts ? `${row.ts} ${row.line}` : row.line)),
+        (result.data ?? []).map((row) =>
+          redactSecrets(row.ts ? `${row.ts} ${row.line}` : row.line, [token]),
+        ),
       ),
     );
 
@@ -725,6 +743,11 @@ export const makeCloudflareProvider = Effect.fn("CloudflareProvider.make")(funct
       input.deploymentId === undefined
         ? null
         : parseDeploymentRef(input.deploymentId, makeProjectId(project.kind, project.name));
+    if (input.deploymentId !== undefined && ref === null) {
+      return yield* new PluginError({
+        message: `"${input.deploymentId}" is not a valid Cloudflare deployment id.`,
+      });
+    }
 
     if (project.kind === "pages") {
       let targetId = ref?.rawId;
@@ -847,13 +870,21 @@ export const makeCloudflareProvider = Effect.fn("CloudflareProvider.make")(funct
           ]),
         );
       for (const key of input.remove) patch[key] = null;
+      const secretValues = input.secret ? Object.values(input.vars) : [];
       yield* Cf.patchPagesProjectEnv(
         token,
         meta.accountId,
         target.name,
         input.environment,
         patch,
-      ).pipe(Effect.mapError(cfError));
+      ).pipe(
+        Effect.mapError((error) => {
+          const pluginError = cfError(error);
+          return new PluginError({
+            message: redactSecrets(pluginError.message, [token, ...secretValues]),
+          });
+        }),
+      );
       return;
     }
 

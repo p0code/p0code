@@ -1049,4 +1049,78 @@ describe("account isolation and env targets", () => {
         assert.include(warningText, ".aws");
       }).pipe(Effect.scoped),
   );
+
+  it.effect(
+    "rejects dot-segment traversal identifiers before sending HTTP requests and redacts secret setEnv values on error",
+    () =>
+      Effect.gen(function* () {
+        const secretVal = "sk_live_echoed_secret_value_999";
+        const http = makeFakeHttpLayer((req) => {
+          if (req.url.pathname === "/v2/user") {
+            return { status: 200, body: { user: { id: "u1", username: "ada" } } };
+          }
+          if (req.method === "POST" && req.url.pathname === "/v9/projects/prj_web_1/env") {
+            return {
+              status: 400,
+              body: { error: { message: `Rejected secret value: ${secretVal}` } },
+            };
+          }
+          return { status: 200, body: {} };
+        });
+        const { storage } = fakeStorage();
+        const provider = yield* createVercelDeployProvider({ storage }).pipe(
+          Effect.provide(makeTestPlatform(http.layer)),
+        );
+        yield* provider.link({ account: TEST_ACCOUNT, token: TEST_TOKEN });
+        const requestsBefore = http.requests.length;
+
+        // Path-traversal / dot segments are rejected before any HTTP call is issued.
+        for (const badId of [".", "..", "a/b"]) {
+          assert.include(
+            extractFailureMessage(
+              yield* Effect.exit(
+                provider.link({ account: { accountId: "bad", teamId: badId }, token: TEST_TOKEN }),
+              ),
+            ),
+            "Invalid Vercel",
+          );
+          assert.include(
+            extractFailureMessage(
+              yield* Effect.exit(
+                provider.deploymentStatus({ account: TEST_ACCOUNT, deploymentId: badId }),
+              ),
+            ),
+            "Invalid Vercel",
+          );
+          assert.include(
+            extractFailureMessage(
+              yield* Effect.exit(
+                provider.listDomains({
+                  account: TEST_ACCOUNT,
+                  target: { kind: "vercel-project", id: badId },
+                }),
+              ),
+            ),
+            "Invalid Vercel",
+          );
+        }
+        assert.strictEqual(http.requests.length, requestsBefore);
+
+        // Secret setEnv values echoed in upstream errors are redacted.
+        const envExit = yield* Effect.exit(
+          provider.setEnv({
+            account: TEST_ACCOUNT,
+            target: { kind: "vercel-project", id: "prj_web_1" },
+            environment: "production",
+            secret: true,
+            remove: [],
+            vars: { API_SECRET: secretVal },
+          }),
+        );
+        assert.isTrue(Exit.isFailure(envExit));
+        const envErr = extractFailureMessage(envExit);
+        assert.isFalse(envErr.includes(secretVal));
+        assert.include(envErr, "[REDACTED]");
+      }),
+  );
 });

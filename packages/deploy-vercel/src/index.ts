@@ -181,13 +181,16 @@ export const createVercelDeployProvider = Effect.fn("createVercelDeployProvider"
   });
 
   const handleClientError =
-    (ref: DeployAccountRef, token: string) => (error: VercelClientError) => {
+    (ref: DeployAccountRef, token: string, extraSecrets: ReadonlyArray<string> = []) =>
+    (error: VercelClientError) => {
       if (isAuthExpired(error)) {
         return markExpired(ref).pipe(
           Effect.andThen(Effect.fail(new PluginError({ message: EXPIRED_TOKEN_MESSAGE }))),
         );
       }
-      return Effect.fail(new PluginError({ message: redactSecrets(error.message, token) }));
+      return Effect.fail(
+        new PluginError({ message: redactSecrets(error.message, token, extraSecrets) }),
+      );
     };
 
   const requireAuth = Effect.fn("VercelDeployProvider.requireAuth")(function* (
@@ -563,13 +566,14 @@ export const createVercelDeployProvider = Effect.fn("createVercelDeployProvider"
         return yield* new PluginError({ message: "Environment variable keys cannot be empty." });
       }
     }
+    const secretValues = input.secret ? Object.values(input.vars) : [];
     yield* client
       .removeEnv(token, input.target.id, input.remove, input.environment, teamId)
-      .pipe(Effect.catch(handleClientError(input.account, token)));
+      .pipe(Effect.catch(handleClientError(input.account, token, secretValues)));
     if (entries.length > 0)
       yield* client
-        .upsertEnv(token, input.target.id, entries, teamId)
-        .pipe(Effect.catch(handleClientError(input.account, token)));
+        .upsertEnv(token, input.target.id, entries, teamId, secretValues)
+        .pipe(Effect.catch(handleClientError(input.account, token, secretValues)));
   });
 
   return checkDeployProvider(VERCEL_PROVIDER_DESCRIPTOR, {

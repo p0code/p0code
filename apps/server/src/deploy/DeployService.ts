@@ -143,9 +143,14 @@ const make = Effect.gen(function* () {
     Effect.fail(new DeployError({ reason, message }));
 
   const providerFailed =
-    (secret?: string) =>
-    (error: PluginError): DeployError =>
-      new DeployError({ reason: "provider-failed", message: redact(error.message, secret) });
+    (secret?: string, extraSecrets: ReadonlyArray<string> = []) =>
+    (error: PluginError): DeployError => {
+      let message = redact(error.message, secret);
+      for (const value of extraSecrets) {
+        message = redact(message, value);
+      }
+      return new DeployError({ reason: "provider-failed", message });
+    };
 
   // Unreadable settings leave every account visible, as thread launches do.
   const activeProfile: Effect.Effect<AccountProfileId | null> = settings.getSettings.pipe(
@@ -559,16 +564,19 @@ const make = Effect.gen(function* () {
     }),
     setEnv: Effect.fn("DeployService.setEnv")(function* (input) {
       const { mapping, ref, provider } = yield* requireMapping(input.projectId);
+      const isSecret = Object.hasOwn(input, "secret") && input.secret === true;
       yield* provider
         .setEnv({
           account: ref,
           target: { kind: mapping.targetKind, id: mapping.targetId },
           environment: input.environment,
           vars: input.vars,
-          secret: input.secret ?? false,
+          secret: isSecret,
           remove: input.remove ?? [],
         })
-        .pipe(Effect.mapError(providerFailed()));
+        .pipe(
+          Effect.mapError(providerFailed(undefined, isSecret ? Object.values(input.vars) : [])),
+        );
     }),
   });
 });

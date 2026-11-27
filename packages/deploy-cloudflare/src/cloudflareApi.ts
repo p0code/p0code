@@ -376,7 +376,23 @@ const sendRequest = Effect.fn("cloudflareApi.sendRequest")(function* <A, I>(
   );
 });
 
-const enc = encodeURIComponent;
+function isSafePathSegment(value: string): boolean {
+  const trimmed = value.trim();
+  return trimmed.length > 0 && trimmed !== "." && trimmed !== ".." && !/[/\\\0]/.test(value);
+}
+
+const enc = (value: string, label: string): Effect.Effect<string, CloudflareApiError> =>
+  isSafePathSegment(value)
+    ? Effect.succeed(encodeURIComponent(value.trim()))
+    : Effect.fail(
+        new CloudflareApiError({
+          status: 0,
+          message: `Invalid Cloudflare ${label}.`,
+          isScopeError: false,
+          isAuthError: false,
+          codes: [],
+        }),
+      );
 
 export const verifyToken = (token: string) =>
   sendRequest(
@@ -396,9 +412,13 @@ export const listAccounts = (token: string) =>
     actionLabel: "list Cloudflare accounts",
   });
 
-export const listPagesProjects = (token: string, accountId: string) =>
-  sendRequest(
-    HttpClientRequest.get(`${CLOUDFLARE_API_BASE}/accounts/${enc(accountId)}/pages/projects`),
+export const listPagesProjects = Effect.fn("cloudflareApi.listPagesProjects")(function* (
+  token: string,
+  accountId: string,
+) {
+  const acct = yield* enc(accountId, "accountId");
+  return yield* sendRequest(
+    HttpClientRequest.get(`${CLOUDFLARE_API_BASE}/accounts/${acct}/pages/projects`),
     Schema.Array(CfPagesProject),
     {
       token,
@@ -406,12 +426,17 @@ export const listPagesProjects = (token: string, accountId: string) =>
       actionLabel: "list Cloudflare Pages projects",
     },
   );
+});
 
-export const getPagesProject = (token: string, accountId: string, projectName: string) =>
-  sendRequest(
-    HttpClientRequest.get(
-      `${CLOUDFLARE_API_BASE}/accounts/${enc(accountId)}/pages/projects/${enc(projectName)}`,
-    ),
+export const getPagesProject = Effect.fn("cloudflareApi.getPagesProject")(function* (
+  token: string,
+  accountId: string,
+  projectName: string,
+) {
+  const acct = yield* enc(accountId, "accountId");
+  const proj = yield* enc(projectName, "projectName");
+  return yield* sendRequest(
+    HttpClientRequest.get(`${CLOUDFLARE_API_BASE}/accounts/${acct}/pages/projects/${proj}`),
     CfPagesProject,
     {
       token,
@@ -419,11 +444,18 @@ export const getPagesProject = (token: string, accountId: string, projectName: s
       actionLabel: `read Pages project "${projectName}"`,
     },
   );
+});
 
-export const getPagesUploadToken = (token: string, accountId: string, projectName: string) =>
-  sendRequest(
+export const getPagesUploadToken = Effect.fn("cloudflareApi.getPagesUploadToken")(function* (
+  token: string,
+  accountId: string,
+  projectName: string,
+) {
+  const acct = yield* enc(accountId, "accountId");
+  const proj = yield* enc(projectName, "projectName");
+  return yield* sendRequest(
     HttpClientRequest.get(
-      `${CLOUDFLARE_API_BASE}/accounts/${enc(accountId)}/pages/projects/${enc(projectName)}/upload-token`,
+      `${CLOUDFLARE_API_BASE}/accounts/${acct}/pages/projects/${proj}/upload-token`,
     ),
     CfPagesUploadToken,
     {
@@ -432,6 +464,7 @@ export const getPagesUploadToken = (token: string, accountId: string, projectNam
       actionLabel: `obtain a Pages direct-upload token for "${projectName}"`,
     },
   );
+});
 
 export const checkMissingPagesAssets = (
   uploadJwt: string,
@@ -503,6 +536,8 @@ export const createPagesDeployment = Effect.fn("cloudflareApi.createPagesDeploym
     readonly manifest?: Readonly<Record<string, string>>;
   },
 ) {
+  const acct = yield* enc(accountId, "accountId");
+  const proj = yield* enc(projectName, "projectName");
   const form = new FormData();
   if (options.branch && options.branch.trim().length > 0) {
     form.append("branch", options.branch.trim());
@@ -525,7 +560,7 @@ export const createPagesDeployment = Effect.fn("cloudflareApi.createPagesDeploym
   }
   return yield* sendRequest(
     HttpClientRequest.post(
-      `${CLOUDFLARE_API_BASE}/accounts/${enc(accountId)}/pages/projects/${enc(projectName)}/deployments`,
+      `${CLOUDFLARE_API_BASE}/accounts/${acct}/pages/projects/${proj}/deployments`,
     ).pipe(HttpClientRequest.bodyFormData(form)),
     CfPagesDeployment,
     {
@@ -536,10 +571,16 @@ export const createPagesDeployment = Effect.fn("cloudflareApi.createPagesDeploym
   );
 });
 
-export const listPagesDeployments = (token: string, accountId: string, projectName: string) =>
-  sendRequest(
+export const listPagesDeployments = Effect.fn("cloudflareApi.listPagesDeployments")(function* (
+  token: string,
+  accountId: string,
+  projectName: string,
+) {
+  const acct = yield* enc(accountId, "accountId");
+  const proj = yield* enc(projectName, "projectName");
+  return yield* sendRequest(
     HttpClientRequest.get(
-      `${CLOUDFLARE_API_BASE}/accounts/${enc(accountId)}/pages/projects/${enc(projectName)}/deployments`,
+      `${CLOUDFLARE_API_BASE}/accounts/${acct}/pages/projects/${proj}/deployments`,
     ),
     Schema.Array(CfPagesDeployment),
     {
@@ -548,16 +589,20 @@ export const listPagesDeployments = (token: string, accountId: string, projectNa
       actionLabel: `list deployments for Pages project "${projectName}"`,
     },
   );
+});
 
-export const getPagesDeployment = (
+export const getPagesDeployment = Effect.fn("cloudflareApi.getPagesDeployment")(function* (
   token: string,
   accountId: string,
   projectName: string,
   deploymentId: string,
-) =>
-  sendRequest(
+) {
+  const acct = yield* enc(accountId, "accountId");
+  const proj = yield* enc(projectName, "projectName");
+  const dep = yield* enc(deploymentId, "deploymentId");
+  return yield* sendRequest(
     HttpClientRequest.get(
-      `${CLOUDFLARE_API_BASE}/accounts/${enc(accountId)}/pages/projects/${enc(projectName)}/deployments/${enc(deploymentId)}`,
+      `${CLOUDFLARE_API_BASE}/accounts/${acct}/pages/projects/${proj}/deployments/${dep}`,
     ),
     CfPagesDeployment,
     {
@@ -566,16 +611,20 @@ export const getPagesDeployment = (
       actionLabel: `read deployment "${deploymentId}" for Pages project "${projectName}"`,
     },
   );
+});
 
-export const getPagesDeploymentLogs = (
+export const getPagesDeploymentLogs = Effect.fn("cloudflareApi.getPagesDeploymentLogs")(function* (
   token: string,
   accountId: string,
   projectName: string,
   deploymentId: string,
-) =>
-  sendRequest(
+) {
+  const acct = yield* enc(accountId, "accountId");
+  const proj = yield* enc(projectName, "projectName");
+  const dep = yield* enc(deploymentId, "deploymentId");
+  return yield* sendRequest(
     HttpClientRequest.get(
-      `${CLOUDFLARE_API_BASE}/accounts/${enc(accountId)}/pages/projects/${enc(projectName)}/deployments/${enc(deploymentId)}/history/logs`,
+      `${CLOUDFLARE_API_BASE}/accounts/${acct}/pages/projects/${proj}/deployments/${dep}/history/logs`,
     ),
     CfPagesLogsResult,
     {
@@ -584,30 +633,36 @@ export const getPagesDeploymentLogs = (
       actionLabel: `read build logs for Pages deployment "${deploymentId}"`,
     },
   );
+});
 
-export const rollbackPagesDeployment = (
+export const rollbackPagesDeployment = Effect.fn("cloudflareApi.rollbackPagesDeployment")(
+  function* (token: string, accountId: string, projectName: string, deploymentId: string) {
+    const acct = yield* enc(accountId, "accountId");
+    const proj = yield* enc(projectName, "projectName");
+    const dep = yield* enc(deploymentId, "deploymentId");
+    return yield* sendRequest(
+      HttpClientRequest.post(
+        `${CLOUDFLARE_API_BASE}/accounts/${acct}/pages/projects/${proj}/deployments/${dep}/rollback`,
+      ),
+      CfPagesDeployment,
+      {
+        token,
+        requiredScope: "Pages:Edit",
+        actionLabel: `roll back Pages project "${projectName}" to "${deploymentId}"`,
+      },
+    );
+  },
+);
+
+export const listPagesDomains = Effect.fn("cloudflareApi.listPagesDomains")(function* (
   token: string,
   accountId: string,
   projectName: string,
-  deploymentId: string,
-) =>
-  sendRequest(
-    HttpClientRequest.post(
-      `${CLOUDFLARE_API_BASE}/accounts/${enc(accountId)}/pages/projects/${enc(projectName)}/deployments/${enc(deploymentId)}/rollback`,
-    ),
-    CfPagesDeployment,
-    {
-      token,
-      requiredScope: "Pages:Edit",
-      actionLabel: `roll back Pages project "${projectName}" to "${deploymentId}"`,
-    },
-  );
-
-export const listPagesDomains = (token: string, accountId: string, projectName: string) =>
-  sendRequest(
-    HttpClientRequest.get(
-      `${CLOUDFLARE_API_BASE}/accounts/${enc(accountId)}/pages/projects/${enc(projectName)}/domains`,
-    ),
+) {
+  const acct = yield* enc(accountId, "accountId");
+  const proj = yield* enc(projectName, "projectName");
+  return yield* sendRequest(
+    HttpClientRequest.get(`${CLOUDFLARE_API_BASE}/accounts/${acct}/pages/projects/${proj}/domains`),
     Schema.Array(CfPagesDomain),
     {
       token,
@@ -615,8 +670,9 @@ export const listPagesDomains = (token: string, accountId: string, projectName: 
       actionLabel: `list custom domains for Pages project "${projectName}"`,
     },
   );
+});
 
-export const patchPagesProjectEnv = (
+export const patchPagesProjectEnv = Effect.fn("cloudflareApi.patchPagesProjectEnv")(function* (
   token: string,
   accountId: string,
   projectName: string,
@@ -624,11 +680,17 @@ export const patchPagesProjectEnv = (
   envVars: Readonly<
     Record<string, { readonly type: "plain_text" | "secret_text"; readonly value: string } | null>
   >,
-) =>
-  sendRequest(
-    HttpClientRequest.patch(
-      `${CLOUDFLARE_API_BASE}/accounts/${enc(accountId)}/pages/projects/${enc(projectName)}`,
-    ).pipe(
+) {
+  const acct = yield* enc(accountId, "accountId");
+  const proj = yield* enc(projectName, "projectName");
+  const secretValues = Object.values(envVars)
+    .filter(
+      (entry): entry is { readonly type: "secret_text"; readonly value: string } =>
+        entry !== null && entry.type === "secret_text",
+    )
+    .map((entry) => entry.value);
+  return yield* sendRequest(
+    HttpClientRequest.patch(`${CLOUDFLARE_API_BASE}/accounts/${acct}/pages/projects/${proj}`).pipe(
       HttpClientRequest.bodyJsonUnsafe({
         deployment_configs: {
           [environment]: {
@@ -640,14 +702,20 @@ export const patchPagesProjectEnv = (
     CfPagesProject,
     {
       token,
+      secretsToRedact: secretValues,
       requiredScope: "Pages:Edit",
       actionLabel: `update ${environment} environment variables for Pages project "${projectName}"`,
     },
   );
+});
 
-export const listWorkerScripts = (token: string, accountId: string) =>
-  sendRequest(
-    HttpClientRequest.get(`${CLOUDFLARE_API_BASE}/accounts/${enc(accountId)}/workers/scripts`),
+export const listWorkerScripts = Effect.fn("cloudflareApi.listWorkerScripts")(function* (
+  token: string,
+  accountId: string,
+) {
+  const acct = yield* enc(accountId, "accountId");
+  return yield* sendRequest(
+    HttpClientRequest.get(`${CLOUDFLARE_API_BASE}/accounts/${acct}/workers/scripts`),
     Schema.Array(CfWorkerScript),
     {
       token,
@@ -655,10 +723,15 @@ export const listWorkerScripts = (token: string, accountId: string) =>
       actionLabel: "list Cloudflare Workers scripts",
     },
   );
+});
 
-export const getWorkersSubdomain = (token: string, accountId: string) =>
-  sendRequest(
-    HttpClientRequest.get(`${CLOUDFLARE_API_BASE}/accounts/${enc(accountId)}/workers/subdomain`),
+export const getWorkersSubdomain = Effect.fn("cloudflareApi.getWorkersSubdomain")(function* (
+  token: string,
+  accountId: string,
+) {
+  const acct = yield* enc(accountId, "accountId");
+  return yield* sendRequest(
+    HttpClientRequest.get(`${CLOUDFLARE_API_BASE}/accounts/${acct}/workers/subdomain`),
     CfWorkersSubdomain,
     {
       token,
@@ -666,6 +739,7 @@ export const getWorkersSubdomain = (token: string, accountId: string) =>
       actionLabel: "read workers.dev subdomain",
     },
   );
+});
 
 export const uploadWorkerScript = Effect.fn("cloudflareApi.uploadWorkerScript")(function* (
   token: string,
@@ -679,6 +753,8 @@ export const uploadWorkerScript = Effect.fn("cloudflareApi.uploadWorkerScript")(
     readonly bindings: ReadonlyArray<WorkerBinding>;
   },
 ) {
+  const acct = yield* enc(accountId, "accountId");
+  const script = yield* enc(scriptName, "scriptName");
   const metadata = {
     main_module: bundle.mainModule,
     ...(bundle.compatibilityDate ? { compatibility_date: bundle.compatibilityDate } : {}),
@@ -710,9 +786,9 @@ export const uploadWorkerScript = Effect.fn("cloudflareApi.uploadWorkerScript")(
     bundle.mainModule,
   );
   return yield* sendRequest(
-    HttpClientRequest.put(
-      `${CLOUDFLARE_API_BASE}/accounts/${enc(accountId)}/workers/scripts/${enc(scriptName)}`,
-    ).pipe(HttpClientRequest.bodyFormData(form)),
+    HttpClientRequest.put(`${CLOUDFLARE_API_BASE}/accounts/${acct}/workers/scripts/${script}`).pipe(
+      HttpClientRequest.bodyFormData(form),
+    ),
     CfWorkerUploadResult,
     {
       token,
@@ -722,10 +798,16 @@ export const uploadWorkerScript = Effect.fn("cloudflareApi.uploadWorkerScript")(
   );
 });
 
-export const listWorkerVersions = (token: string, accountId: string, scriptName: string) =>
-  sendRequest(
+export const listWorkerVersions = Effect.fn("cloudflareApi.listWorkerVersions")(function* (
+  token: string,
+  accountId: string,
+  scriptName: string,
+) {
+  const acct = yield* enc(accountId, "accountId");
+  const script = yield* enc(scriptName, "scriptName");
+  return yield* sendRequest(
     HttpClientRequest.get(
-      `${CLOUDFLARE_API_BASE}/accounts/${enc(accountId)}/workers/scripts/${enc(scriptName)}/versions`,
+      `${CLOUDFLARE_API_BASE}/accounts/${acct}/workers/scripts/${script}/versions`,
     ),
     CfWorkerVersionsList,
     {
@@ -734,16 +816,20 @@ export const listWorkerVersions = (token: string, accountId: string, scriptName:
       actionLabel: `list versions for Worker "${scriptName}"`,
     },
   );
+});
 
-export const getWorkerVersion = (
+export const getWorkerVersion = Effect.fn("cloudflareApi.getWorkerVersion")(function* (
   token: string,
   accountId: string,
   scriptName: string,
   versionId: string,
-) =>
-  sendRequest(
+) {
+  const acct = yield* enc(accountId, "accountId");
+  const script = yield* enc(scriptName, "scriptName");
+  const ver = yield* enc(versionId, "versionId");
+  return yield* sendRequest(
     HttpClientRequest.get(
-      `${CLOUDFLARE_API_BASE}/accounts/${enc(accountId)}/workers/scripts/${enc(scriptName)}/versions/${enc(versionId)}`,
+      `${CLOUDFLARE_API_BASE}/accounts/${acct}/workers/scripts/${script}/versions/${ver}`,
     ),
     CfWorkerVersionItem,
     {
@@ -752,11 +838,18 @@ export const getWorkerVersion = (
       actionLabel: `read version "${versionId}" for Worker "${scriptName}"`,
     },
   );
+});
 
-export const listWorkerDeployments = (token: string, accountId: string, scriptName: string) =>
-  sendRequest(
+export const listWorkerDeployments = Effect.fn("cloudflareApi.listWorkerDeployments")(function* (
+  token: string,
+  accountId: string,
+  scriptName: string,
+) {
+  const acct = yield* enc(accountId, "accountId");
+  const script = yield* enc(scriptName, "scriptName");
+  return yield* sendRequest(
     HttpClientRequest.get(
-      `${CLOUDFLARE_API_BASE}/accounts/${enc(accountId)}/workers/scripts/${enc(scriptName)}/deployments`,
+      `${CLOUDFLARE_API_BASE}/accounts/${acct}/workers/scripts/${script}/deployments`,
     ),
     CfWorkerDeploymentsList,
     {
@@ -765,17 +858,20 @@ export const listWorkerDeployments = (token: string, accountId: string, scriptNa
       actionLabel: `list deployments for Worker "${scriptName}"`,
     },
   );
+});
 
-export const createWorkerDeployment = (
+export const createWorkerDeployment = Effect.fn("cloudflareApi.createWorkerDeployment")(function* (
   token: string,
   accountId: string,
   scriptName: string,
   versionId: string,
   message: string,
-) =>
-  sendRequest(
+) {
+  const acct = yield* enc(accountId, "accountId");
+  const script = yield* enc(scriptName, "scriptName");
+  return yield* sendRequest(
     HttpClientRequest.post(
-      `${CLOUDFLARE_API_BASE}/accounts/${enc(accountId)}/workers/scripts/${enc(scriptName)}/deployments`,
+      `${CLOUDFLARE_API_BASE}/accounts/${acct}/workers/scripts/${script}/deployments`,
     ).pipe(
       HttpClientRequest.bodyJsonUnsafe({
         strategy: "percentage",
@@ -790,11 +886,18 @@ export const createWorkerDeployment = (
       actionLabel: `deploy version "${versionId}" for Worker "${scriptName}"`,
     },
   );
+});
 
-export const getWorkerSettings = (token: string, accountId: string, scriptName: string) =>
-  sendRequest(
+export const getWorkerSettings = Effect.fn("cloudflareApi.getWorkerSettings")(function* (
+  token: string,
+  accountId: string,
+  scriptName: string,
+) {
+  const acct = yield* enc(accountId, "accountId");
+  const script = yield* enc(scriptName, "scriptName");
+  return yield* sendRequest(
     HttpClientRequest.get(
-      `${CLOUDFLARE_API_BASE}/accounts/${enc(accountId)}/workers/scripts/${enc(scriptName)}/settings`,
+      `${CLOUDFLARE_API_BASE}/accounts/${acct}/workers/scripts/${script}/settings`,
     ),
     CfWorkerSettings,
     {
@@ -803,10 +906,16 @@ export const getWorkerSettings = (token: string, accountId: string, scriptName: 
       actionLabel: `read settings and bindings for Worker "${scriptName}"`,
     },
   );
+});
 
-export const listWorkerDomains = (token: string, accountId: string, scriptName: string) =>
-  sendRequest(
-    HttpClientRequest.get(`${CLOUDFLARE_API_BASE}/accounts/${enc(accountId)}/workers/domains`).pipe(
+export const listWorkerDomains = Effect.fn("cloudflareApi.listWorkerDomains")(function* (
+  token: string,
+  accountId: string,
+  scriptName: string,
+) {
+  const acct = yield* enc(accountId, "accountId");
+  return yield* sendRequest(
+    HttpClientRequest.get(`${CLOUDFLARE_API_BASE}/accounts/${acct}/workers/domains`).pipe(
       HttpClientRequest.setUrlParams({ service: scriptName }),
     ),
     Schema.Array(CfWorkerDomain),
@@ -816,11 +925,16 @@ export const listWorkerDomains = (token: string, accountId: string, scriptName: 
       actionLabel: `list custom domains for Worker "${scriptName}"`,
     },
   );
+});
 
-export const listZones = (token: string, accountId: string) =>
-  sendRequest(
+export const listZones = Effect.fn("cloudflareApi.listZones")(function* (
+  token: string,
+  accountId: string,
+) {
+  yield* enc(accountId, "accountId");
+  return yield* sendRequest(
     HttpClientRequest.get(`${CLOUDFLARE_API_BASE}/zones`).pipe(
-      HttpClientRequest.setUrlParams({ "account.id": accountId, per_page: "50" }),
+      HttpClientRequest.setUrlParams({ "account.id": accountId.trim(), per_page: "50" }),
     ),
     Schema.Array(CfZone),
     {
@@ -829,10 +943,15 @@ export const listZones = (token: string, accountId: string) =>
       actionLabel: "list zones to inspect Worker routes",
     },
   );
+});
 
-export const listZoneWorkerRoutes = (token: string, zoneId: string) =>
-  sendRequest(
-    HttpClientRequest.get(`${CLOUDFLARE_API_BASE}/zones/${enc(zoneId)}/workers/routes`),
+export const listZoneWorkerRoutes = Effect.fn("cloudflareApi.listZoneWorkerRoutes")(function* (
+  token: string,
+  zoneId: string,
+) {
+  const zone = yield* enc(zoneId, "zoneId");
+  return yield* sendRequest(
+    HttpClientRequest.get(`${CLOUDFLARE_API_BASE}/zones/${zone}/workers/routes`),
     Schema.Array(CfWorkerRoute),
     {
       token,
@@ -840,3 +959,4 @@ export const listZoneWorkerRoutes = (token: string, zoneId: string) =>
       actionLabel: `list Worker routes in zone "${zoneId}"`,
     },
   );
+});
