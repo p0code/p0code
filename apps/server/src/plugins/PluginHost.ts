@@ -6,6 +6,7 @@ import {
   type PluginSetEnabledInput,
   type PluginSettings,
   type PluginsSnapshot,
+  pluginHttpRoutePath,
 } from "@t3tools/contracts";
 import {
   type Plugin,
@@ -301,7 +302,8 @@ const make = Effect.gen(function* () {
       for (const { plugin, started } of running.values()) {
         if (pluginId !== undefined && plugin.manifest.id !== pluginId) continue;
         if (!plugin.manifest.capabilities.includes("http:routes")) continue;
-        if (!plugin.manifest.httpRoutes.includes(path)) continue;
+        if (!plugin.manifest.httpRoutes.some((entry) => pluginHttpRoutePath(entry) === path))
+          continue;
         const handler = started.routes.get(path);
         if (handler !== undefined) return handler;
       }

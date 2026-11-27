@@ -31,8 +31,11 @@ plugins depend only on [`@t3tools/plugin-api`](../../packages/plugin-api), never
 - **Routes are fixed paths.** A plugin's HTTP routes are declared in its manifest and resolved against
   the running plugins; they answer 404 while the plugin is off. Paths are absolute because an external
   service may call them (the bridge's are upstream T3 Connect's). The host resolves current running
-  manifests for each request and requires a same-origin caller or the per-plugin route secret.
-  Unknown paths/methods return 404; JSON bodies are capped at 1 MiB.
+  manifests for each request; routes default to `auth: "session"` and require either the per-plugin
+  route secret or an authenticated session carrying the plugin management scope (`relay:configure`,
+  with cookie CSRF origin checks enforced by `EnvironmentAuth`). Only routes explicitly declared
+  `{ path, auth: "none" }` in the manifest are reachable unauthenticated (for self-authenticated
+  webhooks). Unknown paths/methods return 404; JSON bodies are capped at 1 MiB.
 - **Agent instructions are opt-in.** A plugin declaring `agent:instructions` may expose an
   `agentInstructions` effect returning a block appended to every agent turn while the plugin runs.
   `PluginHost` feeds those blocks into the runtime policy (`pluginInstructions`) through
