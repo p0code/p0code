@@ -2810,6 +2810,11 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   if (platform === "mac") {
     const path = yield* Path.Path;
     const repoRoot = yield* RepoRoot;
+    const macInheritEntitlementsPath = path.join(
+      repoRoot,
+      "apps/desktop/resources/entitlements.mac.inherit.plist",
+    );
+    buildConfig.afterPack = path.join(repoRoot, "scripts/mac-after-pack.ts");
     if (!signed) buildConfig.afterSign = path.join(repoRoot, "scripts/mac-after-sign.cjs");
     buildConfig.mac = {
       target: target === "dmg" ? [target, "zip"] : [target],
@@ -2862,9 +2867,12 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
         },
       ],
       ...(signed ? { sign: path.join(repoRoot, "scripts/sign-macos.ts") } : {}),
+      entitlements: macPasskeySigning
+        ? macPasskeySigning.entitlementsPath
+        : macInheritEntitlementsPath,
+      entitlementsInherit: macInheritEntitlementsPath,
       ...(macPasskeySigning
         ? {
-            entitlements: macPasskeySigning.entitlementsPath,
             provisioningProfile: macPasskeySigning.provisioningProfilePath,
           }
         : {}),
