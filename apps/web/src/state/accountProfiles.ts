@@ -5,13 +5,13 @@ import {
   type ProjectId,
   type ScopedProjectRef,
   type ScopedThreadRef,
-  type ServerSettings,
 } from "@t3tools/contracts";
 import { runAtomCommand } from "@t3tools/client-runtime/state/runtime";
 import { msg } from "gt-react";
 import {
   explicitProjectAccountProfile,
   nextAccountProfile,
+  type ProfileFilteringSettings,
   projectAccountProfile,
   threadAccountProfile,
 } from "@t3tools/shared/accountProfiles";
@@ -19,7 +19,7 @@ import {
 import { m } from "../i18n/messages";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { readPrimaryEnvironmentId } from "./environments";
-import { environmentProjects } from "./projects";
+import { environmentProjects, readEffectiveAccountProfileSettings } from "./projects";
 import { serverEnvironment } from "./server";
 
 /**
@@ -56,7 +56,7 @@ export function cycleAccountProfile() {
 
 /** The profiles a project can be filed under and its current one; null when there is nothing to pick. */
 export function projectAccountProfileChoices(
-  settings: ServerSettings | null | undefined,
+  settings: ProfileFilteringSettings | null | undefined,
   projectId: ProjectId,
 ) {
   if (settings == null || settings.accountProfiles.length < 2) return null;
@@ -68,14 +68,14 @@ export function projectAccountProfileChoices(
 
 export function readProjectAccountProfileChoices(projectRef: ScopedProjectRef) {
   return projectAccountProfileChoices(
-    appAtomRegistry.get(serverEnvironment.settingsValueAtom(projectRef.environmentId)),
+    readEffectiveAccountProfileSettings(appAtomRegistry, projectRef.environmentId),
     projectRef.projectId,
   );
 }
 
 /**
- * Files projects under a profile. Each environment keeps its own profiles, so one lacking the
- * profile leaves its projects alone.
+ * Files projects under a profile. Uses the effective profiles (primary's when available) so moving
+ * a remote project works even before profile sync lands.
  */
 export async function setProjectAccountProfile(
   projectRefs: ReadonlyArray<ScopedProjectRef>,
@@ -90,7 +90,7 @@ export async function setProjectAccountProfile(
   }
   await Promise.all(
     [...byEnvironment].map(([environmentId, refs]) => {
-      const settings = appAtomRegistry.get(serverEnvironment.settingsValueAtom(environmentId));
+      const settings = readEffectiveAccountProfileSettings(appAtomRegistry, environmentId);
       if (!settings?.accountProfiles.some((profile) => profile.id === profileId)) {
         return undefined;
       }
@@ -123,9 +123,7 @@ export function readThreadAccountProfileChoices(
   threadRef: ScopedThreadRef,
   projectId: ProjectId | null,
 ): AccountProfileChoices | null {
-  const settings = appAtomRegistry.get(
-    serverEnvironment.settingsValueAtom(threadRef.environmentId),
-  );
+  const settings = readEffectiveAccountProfileSettings(appAtomRegistry, threadRef.environmentId);
   if (settings == null || settings.accountProfiles.length < 2) return null;
   if (projectId !== null) {
     const project = appAtomRegistry.get(
@@ -136,7 +134,12 @@ export function readThreadAccountProfileChoices(
   }
   return {
     profiles: settings.accountProfiles,
-    assignedId: threadAccountProfile(settings, { id: threadRef.threadId, projectId })?.id ?? null,
+    assignedId:
+      threadAccountProfile(settings, {
+        id: threadRef.threadId,
+        projectId,
+        isScratchProject: true,
+      })?.id ?? null,
   };
 }
 

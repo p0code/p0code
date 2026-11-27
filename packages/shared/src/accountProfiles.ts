@@ -254,11 +254,35 @@ type ProjectProfileSettings = Pick<
   ServerSettings,
   "accountProfiles" | "activeAccountProfileId" | "projectAccountProfileIds"
 >;
-type ThreadProfileSettings = ProjectProfileSettings &
+export type ProfileFilteringSettings = ProjectProfileSettings &
   Pick<ServerSettings, "threadAccountProfileIds">;
+type ThreadProfileSettings = ProfileFilteringSettings;
 interface ProfiledThread {
   readonly id: ThreadId;
   readonly projectId: ProjectId | null;
+  /** When false, the thread belongs to a regular (non-scratch) project and follows that project's profile. */
+  readonly isScratchProject?: boolean | undefined;
+}
+
+/**
+ * Effective profile settings for one environment: the primary environment's profile list and
+ * active pick govern every machine (matching `profileHiddenEnvironmentIds`), paired with that
+ * environment's own project and thread filing. Without a primary (or when the primary has no
+ * profiles), the environment's own settings decide.
+ */
+export function effectiveAccountProfileSettings(
+  settings: ProfileFilteringSettings | null | undefined,
+  primary: Pick<ServerSettings, "accountProfiles" | "activeAccountProfileId"> | null | undefined,
+): ProfileFilteringSettings | undefined {
+  if (primary != null && primary.accountProfiles.length > 0) {
+    return {
+      accountProfiles: primary.accountProfiles,
+      activeAccountProfileId: primary.activeAccountProfileId,
+      projectAccountProfileIds: settings?.projectAccountProfileIds ?? {},
+      threadAccountProfileIds: settings?.threadAccountProfileIds ?? {},
+    };
+  }
+  return settings ?? undefined;
 }
 
 function existingProfile(
@@ -292,11 +316,18 @@ export function projectAccountProfile(
   return explicitProjectAccountProfile(settings, projectId) ?? homeAccountProfile(settings);
 }
 
-/** A thread follows its project's explicit profile, else its own profile, else the first (home) profile. */
+/**
+ * A thread in a regular project follows its project's profile (explicit or home). Otherwise
+ * (scratch/"No project" or unknown project), it follows its project's explicit profile, else its
+ * own profile, else the first (home) profile.
+ */
 export function threadAccountProfile(
   settings: ThreadProfileSettings,
   thread: ProfiledThread,
 ): AccountProfile | undefined {
+  if (thread.projectId !== null && thread.isScratchProject === false) {
+    return projectAccountProfile(settings, thread.projectId);
+  }
   return (
     (thread.projectId === null
       ? undefined
@@ -336,6 +367,28 @@ export function isThreadInActiveAccountProfile(
   return (
     settings == null || shownUnderActiveProfile(settings, threadAccountProfile(settings, thread))
   );
+}
+
+/**
+ * Maximum number of unloaded older settled scratch ("No project") threads that can belong to the
+ * active profile on an environment, or `null` when legacy (unassigned) threads belong to the
+ * active profile (fewer than two profiles, or the first/home profile is active).
+ */
+export function activeProfileUnloadedScratchLimit(
+  settings: ThreadProfileSettings | null | undefined,
+  loadedThreadIds: ReadonlySet<ThreadId>,
+): number | null {
+  if (settings == null || settings.accountProfiles.length < 2) return null;
+  const active = activeAccountProfile(settings);
+  const home = homeAccountProfile(settings);
+  if (active === undefined || home === undefined || active.id === home.id) return null;
+  let unloaded = 0;
+  for (const [threadId, profileId] of Object.entries(settings.threadAccountProfileIds)) {
+    if (profileId === active.id && !loadedThreadIds.has(threadId as ThreadId)) {
+      unloaded += 1;
+    }
+  }
+  return unloaded;
 }
 
 function activeProfileWhenSeparating(settings: ProjectProfileSettings) {

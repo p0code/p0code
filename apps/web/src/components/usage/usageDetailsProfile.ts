@@ -1,5 +1,8 @@
-import type { ServerSettings, UsageDetails, UsageDetailsRow } from "@t3tools/contracts";
-import { isThreadInActiveAccountProfile } from "@t3tools/shared/accountProfiles";
+import type { UsageDetails, UsageDetailsRow } from "@t3tools/contracts";
+import {
+  isThreadInActiveAccountProfile,
+  type ProfileFilteringSettings,
+} from "@t3tools/shared/accountProfiles";
 
 const NO_TOTALS: UsageDetails["totals"] = {
   uncachedInputTokens: 0,
@@ -31,7 +34,7 @@ function addRow(totals: UsageDetails["totals"], row: UsageDetailsRow): UsageDeta
  */
 export function usageDetailsInActiveProfile(
   data: UsageDetails,
-  settings: ServerSettings | null,
+  settings: ProfileFilteringSettings | null,
 ): UsageDetails {
   if (settings === null) return data;
   const rows = data.rows.filter((row) =>

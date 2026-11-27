@@ -31,16 +31,14 @@ import type {
 } from "@t3tools/contracts";
 import type { ThreadCheckpointSummary } from "@t3tools/client-runtime/state/thread-checkpoints";
 import { Atom } from "effect/reactivity";
-import {
-  isThreadInActiveAccountProfile,
-  withoutHiddenEnvironments,
-} from "@t3tools/shared/accountProfiles";
+import { withoutHiddenEnvironments } from "@t3tools/shared/accountProfiles";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import {
+  activeProfileThreadVisibilityAtom,
   environmentProjects,
+  isThreadVisibleInActiveProfile,
   profileHiddenEnvironmentIdsAtom,
   profileHiddenProjectKeysAtom,
-  profileSeparatingSettingsAtom,
 } from "./projects";
 import { environmentPresentations } from "./presentation";
 import { environmentServerConfigsAtom } from "./server";
@@ -173,14 +171,17 @@ export function useVisibleThreadShells(enabled = true): ReadonlyArray<Environmen
 export function useProfileThreads<
   T extends Pick<EnvironmentThreadShell, "environmentId" | "id" | "projectId">,
 >(threads: ReadonlyArray<T>): ReadonlyArray<T> {
-  const separating = useAtomValue(profileSeparatingSettingsAtom);
-  const hiddenEnvironments = useProfileHiddenEnvironmentIds();
-  if (separating.size === 0 && hiddenEnvironments.size === 0) return threads;
-  const visible = threads.filter(
-    (thread) =>
-      !hiddenEnvironments.has(thread.environmentId) &&
-      isThreadInActiveAccountProfile(separating.get(thread.environmentId), thread),
-  );
+  const visibility = useAtomValue(activeProfileThreadVisibilityAtom);
+  if (
+    threads.length === 0 ||
+    (visibility.separatingByEnvironment.size === 0 &&
+      visibility.primarySeparating === null &&
+      visibility.hiddenEnvironments.size === 0 &&
+      visibility.hiddenProjectKeys.size === 0)
+  ) {
+    return threads;
+  }
+  const visible = threads.filter((thread) => isThreadVisibleInActiveProfile(thread, visibility));
   return visible.length === threads.length ? threads : visible;
 }
 

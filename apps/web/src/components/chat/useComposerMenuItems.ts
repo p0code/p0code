@@ -30,7 +30,13 @@ import {
   getProviderSkillsForSlashMenu,
   getProviderSlashCommandsForSlashMenu,
 } from "@t3tools/client-runtime/providerSkills";
-import { useVisibleThreadShells } from "~/state/entities";
+import { withoutHiddenEnvironmentIds } from "@t3tools/shared/accountProfiles";
+import {
+  useProfileEnvironments,
+  useProfileHiddenEnvironmentIds,
+  useProfileThreads,
+  useVisibleThreadShells,
+} from "~/state/entities";
 import { useEnvironmentIdentities, useEnvironmentMachines } from "~/state/environments";
 import { offersLinkedEnvironmentsAtom } from "~/state/peerLinks";
 import {
@@ -125,16 +131,22 @@ export function useComposerMenuItems({
   const settledPullRequestTextQuery =
     pullRequestTextQuery === debouncedPullRequestTextQuery ? pullRequestTextQuery : null;
   const isPathTrigger = composerTriggerKind === "path";
-  const environmentThreadShells = useVisibleThreadShells(isPathTrigger);
+  const hiddenEnvironments = useProfileHiddenEnvironmentIds();
+  const environmentThreadShells = useProfileThreads(useVisibleThreadShells(isPathTrigger));
   // Mounts older settled threads matching the mention, here and on linked machines, which shells
   // may leave out.
   useThreadSearch(
-    isPathTrigger ? [environmentId, ...linkedEnvironments.keys()] : [],
+    isPathTrigger
+      ? withoutHiddenEnvironmentIds(
+          [environmentId, ...linkedEnvironments.keys()],
+          hiddenEnvironments,
+        )
+      : [],
     pathTriggerQuery,
     { titlesOnly: true },
   );
   // The user's machines feed `@` machine matches; the catalog summary is cheap and stable.
-  const environmentIdentities = useEnvironmentIdentities();
+  const environmentIdentities = useProfileEnvironments(useEnvironmentIdentities());
   const environmentMachines = useEnvironmentMachines();
   const offersMachines = useAtomValue(offersLinkedEnvironmentsAtom(environmentId));
   const mentionableEnvironments = environmentIdentities.map((identity) => ({

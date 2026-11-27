@@ -20,15 +20,18 @@ function actions(
   primary: EnvironmentId | null,
   localRoot: string | null,
   remoteRoot: string | null = "/remote/scratch",
+  hidden: ReadonlyArray<EnvironmentId> = [],
 ) {
   const environments = [
     scratchEnvironment(local, localRoot),
     scratchEnvironment(remote, remoteRoot),
     scratchEnvironment(other, "/other/scratch"),
   ];
+  const hiddenSet = new Set(hidden);
   return createScratchProjectActions({
     environments: () => environments,
     primaryEnvironmentId: () => primary,
+    hiddenEnvironmentIds: () => hiddenSet,
     registry: AtomRegistry.make(),
     handleNewThread: async () => null,
   });
@@ -45,5 +48,16 @@ describe("scratchEnvironmentId", () => {
     expect(actions(null, null).scratchEnvironmentId(remote)).toBe(remote);
     expect(actions(null, null, null).scratchEnvironmentId(remote)).toBe(other);
     expect(actions(local, null).scratchEnvironmentId(null)).toBeNull();
+  });
+
+  it("never picks an environment hidden by the active profile", () => {
+    expect(
+      actions(local, "/local/scratch", "/remote/scratch", [local]).scratchEnvironmentId(remote),
+    ).toBe(remote);
+    expect(
+      actions(local, "/local/scratch", "/remote/scratch", [local, remote]).scratchEnvironmentId(
+        remote,
+      ),
+    ).toBe(other);
   });
 });
