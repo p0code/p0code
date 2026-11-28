@@ -70,6 +70,7 @@ import {
 import { getProviderVersionLabel } from "./providerStatus";
 import { useSettingsScope } from "./SettingsScopeContext";
 import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
+import { CloudflareIcon, type Icon, VercelIcon } from "../Icons";
 
 /** A deploy the page should open on arrival, e.g. from a thread's menu. */
 export interface DeployPreselection {
@@ -98,14 +99,14 @@ const builtInDeployProviders = (gt: ReturnType<typeof useGT>) => [
     id: "vercel",
     // oxlint-disable-next-line t3code/no-untranslated-copy -- product brand name
     label: "Vercel",
-    icon: "triangle",
+    icon: "vercel",
     description: gt("Deploy web apps and preview branches to Vercel projects."),
   },
   {
     id: "cloudflare",
     // oxlint-disable-next-line t3code/no-untranslated-copy -- product brand name
     label: "Cloudflare",
-    icon: "cloud",
+    icon: "cloudflare",
     description: gt("Deploy Workers and Pages to Cloudflare."),
   },
   {
@@ -145,7 +146,9 @@ function listDeployProviders(
   ];
 }
 
-const PROVIDER_ICONS: Partial<Record<string, typeof RocketIcon>> = {
+const PROVIDER_ICONS: Partial<Record<string, typeof RocketIcon | Icon>> = {
+  vercel: VercelIcon,
+  cloudflare: CloudflareIcon,
   cloud: CloudIcon,
   server: ServerIcon,
   triangle: TriangleIcon,
