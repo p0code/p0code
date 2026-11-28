@@ -290,12 +290,21 @@ fn binary_name() -> &'static str {
 
 /// The `<goos>-<goarch>` folder `apps/p0d/scripts/build.sh` writes for this host.
 fn dist_target() -> String {
-    let goarch = match std::env::consts::ARCH {
+    go_target(std::env::consts::OS, std::env::consts::ARCH)
+}
+
+/// Rust's `macos` is Go's `darwin`; `build.sh` names folders with Go's spelling.
+fn go_target(os: &str, arch: &str) -> String {
+    let goos = match os {
+        "macos" => "darwin",
+        other => other,
+    };
+    let goarch = match arch {
         "x86_64" => "amd64",
         "aarch64" => "arm64",
         other => other,
     };
-    format!("{}-{goarch}", std::env::consts::OS)
+    format!("{goos}-{goarch}")
 }
 
 /// Electron's `p0dBinaryCandidates` order: the bundled binary, the configured path,
@@ -433,6 +442,14 @@ pub fn default_legacy_server_command() -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dist_target_uses_go_platform_names() {
+        assert_eq!(go_target("macos", "aarch64"), "darwin-arm64");
+        assert_eq!(go_target("macos", "x86_64"), "darwin-amd64");
+        assert_eq!(go_target("linux", "x86_64"), "linux-amd64");
+        assert_eq!(go_target("windows", "aarch64"), "windows-arm64");
+    }
 
     #[test]
     fn candidates_follow_electron_order() {
