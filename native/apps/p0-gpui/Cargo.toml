@@ -13,6 +13,7 @@ p0-client = { path = "../../crates/p0-client" }
 p0-i18n = { path = "../../crates/p0-i18n" }
 p0-protocol = { path = "../../crates/p0-protocol" }
 p0-terminal = { path = "../../crates/p0-terminal" }
+p0-theme = { path = "../../crates/p0-theme" }
 nucleo-matcher.workspace = true
 pulldown-cmark.workspace = true
 serde.workspace = true

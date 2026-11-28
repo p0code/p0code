@@ -9,13 +9,13 @@ use gpui_kit::component::input::{InputEvent, TextareaState};
 use gpui_kit::component::message_scroller::MessageScroller;
 use gpui_kit::component::{Root, Theme, ThemeMode};
 use gpui_kit::{
-    App, AppContext as _, Context, Entity, FocusHandle, Focusable as _, FontWeight,
-    InteractiveElement as _, IntoElement, KeyBinding, ParentElement as _, Render, SharedString,
+    App, AppContext as _, Context, Entity, FocusHandle, Focusable as _, InteractiveElement as _,
+    IntoElement, KeyBinding, ParentElement as _, Render, SharedString,
     StatefulInteractiveElement as _, Styled as _, Subscription, Window, actions, div, px,
 };
 use p0_client::{ConnectionState, ShellState, ThreadState};
 use p0_i18n::{Catalog, Key};
-use p0_protocol::{ModelSelection, RuntimeMode, ThreadShell, ThreadStatus};
+use p0_protocol::{ModelSelection, RuntimeMode, ThreadShell};
 
 use crate::attachments::{AttachmentImageCache, AttachmentTray};
 use crate::bridge::AppBridge;
@@ -31,6 +31,9 @@ use p0_terminal::TerminalEngine as _;
 
 use crate::terminal::{CELL_WIDTH, DRAWER_ROWS, SharedTerminal, key_bytes};
 use crate::theme::AppPalette;
+
+mod chrome;
+mod sidebar;
 
 actions!(
     p0,
@@ -99,7 +102,7 @@ pub struct P0App {
     /// Project a new thread starts in when nothing is selected (New thread).
     draft_project_id: Option<String>,
     launched: Arc<Mutex<Option<String>>>,
-    collapsed_projects: HashSet<String>,
+    group_by_project: bool,
     pub(crate) feed: FeedState,
     pub(crate) md_cache: MarkdownCache,
     pub(crate) expanded_items: HashSet<String>,
@@ -178,7 +181,7 @@ impl P0App {
             selected_thread_id: None,
             draft_project_id: None,
             launched: Arc::new(Mutex::new(None)),
-            collapsed_projects: HashSet::new(),
+            group_by_project: false,
             feed: FeedState::new(cx),
             md_cache: MarkdownCache::new(),
             expanded_items: HashSet::new(),
@@ -247,12 +250,14 @@ impl P0App {
     }
 
     pub(crate) fn apply_theme(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let mode = if self.prefs.theme.is_dark(window.appearance()) {
+        let dark = self.prefs.theme.is_dark(window.appearance());
+        let mode = if dark {
             ThemeMode::Dark
         } else {
             ThemeMode::Light
         };
         Theme::change(mode, Some(window), cx);
+        crate::theme::apply_component_theme(dark, cx);
         cx.notify();
     }
 
@@ -363,16 +368,6 @@ impl P0App {
             self.selected_thread_id = Some(first.clone());
             self.bridge.select_thread(first);
         }
-    }
-
-    /// Threads in sidebar order, skipping collapsed projects.
-    fn sidebar_threads(&self) -> Vec<&ThreadShell> {
-        self.shell
-            .projects
-            .iter()
-            .filter(|p| !self.collapsed_projects.contains(&p.id))
-            .flat_map(|p| self.shell.threads_for_project(&p.id))
-            .collect()
     }
 
     pub(crate) fn open_thread(&mut self, thread_id: String, cx: &mut Context<Self>) {
@@ -554,13 +549,6 @@ impl P0App {
     pub(crate) fn open_settings(&mut self, path: &'static str, cx: &mut Context<Self>) {
         self.view = View::Settings(path);
         self.palette = None;
-        cx.notify();
-    }
-
-    fn toggle_project(&mut self, project_id: String, cx: &mut Context<Self>) {
-        if !self.collapsed_projects.remove(&project_id) {
-            self.collapsed_projects.insert(project_id);
-        }
         cx.notify();
     }
 
@@ -868,210 +856,6 @@ impl P0App {
         chip
     }
 
-    fn render_sidebar(&self, palette: &AppPalette, cx: &mut Context<Self>) -> impl IntoElement {
-        let mut projects_col = div().flex().flex_col().gap(px(6.0)).p(px(8.0));
-
-        if self.shell.projects.is_empty() {
-            projects_col = projects_col.child(
-                div()
-                    .px(px(8.0))
-                    .py(px(12.0))
-                    .text_sm()
-                    .text_color(palette.muted_foreground)
-                    .child(SharedString::from(
-                        self.i18n.get(Key::NoProjectsYet).to_owned(),
-                    )),
-            );
-        }
-        for project in &self.shell.projects {
-            let project_id = project.id.clone();
-            let collapsed = self.collapsed_projects.contains(&project_id);
-            let threads = self.shell.threads_for_project(&project.id);
-            let toggle_pid = project_id.clone();
-            let new_pid = project_id.clone();
-
-            let header = div()
-                .id(SharedString::from(format!("proj-{}", project.id)))
-                .group("project-header")
-                .flex()
-                .items_center()
-                .justify_between()
-                .px(px(8.0))
-                .py(px(5.0))
-                .rounded(px(6.0))
-                .cursor_pointer()
-                .hover(|s| s.bg(palette.row_hover))
-                .on_click(
-                    cx.listener(move |this, _, _, cx| this.toggle_project(toggle_pid.clone(), cx)),
-                )
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(px(6.0))
-                        .min_w_0()
-                        .text_xs()
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(palette.muted_foreground)
-                        .child(if collapsed { "▸" } else { "▾" })
-                        .child(
-                            div()
-                                .truncate()
-                                .child(SharedString::from(project.title.clone())),
-                        ),
-                )
-                .child(
-                    div()
-                        .id(SharedString::from(format!("proj-new-{}", project.id)))
-                        .px(px(5.0))
-                        .rounded(px(4.0))
-                        .text_sm()
-                        .text_color(palette.muted_foreground)
-                        .hover(|s| s.bg(palette.row_selected).text_color(palette.foreground))
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            cx.stop_propagation();
-                            this.start_new_thread(Some(new_pid.clone()), window, cx);
-                        }))
-                        .child("+"),
-                );
-
-            let mut group = div().flex().flex_col().gap(px(2.0)).child(header);
-            if !collapsed {
-                for thread in threads {
-                    group = group.child(self.render_thread_row(thread, palette, cx));
-                }
-            }
-            projects_col = projects_col.child(group);
-        }
-
-        div()
-            .w(px(272.0))
-            .flex_none()
-            .h_full()
-            .flex()
-            .flex_col()
-            .bg(palette.sidebar)
-            .border_r_1()
-            .border_color(palette.border)
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(6.0))
-                    .px(px(12.0))
-                    .py(px(10.0))
-                    .border_b_1()
-                    .border_color(palette.border)
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(palette.foreground)
-                            .child("p0code"),
-                    )
-                    .child(self.render_connection_chip(palette, cx)),
-            )
-            .child(
-                div()
-                    .id("sidebar-scroll")
-                    .flex_1()
-                    .overflow_y_scroll()
-                    .child(projects_col),
-            )
-            .child(
-                div()
-                    .id("sidebar-settings")
-                    .m(px(8.0))
-                    .px(px(10.0))
-                    .py(px(6.0))
-                    .rounded(px(6.0))
-                    .cursor_pointer()
-                    .text_sm()
-                    .text_color(palette.muted_foreground)
-                    .hover(|s| s.bg(palette.row_hover).text_color(palette.foreground))
-                    .on_click(
-                        cx.listener(|this, _, _, cx| this.open_settings(SECTIONS[0].path, cx)),
-                    )
-                    .child(SharedString::from(self.i18n.get(Key::Settings).to_owned())),
-            )
-    }
-
-    fn render_thread_row(
-        &self,
-        thread: &ThreadShell,
-        palette: &AppPalette,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        let tid = thread.id.clone();
-        let selected =
-            self.view == View::Chat && self.selected_thread_id.as_deref() == Some(tid.as_str());
-        let title = if thread.title.trim().is_empty() {
-            self.i18n.get(Key::UntitledThread).to_owned()
-        } else {
-            thread.title.clone()
-        };
-        let mut row = div()
-            .id(SharedString::from(format!("thread-row-{}", thread.id)))
-            .flex()
-            .items_center()
-            .justify_between()
-            .gap(px(6.0))
-            .px(px(10.0))
-            .py(px(6.0))
-            .rounded(px(6.0))
-            .cursor_pointer()
-            .when_selected(selected, palette)
-            .hover(|s| s.bg(palette.row_hover))
-            .on_click(cx.listener(move |this, _, _, cx| this.open_thread(tid.clone(), cx)))
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(7.0))
-                    .min_w_0()
-                    .child(
-                        div()
-                            .flex_none()
-                            .w(px(7.0))
-                            .h(px(7.0))
-                            .rounded_full()
-                            .bg(status_dot_color(thread.status, palette)),
-                    )
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(palette.foreground)
-                            .truncate()
-                            .child(SharedString::from(title)),
-                    ),
-            );
-        if thread.pending_runtime_request.is_some() {
-            row = row.child(
-                div()
-                    .flex_none()
-                    .px(px(5.0))
-                    .py(px(1.0))
-                    .rounded(px(4.0))
-                    .bg(palette.warning_surface)
-                    .text_xs()
-                    .text_color(palette.badge_approval)
-                    .child(SharedString::from(
-                        self.i18n.get(Key::ApprovalNeeded).to_owned(),
-                    )),
-            );
-        } else if thread.is_unread() {
-            row = row.child(
-                div()
-                    .flex_none()
-                    .w(px(6.0))
-                    .h(px(6.0))
-                    .rounded_full()
-                    .bg(palette.primary),
-            );
-        }
-        row
-    }
-
     fn render_chat(
         &mut self,
         palette: AppPalette,
@@ -1085,61 +869,21 @@ impl P0App {
         let title = match (&self.thread.projection, selected, &self.draft_project_id) {
             (Some(p), _, _) => p.thread.title.clone(),
             (None, Some(t), _) => t.title.clone(),
-            (None, None, Some(project)) => format!(
-                "{} · {}",
-                self.i18n.tr("New thread"),
-                self.shell
-                    .projects
-                    .iter()
-                    .find(|p| &p.id == project)
-                    .map(|p| p.title.as_str())
-                    .unwrap_or_default()
-            ),
+            (None, None, Some(_)) => self.i18n.tr("New thread").to_owned(),
             _ => self.i18n.get(Key::Thread).to_owned(),
         };
+        let project_id = selected
+            .map(|t| t.project_id.as_str())
+            .or(self.draft_project_id.as_deref());
+        let project = project_id.and_then(|id| self.shell.projects.iter().find(|p| p.id == id));
+        let project = project.map(|p| p.title.clone());
         let branch = self
             .thread
             .projection
             .as_ref()
             .and_then(|p| p.thread.branch.clone())
             .or_else(|| selected.and_then(|t| t.branch.clone()));
-
-        let mut header = div()
-            .w_full()
-            .flex_none()
-            .px(px(16.0))
-            .py(px(10.0))
-            .border_b_1()
-            .border_color(palette.border)
-            .flex()
-            .items_center()
-            .justify_between()
-            .gap(px(8.0))
-            .child(
-                div()
-                    .min_w_0()
-                    .truncate()
-                    .text_sm()
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(palette.foreground)
-                    .child(SharedString::from(title)),
-            );
-        if let Some(branch) = branch {
-            header = header.child(
-                div()
-                    .flex_none()
-                    .px(px(8.0))
-                    .py(px(2.0))
-                    .rounded(px(4.0))
-                    .bg(palette.card)
-                    .border_1()
-                    .border_color(palette.border)
-                    .font_family("monospace")
-                    .text_xs()
-                    .text_color(palette.muted_foreground)
-                    .child(SharedString::from(branch)),
-            );
-        }
+        let header = self.render_chat_header(&palette, project, title, branch, cx);
 
         let body = if self.thread.projection.is_some() {
             let view = cx.entity();
@@ -1220,20 +964,6 @@ impl P0App {
     }
 }
 
-trait SelectedRow {
-    fn when_selected(self, selected: bool, palette: &AppPalette) -> Self;
-}
-
-impl SelectedRow for gpui_kit::Stateful<gpui_kit::Div> {
-    fn when_selected(self, selected: bool, palette: &AppPalette) -> Self {
-        if selected {
-            self.bg(palette.row_selected)
-        } else {
-            self
-        }
-    }
-}
-
 impl Render for P0App {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = self.palette_colors(window);
@@ -1277,7 +1007,7 @@ impl Render for P0App {
         match self.view {
             View::Chat => {
                 if !self.prefs.sidebar_hidden {
-                    root = root.child(self.render_sidebar(&palette, cx));
+                    root = root.child(self.render_sidebar(&palette, palette.dark, cx));
                 }
                 root = root.child(self.render_chat(palette, window, cx));
                 if let Some(panel) = self.render_right_panel(&palette, window, cx) {
@@ -1302,26 +1032,13 @@ fn catalog_for(prefs: &LocalPrefs) -> Catalog {
     }
 }
 
-pub fn status_dot_color(status: ThreadStatus, palette: &AppPalette) -> gpui_kit::Hsla {
-    match status {
-        ThreadStatus::Running | ThreadStatus::Starting | ThreadStatus::Preparing => palette.info,
-        ThreadStatus::Waiting | ThreadStatus::Queued => palette.warning,
-        ThreadStatus::Completed => palette.success,
-        ThreadStatus::Failed => palette.error,
-        ThreadStatus::Idle
-        | ThreadStatus::Interrupted
-        | ThreadStatus::Cancelled
-        | ThreadStatus::RolledBack
-        | ThreadStatus::Unknown => palette.muted_foreground,
-    }
-}
-
 pub fn run_gui(bridge: Arc<AppBridge>) {
     let on_quit = bridge.clone();
     gpui_kit::application()
-        .with_assets(gpui_kit::assets::Assets)
+        .with_assets(gpui_kit::assets::AllAssets)
         .run(move |cx: &mut App| {
             gpui_kit::init(cx);
+            crate::theme::register_fonts(cx);
             cx.bind_keys(keybindings());
             cx.on_app_quit(move |_| {
                 on_quit.shutdown();

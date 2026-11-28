@@ -5356,6 +5356,7 @@ dependencies = [
  "p0-i18n",
  "p0-protocol",
  "p0-terminal",
+ "p0-theme",
  "pulldown-cmark",
  "serde",
  "serde_json",
