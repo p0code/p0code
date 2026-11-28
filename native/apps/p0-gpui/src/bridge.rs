@@ -447,6 +447,25 @@ impl AppBridge {
         );
     }
 
+    /// Patches server settings and re-fetches `server.getConfig` (for provider/model changes).
+    pub fn update_settings_and_refresh_config(&self, patch: Value) {
+        let client = self.client.clone();
+        let settings = self.settings.clone();
+        let config = self.config.clone();
+        self.run(
+            "Settings",
+            async move {
+                let updated = client.update_settings(&patch).await?;
+                let cfg = client.get_config().await?;
+                Ok((updated, cfg))
+            },
+            move |(updated, cfg)| {
+                *settings.lock().unwrap() = Some(updated);
+                *config.lock().unwrap() = Some(cfg);
+            },
+        );
+    }
+
     pub fn refresh_providers(&self) {
         let client = self.client.clone();
         let config = self.config.clone();

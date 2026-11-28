@@ -3,6 +3,7 @@
 //! lives in its own module under `settings/`; sections still `todo` link to the web app.
 
 pub mod keybindings;
+pub mod providers;
 
 use std::path::PathBuf;
 
@@ -14,7 +15,7 @@ use gpui_kit::{
     StatefulInteractiveElement as _, Styled as _, Window, div, px,
 };
 use p0_i18n::SUPPORTED_LOCALES;
-use p0_protocol::{RuntimeMode, ServerProviderState};
+use p0_protocol::RuntimeMode;
 use serde::{Deserialize, Serialize};
 
 use crate::feed::choice;
@@ -23,6 +24,7 @@ use crate::theme::{AppPalette, ThemePreference};
 #[derive(Default)]
 pub struct SettingsUiState {
     pub keybindings: keybindings::KeybindingsUiState,
+    pub providers: providers::ProvidersUiState,
 }
 
 pub struct Section {
@@ -252,7 +254,9 @@ impl crate::app::P0App {
             "/settings/keybindings" => self
                 .render_keybindings(palette, window, cx)
                 .into_any_element(),
-            "/settings/providers" => self.render_providers(palette, cx).into_any_element(),
+            "/settings/providers" => self
+                .render_providers(palette, window, cx)
+                .into_any_element(),
             _ => {
                 let url = web_url(self.bridge.base_url(), section.path);
                 div()
@@ -435,96 +439,6 @@ impl crate::app::P0App {
             .flex()
             .flex_col()
             .child(setting_row(self.i18n.tr("Color scheme"), schemes, palette))
-    }
-
-    fn render_providers(
-        &mut self,
-        palette: &AppPalette,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        let mut col = div().flex().flex_col().gap(px(10.0)).child(
-            div().child(
-                Button::new("providers-refresh")
-                    .label(self.i18n.tr("Refresh").to_owned())
-                    .compact()
-                    .outline()
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.bridge.refresh_providers();
-                        cx.notify();
-                    })),
-            ),
-        );
-        let Some(config) = self.bridge.server_config() else {
-            return col;
-        };
-        for provider in &config.providers {
-            let (dot, status) = match provider.status {
-                ServerProviderState::Ready => (palette.success, self.i18n.tr("Ready")),
-                ServerProviderState::Warning => (palette.warning, self.i18n.tr("Warning")),
-                ServerProviderState::Error => (palette.error, self.i18n.get(p0_i18n::Key::Error)),
-                ServerProviderState::Disabled => {
-                    (palette.muted_foreground, self.i18n.tr("Disabled"))
-                }
-                ServerProviderState::Unknown => (palette.muted_foreground, ""),
-            };
-            let mut c = crate::feed::card(palette).child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap(px(8.0))
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(px(8.0))
-                            .child(div().w(px(8.0)).h(px(8.0)).rounded_full().bg(dot))
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .child(SharedString::from(provider.label().to_owned())),
-                            )
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(palette.muted_foreground)
-                                    .child(SharedString::from(provider.driver.clone())),
-                            ),
-                    )
-                    .child(
-                        div().text_xs().text_color(palette.muted_foreground).child(
-                            SharedString::from(
-                                [Some(status.to_owned()), provider.version.clone()]
-                                    .into_iter()
-                                    .flatten()
-                                    .filter(|s| !s.is_empty())
-                                    .collect::<Vec<_>>()
-                                    .join(" · "),
-                            ),
-                        ),
-                    ),
-            );
-            if let Some(message) = provider.message.as_deref().filter(|m| !m.is_empty()) {
-                c = c.child(
-                    div()
-                        .text_xs()
-                        .text_color(palette.muted_foreground)
-                        .child(SharedString::from(message.to_owned())),
-                );
-            }
-            let models = provider
-                .models
-                .iter()
-                .map(|m| m.short_name.clone().unwrap_or_else(|| m.name.clone()))
-                .collect::<Vec<_>>()
-                .join(", ");
-            if !models.is_empty() {
-                c = c.child(div().text_xs().child(SharedString::from(models)));
-            }
-            col = col.child(c);
-        }
-        col
     }
 }
 

@@ -840,6 +840,31 @@ async fn live_p0d_settings_roundtrip() {
         "removed keybinding still present"
     );
 
+    // 2. Provider model preferences & idleCompaction round-trip
+    let updated_prefs = client
+        .update_settings(&json!({
+            "idleCompaction": "beforeCacheExpires",
+            "setModelFavorites": [{"provider": "codex", "model": "gpt-5", "favorite": true}],
+            "setModelsHidden": [{"provider": "codex", "model": "gpt-4", "hidden": true}]
+        }))
+        .await
+        .unwrap();
+    assert_eq!(updated_prefs["idleCompaction"], "beforeCacheExpires");
+    assert!(
+        updated_prefs["favorites"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|f| f["provider"] == "codex" && f["model"] == "gpt-5")
+    );
+    assert!(
+        updated_prefs["providerModelPreferences"]["codex"]["hiddenModels"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|m| m == "gpt-4")
+    );
+
     client.shutdown().await;
     proc.shutdown().await;
     let _ = std::fs::remove_dir_all(&root);
