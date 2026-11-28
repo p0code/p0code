@@ -15,17 +15,18 @@ use http::HeaderValue;
 use p0_protocol::{
     ArchivedShellSnapshot, DispatchCommandResult, FramePartAssembler, LaunchThreadInput,
     LaunchThreadResult, ORCHESTRATION_PROTOCOL_QUERY_PARAM, ORCHESTRATION_PROTOCOL_VERSION,
-    OrchestrationCommand, PeerLinkRemoveResult, PeerLinksListResult,
+    OrchestrationCommand, PeerLinkRemoveResult, PeerLinksListResult, PluginsSnapshot,
     RPC_ORCHESTRATION_DISPATCH_COMMAND, RPC_ORCHESTRATION_FORCE_STOP_THREAD,
     RPC_ORCHESTRATION_GET_ARCHIVED_SHELL_SNAPSHOT, RPC_ORCHESTRATION_LAUNCH_THREAD,
     RPC_ORCHESTRATION_SUBSCRIBE_SHELL, RPC_ORCHESTRATION_SUBSCRIBE_THREAD, RPC_PEER_LINKS_LIST,
-    RPC_PEER_LINKS_UNLINK, RPC_SECRETS_ANSWER_REQUEST, RPC_SERVER_GET_CONFIG,
-    RPC_SERVER_GET_SETTINGS, RPC_SERVER_PROBE, RPC_SERVER_REFRESH_PROVIDERS,
-    RPC_SERVER_REMOVE_KEYBINDING, RPC_SERVER_UPDATE_SETTINGS, RPC_SERVER_UPSERT_KEYBINDING,
-    RequestId, RpcClientFrame, RpcExit, RpcServerFrame, SOCKET_FRAME_PARTS_QUERY_PARAM,
-    SecretRequestAnswerInput, ServerConfig, ServerKeybindingMutationResult, ServerProbeResult,
-    ServerRemoveKeybindingInput, ServerUpsertKeybindingInput, ShellStreamItem, SubscribeShellInput,
-    SubscribeThreadInput, ThreadStreamItem, decode_server_frame, encode_client_frame,
+    RPC_PEER_LINKS_UNLINK, RPC_PLUGINS_SET_ENABLED, RPC_PLUGINS_SUBSCRIBE,
+    RPC_SECRETS_ANSWER_REQUEST, RPC_SERVER_GET_CONFIG, RPC_SERVER_GET_SETTINGS, RPC_SERVER_PROBE,
+    RPC_SERVER_REFRESH_PROVIDERS, RPC_SERVER_REMOVE_KEYBINDING, RPC_SERVER_UPDATE_SETTINGS,
+    RPC_SERVER_UPSERT_KEYBINDING, RequestId, RpcClientFrame, RpcExit, RpcServerFrame,
+    SOCKET_FRAME_PARTS_QUERY_PARAM, SecretRequestAnswerInput, ServerConfig,
+    ServerKeybindingMutationResult, ServerProbeResult, ServerRemoveKeybindingInput,
+    ServerUpsertKeybindingInput, ShellStreamItem, SubscribeShellInput, SubscribeThreadInput,
+    ThreadStreamItem, decode_server_frame, encode_client_frame,
 };
 use rand::RngExt as _;
 use serde::Serialize;
@@ -367,6 +368,22 @@ impl RpcClient {
         self.request(
             RPC_PEER_LINKS_UNLINK,
             &json!({ "environmentId": environment_id }),
+        )
+        .await
+    }
+
+    pub async fn subscribe_plugins(&self) -> Result<Subscription<PluginsSnapshot>, ClientError> {
+        self.subscribe(RPC_PLUGINS_SUBSCRIBE, &json!({})).await
+    }
+
+    pub async fn set_plugin_enabled(
+        &self,
+        plugin_id: &str,
+        enabled: bool,
+    ) -> Result<PluginsSnapshot, ClientError> {
+        self.request(
+            RPC_PLUGINS_SET_ENABLED,
+            &json!({ "pluginId": plugin_id, "enabled": enabled }),
         )
         .await
     }

@@ -12,10 +12,11 @@ use p0_client::{
 };
 use p0_protocol::{
     ApprovalDecision, ArchivedShellSnapshot, DispatchMode, LaunchInitialMessage, LaunchThreadInput,
-    ModelSelection, OrchestrationCommand, PeerLinkSummary, RPC_ORCHESTRATION_SUBSCRIBE_SHELL,
-    RPC_ORCHESTRATION_SUBSCRIBE_THREAD, RuntimeMode, SecretRequestAnswer, SecretRequestAnswerInput,
-    ServerConfig, ServerRemoveKeybindingInput, ServerUpsertKeybindingInput, ShellStreamItem,
-    SubscribeShellInput, SubscribeThreadInput, ThreadStreamItem, WorkspaceStrategy,
+    ModelSelection, OrchestrationCommand, PeerLinkSummary, PluginInfo, PluginsSnapshot,
+    RPC_ORCHESTRATION_SUBSCRIBE_SHELL, RPC_ORCHESTRATION_SUBSCRIBE_THREAD, RPC_PLUGINS_SUBSCRIBE,
+    RuntimeMode, SecretRequestAnswer, SecretRequestAnswerInput, ServerConfig,
+    ServerRemoveKeybindingInput, ServerUpsertKeybindingInput, ShellStreamItem, SubscribeShellInput,
+    SubscribeThreadInput, ThreadStreamItem, WorkspaceStrategy,
 };
 use serde_json::Value;
 use tokio::runtime::Runtime;
@@ -41,10 +42,12 @@ pub struct AppBridge {
     settings: Arc<Mutex<Option<Value>>>,
     archived_snapshot: Arc<Mutex<Option<ArchivedShellSnapshot>>>,
     peer_links: Arc<Mutex<Option<Vec<PeerLinkSummary>>>>,
+    plugins: Arc<Mutex<Option<Vec<PluginInfo>>>>,
     notice: Arc<Mutex<Option<String>>>,
     changed: Arc<Notify>,
     thread_task: Mutex<Option<JoinHandle<()>>>,
     terminal_task: Mutex<Option<JoinHandle<()>>>,
+    plugins_task: Mutex<Option<JoinHandle<()>>>,
     p0d: Mutex<Option<P0dProcess>>,
 }
 
@@ -72,10 +75,12 @@ impl AppBridge {
             settings: Arc::new(Mutex::new(None)),
             archived_snapshot: Arc::new(Mutex::new(None)),
             peer_links: Arc::new(Mutex::new(None)),
+            plugins: Arc::new(Mutex::new(None)),
             notice: Arc::new(Mutex::new(None)),
             changed: Arc::new(Notify::new()),
             thread_task: Mutex::new(None),
             terminal_task: Mutex::new(None),
+            plugins_task: Mutex::new(None),
             p0d: Mutex::new(p0d),
         });
         bridge.spawn_background();
@@ -198,6 +203,44 @@ impl AppBridge {
 
     pub fn peer_links(&self) -> Option<Vec<PeerLinkSummary>> {
         self.peer_links.lock().unwrap().clone()
+    }
+
+    pub fn plugins(&self) -> Option<Vec<PluginInfo>> {
+        self.plugins.lock().unwrap().clone()
+    }
+
+    pub fn ensure_plugins_subscribed(&self) {
+        let mut slot = self.plugins_task.lock().unwrap();
+        if slot.is_some() {
+            return;
+        }
+        let plugins = self.plugins.clone();
+        let changed = self.changed.clone();
+        let notice = self.notice.clone();
+        *slot = Some(self.rt.spawn(run_durable_stream(
+            self.client.clone(),
+            RPC_PLUGINS_SUBSCRIBE,
+            || serde_json::json!({}),
+            move |snap: PluginsSnapshot| {
+                *plugins.lock().unwrap() = Some(snap.plugins);
+                changed.notify_one();
+            },
+            move |err| {
+                if is_user_visible(err) {
+                    *notice.lock().unwrap() = Some(err.to_string());
+                }
+            },
+        )));
+    }
+
+    pub fn set_plugin_enabled(&self, plugin_id: String, enabled: bool) {
+        let client = self.client.clone();
+        let plugins = self.plugins.clone();
+        self.run(
+            "Plugins",
+            async move { client.set_plugin_enabled(&plugin_id, enabled).await },
+            move |snap| *plugins.lock().unwrap() = Some(snap.plugins),
+        );
     }
 
     pub fn refresh_peer_links(&self) {

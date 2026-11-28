@@ -17,6 +17,8 @@ pub const RPC_SERVER_UPSERT_KEYBINDING: &str = "server.upsertKeybinding";
 pub const RPC_SERVER_REMOVE_KEYBINDING: &str = "server.removeKeybinding";
 pub const RPC_PEER_LINKS_LIST: &str = "peerLinks.list";
 pub const RPC_PEER_LINKS_UNLINK: &str = "peerLinks.unlink";
+pub const RPC_PLUGINS_SUBSCRIBE: &str = "plugins.subscribe";
+pub const RPC_PLUGINS_SET_ENABLED: &str = "plugins.setEnabled";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ServerProbeResult {
@@ -358,6 +360,36 @@ pub struct PeerLinkRemoveResult {
     pub removed: bool,
     #[serde(rename = "endedThere", default)]
     pub ended_there: Option<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PluginManifest {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub version: String,
+    #[serde(default)]
+    pub unofficial: bool,
+    #[serde(rename = "externalServices", default)]
+    pub external_services: Vec<String>,
+    #[serde(default)]
+    pub capabilities: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PluginInfo {
+    pub manifest: PluginManifest,
+    pub origin: String,
+    pub enabled: bool,
+    pub state: String,
+    #[serde(default)]
+    pub message: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PluginsSnapshot {
+    #[serde(default)]
+    pub plugins: Vec<PluginInfo>,
 }
 
 /// Subset of `ServerConfig` returned by `server.getConfig`.

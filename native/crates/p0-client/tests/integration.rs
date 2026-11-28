@@ -873,6 +873,21 @@ async fn live_p0d_settings_roundtrip() {
     let peers = client.list_peer_links().await.unwrap();
     assert!(peers.links.is_empty());
 
+    // 5. Plugins subscription snapshot round-trip
+    let mut plugins_sub = client.subscribe_plugins().await.unwrap();
+    let plugins_snap = tokio::time::timeout(Duration::from_secs(10), plugins_sub.recv())
+        .await
+        .expect("plugins snapshot timeout")
+        .expect("plugins stream ended")
+        .unwrap();
+    assert!(
+        plugins_snap
+            .plugins
+            .iter()
+            .all(|p| !p.manifest.id.is_empty()),
+        "plugin manifests should decode ids"
+    );
+
     client.shutdown().await;
     proc.shutdown().await;
     let _ = std::fs::remove_dir_all(&root);
