@@ -15,6 +15,8 @@ pub const RPC_SERVER_UPDATE_SETTINGS: &str = "server.updateSettings";
 pub const RPC_SERVER_REFRESH_PROVIDERS: &str = "server.refreshProviders";
 pub const RPC_SERVER_UPSERT_KEYBINDING: &str = "server.upsertKeybinding";
 pub const RPC_SERVER_REMOVE_KEYBINDING: &str = "server.removeKeybinding";
+pub const RPC_PEER_LINKS_LIST: &str = "peerLinks.list";
+pub const RPC_PEER_LINKS_UNLINK: &str = "peerLinks.unlink";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ServerProbeResult {
@@ -317,6 +319,47 @@ pub struct ServerKeybindingMutationResult {
     pub issues: Vec<Value>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ServerDirectEndpoint {
+    pub url: String,
+    #[serde(default)]
+    pub kind: Option<String>,
+    #[serde(default)]
+    pub label: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PeerLinkSummary {
+    #[serde(rename = "environmentId")]
+    pub environment_id: String,
+    pub label: String,
+    #[serde(default)]
+    pub urls: Vec<String>,
+    pub access: String,
+    pub status: String,
+    #[serde(rename = "linkedAt", default)]
+    pub linked_at: Option<String>,
+    #[serde(rename = "expiresAt", default)]
+    pub expires_at: Option<String>,
+    #[serde(rename = "lastReachedAt", default)]
+    pub last_reached_at: Option<String>,
+    #[serde(rename = "lastError", default)]
+    pub last_error: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PeerLinksListResult {
+    #[serde(default)]
+    pub links: Vec<PeerLinkSummary>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PeerLinkRemoveResult {
+    pub removed: bool,
+    #[serde(rename = "endedThere", default)]
+    pub ended_there: Option<bool>,
+}
+
 /// Subset of `ServerConfig` returned by `server.getConfig`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ServerConfig {
@@ -325,6 +368,8 @@ pub struct ServerConfig {
     pub cwd: String,
     #[serde(default)]
     pub hostname: Option<String>,
+    #[serde(rename = "directEndpoints", default)]
+    pub direct_endpoints: Vec<ServerDirectEndpoint>,
     #[serde(rename = "keybindingsConfigPath", default)]
     pub keybindings_config_path: Option<String>,
     #[serde(default)]

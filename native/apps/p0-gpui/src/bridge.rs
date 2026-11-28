@@ -12,7 +12,7 @@ use p0_client::{
 };
 use p0_protocol::{
     ApprovalDecision, ArchivedShellSnapshot, DispatchMode, LaunchInitialMessage, LaunchThreadInput,
-    ModelSelection, OrchestrationCommand, RPC_ORCHESTRATION_SUBSCRIBE_SHELL,
+    ModelSelection, OrchestrationCommand, PeerLinkSummary, RPC_ORCHESTRATION_SUBSCRIBE_SHELL,
     RPC_ORCHESTRATION_SUBSCRIBE_THREAD, RuntimeMode, SecretRequestAnswer, SecretRequestAnswerInput,
     ServerConfig, ServerRemoveKeybindingInput, ServerUpsertKeybindingInput, ShellStreamItem,
     SubscribeShellInput, SubscribeThreadInput, ThreadStreamItem, WorkspaceStrategy,
@@ -40,6 +40,7 @@ pub struct AppBridge {
     config: Arc<Mutex<Option<ServerConfig>>>,
     settings: Arc<Mutex<Option<Value>>>,
     archived_snapshot: Arc<Mutex<Option<ArchivedShellSnapshot>>>,
+    peer_links: Arc<Mutex<Option<Vec<PeerLinkSummary>>>>,
     notice: Arc<Mutex<Option<String>>>,
     changed: Arc<Notify>,
     thread_task: Mutex<Option<JoinHandle<()>>>,
@@ -70,6 +71,7 @@ impl AppBridge {
             config: Arc::new(Mutex::new(None)),
             settings: Arc::new(Mutex::new(None)),
             archived_snapshot: Arc::new(Mutex::new(None)),
+            peer_links: Arc::new(Mutex::new(None)),
             notice: Arc::new(Mutex::new(None)),
             changed: Arc::new(Notify::new()),
             thread_task: Mutex::new(None),
@@ -192,6 +194,33 @@ impl AppBridge {
 
     pub fn archived_snapshot(&self) -> Option<ArchivedShellSnapshot> {
         self.archived_snapshot.lock().unwrap().clone()
+    }
+
+    pub fn peer_links(&self) -> Option<Vec<PeerLinkSummary>> {
+        self.peer_links.lock().unwrap().clone()
+    }
+
+    pub fn refresh_peer_links(&self) {
+        let client = self.client.clone();
+        let links = self.peer_links.clone();
+        self.run(
+            "Linked environments",
+            async move { client.list_peer_links().await },
+            move |res| *links.lock().unwrap() = Some(res.links),
+        );
+    }
+
+    pub fn unlink_peer(&self, environment_id: String) {
+        let client = self.client.clone();
+        let links = self.peer_links.clone();
+        self.run(
+            "Unlink environment",
+            async move {
+                client.unlink_peer(&environment_id).await?;
+                client.list_peer_links().await
+            },
+            move |res| *links.lock().unwrap() = Some(res.links),
+        );
     }
 
     pub fn refresh_archived_threads(&self) {

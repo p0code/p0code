@@ -869,6 +869,10 @@ async fn live_p0d_settings_roundtrip() {
     let archived = client.get_archived_shell_snapshot().await.unwrap();
     assert_eq!(archived.schema_version, 2);
 
+    // 4. Peer links list round-trip
+    let peers = client.list_peer_links().await.unwrap();
+    assert!(peers.links.is_empty());
+
     client.shutdown().await;
     proc.shutdown().await;
     let _ = std::fs::remove_dir_all(&root);

@@ -4,6 +4,7 @@
 
 pub mod archived;
 pub mod chat;
+pub mod connections;
 pub mod general;
 pub mod keybindings;
 pub mod providers;
@@ -25,6 +26,7 @@ use crate::theme::{AppPalette, ThemePreference};
 #[derive(Default)]
 pub struct SettingsUiState {
     pub archived: archived::ArchivedUiState,
+    pub connections: connections::ConnectionsUiState,
     pub keybindings: keybindings::KeybindingsUiState,
     pub providers: providers::ProvidersUiState,
 }
@@ -325,6 +327,7 @@ impl crate::app::P0App {
             "/settings/providers" => self
                 .render_providers(palette, window, cx)
                 .into_any_element(),
+            "/settings/connections" => self.render_connections(palette, cx).into_any_element(),
             "/settings/archived" => self.render_archived(palette, cx).into_any_element(),
             _ => {
                 let url = web_url(self.bridge.base_url(), section.path);
