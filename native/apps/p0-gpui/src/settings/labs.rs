@@ -16,8 +16,8 @@ use crate::app::P0App;
 use crate::settings::{setting_row, web_url};
 use crate::theme::AppPalette;
 
-const DEFAULT_WORKFLOW_SKIPPED_RUNS_KEPT: u64 = 10;
-const MAX_WORKFLOW_SKIPPED_RUNS_KEPT: u64 = 100;
+const DEFAULT_WORKFLOW_SKIPPED_RUNS_KEPT: u64 = 500;
+const MAX_WORKFLOW_SKIPPED_RUNS_KEPT: u64 = 10_000;
 
 #[derive(Default)]
 pub struct LabsUiState {
@@ -143,7 +143,7 @@ impl P0App {
                     .skipped_runs_input
                     .get_or_insert_with(|| {
                         cx.new(|cx| {
-                            let mut st = InputState::new(window, cx).placeholder("10");
+                            let mut st = InputState::new(window, cx).placeholder("500");
                             st.set_value(kept_str, window, cx);
                             st
                         })
@@ -231,8 +231,8 @@ mod tests {
         assert!(!labs.guest_sharing_enabled);
 
         assert_eq!(parse_skipped_runs("0"), Some(0));
-        assert_eq!(parse_skipped_runs("100"), Some(100));
-        assert_eq!(parse_skipped_runs("101"), None);
+        assert_eq!(parse_skipped_runs("10000"), Some(10_000));
+        assert_eq!(parse_skipped_runs("10001"), None);
         assert_eq!(parse_skipped_runs("-1"), None);
     }
 }

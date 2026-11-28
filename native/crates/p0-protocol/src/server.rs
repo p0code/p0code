@@ -19,6 +19,10 @@ pub const RPC_PEER_LINKS_LIST: &str = "peerLinks.list";
 pub const RPC_PEER_LINKS_UNLINK: &str = "peerLinks.unlink";
 pub const RPC_PLUGINS_SUBSCRIBE: &str = "plugins.subscribe";
 pub const RPC_PLUGINS_SET_ENABLED: &str = "plugins.setEnabled";
+pub const RPC_SERVER_GET_STORAGE_CLEANUP_REPORT: &str = "server.getStorageCleanupReport";
+pub const RPC_SERVER_RUN_STORAGE_CLEANUP: &str = "server.runStorageCleanup";
+pub const RPC_SERVER_GET_DATABASE_STORAGE: &str = "server.getDatabaseStorage";
+pub const RPC_SERVER_RECLAIM_DATABASE_SPACE: &str = "server.reclaimDatabaseSpace";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ServerProbeResult {
@@ -323,6 +327,7 @@ pub struct ServerKeybindingMutationResult {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ServerDirectEndpoint {
+    #[serde(rename = "httpBaseUrl", alias = "url")]
     pub url: String,
     #[serde(default)]
     pub kind: Option<String>,
@@ -390,6 +395,64 @@ pub struct PluginInfo {
 pub struct PluginsSnapshot {
     #[serde(default)]
     pub plugins: Vec<PluginInfo>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DatabaseStorageStatus {
+    #[serde(rename = "databaseBytes")]
+    pub database_bytes: f64,
+    #[serde(rename = "reclaimableBytes")]
+    pub reclaimable_bytes: f64,
+    #[serde(rename = "incrementalVacuumEnabled")]
+    pub incremental_vacuum_enabled: bool,
+    #[serde(rename = "compactCommand")]
+    pub compact_command: String,
+    #[serde(rename = "canReclaim", default)]
+    pub can_reclaim: Option<bool>,
+    #[serde(rename = "reclaimFailure", default)]
+    pub reclaim_failure: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StorageCleanupReportCounts {
+    pub removed: u64,
+    pub kept: u64,
+    pub failed: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct StorageCleanupReportEntry {
+    pub kind: String,
+    pub outcome: String,
+    pub reason: String,
+    #[serde(default)]
+    pub path: Option<String>,
+    #[serde(rename = "projectPath", default)]
+    pub project_path: Option<String>,
+    #[serde(rename = "threadId", default)]
+    pub thread_id: Option<String>,
+    #[serde(rename = "threadTitle", default)]
+    pub thread_title: Option<String>,
+    #[serde(default)]
+    pub bytes: Option<f64>,
+    #[serde(default)]
+    pub files: Option<u64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct StorageCleanupReport {
+    pub trigger: String,
+    #[serde(rename = "startedAt")]
+    pub started_at: String,
+    #[serde(rename = "finishedAt")]
+    pub finished_at: String,
+    #[serde(default)]
+    pub entries: Vec<StorageCleanupReportEntry>,
+    pub counts: StorageCleanupReportCounts,
+    #[serde(rename = "omittedCount", default)]
+    pub omitted_count: u64,
+    #[serde(rename = "bytesFreed", default)]
+    pub bytes_freed: f64,
 }
 
 /// Subset of `ServerConfig` returned by `server.getConfig`.

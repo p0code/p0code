@@ -13,20 +13,22 @@ use std::time::{Duration, Instant};
 use futures_util::{SinkExt as _, StreamExt as _};
 use http::HeaderValue;
 use p0_protocol::{
-    ArchivedShellSnapshot, DispatchCommandResult, FramePartAssembler, LaunchThreadInput,
-    LaunchThreadResult, ORCHESTRATION_PROTOCOL_QUERY_PARAM, ORCHESTRATION_PROTOCOL_VERSION,
-    OrchestrationCommand, PeerLinkRemoveResult, PeerLinksListResult, PluginsSnapshot,
-    RPC_ORCHESTRATION_DISPATCH_COMMAND, RPC_ORCHESTRATION_FORCE_STOP_THREAD,
-    RPC_ORCHESTRATION_GET_ARCHIVED_SHELL_SNAPSHOT, RPC_ORCHESTRATION_LAUNCH_THREAD,
-    RPC_ORCHESTRATION_SUBSCRIBE_SHELL, RPC_ORCHESTRATION_SUBSCRIBE_THREAD, RPC_PEER_LINKS_LIST,
-    RPC_PEER_LINKS_UNLINK, RPC_PLUGINS_SET_ENABLED, RPC_PLUGINS_SUBSCRIBE,
-    RPC_SECRETS_ANSWER_REQUEST, RPC_SERVER_GET_CONFIG, RPC_SERVER_GET_SETTINGS, RPC_SERVER_PROBE,
-    RPC_SERVER_REFRESH_PROVIDERS, RPC_SERVER_REMOVE_KEYBINDING, RPC_SERVER_UPDATE_SETTINGS,
-    RPC_SERVER_UPSERT_KEYBINDING, RequestId, RpcClientFrame, RpcExit, RpcServerFrame,
-    SOCKET_FRAME_PARTS_QUERY_PARAM, SecretRequestAnswerInput, ServerConfig,
+    ArchivedShellSnapshot, DatabaseStorageStatus, DispatchCommandResult, FramePartAssembler,
+    LaunchThreadInput, LaunchThreadResult, ORCHESTRATION_PROTOCOL_QUERY_PARAM,
+    ORCHESTRATION_PROTOCOL_VERSION, OrchestrationCommand, PeerLinkRemoveResult,
+    PeerLinksListResult, PluginsSnapshot, RPC_ORCHESTRATION_DISPATCH_COMMAND,
+    RPC_ORCHESTRATION_FORCE_STOP_THREAD, RPC_ORCHESTRATION_GET_ARCHIVED_SHELL_SNAPSHOT,
+    RPC_ORCHESTRATION_LAUNCH_THREAD, RPC_ORCHESTRATION_SUBSCRIBE_SHELL,
+    RPC_ORCHESTRATION_SUBSCRIBE_THREAD, RPC_PEER_LINKS_LIST, RPC_PEER_LINKS_UNLINK,
+    RPC_PLUGINS_SET_ENABLED, RPC_PLUGINS_SUBSCRIBE, RPC_SECRETS_ANSWER_REQUEST,
+    RPC_SERVER_GET_CONFIG, RPC_SERVER_GET_DATABASE_STORAGE, RPC_SERVER_GET_SETTINGS,
+    RPC_SERVER_GET_STORAGE_CLEANUP_REPORT, RPC_SERVER_PROBE, RPC_SERVER_RECLAIM_DATABASE_SPACE,
+    RPC_SERVER_REFRESH_PROVIDERS, RPC_SERVER_REMOVE_KEYBINDING, RPC_SERVER_RUN_STORAGE_CLEANUP,
+    RPC_SERVER_UPDATE_SETTINGS, RPC_SERVER_UPSERT_KEYBINDING, RequestId, RpcClientFrame, RpcExit,
+    RpcServerFrame, SOCKET_FRAME_PARTS_QUERY_PARAM, SecretRequestAnswerInput, ServerConfig,
     ServerKeybindingMutationResult, ServerProbeResult, ServerRemoveKeybindingInput,
-    ServerUpsertKeybindingInput, ShellStreamItem, SubscribeShellInput, SubscribeThreadInput,
-    ThreadStreamItem, decode_server_frame, encode_client_frame,
+    ServerUpsertKeybindingInput, ShellStreamItem, StorageCleanupReport, SubscribeShellInput,
+    SubscribeThreadInput, ThreadStreamItem, decode_server_frame, encode_client_frame,
 };
 use rand::RngExt as _;
 use serde::Serialize;
@@ -386,6 +388,30 @@ impl RpcClient {
             &json!({ "pluginId": plugin_id, "enabled": enabled }),
         )
         .await
+    }
+
+    pub async fn subscribe_storage_cleanup_report(
+        &self,
+    ) -> Result<Subscription<Option<StorageCleanupReport>>, ClientError> {
+        self.subscribe(RPC_SERVER_GET_STORAGE_CLEANUP_REPORT, &json!({}))
+            .await
+    }
+
+    pub async fn run_storage_cleanup(&self) -> Result<StorageCleanupReport, ClientError> {
+        self.request(RPC_SERVER_RUN_STORAGE_CLEANUP, &json!({}))
+            .await
+    }
+
+    pub async fn subscribe_database_storage(
+        &self,
+    ) -> Result<Subscription<Option<DatabaseStorageStatus>>, ClientError> {
+        self.subscribe(RPC_SERVER_GET_DATABASE_STORAGE, &json!({}))
+            .await
+    }
+
+    pub async fn reclaim_database_space(&self) -> Result<Value, ClientError> {
+        self.request(RPC_SERVER_RECLAIM_DATABASE_SPACE, &json!({}))
+            .await
     }
 }
 

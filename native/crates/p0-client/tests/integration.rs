@@ -899,6 +899,42 @@ async fn live_p0d_settings_roundtrip() {
     assert_eq!(labs_updated["workflowsEnabled"], true);
     assert_eq!(labs_updated["workflowSkippedRunsKept"], 25);
 
+    // 7. Maintenance settings & storage/database RPC round-trip
+    let maint_updated = client
+        .update_settings(&json!({
+            "backgroundActivity": {
+                "schemaVersion": 1,
+                "profile": "battery-saver",
+                "overrides": {}
+            },
+            "storageCleanup": {
+                "logsAfterDays": 14
+            }
+        }))
+        .await
+        .unwrap();
+    assert_eq!(
+        maint_updated["backgroundActivity"]["profile"],
+        "battery-saver"
+    );
+    assert_eq!(maint_updated["storageCleanup"]["logsAfterDays"], 14);
+    let mut cleanup_sub = client.subscribe_storage_cleanup_report().await.unwrap();
+    let _cleanup_report = tokio::time::timeout(Duration::from_secs(10), cleanup_sub.recv())
+        .await
+        .expect("storage cleanup report stream timeout")
+        .expect("storage cleanup report stream ended")
+        .unwrap();
+    let mut db_sub = client.subscribe_database_storage().await.unwrap();
+    let db_storage = tokio::time::timeout(Duration::from_secs(10), db_sub.recv())
+        .await
+        .expect("database storage stream timeout")
+        .expect("database storage stream ended")
+        .unwrap();
+    if let Some(status) = db_storage {
+        assert!(status.database_bytes >= 0.0);
+        assert!(!status.compact_command.is_empty());
+    }
+
     client.shutdown().await;
     proc.shutdown().await;
     let _ = std::fs::remove_dir_all(&root);

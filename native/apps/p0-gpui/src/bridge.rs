@@ -11,11 +11,13 @@ use p0_client::{
     wait_until_connected,
 };
 use p0_protocol::{
-    ApprovalDecision, ArchivedShellSnapshot, DispatchMode, LaunchInitialMessage, LaunchThreadInput,
-    ModelSelection, OrchestrationCommand, PeerLinkSummary, PluginInfo, PluginsSnapshot,
-    RPC_ORCHESTRATION_SUBSCRIBE_SHELL, RPC_ORCHESTRATION_SUBSCRIBE_THREAD, RPC_PLUGINS_SUBSCRIBE,
-    RuntimeMode, SecretRequestAnswer, SecretRequestAnswerInput, ServerConfig,
-    ServerRemoveKeybindingInput, ServerUpsertKeybindingInput, ShellStreamItem, SubscribeShellInput,
+    ApprovalDecision, ArchivedShellSnapshot, DatabaseStorageStatus, DispatchMode,
+    LaunchInitialMessage, LaunchThreadInput, ModelSelection, OrchestrationCommand, PeerLinkSummary,
+    PluginInfo, PluginsSnapshot, RPC_ORCHESTRATION_SUBSCRIBE_SHELL,
+    RPC_ORCHESTRATION_SUBSCRIBE_THREAD, RPC_PLUGINS_SUBSCRIBE, RPC_SERVER_GET_DATABASE_STORAGE,
+    RPC_SERVER_GET_STORAGE_CLEANUP_REPORT, RuntimeMode, SecretRequestAnswer,
+    SecretRequestAnswerInput, ServerConfig, ServerRemoveKeybindingInput,
+    ServerUpsertKeybindingInput, ShellStreamItem, StorageCleanupReport, SubscribeShellInput,
     SubscribeThreadInput, ThreadStreamItem, WorkspaceStrategy,
 };
 use serde_json::Value;
@@ -43,11 +45,14 @@ pub struct AppBridge {
     archived_snapshot: Arc<Mutex<Option<ArchivedShellSnapshot>>>,
     peer_links: Arc<Mutex<Option<Vec<PeerLinkSummary>>>>,
     plugins: Arc<Mutex<Option<Vec<PluginInfo>>>>,
+    storage_cleanup_report: Arc<Mutex<Option<Option<StorageCleanupReport>>>>,
+    database_storage: Arc<Mutex<Option<Option<DatabaseStorageStatus>>>>,
     notice: Arc<Mutex<Option<String>>>,
     changed: Arc<Notify>,
     thread_task: Mutex<Option<JoinHandle<()>>>,
     terminal_task: Mutex<Option<JoinHandle<()>>>,
     plugins_task: Mutex<Option<JoinHandle<()>>>,
+    storage_tasks: Mutex<Option<(JoinHandle<()>, JoinHandle<()>)>>,
     p0d: Mutex<Option<P0dProcess>>,
 }
 
@@ -76,11 +81,14 @@ impl AppBridge {
             archived_snapshot: Arc::new(Mutex::new(None)),
             peer_links: Arc::new(Mutex::new(None)),
             plugins: Arc::new(Mutex::new(None)),
+            storage_cleanup_report: Arc::new(Mutex::new(None)),
+            database_storage: Arc::new(Mutex::new(None)),
             notice: Arc::new(Mutex::new(None)),
             changed: Arc::new(Notify::new()),
             thread_task: Mutex::new(None),
             terminal_task: Mutex::new(None),
             plugins_task: Mutex::new(None),
+            storage_tasks: Mutex::new(None),
             p0d: Mutex::new(p0d),
         });
         bridge.spawn_background();
@@ -207,6 +215,75 @@ impl AppBridge {
 
     pub fn plugins(&self) -> Option<Vec<PluginInfo>> {
         self.plugins.lock().unwrap().clone()
+    }
+
+    pub fn storage_cleanup_report(&self) -> Option<Option<StorageCleanupReport>> {
+        self.storage_cleanup_report.lock().unwrap().clone()
+    }
+
+    pub fn database_storage(&self) -> Option<Option<DatabaseStorageStatus>> {
+        self.database_storage.lock().unwrap().clone()
+    }
+
+    pub fn ensure_storage_subscribed(&self) {
+        let mut slot = self.storage_tasks.lock().unwrap();
+        if slot.is_some() {
+            return;
+        }
+        let report_slot = self.storage_cleanup_report.clone();
+        let changed_r = self.changed.clone();
+        let notice_r = self.notice.clone();
+        let report_task = self.rt.spawn(run_durable_stream(
+            self.client.clone(),
+            RPC_SERVER_GET_STORAGE_CLEANUP_REPORT,
+            || serde_json::json!({}),
+            move |report: Option<StorageCleanupReport>| {
+                *report_slot.lock().unwrap() = Some(report);
+                changed_r.notify_one();
+            },
+            move |err| {
+                if is_user_visible(err) {
+                    *notice_r.lock().unwrap() = Some(err.to_string());
+                }
+            },
+        ));
+        let db_slot = self.database_storage.clone();
+        let changed_d = self.changed.clone();
+        let notice_d = self.notice.clone();
+        let db_task = self.rt.spawn(run_durable_stream(
+            self.client.clone(),
+            RPC_SERVER_GET_DATABASE_STORAGE,
+            || serde_json::json!({}),
+            move |status: Option<DatabaseStorageStatus>| {
+                *db_slot.lock().unwrap() = Some(status);
+                changed_d.notify_one();
+            },
+            move |err| {
+                if is_user_visible(err) {
+                    *notice_d.lock().unwrap() = Some(err.to_string());
+                }
+            },
+        ));
+        *slot = Some((report_task, db_task));
+    }
+
+    pub fn run_storage_cleanup(&self) {
+        let client = self.client.clone();
+        let report_slot = self.storage_cleanup_report.clone();
+        self.run(
+            "Storage cleanup",
+            async move { client.run_storage_cleanup().await },
+            move |report| *report_slot.lock().unwrap() = Some(Some(report)),
+        );
+    }
+
+    pub fn reclaim_database_space(&self) {
+        let client = self.client.clone();
+        self.run(
+            "Reclaim database space",
+            async move { client.reclaim_database_space().await },
+            |_| {},
+        );
     }
 
     pub fn ensure_plugins_subscribed(&self) {

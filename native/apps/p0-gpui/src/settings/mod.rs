@@ -8,6 +8,7 @@ pub mod connections;
 pub mod general;
 pub mod keybindings;
 pub mod labs;
+pub mod maintenance;
 pub mod plugins;
 pub mod providers;
 
@@ -31,6 +32,7 @@ pub struct SettingsUiState {
     pub connections: connections::ConnectionsUiState,
     pub keybindings: keybindings::KeybindingsUiState,
     pub labs: labs::LabsUiState,
+    pub maintenance: maintenance::MaintenanceUiState,
     pub providers: providers::ProvidersUiState,
 }
 
@@ -332,6 +334,9 @@ impl crate::app::P0App {
                 .into_any_element(),
             "/settings/connections" => self.render_connections(palette, cx).into_any_element(),
             "/settings/plugins" => self.render_plugins(palette, cx).into_any_element(),
+            "/settings/maintenance" => self
+                .render_maintenance(palette, window, cx)
+                .into_any_element(),
             "/settings/labs" => self.render_labs(palette, window, cx).into_any_element(),
             "/settings/archived" => self.render_archived(palette, cx).into_any_element(),
             _ => {
