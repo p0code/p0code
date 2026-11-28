@@ -996,6 +996,33 @@ async fn live_p0d_settings_roundtrip() {
     let trace_diag = client.get_trace_diagnostics().await.unwrap();
     assert!(!trace_diag.trace_file_path.is_empty());
 
+    // 11. Projects, Source control, and Sharing & access settings round-trip
+    let sc_access_updated = client
+        .update_settings(&json!({
+            "defaultAutoPull": true,
+            "sourceControlWritingStyle": {
+                "mode": "conventional_commits",
+                "followChangeRequestTemplates": false
+            },
+            "pullRequestMergeMethod": "squash",
+            "removeAgentCreditsOnMerge": true,
+            "reviewGuidesEnabled": true,
+            "requireConnectDeviceApproval": true,
+            "enablePreviewTunnel": false
+        }))
+        .await
+        .unwrap();
+    assert_eq!(sc_access_updated["defaultAutoPull"], true);
+    assert_eq!(
+        sc_access_updated["sourceControlWritingStyle"]["mode"],
+        "conventional_commits"
+    );
+    assert_eq!(sc_access_updated["pullRequestMergeMethod"], "squash");
+    assert_eq!(sc_access_updated["removeAgentCreditsOnMerge"], true);
+    assert_eq!(sc_access_updated["reviewGuidesEnabled"], true);
+    assert_eq!(sc_access_updated["requireConnectDeviceApproval"], true);
+    assert_eq!(sc_access_updated["enablePreviewTunnel"], false);
+
     client.shutdown().await;
     proc.shutdown().await;
     let _ = std::fs::remove_dir_all(&root);

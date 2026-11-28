@@ -3,6 +3,7 @@
 //! lives in its own module under `settings/`; sections still `todo` link to the web app.
 
 pub mod about;
+pub mod access;
 pub mod archived;
 pub mod chat;
 pub mod connections;
@@ -13,8 +14,10 @@ pub mod keybindings;
 pub mod labs;
 pub mod maintenance;
 pub mod plugins;
+pub mod projects;
 pub mod providers;
 pub mod scheduled_tasks;
+pub mod source_control;
 pub mod threads;
 pub mod worktrees;
 
@@ -42,6 +45,7 @@ pub struct SettingsUiState {
     pub maintenance: maintenance::MaintenanceUiState,
     pub providers: providers::ProvidersUiState,
     pub scheduled_tasks: scheduled_tasks::ScheduledTasksUiState,
+    pub source_control: source_control::SourceControlUiState,
     pub threads: threads::ThreadsUiState,
     pub worktrees: worktrees::WorktreesUiState,
 }
@@ -371,10 +375,17 @@ impl crate::app::P0App {
             "/settings/scheduled-tasks" => {
                 self.render_scheduled_tasks(palette, cx).into_any_element()
             }
+            "/settings/projects" => self
+                .render_projects_settings(palette, cx)
+                .into_any_element(),
+            "/settings/source-control" => self
+                .render_source_control_settings(palette, window, cx)
+                .into_any_element(),
             "/settings/worktrees" => self
                 .render_worktrees_settings(palette, window, cx)
                 .into_any_element(),
             "/settings/connections" => self.render_connections(palette, cx).into_any_element(),
+            "/settings/access" => self.render_access_settings(palette, cx).into_any_element(),
             "/settings/plugins" => self.render_plugins(palette, cx).into_any_element(),
             "/settings/maintenance" => self
                 .render_maintenance(palette, window, cx)
