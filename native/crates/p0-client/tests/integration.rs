@@ -952,6 +952,31 @@ async fn live_p0d_settings_roundtrip() {
     assert_eq!(threads_updated["responseStreamingMode"], "turn");
     assert_eq!(threads_updated["defaultThreadEnvMode"], "worktree");
 
+    // 9. Worktrees settings round-trip
+    let worktrees_updated = client
+        .update_settings(&json!({
+            "newWorktreesStartFromOrigin": false,
+            "worktreeSubmodules": "recursive",
+            "branchNamingMode": "semantic",
+            "storageCleanup": {
+                "worktreeOnDelete": true,
+                "worktreeKeepWhen": "tracked-changes"
+            }
+        }))
+        .await
+        .unwrap();
+    assert_eq!(worktrees_updated["newWorktreesStartFromOrigin"], false);
+    assert_eq!(worktrees_updated["worktreeSubmodules"], "recursive");
+    assert_eq!(worktrees_updated["branchNamingMode"], "semantic");
+    assert_eq!(
+        worktrees_updated["storageCleanup"]["worktreeOnDelete"],
+        true
+    );
+    assert_eq!(
+        worktrees_updated["storageCleanup"]["worktreeKeepWhen"],
+        "tracked-changes"
+    );
+
     client.shutdown().await;
     proc.shutdown().await;
     let _ = std::fs::remove_dir_all(&root);

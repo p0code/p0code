@@ -6,6 +6,7 @@ pub mod about;
 pub mod archived;
 pub mod chat;
 pub mod connections;
+pub mod diffs;
 pub mod general;
 pub mod keybindings;
 pub mod labs;
@@ -13,6 +14,7 @@ pub mod maintenance;
 pub mod plugins;
 pub mod providers;
 pub mod threads;
+pub mod worktrees;
 
 use std::path::PathBuf;
 
@@ -37,6 +39,7 @@ pub struct SettingsUiState {
     pub maintenance: maintenance::MaintenanceUiState,
     pub providers: providers::ProvidersUiState,
     pub threads: threads::ThreadsUiState,
+    pub worktrees: worktrees::WorktreesUiState,
 }
 
 pub struct Section {
@@ -116,6 +119,12 @@ fn default_steer() -> String {
 fn default_show_all() -> String {
     "showAll".to_owned()
 }
+fn default_stacked() -> String {
+    "stacked".to_owned()
+}
+fn default_red_green() -> String {
+    "red-green".to_owned()
+}
 
 /// Preferences the web app keeps per client (its `ClientSettings`); the native client keeps them
 /// in a file of its own.
@@ -147,6 +156,16 @@ pub struct LocalPrefs {
     pub tool_call_visibility: String,
     #[serde(default = "default_true")]
     pub show_skills_in_slash_menu: bool,
+    #[serde(default = "default_stacked")]
+    pub diff_layout: String,
+    pub diff_ignore_whitespace: bool,
+    pub diff_files_collapsed: bool,
+    #[serde(default = "default_red_green")]
+    pub diff_color_scheme: String,
+    #[serde(default = "default_true")]
+    pub proactive_panels_enabled: bool,
+    #[serde(default = "default_true")]
+    pub pull_request_links_open_in_app: bool,
 }
 
 impl Default for LocalPrefs {
@@ -167,6 +186,12 @@ impl Default for LocalPrefs {
             follow_up_behavior: default_steer(),
             tool_call_visibility: default_show_all(),
             show_skills_in_slash_menu: true,
+            diff_layout: default_stacked(),
+            diff_ignore_whitespace: false,
+            diff_files_collapsed: false,
+            diff_color_scheme: default_red_green(),
+            proactive_panels_enabled: true,
+            pull_request_links_open_in_app: true,
         }
     }
 }
@@ -329,6 +354,7 @@ impl crate::app::P0App {
             "/settings/general" => self.render_general(palette, cx).into_any_element(),
             "/settings/appearance" => self.render_appearance(palette, cx).into_any_element(),
             "/settings/chat" => self.render_chat_settings(palette, cx).into_any_element(),
+            "/settings/diffs" => self.render_diffs_settings(palette, cx).into_any_element(),
             "/settings/keybindings" => self
                 .render_keybindings(palette, window, cx)
                 .into_any_element(),
@@ -337,6 +363,9 @@ impl crate::app::P0App {
                 .into_any_element(),
             "/settings/threads" => self
                 .render_threads_settings(palette, window, cx)
+                .into_any_element(),
+            "/settings/worktrees" => self
+                .render_worktrees_settings(palette, window, cx)
                 .into_any_element(),
             "/settings/connections" => self.render_connections(palette, cx).into_any_element(),
             "/settings/plugins" => self.render_plugins(palette, cx).into_any_element(),
