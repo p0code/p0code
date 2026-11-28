@@ -13311,5 +13311,17 @@
       "c": "Plugins"
     },
     "."
-  ]
+  ],
+  "10f436e738f270cc": "No se pudo vincular la sesión de la CLI. Comprueba qué cuenta tiene la sesión iniciada.",
+  "a15e7ef6da7a881d": "Instala {cli} en el host de despliegue y vuelve a comprobarlo.",
+  "761f740f2ff20ed5": "No se pudo comprobar la CLI de {cli} en el host de despliegue.",
+  "885a8b3714f09e46": "Sesión iniciada como {account}",
+  "1d81038c7e181caf": "Iniciar sesión con {provider}",
+  "3c90f4bc2003eb87": "Comprobando la CLI de {cli}…",
+  "139e4633aa1d8196": "Completa el inicio de sesión en el navegador del host de despliegue.",
+  "ba58f96850068f18": "Cancelar inicio de sesión",
+  "9ec433045537acfc": "Comprobar de nuevo",
+  "e16e169c212adac1": "Vincular cuenta de la CLI",
+  "a5f1f54fe48f80e4": "Vincular con un token de acceso",
+  "cd8679f505c9e28d": "Opciones avanzadas: usar un token de acceso"
 }

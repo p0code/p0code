@@ -62,6 +62,7 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
   // Deploy: linking stores a provider credential (in the plugin's storage), as a provider
   // sign-in does; mapping a project is a setting; deploying, rolling back and setting a
   // project's variables change what runs in production, as operating a thread does.
+  [WS_METHODS.deployCliLogin]: AuthProvidersManageScope,
   [WS_METHODS.deployLink]: AuthProvidersManageScope,
   [WS_METHODS.deployUnlink]: AuthProvidersManageScope,
   [WS_METHODS.deployUpdateAccount]: AuthProvidersManageScope,

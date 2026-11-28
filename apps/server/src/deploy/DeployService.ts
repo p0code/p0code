@@ -7,6 +7,9 @@ import {
   type AccountProfileId,
   ALL_DEPLOY_PROVIDER_OPERATIONS,
   type DeployAccount,
+  type DeployCliLoginEvent,
+  type DeployCliLoginInput,
+  type DeployCliStatus,
   type DeployAccountRef,
   type DeployAccountSummary,
   type DeployDecideApprovalInput,
@@ -74,6 +77,10 @@ export class DeployService extends Context.Service<
   DeployService,
   {
     readonly overview: Effect.Effect<DeployOverview, DeployError>;
+    readonly cliStatus: (pluginId: string) => Effect.Effect<DeployCliStatus, DeployError>;
+    readonly cliLogin: (
+      input: DeployCliLoginInput,
+    ) => Stream.Stream<DeployCliLoginEvent, DeployError>;
     readonly link: (input: DeployLinkRpcInput) => Effect.Effect<DeployLinkRpcResult, DeployError>;
     readonly unlink: (accountId: string) => Effect.Effect<void, DeployError>;
     readonly updateAccount: (input: DeployUpdateAccountInput) => Effect.Effect<void, DeployError>;
@@ -107,6 +114,7 @@ export const redact = (text: string, secret: string | undefined): string =>
 const refOf = (account: DeployAccount): DeployAccountRef => ({
   accountId: account.id,
   ...(account.teamId === null ? {} : { teamId: account.teamId }),
+  ...(account.cliSubject === undefined ? {} : { cliSubject: account.cliSubject }),
 });
 
 const make = Effect.gen(function* () {
@@ -260,12 +268,13 @@ const make = Effect.gen(function* () {
     return { projectRoot: realRoot, directory: realDirectory, thread };
   });
 
-  const builtinSummaries: ReadonlyArray<DeployProviderSummary> = builtins.map(({ info }) => ({
+  const builtinSummaries: ReadonlyArray<DeployProviderSummary> = builtins.map(({ info, cli }) => ({
     pluginId: info.id,
     label: info.label,
     icon: info.icon,
     running: true,
     origin: "builtin",
+    ...(cli === undefined ? {} : { cliAuth: true }),
     version: info.version,
     description: info.description,
     supportedOperations: info.supportedOperations,
@@ -303,7 +312,16 @@ const make = Effect.gen(function* () {
             }),
           ),
         )
-    ).pipe(Effect.map((status) => ({ ...account, status })));
+    ).pipe(
+      Effect.map((status) => {
+        const { cliSubject, ...details } = account;
+        return {
+          ...details,
+          ...(cliSubject === undefined ? {} : { auth: "cli" as const }),
+          status,
+        };
+      }),
+    );
 
   const runDeploy = Effect.fn("DeployService.runDeploy")(function* (input: DeployStartInput) {
     const { mapping, account, ref, provider } = yield* requireMapping(input.projectId);
@@ -376,7 +394,76 @@ const make = Effect.gen(function* () {
     return approval;
   });
 
+  const requireCli = Effect.fn("DeployService.requireCli")(function* (pluginId: string) {
+    const cli = builtinFor(pluginId)?.cli;
+    if (!cli)
+      return yield* fail("unknown-provider", "This deploy provider does not support CLI sign-in.");
+    return cli;
+  });
+
+  const requireCliAccount = Effect.fn("DeployService.requireCliAccount")(function* (input: {
+    readonly pluginId: string;
+    readonly accountId?: string;
+  }) {
+    if (input.accountId === undefined) return null;
+    const account = yield* requireAccount(input.accountId);
+    if (account.pluginId !== input.pluginId || account.cliSubject === undefined) {
+      return yield* fail(
+        "unknown-account",
+        "This account does not use this provider's CLI sign-in.",
+      );
+    }
+    return account;
+  });
+
+  const linkCli = Effect.fn("DeployService.linkCli")(function* (input: DeployLinkRpcInput) {
+    const cli = yield* requireCli(input.pluginId);
+    const existing = yield* requireCliAccount(input);
+    const current = yield* cli
+      .session(existing === null ? undefined : refOf(existing))
+      .pipe(Effect.mapError(providerFailed()));
+    const accountId = existing?.id ?? (yield* random.uuidV4());
+    const teamId = existing === null ? current.teamId : existing.teamId;
+    if (existing === null) {
+      const profile = yield* activeProfile;
+      yield* store.insertAccount({
+        id: accountId,
+        pluginId: input.pluginId,
+        label: current.label,
+        teamId,
+        cliSubject: current.subject,
+        profileIds: input.profileIds ?? (profile === null ? [] : [profile]),
+        createdAt: DateTime.formatIso(yield* DateTime.now),
+      });
+    }
+    return {
+      accountId,
+      result: {
+        _tag: "linked" as const,
+        accountLabel: current.label,
+        ...(teamId === null ? {} : { teamId }),
+      },
+    };
+  });
+
   return DeployService.of({
+    cliStatus: Effect.fn("DeployService.cliStatus")(function* (pluginId) {
+      const cli = yield* requireCli(pluginId);
+      return yield* cli.status();
+    }),
+    cliLogin: (input) =>
+      Stream.concat(
+        Stream.make({ state: "waiting" as const }),
+        Stream.fromEffect(
+          Effect.gen(function* () {
+            const cli = yield* requireCli(input.pluginId);
+            yield* requireCliAccount(input);
+            yield* cli.login().pipe(Effect.mapError(providerFailed()));
+            const { accountId } = yield* linkCli(input);
+            return { state: "linked" as const, accountId };
+          }),
+        ),
+      ),
     overview: Effect.gen(function* () {
       const activeProfileId = yield* activeProfile;
       const entries = yield* pluginProviders;
@@ -406,11 +493,18 @@ const make = Effect.gen(function* () {
       };
     }),
     link: Effect.fn("DeployService.link")(function* (input) {
+      if (input.auth === "cli") return yield* linkCli(input);
       const provider = yield* requireProvider(input.pluginId);
       let account: DeployAccount;
       let created = false;
       if (input.accountId !== undefined) {
         account = yield* requireAccount(input.accountId);
+        if (account.cliSubject !== undefined) {
+          return yield* fail(
+            "provider-failed",
+            "Sign in with the provider CLI to reconnect this account.",
+          );
+        }
         if (account.pluginId !== input.pluginId) {
           return yield* fail("unknown-account", "This account belongs to another provider.");
         }
@@ -462,7 +556,7 @@ const make = Effect.gen(function* () {
         builtinFor(account.pluginId) !== undefined ||
         (yield* pluginProviders).some((candidate) => candidate.manifest.id === account.pluginId);
       // A removed plugin took its storage with it; only the record is left to forget.
-      if (known) {
+      if (known && account.cliSubject === undefined) {
         const provider = yield* requireProvider(account.pluginId);
         yield* provider.unlink(refOf(account)).pipe(Effect.mapError(providerFailed()));
       }

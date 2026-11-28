@@ -13332,5 +13332,17 @@
       "c": "Plugins"
     },
     "."
-  ]
+  ],
+  "10f436e738f270cc": "Could not link the CLI session. Check which account is signed in.",
+  "a15e7ef6da7a881d": "Install {cli} on the deploy host, then check again.",
+  "761f740f2ff20ed5": "Could not check the {cli} CLI on the deploy host.",
+  "885a8b3714f09e46": "Signed in as {account}",
+  "1d81038c7e181caf": "Sign in with {provider}",
+  "3c90f4bc2003eb87": "Checking the {cli} CLI…",
+  "139e4633aa1d8196": "Complete sign-in in the browser on the deploy host.",
+  "ba58f96850068f18": "Cancel sign-in",
+  "9ec433045537acfc": "Check again",
+  "e16e169c212adac1": "Link CLI account",
+  "a5f1f54fe48f80e4": "Link with access token",
+  "cd8679f505c9e28d": "Advanced: use an access token instead"
 }

@@ -67,6 +67,7 @@ import {
   type ProviderInstanceListRow,
   type ProviderInstanceRowStatusTone,
 } from "./ProviderInstancesLayout";
+import { DeployCliSignIn } from "./DeployCliSignIn";
 import { getProviderVersionLabel } from "./providerStatus";
 import { useSettingsScope } from "./SettingsScopeContext";
 import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
@@ -778,6 +779,8 @@ function AddDeployProviderDialog({
   const selected = entries.find((entry) => entry.id === pluginId) ?? null;
   const target = selected?.provider?.running ? selected.provider : null;
 
+  const cliAuth = target?.cliAuth === true;
+
   const choose = (nextPluginId: string | null) => {
     setPluginId(nextPluginId);
     setLabel("");
@@ -851,6 +854,63 @@ function AddDeployProviderDialog({
     );
   };
 
+  const tokenForm = target ? (
+    <div className="space-y-3">
+      <Input
+        size="sm"
+        value={label}
+        disabled={!canLink || busy}
+        placeholder={gt("Account name")}
+        aria-label={gt("{provider} account name", { provider: target.label })}
+        onChange={(event) => setLabel(event.target.value)}
+      />
+      <Input
+        size="sm"
+        value={teamId}
+        disabled={!canLink || busy}
+        placeholder={gt("Team ID (optional)")}
+        aria-label={gt("{provider} team ID", { provider: target.label })}
+        onChange={(event) => setTeamId(event.target.value)}
+      />
+      <Input
+        type="password"
+        autoComplete="off"
+        spellCheck={false}
+        size="sm"
+        value={token}
+        disabled={!canLink || busy}
+        placeholder={gt("Access token (optional)")}
+        aria-label={gt("{provider} access token", { provider: target.label })}
+        onChange={(event) => setToken(event.target.value)}
+      />
+      {authorizeUrl ? (
+        <a
+          className="inline-flex items-center gap-1 text-sm underline"
+          href={authorizeUrl}
+          target="_blank"
+          rel="noreferrer"
+        >
+          <T>Finish signing in</T>
+          <ExternalLinkIcon className="size-3.5" />
+        </a>
+      ) : null}
+      {failure ? (
+        <p role="alert" className="text-sm text-destructive">
+          {failure}
+        </p>
+      ) : null}
+      {cliAuth ? (
+        <Button
+          size="sm"
+          disabled={!canLink || busy || !token.trim()}
+          onClick={() => void submit()}
+        >
+          <T>Link with access token</T>
+        </Button>
+      ) : null}
+    </div>
+  ) : null;
+
   const pluginEntries = entries.filter((entry) => !entry.builtIn);
 
   return (
@@ -876,51 +936,24 @@ function AddDeployProviderDialog({
         </DialogHeader>
         <DialogPanel>
           {target ? (
-            <div className="space-y-3">
-              <Input
-                size="sm"
-                value={label}
-                disabled={!canLink || busy}
-                placeholder={gt("Account name")}
-                aria-label={gt("{provider} account name", { provider: target.label })}
-                onChange={(event) => setLabel(event.target.value)}
-              />
-              <Input
-                size="sm"
-                value={teamId}
-                disabled={!canLink || busy}
-                placeholder={gt("Team ID (optional)")}
-                aria-label={gt("{provider} team ID", { provider: target.label })}
-                onChange={(event) => setTeamId(event.target.value)}
-              />
-              <Input
-                type="password"
-                autoComplete="off"
-                spellCheck={false}
-                size="sm"
-                value={token}
-                disabled={!canLink || busy}
-                placeholder={gt("Access token (optional)")}
-                aria-label={gt("{provider} access token", { provider: target.label })}
-                onChange={(event) => setToken(event.target.value)}
-              />
-              {authorizeUrl ? (
-                <a
-                  className="inline-flex items-center gap-1 text-sm underline"
-                  href={authorizeUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  <T>Finish signing in</T>
-                  <ExternalLinkIcon className="size-3.5" />
-                </a>
-              ) : null}
-              {failure ? (
-                <p role="alert" className="text-sm text-destructive">
-                  {failure}
-                </p>
-              ) : null}
-            </div>
+            cliAuth ? (
+              <div className="space-y-4">
+                <DeployCliSignIn
+                  key={target.pluginId}
+                  environmentId={environmentId}
+                  provider={target}
+                  onLinked={(accountId) => onLinked(target.pluginId, accountId, [])}
+                />
+                <details className="text-sm">
+                  <summary className="cursor-pointer text-muted-foreground">
+                    <T>Advanced: use an access token instead</T>
+                  </summary>
+                  <div className="mt-3">{tokenForm}</div>
+                </details>
+              </div>
+            ) : (
+              tokenForm
+            )
           ) : (
             <div className="space-y-4">
               <div className="space-y-2" data-testid="add-deploy-provider-builtins">
@@ -954,9 +987,11 @@ function AddDeployProviderDialog({
               <Button variant="outline" disabled={busy} onClick={() => choose(null)}>
                 <T>Back</T>
               </Button>
-              <Button disabled={!canLink || busy} onClick={() => void submit()}>
-                {gt("Link account")}
-              </Button>
+              {!cliAuth ? (
+                <Button disabled={!canLink || busy} onClick={() => void submit()}>
+                  {gt("Link account")}
+                </Button>
+              ) : null}
             </>
           ) : (
             <Button variant="outline" onClick={onClose}>
@@ -1118,7 +1153,14 @@ function AccountCardRow({
       }
       control={
         <div className="flex flex-wrap items-center justify-end gap-1.5">
-          {provider.running && !linked ? (
+          {provider.running && !linked && account.auth === "cli" ? (
+            <DeployCliSignIn
+              accountId={account.id}
+              environmentId={environmentId}
+              provider={provider}
+            />
+          ) : null}
+          {provider.running && !linked && account.auth !== "cli" ? (
             <>
               <Input
                 type="password"

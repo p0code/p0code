@@ -1,5 +1,6 @@
 import {
   type DeployAccountSummary,
+  type DeployCliLoginInput,
   type DeployOverview,
   type DeployProjectMapping,
   type DeployProviderSummary,
@@ -19,7 +20,10 @@ import {
   createEnvironmentRpcCommand,
   createEnvironmentRpcQueryAtomFamily,
   createEnvironmentRpcSubscriptionAtomFamily,
+  createEnvironmentSubscriptionAtomFamily,
 } from "./runtime.ts";
+import { createCommandPermissions } from "./commandPermissions.ts";
+import { runStreamGuarded } from "../rpc/client.ts";
 import type { EnvironmentRegistry } from "../connection/registry.ts";
 import * as Persistence from "../platform/persistence.ts";
 
@@ -72,6 +76,22 @@ export function createDeployEnvironmentAtoms<R, E>(
     });
   return {
     overview,
+    cliStatus: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:deploy:cli-status",
+      tag: WS_METHODS.deployCliStatus,
+      staleTimeMs: 0,
+    }),
+    cliLogin: createEnvironmentSubscriptionAtomFamily(runtime, {
+      label: "environment-data:deploy:cli-login",
+      subscribe: (input: DeployCliLoginInput & { readonly attemptId: string }) =>
+        runStreamGuarded(WS_METHODS.deployCliLogin, {
+          pluginId: input.pluginId,
+          ...(input.accountId === undefined ? {} : { accountId: input.accountId }),
+        }),
+      idleTtlMs: 0,
+      completeWhen: (event) => event.state === "linked",
+    }),
+    cliLoginPermissions: createCommandPermissions(runtime, WS_METHODS.deployCliLogin),
     providerProjects: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:deploy:provider-projects",
       tag: WS_METHODS.deployListProjects,

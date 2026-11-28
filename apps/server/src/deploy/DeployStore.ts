@@ -94,6 +94,7 @@ interface AccountRow {
   readonly plugin_id: string;
   readonly label: string | null;
   readonly team_id: string | null;
+  readonly cli_subject: string | null;
   readonly profile_ids_json: string;
   readonly created_at: string;
 }
@@ -133,6 +134,7 @@ const accountOf = (row: AccountRow) =>
         pluginId: row.plugin_id,
         label: row.label,
         teamId: row.team_id,
+        ...(row.cli_subject === null ? {} : { cliSubject: row.cli_subject }),
         profileIds,
         createdAt: row.created_at,
       }),
@@ -192,9 +194,9 @@ const make = Effect.gen(function* () {
     insertAccount: Effect.fn("DeployStore.insertAccount")(function* (account) {
       const profileIds = yield* stored(encodeProfileIds(account.profileIds));
       yield* stored(sql`
-        INSERT INTO deploy_accounts (id, plugin_id, label, team_id, profile_ids_json, created_at)
+        INSERT INTO deploy_accounts (id, plugin_id, label, team_id, cli_subject, profile_ids_json, created_at)
         VALUES (${account.id}, ${account.pluginId}, ${account.label}, ${account.teamId},
-          ${profileIds}, ${account.createdAt})
+          ${account.cliSubject ?? null}, ${profileIds}, ${account.createdAt})
       `);
     }),
     updateAccount: Effect.fn("DeployStore.updateAccount")(function* (id, patch) {

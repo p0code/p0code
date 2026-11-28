@@ -38,6 +38,10 @@ import {
   PluginsSnapshot,
 } from "./plugins.ts";
 import {
+  DeployCliInput,
+  DeployCliLoginEvent,
+  DeployCliLoginInput,
+  DeployCliStatus,
   DeployDecideApprovalInput,
   DeployDeploymentInput,
   DeployDomain,
@@ -804,6 +808,8 @@ export const WS_METHODS = {
 
   deployOverview: "deploy.overview",
   deployLink: "deploy.link",
+  deployCliStatus: "deploy.cliStatus",
+  deployCliLogin: "deploy.cliLogin",
   deployUnlink: "deploy.unlink",
   deployUpdateAccount: "deploy.updateAccount",
   deployListProjects: "deploy.listProjects",
@@ -1584,6 +1590,17 @@ const WsPluginsInvokeRpc = Rpc.make(WS_METHODS.pluginsInvoke, {
 
 const DeployRpcError = Schema.Union([DeployError, EnvironmentAuthorizationError]);
 /** Providers from plugins declaring deploy:provider, project mappings, recent deploys, approvals. */
+const WsDeployCliStatusRpc = Rpc.make(WS_METHODS.deployCliStatus, {
+  payload: DeployCliInput,
+  success: DeployCliStatus,
+  error: DeployRpcError,
+});
+const WsDeployCliLoginRpc = Rpc.make(WS_METHODS.deployCliLogin, {
+  payload: DeployCliLoginInput,
+  success: DeployCliLoginEvent,
+  error: DeployRpcError,
+  stream: true,
+});
 const WsDeployOverviewRpc = Rpc.make(WS_METHODS.deployOverview, {
   payload: Schema.Struct({}),
   success: DeployOverview,
@@ -3069,6 +3086,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsPluginsInvokeRpc,
   WsDeployOverviewRpc,
   WsDeployLinkRpc,
+  WsDeployCliStatusRpc,
+  WsDeployCliLoginRpc,
   WsDeployUnlinkRpc,
   WsDeployUpdateAccountRpc,
   WsDeployListProjectsRpc,

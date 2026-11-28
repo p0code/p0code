@@ -36,6 +36,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as HttpClient from "effect/http/HttpClient";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
+import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 
@@ -107,6 +108,12 @@ const encodeStoredAccount = Schema.encodeEffect(Schema.fromJsonString(StoredAcco
 export interface CreateVercelDeployProviderOptions {
   readonly storage: DeployProviderStorage;
   readonly baseUrl?: string;
+  readonly cliSession?: (
+    ref: DeployAccountRef,
+  ) => Effect.Effect<
+    { readonly label: string; readonly token: Redacted.Redacted<string> },
+    PluginError
+  >;
   readonly logsPollIntervalMs?: number;
   readonly logsMaxPolls?: number;
 }
@@ -184,7 +191,7 @@ export const createVercelDeployProvider = Effect.fn("createVercelDeployProvider"
     (ref: DeployAccountRef, token: string, extraSecrets: ReadonlyArray<string> = []) =>
     (error: VercelClientError) => {
       if (isAuthExpired(error)) {
-        return markExpired(ref).pipe(
+        return (ref.cliSubject === undefined ? markExpired(ref) : Effect.void).pipe(
           Effect.andThen(Effect.fail(new PluginError({ message: EXPIRED_TOKEN_MESSAGE }))),
         );
       }
@@ -196,6 +203,13 @@ export const createVercelDeployProvider = Effect.fn("createVercelDeployProvider"
   const requireAuth = Effect.fn("VercelDeployProvider.requireAuth")(function* (
     ref: DeployAccountRef,
   ) {
+    if (ref.cliSubject !== undefined && options.cliSession) {
+      const current = yield* options.cliSession(ref);
+      return {
+        token: Redacted.value(current.token),
+        ...(ref.teamId !== undefined ? { teamId: ref.teamId } : {}),
+      };
+    }
     const token = yield* readToken(ref);
     if (token === null || token.trim().length === 0) {
       const account = yield* readAccount(ref);
@@ -212,6 +226,12 @@ export const createVercelDeployProvider = Effect.fn("createVercelDeployProvider"
   const status: DeployProvider["status"] = Effect.fn("VercelDeployProvider.status")(function* (
     ref: DeployAccountRef,
   ) {
+    if (ref.cliSubject !== undefined && options.cliSession) {
+      const current = yield* options.cliSession(ref).pipe(Effect.result);
+      return current._tag === "Success"
+        ? { state: "linked", accountLabel: current.success.label, message: null }
+        : { state: "expired", accountLabel: null, message: current.failure.message };
+    }
     const token = yield* readToken(ref);
     const account = yield* readAccount(ref);
     const teamId = ref.teamId ?? account?.teamId;

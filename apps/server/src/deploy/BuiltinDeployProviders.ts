@@ -24,6 +24,7 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 
 import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
+import * as DeployCli from "./DeployCli.ts";
 
 export interface BuiltinDeployProviderInfo {
   readonly id: string;
@@ -39,6 +40,7 @@ export interface BuiltinDeployProviderInfo {
 export interface BuiltinDeployProvider {
   readonly info: BuiltinDeployProviderInfo;
   readonly provider: StartedDeployProvider;
+  readonly cli?: DeployCli.DeployCli;
 }
 
 export class BuiltinDeployProviders extends Context.Service<
@@ -122,15 +124,19 @@ export const layer = Layer.effect(
   BuiltinDeployProviders,
   Effect.gen(function* () {
     const secrets = yield* ServerSecretStore.ServerSecretStore;
+    const vercelCli = yield* DeployCli.make("vercel");
+    const cloudflareCli = yield* DeployCli.make("cloudflare");
     const vercel = yield* createVercelDeployProvider({
       storage: secretStorage(secrets, VERCEL_PROVIDER_INFO.id),
+      cliSession: vercelCli.session,
     });
     const cloudflare = yield* createCloudflareDeployProvider({
       storage: secretStorage(secrets, CLOUDFLARE_PROVIDER_INFO.id),
+      cliSession: cloudflareCli.session,
     });
     return BuiltinDeployProviders.of([
-      { info: VERCEL_PROVIDER_INFO, provider: vercel },
-      { info: CLOUDFLARE_PROVIDER_INFO, provider: cloudflare },
+      { info: VERCEL_PROVIDER_INFO, provider: vercel, cli: vercelCli },
+      { info: CLOUDFLARE_PROVIDER_INFO, provider: cloudflare, cli: cloudflareCli },
     ]);
   }),
 );

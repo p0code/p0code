@@ -82,6 +82,7 @@ export type DeployWarning = typeof DeployWarning.Type;
 export const DeployAccountRef = Schema.Struct({
   accountId: DeployAccountId,
   teamId: Schema.optionalKey(TrimmedNonEmptyString),
+  cliSubject: Schema.optionalKey(TrimmedNonEmptyString),
 });
 export type DeployAccountRef = typeof DeployAccountRef.Type;
 
@@ -230,14 +231,17 @@ export const DeployAccount = Schema.Struct({
   /** The person's name for it, e.g. "Business-A"; null shows the provider's own label. */
   label: Schema.NullOr(TrimmedNonEmptyString),
   teamId: Schema.NullOr(TrimmedNonEmptyString),
+  cliSubject: Schema.optionalKey(TrimmedNonEmptyString),
   /** The account profiles it shows in; empty shows it in every profile. */
   profileIds: Schema.Array(AccountProfileId),
   createdAt: IsoDateTime,
 });
 export type DeployAccount = typeof DeployAccount.Type;
 
+const { cliSubject: _cliSubject, ...publicAccountFields } = DeployAccount.fields;
 export const DeployAccountSummary = Schema.Struct({
-  ...DeployAccount.fields,
+  ...publicAccountFields,
+  auth: Schema.optionalKey(Schema.Literal("cli")),
   status: DeployProviderStatus,
 });
 export type DeployAccountSummary = typeof DeployAccountSummary.Type;
@@ -274,6 +278,7 @@ export const DeployProviderSummary = Schema.Struct({
   description: Schema.optionalKey(TrimmedNonEmptyString),
   /** Operations the provider supports. */
   supportedOperations: Schema.optionalKey(Schema.Array(DeployProviderOperation)),
+  cliAuth: Schema.optionalKey(Schema.Boolean),
   /** Target kinds this provider can deploy to (e.g. `vercel-project`, `pages`, `worker`). */
   supportedTargetKinds: Schema.optionalKey(Schema.Array(DeployTargetKind)),
   /** Source kinds this provider accepts (e.g. `git`, `local-build`). */
@@ -330,6 +335,31 @@ export type DeployOverview = typeof DeployOverview.Type;
 export const DeployAccountInput = Schema.Struct({ accountId: DeployAccountId });
 export type DeployAccountInput = typeof DeployAccountInput.Type;
 
+export const DeployCliInput = Schema.Struct({ pluginId: PluginId });
+export type DeployCliInput = typeof DeployCliInput.Type;
+
+export const DeployCliStatus = Schema.Union([
+  Schema.Struct({ state: Schema.Literals(["missing", "signed-out", "error"]) }),
+  Schema.Struct({
+    state: Schema.Literal("signed-in"),
+    label: TrimmedNonEmptyString,
+    teamId: Schema.NullOr(TrimmedNonEmptyString),
+  }),
+]);
+export type DeployCliStatus = typeof DeployCliStatus.Type;
+
+export const DeployCliLoginInput = Schema.Struct({
+  ...DeployCliInput.fields,
+  accountId: Schema.optionalKey(DeployAccountId),
+});
+export type DeployCliLoginInput = typeof DeployCliLoginInput.Type;
+
+export const DeployCliLoginEvent = Schema.Union([
+  Schema.Struct({ state: Schema.Literal("waiting") }),
+  Schema.Struct({ state: Schema.Literal("linked"), accountId: DeployAccountId }),
+]);
+export type DeployCliLoginEvent = typeof DeployCliLoginEvent.Type;
+
 /** Links a new account, or relinks `accountId`. */
 export const DeployLinkRpcInput = Schema.Struct({
   pluginId: PluginId,
@@ -337,6 +367,7 @@ export const DeployLinkRpcInput = Schema.Struct({
   label: Schema.optionalKey(TrimmedNonEmptyString),
   teamId: Schema.optionalKey(TrimmedNonEmptyString),
   token: Schema.optionalKey(Schema.String),
+  auth: Schema.optionalKey(Schema.Literal("cli")),
   /** Absent puts a new account in the active profile (or every profile when none is active). */
   profileIds: Schema.optionalKey(Schema.Array(AccountProfileId)),
 });

@@ -13316,5 +13316,17 @@
       "c": "Plugins"
     },
     "."
-  ]
+  ],
+  "10f436e738f270cc": "Impossible d’associer la session CLI. Vérifiez le compte connecté.",
+  "a15e7ef6da7a881d": "Installez {cli} sur l’hôte de déploiement, puis relancez la vérification.",
+  "761f740f2ff20ed5": "Impossible de vérifier la CLI {cli} sur l’hôte de déploiement.",
+  "885a8b3714f09e46": "Connecté en tant que {account}",
+  "1d81038c7e181caf": "Se connecter avec {provider}",
+  "3c90f4bc2003eb87": "Vérification de la CLI {cli}…",
+  "139e4633aa1d8196": "Terminez la connexion dans le navigateur de l’hôte de déploiement.",
+  "ba58f96850068f18": "Annuler la connexion",
+  "9ec433045537acfc": "Vérifier à nouveau",
+  "e16e169c212adac1": "Associer le compte CLI",
+  "a5f1f54fe48f80e4": "Associer avec un jeton d’accès",
+  "cd8679f505c9e28d": "Options avancées : utiliser un jeton d’accès"
 }

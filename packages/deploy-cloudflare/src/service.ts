@@ -30,6 +30,7 @@ import type * as FileSystem from "effect/FileSystem";
 import type * as HttpClient from "effect/http/HttpClient";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
+import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 
@@ -164,6 +165,12 @@ const workerLogsDashboardUrl = (accountId: string, script: string) =>
 
 export interface CloudflareProviderOptions {
   readonly storage: DeployProviderStorage;
+  readonly cliSession?: (
+    ref: DeployAccountRef,
+  ) => Effect.Effect<
+    { readonly label: string; readonly token: Redacted.Redacted<string> },
+    PluginError
+  >;
   readonly logsPollIntervalMs?: number;
   readonly logsMaxPolls?: number;
   readonly maxLogLines?: number;
@@ -203,7 +210,7 @@ export const makeCloudflareProvider = Effect.fn("CloudflareProvider.make")(funct
     account: DeployAccountRef,
     effect: Effect.Effect<A, PluginError, Lent>,
   ): Effect.Effect<A, PluginError> =>
-    readToken(account).pipe(
+    (account.cliSubject === undefined ? readToken(account) : Effect.succeed(null)).pipe(
       Effect.flatMap((token) =>
         Effect.provideContext(effect, services).pipe(
           Effect.mapError(
@@ -217,6 +224,13 @@ export const makeCloudflareProvider = Effect.fn("CloudflareProvider.make")(funct
   const requireLinked = Effect.fn("CloudflareProvider.requireLinked")(function* (
     account: DeployAccountRef,
   ) {
+    if (account.cliSubject !== undefined && options.cliSession && account.teamId) {
+      const current = yield* options.cliSession(account);
+      return {
+        token: Redacted.value(current.token),
+        meta: { accountId: account.teamId },
+      };
+    }
     const token = yield* readToken(account);
     const meta = yield* readMeta(account);
     if (!token || !meta) {
@@ -293,7 +307,7 @@ export const makeCloudflareProvider = Effect.fn("CloudflareProvider.make")(funct
     const token = input.token?.trim() ?? "";
     if (token.length === 0) {
       return yield* new PluginError({
-        message: `Cloudflare links with an API token, not a browser sign-in. Create a Custom API Token (${REQUIRED_TOKEN_SCOPES.join(", ")}) under Cloudflare Dashboard → My Profile → API Tokens and paste it here.`,
+        message: `To link Cloudflare with an API token, create a Custom API Token (${REQUIRED_TOKEN_SCOPES.join(", ")}) under Cloudflare Dashboard → My Profile → API Tokens and paste it here.`,
       });
     }
 
@@ -341,7 +355,15 @@ export const makeCloudflareProvider = Effect.fn("CloudflareProvider.make")(funct
     yield* storage.remove(storageKey(account, STORAGE_META_KEY));
   });
 
-  const status = Effect.fn("CloudflareProvider.status")(function* (account: DeployAccountRef) {
+  const status = Effect.fn("CloudflareProvider.status")(function* (
+    account: DeployAccountRef,
+  ): Effect.fn.Return<DeployProviderStatus, PluginError, Lent> {
+    if (account.cliSubject !== undefined && options.cliSession) {
+      const current = yield* options.cliSession(account).pipe(Effect.result);
+      return current._tag === "Success"
+        ? { state: "linked", accountLabel: current.success.label, message: null }
+        : { state: "expired", accountLabel: null, message: current.failure.message };
+    }
     const token = yield* readToken(account);
     const meta = yield* readMeta(account);
     if (!token || !meta) {
@@ -462,7 +484,7 @@ export const makeCloudflareProvider = Effect.fn("CloudflareProvider.make")(funct
 
   const deployPages = Effect.fn("CloudflareProvider.deployPages")(function* (
     token: string,
-    meta: StoredAccountMeta,
+    meta: Pick<StoredAccountMeta, "accountId">,
     project: string,
     input: DeployProviderDeployInput,
   ) {
@@ -546,7 +568,7 @@ export const makeCloudflareProvider = Effect.fn("CloudflareProvider.make")(funct
 
   const deployWorker = Effect.fn("CloudflareProvider.deployWorker")(function* (
     token: string,
-    meta: StoredAccountMeta,
+    meta: Pick<StoredAccountMeta, "accountId">,
     script: string,
     input: DeployProviderDeployInput,
   ) {

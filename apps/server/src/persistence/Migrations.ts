@@ -139,6 +139,7 @@ import Migration0120 from "./Migrations/120_PublicTunnels.ts";
 import Migration0121 from "./Migrations/121_WorkflowRunSubject.ts";
 import Migration0122 from "./Migrations/122_DeployHost.ts";
 import Migration0123 from "./Migrations/123_AuthPluginsManageScope.ts";
+import Migration0124 from "./Migrations/124_DeployCliSubject.ts";
 
 export { migrationManifest, skippedV2Migrations };
 
@@ -266,6 +267,7 @@ const migrationsById = {
   121: Migration0121,
   122: Migration0122,
   123: Migration0123,
+  124: Migration0124,
 } as const;
 
 type KnownMigration = (typeof migrationsById)[keyof typeof migrationsById];

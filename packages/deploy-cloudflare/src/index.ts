@@ -12,7 +12,6 @@ import {
 import {
   checkDeployProvider,
   type DeployProviderDescriptor,
-  type DeployProviderStorage,
   type StartedDeployProvider,
 } from "@t3tools/plugin-api";
 import type * as Digest from "effect/crypto/Digest";
@@ -21,7 +20,7 @@ import type * as FileSystem from "effect/FileSystem";
 import type * as HttpClient from "effect/http/HttpClient";
 import type * as Path from "effect/Path";
 
-import { makeCloudflareProvider } from "./service.ts";
+import { type CloudflareProviderOptions, makeCloudflareProvider } from "./service.ts";
 
 export const CLOUDFLARE_PROVIDER_INFO = {
   id: "cloudflare",
@@ -29,7 +28,7 @@ export const CLOUDFLARE_PROVIDER_INFO = {
   icon: "cloud",
   version: "0.3.0",
   description:
-    "Deploy Cloudflare Pages and Workers from p0code using a least-privilege Cloudflare API token.",
+    "Deploy Cloudflare Pages and Workers from p0code using Wrangler or a Cloudflare API token.",
   supportedOperations: ALL_DEPLOY_PROVIDER_OPERATIONS as ReadonlyArray<DeployProviderOperation>,
   supportedTargetKinds: ["pages", "worker"] as ReadonlyArray<DeployTargetKind>,
   supportedSourceKinds: ["git", "local-build"] as ReadonlyArray<DeploySourceKind>,
@@ -41,14 +40,7 @@ const CLOUDFLARE_PROVIDER_DESCRIPTOR: DeployProviderDescriptor = {
   icon: CLOUDFLARE_PROVIDER_INFO.icon,
 };
 
-export interface CreateCloudflareDeployProviderOptions {
-  readonly storage: DeployProviderStorage;
-  readonly logsPollIntervalMs?: number;
-  readonly logsMaxPolls?: number;
-  readonly maxLogLines?: number;
-  readonly maxPagesFiles?: number;
-  readonly maxPagesBytes?: number;
-}
+export type CreateCloudflareDeployProviderOptions = CloudflareProviderOptions;
 
 /**
  * Creates a schema-checked built-in Cloudflare deploy provider (Pages and Workers) backed by the

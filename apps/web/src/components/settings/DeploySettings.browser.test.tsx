@@ -1,6 +1,8 @@
 import {
   AccountProfileId,
   type DeployOverview,
+  type DeployCliStatus,
+  type DeployCliLoginEvent,
   EnvironmentId,
   PluginId,
   type PluginInfo,
@@ -107,6 +109,8 @@ const EMPTY_OVERVIEW: DeployOverview = {
 
 const mocks = vi.hoisted(() => ({
   overview: null as DeployOverview | null,
+  cliStatus: null as DeployCliStatus | null,
+  cliLogin: null as DeployCliLoginEvent | null,
   plugins: [] as ReadonlyArray<PluginInfo>,
   commandCalls: [] as Array<{ readonly name: string; readonly input: unknown }>,
   refreshCalls: [] as Array<string>,
@@ -164,6 +168,9 @@ vi.mock("../../state/deploy", async () => {
       deploymentStatus: () => ({ __query: "deploymentStatus" }),
       domains: () => ({ __query: "domains" }),
       logs: () => ({ __query: "logs" }),
+      cliStatus: () => ({ __query: "cli-status" }),
+      cliLogin: () => ({ __query: "cli-login" }),
+      cliLoginPermissions: makeCommand("cli-login"),
       link: makeCommand("link"),
       unlink: makeCommand("unlink"),
       updateAccount: makeCommand("updateAccount"),
@@ -208,6 +215,14 @@ vi.mock("../../state/query", () => ({
         isPending: false,
         isSuccess: true,
         refresh: () => mocks.refreshCalls.push("plugins"),
+      };
+    }
+    if (atom?.__query === "cli-status" || atom?.__query === "cli-login") {
+      return {
+        data: atom.__query === "cli-status" ? mocks.cliStatus : mocks.cliLogin,
+        error: null,
+        isPending: false,
+        refresh: () => {},
       };
     }
     if (atom?.__query === "domains") {
@@ -287,6 +302,8 @@ function setup(
   plugins: ReadonlyArray<PluginInfo> = [VERCEL_PLUGIN],
 ) {
   mocks.overview = overview;
+  mocks.cliStatus = null;
+  mocks.cliLogin = null;
   mocks.plugins = plugins;
   mocks.commandCalls = [];
   mocks.refreshCalls = [];
@@ -372,6 +389,111 @@ describe("DeploySettingsPanel", () => {
     expect(mocks.commandCalls).toContainEqual({
       name: "link",
       input: { pluginId: PluginId.make("cloudflare") },
+    });
+  });
+
+  it("shows install guidance and a collapsed token fallback when Wrangler is missing", async () => {
+    setup(
+      {
+        ...EMPTY_OVERVIEW,
+        providers: [
+          {
+            pluginId: PluginId.make("cloudflare"),
+            label: "Cloudflare",
+            icon: null,
+            running: true,
+            cliAuth: true,
+          },
+        ],
+      },
+      [],
+    );
+    mocks.cliStatus = { state: "missing" };
+    await using _screen = await render(<DeploySettingsPanel preselect={{}} />, {
+      router: "/settings/deploy",
+    });
+
+    await userEvent.click(page.getByRole("button", { name: "Add account" }));
+    const dialog = page.getByRole("dialog");
+    await expect
+      .element(dialog.getByText("Install wrangler on the deploy host, then check again."))
+      .toBeVisible();
+    await expect.element(dialog.getByLabelText("Cloudflare access token")).not.toBeVisible();
+    await userEvent.click(dialog.getByText("Advanced: use an access token instead"));
+    await userEvent.fill(dialog.getByLabelText("Cloudflare access token"), "test-token");
+    await userEvent.click(dialog.getByRole("button", { name: "Link with access token" }));
+    expect(mocks.commandCalls).toContainEqual({
+      name: "link",
+      input: { pluginId: PluginId.make("cloudflare"), token: "test-token" },
+    });
+  });
+
+  it("can start, cancel and finish Vercel browser sign-in", async () => {
+    setup(
+      {
+        ...EMPTY_OVERVIEW,
+        providers: [
+          {
+            pluginId: PluginId.make("vercel"),
+            label: "Vercel",
+            icon: null,
+            running: true,
+            cliAuth: true,
+          },
+        ],
+      },
+      [],
+    );
+    mocks.cliStatus = { state: "signed-out" };
+    mocks.cliLogin = { state: "waiting" };
+    await using _screen = await render(<DeploySettingsPanel preselect={{}} />, {
+      router: "/settings/deploy",
+    });
+
+    await userEvent.click(page.getByRole("button", { name: "Add account" }));
+    const dialog = page.getByRole("dialog");
+    const signIn = dialog.getByRole("button", { name: "Sign in with Vercel" });
+    await userEvent.click(signIn);
+    await expect
+      .element(dialog.getByText("Complete sign-in in the browser on the deploy host."))
+      .toBeVisible();
+    await userEvent.click(dialog.getByRole("button", { name: "Cancel sign-in" }));
+    await expect.element(signIn).toBeVisible();
+
+    mocks.cliLogin = { state: "linked", accountId: "acc-new" };
+    await userEvent.click(signIn);
+    await expect.element(dialog).not.toBeInTheDocument();
+    expect(mocks.refreshCalls).toContain("overview");
+  });
+
+  it("links an existing CLI session without manual account fields", async () => {
+    setup(
+      {
+        ...EMPTY_OVERVIEW,
+        providers: [
+          {
+            pluginId: PluginId.make("vercel"),
+            label: "Vercel",
+            icon: null,
+            running: true,
+            cliAuth: true,
+          },
+        ],
+      },
+      [],
+    );
+    mocks.cliStatus = { state: "signed-in", label: "Example Team", teamId: "team_example" };
+    await using _screen = await render(<DeploySettingsPanel preselect={{}} />, {
+      router: "/settings/deploy",
+    });
+
+    await userEvent.click(page.getByRole("button", { name: "Add account" }));
+    const dialog = page.getByRole("dialog");
+    await expect.element(dialog.getByText("Signed in as Example Team")).toBeVisible();
+    await userEvent.click(dialog.getByRole("button", { name: "Link CLI account" }));
+    expect(mocks.commandCalls).toContainEqual({
+      name: "link",
+      input: { pluginId: PluginId.make("vercel"), auth: "cli" },
     });
   });
 

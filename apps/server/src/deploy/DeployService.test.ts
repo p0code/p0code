@@ -3,6 +3,7 @@ import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
+import * as ProcessRunner from "../processRunner.ts";
 import {
   AccountProfileId,
   AuthOrchestrationOperateScope,
@@ -1044,6 +1045,7 @@ describe("DeployService", () => {
     }),
   );
   const layerRealBuiltins = builtinsLayer.pipe(
+    Layer.provide(ProcessRunner.layer),
     Layer.provide(
       Layer.mergeAll(
         layerMemorySecrets,

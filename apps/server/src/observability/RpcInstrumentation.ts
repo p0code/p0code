@@ -171,6 +171,8 @@ const RPC_AGGREGATES = {
   [WS_METHODS.pluginsInvoke]: "plugins",
   [WS_METHODS.deployOverview]: "deploy",
   [WS_METHODS.deployLink]: "deploy",
+  [WS_METHODS.deployCliStatus]: "deploy",
+  [WS_METHODS.deployCliLogin]: "deploy",
   [WS_METHODS.deployUnlink]: "deploy",
   [WS_METHODS.deployUpdateAccount]: "deploy",
   [WS_METHODS.deployListProjects]: "deploy",

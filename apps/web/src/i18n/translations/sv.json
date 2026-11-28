@@ -13323,5 +13323,17 @@
       "c": "Insticksprogram"
     },
     "."
-  ]
+  ],
+  "10f436e738f270cc": "Det gick inte att länka CLI-sessionen. Kontrollera vilket konto som är inloggat.",
+  "a15e7ef6da7a881d": "Installera {cli} på driftsättningsvärden och kontrollera igen.",
+  "761f740f2ff20ed5": "Det gick inte att kontrollera {cli}-CLI på driftsättningsvärden.",
+  "885a8b3714f09e46": "Inloggad som {account}",
+  "1d81038c7e181caf": "Logga in med {provider}",
+  "3c90f4bc2003eb87": "Kontrollerar {cli}-CLI…",
+  "139e4633aa1d8196": "Slutför inloggningen i webbläsaren på driftsättningsvärden.",
+  "ba58f96850068f18": "Avbryt inloggning",
+  "9ec433045537acfc": "Kontrollera igen",
+  "e16e169c212adac1": "Länka CLI-konto",
+  "a5f1f54fe48f80e4": "Länka med åtkomsttoken",
+  "cd8679f505c9e28d": "Avancerat: använd en åtkomsttoken"
 }
