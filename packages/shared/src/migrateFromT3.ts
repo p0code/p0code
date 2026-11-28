@@ -34,6 +34,25 @@ export const PENDING_T3_IMPORT_FILE = "pending-t3-import.json";
 export const T3_IMPORT_REPORT_FILE = "t3-import-report.json";
 const MIGRATION_TOOL_VERSION = 1;
 
+/** Extracts the migrated T3 Code home path from `migrated-from-t3.json` contents, if valid. */
+export function parseMigrationMarkerSource(contents: string): string | undefined {
+  try {
+    const parsed: unknown = JSON.parse(contents);
+    if (
+      typeof parsed !== "object" ||
+      parsed === null ||
+      !("source" in parsed) ||
+      typeof parsed.source !== "string" ||
+      !NodePath.isAbsolute(parsed.source)
+    ) {
+      return undefined;
+    }
+    return parsed.source;
+  } catch {
+    return undefined;
+  }
+}
+
 /** The bridge's secret name for its link key: `plugin-<plugin id>-<storage key>`. */
 const BRIDGE_SIGNING_KEY_SECRET = "plugin-t3-connect-bridge-signing-key";
 /** Stock T3 Code's environment link key; the relay pins it to the environment id. */

@@ -1047,6 +1047,7 @@ it.effect.each([
         }),
         Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({
           scratchRoot: Effect.succeedNone,
+          legacyScratchRoots: Effect.succeed([]),
           namedProjectsRoot: Effect.succeed(process.cwd()),
         }),
         Layer.mock(ScratchThreadPromotion.ScratchThreadPromotion)({}),
@@ -1429,6 +1430,7 @@ it.effect("on-demand clients get provider config without workspace snapshots", (
       }),
       Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({
         scratchRoot: Effect.succeedNone,
+        legacyScratchRoots: Effect.succeed(["/legacy/.t3/scratch"]),
         namedProjectsRoot: Effect.succeed(process.cwd()),
       }),
       Layer.mock(ScratchThreadPromotion.ScratchThreadPromotion)({}),
@@ -1491,6 +1493,7 @@ it.effect("on-demand clients get provider config without workspace snapshots", (
     });
     const snapshot = (yield* Queue.take(responses)) as ServerConfigStreamEvent;
     if (snapshot.type !== "snapshot") return yield* Effect.die("Missing initial snapshot");
+    assert.deepEqual(snapshot.config.legacyScratchWorkspaceRoots, ["/legacy/.t3/scratch"]);
     assert.isUndefined(snapshot.config.providers[0]?.workspaceSnapshots);
     // The cwd snapshot the client fetches carries the catalog, so only command names are sent.
     assert.deepEqual(snapshot.config.providers[0]?.slashCommands, [{ name: "machine-command" }]);
@@ -1809,6 +1812,7 @@ it.effect("a missing thread worktree gets its project's skills in the cwd snapsh
       Layer.mock(DirectEndpoints.DirectEndpoints)({}),
       Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({
         scratchRoot: Effect.succeedNone,
+        legacyScratchRoots: Effect.succeed([]),
         namedProjectsRoot: Effect.succeed(process.cwd()),
       }),
       Layer.mock(ScratchThreadPromotion.ScratchThreadPromotion)({}),

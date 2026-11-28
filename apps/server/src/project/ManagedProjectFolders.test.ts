@@ -9,6 +9,7 @@ import {
   VcsProcessTimeoutError,
 } from "@t3tools/contracts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
+import { MIGRATION_MARKER_FILE } from "@t3tools/shared/migrateFromT3";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
@@ -376,7 +377,7 @@ it.effect("still knows No project when its folder is the target of a symlinked S
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const root = yield* requireRoot;
-      const target = path.join(baseDir, "visible-chats");
+      const target = path.join(yield* fileSystem.realPath(baseDir), "visible-chats");
       yield* fileSystem.makeDirectory(target);
       yield* fileSystem.symlink(target, root);
       const { projectId } = yield* scratch.ensureScratchProject;
@@ -391,6 +392,96 @@ it.effect("still knows No project when its folder is the target of a symlinked S
       assert.deepStrictEqual(yield* scratch.scratchRoot, Option.some(target));
     }),
   ),
+);
+
+it.effect(
+  "recognises a migrated legacy T3 scratch project from migrated-from-t3.json without writing into it",
+  () =>
+    withScratch(({ baseDir }) =>
+      Effect.gen(function* () {
+        const scratch = yield* ManagedProjectFolders.ManagedProjectFolders;
+        const projects = yield* ProjectService.ProjectService;
+        const fileSystem = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const legacyHome = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-legacy-home-" });
+        const legacyScratchRoot = path.resolve(legacyHome, "scratch");
+        yield* fileSystem.makeDirectory(legacyScratchRoot, { recursive: true });
+        yield* fileSystem.writeFileString(
+          path.join(baseDir, "userdata", MIGRATION_MARKER_FILE),
+          JSON.stringify({
+            source: legacyHome,
+            migratedAt: "2026-11-26T02:56:40.672Z",
+            toolVersion: 1,
+          }),
+        );
+
+        const legacyProject = yield* projects.create({
+          commandId: CommandId.make("command:legacy-scratch"),
+          projectId: ProjectId.make("project:legacy-scratch"),
+          title: "No project",
+          workspaceRoot: legacyScratchRoot,
+        });
+        const promotedChild = yield* projects.create({
+          commandId: CommandId.make("command:legacy-promoted"),
+          projectId: ProjectId.make("project:legacy-promoted"),
+          title: "Promoted",
+          workspaceRoot: path.join(legacyScratchRoot, "2026-11-24-promoted"),
+          createWorkspaceRootIfMissing: true,
+        });
+
+        assert.deepEqual(yield* scratch.legacyScratchRoots, [legacyScratchRoot]);
+        assert.isTrue(yield* scratch.isScratchProject(legacyProject.id));
+        assert.isFalse(yield* scratch.isScratchProject(promotedChild.id));
+
+        const allocated = Option.getOrThrow(
+          yield* scratch.folderForThread({
+            projectId: legacyProject.id,
+            threadId: ThreadId.make("thread-from-legacy-scratch"),
+            text: "Follow up task",
+          }),
+        );
+        assert.equal(path.dirname(allocated), yield* requireRoot);
+        assert.isTrue(yield* fileSystem.exists(allocated));
+        assert.deepEqual(yield* fileSystem.readDirectory(legacyScratchRoot), [
+          "2026-11-24-promoted",
+        ]);
+      }),
+    ),
+);
+
+it.effect(
+  "still recognises a migrated legacy scratch project when baseDir sits in a Git repo",
+  () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const checkout = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-legacy-repo-" });
+      yield* git(checkout, ["init", "--quiet"]);
+      const baseDir = path.join(checkout, ".p0code");
+      yield* fileSystem.makeDirectory(path.join(baseDir, "userdata"), { recursive: true });
+      const legacyHome = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-legacy-home-" });
+      const legacyScratchRoot = path.resolve(legacyHome, "scratch");
+      yield* fileSystem.makeDirectory(legacyScratchRoot, { recursive: true });
+      yield* fileSystem.writeFileString(
+        path.join(baseDir, "userdata", MIGRATION_MARKER_FILE),
+        JSON.stringify({ source: legacyHome }),
+      );
+
+      yield* Effect.gen(function* () {
+        const scratch = yield* ManagedProjectFolders.ManagedProjectFolders;
+        const projects = yield* ProjectService.ProjectService;
+        const legacyProject = yield* projects.create({
+          commandId: CommandId.make("command:legacy-scratch-in-repo"),
+          projectId: ProjectId.make("project:legacy-scratch-in-repo"),
+          title: "No project",
+          workspaceRoot: legacyScratchRoot,
+        });
+
+        assert.isTrue(Option.isNone(yield* scratch.scratchRoot));
+        assert.deepEqual(yield* scratch.legacyScratchRoots, [legacyScratchRoot]);
+        assert.isTrue(yield* scratch.isScratchProject(legacyProject.id));
+      }).pipe(Effect.provide(layer(baseDir)));
+    }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
 );
 
 const GIT_IDENTITY_KEYS = [

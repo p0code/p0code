@@ -72,17 +72,24 @@ const make = Effect.gen(function* () {
       .getById(thread.projectId)
       .pipe(Effect.mapError(fail("Could not read the thread's project.")));
     const folder = thread.worktreePath ?? Option.getOrUndefined(project)?.workspaceRoot;
-    const scratchRoot = Option.getOrUndefined(yield* managedFolders.scratchRoot);
+    const [scratchRoot, legacyScratchRoots] = yield* Effect.all([
+      managedFolders.scratchRoot,
+      managedFolders.legacyScratchRoots,
+    ]);
+    const scratchRoots = [
+      ...(Option.isSome(scratchRoot) ? [scratchRoot.value] : []),
+      ...legacyScratchRoots,
+    ];
     const isScratch = yield* managedFolders.isScratchProject(thread.projectId);
     // A thread already rooted at its folder is a partial earlier promotion; finish it.
     const alreadyPromoted =
       Option.isSome(project) && project.value.workspaceRoot === folder && !isScratch;
-    if (
-      folder === undefined ||
-      scratchRoot === undefined ||
-      (yield* realPath(path.dirname(folder))) !== (yield* realPath(scratchRoot)) ||
-      !(isScratch || alreadyPromoted)
-    ) {
+    const inScratchRoot =
+      folder !== undefined &&
+      (yield* Effect.forEach(scratchRoots, realPath)).includes(
+        yield* realPath(path.dirname(folder)),
+      );
+    if (folder === undefined || !inScratchRoot || !(isScratch || alreadyPromoted)) {
       return yield* new ScratchThreadPromotionError({
         reason: "Only a No project thread with its own folder can become a project.",
       });

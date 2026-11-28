@@ -1,5 +1,5 @@
 import { availableScratchWorkspaceRoot } from "@t3tools/client-runtime/operations/projects";
-import { isScratchProject } from "@t3tools/client-runtime/state/projects";
+import { findProjectByPath } from "@t3tools/client-runtime/state/projects";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import {
   type EnvironmentId,
@@ -56,8 +56,10 @@ export function useLogicalProjectEnvironments(
         environment.environmentId === activeProject.environmentId
           ? activeProject
           : allProjects.find(
-              (p) =>
-                p.environmentId === environment.environmentId && isScratchProject(p, scratchRoot),
+              (project) =>
+                project.environmentId === environment.environmentId &&
+                scratchRoot !== null &&
+                findProjectByPath([project], scratchRoot) !== undefined,
             );
       pushEnvironment(environment.environmentId, scratchProject?.id ?? null);
     }

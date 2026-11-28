@@ -95,6 +95,7 @@ export function MoveThreadToProjectDialogHost() {
       (project) =>
         project.environmentId === threadRef.environmentId &&
         project.id !== thread.projectId &&
+        project.isScratch !== true &&
         project.archivedAt == null,
     )
     .map((project) => ({

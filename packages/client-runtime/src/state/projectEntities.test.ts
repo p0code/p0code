@@ -26,7 +26,12 @@ function makeHarness(withConfig = true) {
     }),
   );
   const configAtom = Atom.family((_environmentId: EnvironmentId) =>
-    Atom.make<(Pick<ServerConfig, "scratchWorkspaceRoot"> & { revision?: number }) | null>(null),
+    Atom.make<
+      | (Pick<ServerConfig, "scratchWorkspaceRoot" | "legacyScratchWorkspaceRoots"> & {
+          revision?: number;
+        })
+      | null
+    >(null),
   );
   const catalogValueAtom = Atom.make({
     isReady: true,
@@ -116,6 +121,28 @@ describe("project scratch identity", () => {
 
       registry.set(configAtom(environmentId), null);
       expect(registry.get(projects.projectsAtom).every((project) => !project.isScratch)).toBe(true);
+    } finally {
+      registry.dispose();
+    }
+  });
+
+  it("marks projects matching legacyScratchWorkspaceRoots as scratch alongside the current root", () => {
+    const { registry, projects, configAtom } = makeHarness();
+    try {
+      registry.set(configAtom(environmentId), {
+        scratchWorkspaceRoot: v2Project.workspaceRoot,
+        legacyScratchWorkspaceRoots: ["/repo"],
+      });
+      const loaded = registry.get(projects.projectsAtom);
+      expect(loaded[0]?.isScratch).toBe(true);
+      expect(loaded[1]?.isScratch).toBe(true);
+
+      registry.set(configAtom(environmentId), {
+        legacyScratchWorkspaceRoots: ["/repo/"],
+      });
+      const legacyOnly = registry.get(projects.projectsAtom);
+      expect(legacyOnly[0]).not.toHaveProperty("isScratch");
+      expect(legacyOnly[1]?.isScratch).toBe(true);
     } finally {
       registry.dispose();
     }
