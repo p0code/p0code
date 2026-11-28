@@ -1,14 +1,17 @@
 //! Composer attachments: picked, pasted or dropped files upload as soon as they are added
 //! (`attachments.createUploadUrl` plus a POST, as the web app does) and ride on the next send.
 
-use std::path::PathBuf;
+use std::collections::HashMap;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash as _, Hasher as _};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::{
     AppContext as _, ClipboardEntry, ClipboardItem, Context, Entity, ExternalPaths, Image,
-    InteractiveElement as _, IntoElement, ParentElement as _, PathPromptOptions, SharedString,
-    StatefulInteractiveElement as _, Styled as _, Subscription, Window, div, img, px,
+    ImageFormat, InteractiveElement as _, IntoElement, ParentElement as _, PathPromptOptions,
+    SharedString, StatefulInteractiveElement as _, Styled as _, Subscription, Window, div, img, px,
 };
 use p0_client::attachments::mime_for_name;
 use p0_protocol::ChatAttachment;
@@ -16,6 +19,72 @@ use serde_json::Value;
 
 use crate::app::P0App;
 use crate::theme::AppPalette;
+
+const MAX_CACHED_FEED_IMAGES: usize = 128;
+
+#[derive(Clone)]
+pub enum FeedImageState {
+    Loading,
+    Ready(Arc<Image>),
+    Failed,
+}
+
+#[derive(Default)]
+pub struct AttachmentImageCache {
+    entries: HashMap<String, FeedImageState>,
+}
+
+impl AttachmentImageCache {
+    pub fn signature_for(&self, attachments: &[ChatAttachment]) -> u64 {
+        let mut h = DefaultHasher::new();
+        for att in attachments {
+            att.id.hash(&mut h);
+            let tag: u8 = match self.entries.get(&att.id) {
+                None => 0,
+                Some(FeedImageState::Loading) => 1,
+                Some(FeedImageState::Ready(_)) => 2,
+                Some(FeedImageState::Failed) => 3,
+            };
+            tag.hash(&mut h);
+        }
+        h.finish()
+    }
+}
+
+pub(crate) fn image_format_for_mime(mime_type: &str, name: &str) -> Option<ImageFormat> {
+    let normalized = mime_type.trim().to_ascii_lowercase();
+    let mime = if normalized.starts_with("image/") {
+        normalized.as_str()
+    } else {
+        mime_for_name(name)
+    };
+    match mime {
+        "image/png" => Some(ImageFormat::Png),
+        "image/jpeg" | "image/jpg" => Some(ImageFormat::Jpeg),
+        "image/gif" => Some(ImageFormat::Gif),
+        "image/webp" => Some(ImageFormat::Webp),
+        "image/svg+xml" => Some(ImageFormat::Svg),
+        _ => None,
+    }
+}
+
+pub(crate) fn file_badge(name: &str, mime_type: &str) -> String {
+    if let Some(ext) = Path::new(name)
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(str::trim)
+        .filter(|e| !e.is_empty() && e.len() <= 5 && e.is_ascii())
+    {
+        return ext.to_ascii_uppercase();
+    }
+    if mime_type.starts_with("image/") {
+        "IMG".to_owned()
+    } else if mime_type.starts_with("text/") {
+        "TXT".to_owned()
+    } else {
+        "FILE".to_owned()
+    }
+}
 
 enum Upload {
     Uploading,
@@ -65,7 +134,7 @@ impl AttachmentTray {
     }
 }
 
-fn human_size(bytes: u64) -> String {
+pub(crate) fn human_size(bytes: u64) -> String {
     match bytes {
         b if b >= 1024 * 1024 => format!("{:.1} MB", b as f64 / (1024.0 * 1024.0)),
         b if b >= 1024 => format!("{} KB", b.div_ceil(1024)),
@@ -74,6 +143,47 @@ fn human_size(bytes: u64) -> String {
 }
 
 impl P0App {
+    /// Returns the cached decoded image for a sent feed attachment, kicking off a fetch once.
+    pub(crate) fn feed_image_for(
+        &mut self,
+        attachment: &ChatAttachment,
+        cx: &mut Context<Self>,
+    ) -> FeedImageState {
+        if let Some(state) = self.attachment_images.entries.get(&attachment.id) {
+            return state.clone();
+        }
+        let Some(format) = image_format_for_mime(&attachment.mime_type, &attachment.name) else {
+            self.attachment_images
+                .entries
+                .insert(attachment.id.clone(), FeedImageState::Failed);
+            return FeedImageState::Failed;
+        };
+        if self.attachment_images.entries.len() >= MAX_CACHED_FEED_IMAGES {
+            self.attachment_images.entries.clear();
+        }
+        let id = attachment.id.clone();
+        self.attachment_images
+            .entries
+            .insert(id.clone(), FeedImageState::Loading);
+        let fetch = self.bridge.fetch_attachment_bytes(attachment.clone());
+        cx.spawn(async move |this, cx| {
+            let result = fetch.await;
+            this.update(cx, |app, cx| {
+                let next = match result {
+                    Ok(bytes) if !bytes.is_empty() => {
+                        FeedImageState::Ready(Arc::new(Image::from_bytes(format, bytes)))
+                    }
+                    _ => FeedImageState::Failed,
+                };
+                app.attachment_images.entries.insert(id, next);
+                app.sync_feed(cx);
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+        FeedImageState::Loading
+    }
     fn add_attachment(
         &mut self,
         name: String,
@@ -345,5 +455,25 @@ mod tests {
         assert_eq!(human_size(12), "12 B");
         assert_eq!(human_size(1500), "2 KB");
         assert_eq!(human_size(3 * 1024 * 1024), "3.0 MB");
+    }
+
+    #[test]
+    fn resolves_image_format_and_file_badges() {
+        assert_eq!(
+            image_format_for_mime("image/png", "shot.png"),
+            Some(ImageFormat::Png)
+        );
+        assert_eq!(
+            image_format_for_mime("image/jpeg", "photo.jpg"),
+            Some(ImageFormat::Jpeg)
+        );
+        assert_eq!(
+            image_format_for_mime("application/octet-stream", "shot.webp"),
+            Some(ImageFormat::Webp)
+        );
+        assert_eq!(image_format_for_mime("application/pdf", "doc.pdf"), None);
+        assert_eq!(file_badge("report.pdf", "application/pdf"), "PDF");
+        assert_eq!(file_badge("README", "text/plain"), "TXT");
+        assert_eq!(file_badge("blob", "application/octet-stream"), "FILE");
     }
 }

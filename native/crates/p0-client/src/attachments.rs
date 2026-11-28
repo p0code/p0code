@@ -5,7 +5,8 @@
 use std::path::Path;
 
 use p0_protocol::{
-    AttachmentType, ChatAttachment, CreateUploadUrlInput, CreateUploadUrlResult,
+    AssetResource, AttachmentType, ChatAttachment, CreateAssetUrlInput, CreateAssetUrlResult,
+    CreateUploadUrlInput, CreateUploadUrlResult, RPC_ASSETS_CREATE_URL,
     RPC_ATTACHMENTS_CREATE_UPLOAD_URL,
 };
 
@@ -86,6 +87,36 @@ pub async fn upload_attachment(
         mime_type,
         size_bytes,
     })
+}
+
+/// Requests a signed inline asset URL for `attachment` and downloads its raw bytes.
+pub async fn fetch_attachment_bytes(
+    client: &RpcClient,
+    http_base_url: &str,
+    attachment: &ChatAttachment,
+) -> Result<Vec<u8>, ClientError> {
+    let input = CreateAssetUrlInput {
+        resource: AssetResource::Attachment {
+            attachment_id: attachment.id.clone(),
+            file_name: (!attachment.name.is_empty()).then(|| attachment.name.clone()),
+            mime_type: (!attachment.mime_type.is_empty()).then(|| attachment.mime_type.clone()),
+            disposition: Some("inline".to_owned()),
+        },
+    };
+    let target: CreateAssetUrlResult = client.request(RPC_ASSETS_CREATE_URL, &input).await?;
+    let url = format!(
+        "{}{}",
+        http_base_url.trim_end_matches('/'),
+        target.relative_url
+    );
+    let response = reqwest::Client::new().get(url).send().await?;
+    if !response.status().is_success() {
+        let status = response.status();
+        return Err(ClientError::RpcFailure(format!(
+            "attachment fetch failed ({status})"
+        )));
+    }
+    Ok(response.bytes().await?.to_vec())
 }
 
 #[cfg(test)]

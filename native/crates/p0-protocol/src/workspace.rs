@@ -8,6 +8,7 @@ pub const RPC_PROJECTS_SEARCH_ENTRIES: &str = "projects.searchEntries";
 pub const RPC_PROJECTS_READ_FILE: &str = "projects.readFile";
 pub const RPC_REVIEW_GET_DIFF_PREVIEW: &str = "review.getDiffPreview";
 pub const RPC_ATTACHMENTS_CREATE_UPLOAD_URL: &str = "attachments.createUploadUrl";
+pub const RPC_ASSETS_CREATE_URL: &str = "assets.createUrl";
 
 /// `PROJECT_SEARCH_ENTRIES_MAX_LIMIT`.
 pub const SEARCH_ENTRIES_MAX_LIMIT: u32 = 200;
@@ -105,11 +106,13 @@ pub struct DiffPreviewResult {
     pub sources: Vec<DiffPreviewSource>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum AttachmentType {
     Image,
     File,
+    #[serde(other)]
+    Unknown,
 }
 
 impl AttachmentType {
@@ -124,9 +127,38 @@ impl AttachmentType {
     pub fn max_bytes(self) -> u64 {
         match self {
             Self::Image => IMAGE_ATTACHMENT_MAX_BYTES,
-            Self::File => FILE_ATTACHMENT_MAX_BYTES,
+            Self::File | Self::Unknown => FILE_ATTACHMENT_MAX_BYTES,
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "_tag")]
+pub enum AssetResource {
+    #[serde(rename = "attachment")]
+    Attachment {
+        #[serde(rename = "attachmentId")]
+        attachment_id: String,
+        #[serde(rename = "fileName", skip_serializing_if = "Option::is_none")]
+        file_name: Option<String>,
+        #[serde(rename = "mimeType", skip_serializing_if = "Option::is_none")]
+        mime_type: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        disposition: Option<String>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreateAssetUrlInput {
+    pub resource: AssetResource,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreateAssetUrlResult {
+    #[serde(rename = "relativeUrl")]
+    pub relative_url: String,
+    #[serde(rename = "expiresAt", default)]
+    pub expires_at: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -180,6 +212,32 @@ mod tests {
             serde_json::json!({"type":"image","id":"pending-1.png","name":"a.png","mimeType":"image/png","sizeBytes":3})
         );
         assert_eq!(AttachmentType::for_mime("text/plain"), AttachmentType::File);
+        let unknown: ChatAttachment = serde_json::from_str(
+            r#"{"type":"audio","id":"a1","name":"clip.wav","mimeType":"audio/wav","sizeBytes":9}"#,
+        )
+        .unwrap();
+        assert_eq!(unknown.kind, AttachmentType::Unknown);
+
+        let asset_req = CreateAssetUrlInput {
+            resource: AssetResource::Attachment {
+                attachment_id: "att-1".into(),
+                file_name: Some("shot.png".into()),
+                mime_type: Some("image/png".into()),
+                disposition: Some("inline".into()),
+            },
+        };
+        assert_eq!(
+            serde_json::to_value(&asset_req).unwrap(),
+            serde_json::json!({
+                "resource": {
+                    "_tag": "attachment",
+                    "attachmentId": "att-1",
+                    "fileName": "shot.png",
+                    "mimeType": "image/png",
+                    "disposition": "inline"
+                }
+            })
+        );
     }
 
     #[test]

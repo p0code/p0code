@@ -9,14 +9,15 @@ use std::ops::Range;
 use gpui_kit::component::message_scroller::MessageScrollerState;
 use gpui_kit::{
     AnyElement, App, AppContext as _, Context, Entity, FontStyle, FontWeight, HighlightStyle,
-    InteractiveElement as _, InteractiveText, IntoElement, ParentElement as _, SharedString,
-    StatefulInteractiveElement as _, StrikethroughStyle, Styled as _, StyledText, UnderlineStyle,
-    Window, div, px,
+    InteractiveElement as _, InteractiveText, IntoElement, ObjectFit, ParentElement as _,
+    SharedString, StatefulInteractiveElement as _, StrikethroughStyle, Styled as _,
+    StyledImage as _, StyledText, UnderlineStyle, Window, div, img, px,
 };
 use p0_i18n::Key;
-use p0_protocol::{ProjectedTurnItem, TurnItem, TurnItemStatus};
+use p0_protocol::{AttachmentType, ChatAttachment, ProjectedTurnItem, TurnItem, TurnItemStatus};
 
 use crate::app::P0App;
+use crate::attachments::{FeedImageState, file_badge, human_size};
 use crate::markdown::{Inline, ListMarker, MdBlock};
 use crate::theme::AppPalette;
 
@@ -65,9 +66,21 @@ pub fn row_signature(row: &ProjectedTurnItem, expanded: bool, extra: u64) -> u64
     expanded.hash(&mut h);
     extra.hash(&mut h);
     match &row.item {
-        TurnItem::UserMessage { text, .. }
-        | TurnItem::AssistantMessage { text, .. }
-        | TurnItem::Reasoning { text, .. } => text.hash(&mut h),
+        TurnItem::UserMessage {
+            text, attachments, ..
+        } => {
+            text.hash(&mut h);
+            attachments.len().hash(&mut h);
+            for att in attachments {
+                att.id.hash(&mut h);
+                att.kind.hash(&mut h);
+                att.name.hash(&mut h);
+                att.size_bytes.hash(&mut h);
+            }
+        }
+        TurnItem::AssistantMessage { text, .. } | TurnItem::Reasoning { text, .. } => {
+            text.hash(&mut h)
+        }
         TurnItem::ProposedPlan { markdown, .. } => markdown.hash(&mut h),
         TurnItem::CommandExecution { output, status, .. } => {
             output.as_ref().map(String::len).hash(&mut h);
@@ -93,7 +106,12 @@ impl P0App {
                     .iter()
                     .map(|row| {
                         let expanded = self.expanded_items.contains(&row.source_item_id);
-                        let extra = self.cards.signature(&row.item, &self.thread);
+                        let mut extra = self.cards.signature(&row.item, &self.thread);
+                        if let TurnItem::UserMessage { attachments, .. } = &row.item
+                            && !attachments.is_empty()
+                        {
+                            extra ^= self.attachment_images.signature_for(attachments);
+                        }
                         (
                             row.source_item_id.clone(),
                             row_signature(row, expanded, extra),
@@ -172,13 +190,26 @@ impl P0App {
         let expanded = self.expanded_items.contains(&item_id);
         let i18n = self.i18n.clone();
         match &row.item {
-            TurnItem::UserMessage { text, .. } => {
-                let blocks = self.md_cache.get_or_parse(&item_id, text);
-                div()
-                    .w_full()
+            TurnItem::UserMessage {
+                text, attachments, ..
+            } => {
+                let mut stack = div()
+                    .max_w(px(620.0))
                     .flex()
-                    .justify_end()
-                    .child(
+                    .flex_col()
+                    .items_end()
+                    .gap(px(6.0));
+                if !attachments.is_empty() {
+                    stack = stack.child(self.render_user_attachments(
+                        &item_id,
+                        attachments,
+                        palette,
+                        cx,
+                    ));
+                }
+                if !text.trim().is_empty() || attachments.is_empty() {
+                    let blocks = self.md_cache.get_or_parse(&item_id, text);
+                    stack = stack.child(
                         div()
                             .max_w(px(620.0))
                             .px(px(14.0))
@@ -188,7 +219,13 @@ impl P0App {
                             .border_1()
                             .border_color(palette.border)
                             .child(render_markdown(&item_id, &blocks, palette)),
-                    )
+                    );
+                }
+                div()
+                    .w_full()
+                    .flex()
+                    .justify_end()
+                    .child(stack)
                     .into_any_element()
             }
             TurnItem::AssistantMessage {
@@ -443,6 +480,149 @@ impl P0App {
                 .into_any_element(),
             TurnItem::Unknown => div().into_any_element(),
         }
+    }
+
+    fn render_user_attachments(
+        &mut self,
+        item_id: &str,
+        attachments: &[ChatAttachment],
+        palette: &AppPalette,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let mut images = Vec::new();
+        let mut files = Vec::new();
+        for att in attachments {
+            if att.kind == AttachmentType::Image {
+                images.push(att);
+            } else {
+                files.push(att);
+            }
+        }
+        let mut col = div().flex().flex_col().items_end().gap(px(6.0));
+        if !images.is_empty() {
+            let mut img_row = div().flex().flex_wrap().justify_end().gap(px(6.0));
+            for (ix, att) in images.iter().enumerate() {
+                let state = self.feed_image_for(att, cx);
+                let caption_text = format!("{} · {}", att.name, human_size(att.size_bytes));
+                let mut tile = div()
+                    .id(SharedString::from(format!("feed-img-{item_id}-{ix}")))
+                    .p(px(4.0))
+                    .rounded(px(8.0))
+                    .bg(palette.card)
+                    .border_1()
+                    .border_color(palette.border)
+                    .flex()
+                    .flex_col()
+                    .gap(px(4.0));
+                match state {
+                    FeedImageState::Ready(image) => {
+                        tile = tile.child(
+                            img(image)
+                                .w(px(180.0))
+                                .h(px(120.0))
+                                .object_fit(ObjectFit::Contain)
+                                .rounded(px(6.0)),
+                        );
+                    }
+                    FeedImageState::Loading | FeedImageState::Failed => {
+                        let badge = file_badge(&att.name, &att.mime_type);
+                        let sub = if matches!(state, FeedImageState::Loading) {
+                            self.i18n.get(Key::Loading).to_owned()
+                        } else {
+                            human_size(att.size_bytes)
+                        };
+                        tile = tile.child(
+                            div()
+                                .w(px(180.0))
+                                .h(px(72.0))
+                                .rounded(px(6.0))
+                                .bg(palette.code_bg)
+                                .flex()
+                                .flex_col()
+                                .items_center()
+                                .justify_center()
+                                .gap(px(2.0))
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .font_family("monospace")
+                                        .font_weight(FontWeight::SEMIBOLD)
+                                        .text_color(palette.foreground)
+                                        .child(SharedString::from(badge)),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(palette.muted_foreground)
+                                        .child(SharedString::from(sub)),
+                                ),
+                        );
+                    }
+                }
+                tile = tile.child(
+                    div()
+                        .max_w(px(180.0))
+                        .px(px(2.0))
+                        .truncate()
+                        .text_xs()
+                        .text_color(palette.muted_foreground)
+                        .child(SharedString::from(caption_text)),
+                );
+                img_row = img_row.child(tile);
+            }
+            col = col.child(img_row);
+        }
+        if !files.is_empty() {
+            let mut file_row = div().flex().flex_wrap().justify_end().gap(px(6.0));
+            for (ix, att) in files.iter().enumerate() {
+                let badge = file_badge(&att.name, &att.mime_type);
+                file_row = file_row.child(
+                    div()
+                        .id(SharedString::from(format!("feed-file-{item_id}-{ix}")))
+                        .max_w(px(300.0))
+                        .px(px(8.0))
+                        .py(px(5.0))
+                        .rounded(px(8.0))
+                        .bg(palette.card)
+                        .border_1()
+                        .border_color(palette.border)
+                        .flex()
+                        .items_center()
+                        .gap(px(6.0))
+                        .child(
+                            div()
+                                .flex_none()
+                                .px(px(5.0))
+                                .py(px(1.0))
+                                .rounded(px(4.0))
+                                .bg(palette.code_bg)
+                                .font_family("monospace")
+                                .text_xs()
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .text_color(palette.muted_foreground)
+                                .child(SharedString::from(badge)),
+                        )
+                        .child(
+                            div()
+                                .min_w_0()
+                                .truncate()
+                                .text_xs()
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(palette.foreground)
+                                .child(SharedString::from(att.name.clone())),
+                        )
+                        .child(
+                            div()
+                                .flex_none()
+                                .text_xs()
+                                .text_color(palette.muted_foreground)
+                                .child(SharedString::from(human_size(att.size_bytes))),
+                        ),
+                );
+            }
+            col = col.child(file_row);
+        }
+        col
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -779,6 +959,44 @@ mod tests {
         assert_eq!(
             plan_feed_update(&rows(&[("a", 1)]), &rows(&[("a", 1)])),
             FeedPlan::default()
+        );
+    }
+
+    #[test]
+    fn user_message_signature_tracks_attachments() {
+        let make = |attachments: Vec<ChatAttachment>| ProjectedTurnItem {
+            position: 0,
+            visibility: "visible".into(),
+            source_thread_id: "t1".into(),
+            source_item_id: "u1".into(),
+            item: TurnItem::UserMessage {
+                id: "u1".into(),
+                thread_id: "t1".into(),
+                run_id: None,
+                ordinal: 1,
+                status: TurnItemStatus::Completed,
+                title: None,
+                updated_at: "2026-01-01T00:00:00Z".into(),
+                message_id: "m1".into(),
+                text: "see attached".into(),
+                attachments,
+            },
+        };
+        let plain = make(vec![]);
+        let with_att = make(vec![ChatAttachment {
+            kind: AttachmentType::Image,
+            id: "att-1".into(),
+            name: "shot.png".into(),
+            mime_type: "image/png".into(),
+            size_bytes: 1024,
+        }]);
+        assert_ne!(
+            row_signature(&plain, false, 0),
+            row_signature(&with_att, false, 0)
+        );
+        assert_ne!(
+            row_signature(&with_att, false, 1),
+            row_signature(&with_att, false, 2)
         );
     }
 

@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::server::{ModelSelection, ProviderInteractionMode, RuntimeMode};
+use crate::workspace::ChatAttachment;
 
 pub const RPC_ORCHESTRATION_DISPATCH_COMMAND: &str = "orchestration.dispatchCommand";
 pub const RPC_ORCHESTRATION_LAUNCH_THREAD: &str = "orchestration.launchThread";
@@ -630,6 +631,8 @@ pub enum TurnItem {
         #[serde(rename = "messageId")]
         message_id: String,
         text: String,
+        #[serde(default)]
+        attachments: Vec<ChatAttachment>,
     },
     #[serde(rename = "assistant_message")]
     AssistantMessage {

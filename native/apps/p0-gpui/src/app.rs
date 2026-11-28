@@ -17,7 +17,7 @@ use p0_client::{ConnectionState, ShellState, ThreadState};
 use p0_i18n::{Catalog, Key};
 use p0_protocol::{ModelSelection, RuntimeMode, ThreadShell, ThreadStatus};
 
-use crate::attachments::AttachmentTray;
+use crate::attachments::{AttachmentImageCache, AttachmentTray};
 use crate::bridge::AppBridge;
 use crate::cards::CardForms;
 use crate::completions::Completion;
@@ -113,6 +113,7 @@ pub struct P0App {
     terminal: Option<TerminalPane>,
     pub(crate) right_panel: RightPanel,
     pub(crate) attachments: AttachmentTray,
+    pub(crate) attachment_images: AttachmentImageCache,
     pub(crate) completion: Completion,
     _subs: Vec<Subscription>,
 }
@@ -186,6 +187,7 @@ impl P0App {
             terminal: None,
             right_panel: RightPanel::new(cx),
             attachments: AttachmentTray::default(),
+            attachment_images: AttachmentImageCache::default(),
             completion: Completion::default(),
             _subs: vec![composer_sub, appearance_sub],
         };
