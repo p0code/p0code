@@ -49,6 +49,7 @@ With `origin` on the mirror, use `src` instead of `gh`. PRs into `main` still me
 - Pass flags directly after the task name (e.g. `vp run dev --home-dir /tmp/t3code-dev`, `--browser`).
 - **State and ports:** Linked worktrees default to `<worktree>/.t3/userdata` (outranking `P0CODE_HOME` and `T3CODE_HOME`) and seed on first start from a read-only snapshot of `~/.p0code/userdata/statev2.sqlite` when it is at most 500 MiB (`--no-seed` or `T3CODE_DEV_SEED=0` skips; `vp run migrate-dev-db` refreshes manually). Plain clones and the main checkout default to `~/.p0code/dev`. Never point a dev server at `~/.p0code/userdata` or a stock T3 Code `~/.t3/userdata`. Read actual ports from `[dev-runner]` output (`T3CODE_PORT_OFFSET` / `T3CODE_DEV_INSTANCE` override).
 - **Resource monitor:** First start builds `native/resource-monitor` via Cargo when missing; without Rust, dev starts without process telemetry.
+- **Desktop backend:** The dev desktop runs `p0d`, rebuilt into `apps/p0d/dist/<goos>-<goarch>/` with `go build` whenever its sources are newer. Without Go it uses an older build or `~/.p0code/bin/p0d`, else shows where it looked. p0d's Node sidecar needs a data folder named `userdata`, so the main checkout's `~/.p0code/dev` can't run it: use a worktree or `--home-dir`, or choose **Use legacy Node backend this once**. p0d's own output goes to `<userdata>/logs/p0d.log`.
 - **Sharing:** `vp run dev --share` exposes the web port over Tailscale and prints a pairing URL. Add `--built` to serve `apps/web/dist` via `vp build --watch` (no HMR, faster over slow links). Never set `VITE_HTTP_URL` or `VITE_WS_URL` in dev—Vite proxies `/api` and `/ws` single-origin.
 - **Startup profiling:** `vp run profile:startup` captures the first 20 s of Node processes under `.t3/startup-profiles/<timestamp>`.
 
@@ -119,3 +120,49 @@ rustup target add x86_64-pc-windows-msvc   # or aarch64-pc-windows-msvc
 ```
 
 WSL support also requires passing the Linux CLI archive via `--wsl-runtime`; see [release runbook](./03_release.md#windows-payload-topology-and-update-validation). For signing and macOS passkeys, see [release](./03_release.md) and [Relay setup](./02_relay-setup.md#desktop-passkeys).
+
+## Native GPUI client (`native/`)
+
+The Rust workspace under `native/` (`p0-protocol`, `p0-i18n`, `p0-client`, `apps/p0-gpui`) pins its toolchain in `native/rust-toolchain.toml` (`1.100.0`, required by `gpui-pre 0.3.14`) and caps Cargo concurrency in `native/.cargo/config.toml` (`jobs = 3`, `clang` + `mold` on Linux) to keep peak RAM under ~6.5 GiB.
+
+macOS needs only Xcode command line tools and `rustup`; a first build takes about 15 minutes. In a checkout or worktree made without `--recurse-submodules=plugins`, run `git submodule update --init plugins/t3-connect-bridge plugins/obsidian-shared-memory plugins/backup` before `pnpm install --frozen-lockfile`, or the install fails with `ERR_PNPM_OUTDATED_LOCKFILE`.
+
+### Linux GPUI build prerequisites
+
+```sh
+# Debian 13 / Ubuntu 24.04
+sudo apt-get install build-essential clang mold pkg-config cmake \
+  libfontconfig1-dev libfreetype6-dev \
+  libwayland-dev libxkbcommon-dev libxkbcommon-x11-dev \
+  libx11-xcb-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+  libxcursor-dev libxi-dev libasound2-dev libvulkan1 mesa-vulkan-drivers
+```
+
+Design tokens in `native/crates/p0-theme/src/generated.rs` are generated from the web app's theme sources; after changing `apps/web/src/index.css`, the built-in theme palettes or project icon colors, run `vp run native-theme:generate` (CI runs `native-theme:check`).
+
+Run tests and clippy from `native/`:
+
+```sh
+cd native
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+```
+
+`p0-gpui` finds and starts `p0d` the way the desktop app does (same binary lookup, `--home`, ready
+file and `secrets/desktop-bootstrap-secret`), so both apps pointed at one home share one `p0d`.
+Every desktop sign-in revokes the previous desktop session: two GUIs on one `p0d` sign each other
+out, and `p0-gpui` signs back in a few times with growing delays, then waits for **Sign in here**.
+
+`p0d` serves most RPCs through its Node sidecar, which needs a home named `userdata` and a server
+to run. Without a built `apps/server/dist/bin.mjs`, pass the sources. Headless smoke test (never
+point at `~/.p0code/userdata`):
+
+```sh
+cd apps/p0d && go build -o /tmp/p0d-dev ./ && cd ../..
+native/target/debug/p0-gpui --smoke --home /tmp/p0-gpui-smoke/userdata --p0d-bin /tmp/p0d-dev \
+  --legacy-server "\"node\" \"$PWD/apps/server/src/bin.ts\" \"--mode\" \"web\" \"--no-browser\""
+```
+
+Add `"--dev-url" "http://127.0.0.1:59999"` to the sidecar command to get the free Replay (dev)
+provider. Without a desktop session, `Xvfb :93` plus lavapipe (`mesa-vulkan-drivers`) renders the
+window; `xwd -root` captures it.

@@ -123,6 +123,9 @@ jobs:
       - name: Check i18n catalogs
         run: vp run i18n:check
 
+      - name: Check generated native theme tokens
+        run: vp run native-theme:check
+
       - name: Check
         run: vp check
 
@@ -214,11 +217,24 @@ jobs:
           node apps/server/scripts/cli.ts build-exe
           apps/server/dist-exe/t3 --version
 
+      # The unpackaged desktop runs p0d from apps/p0d/dist/<goos>-<goarch>.
+      - name: Setup Go
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && needs.changes.outputs.desktop_launch != 'false' }}
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: apps/p0d/go.mod
+          cache-dependency-path: apps/p0d/go.sum
+
+      - name: Build p0d
+        id: p0d
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && needs.changes.outputs.desktop_launch != 'false' }}
+        run: bash apps/p0d/scripts/build.sh "$(go env GOOS)/$(go env GOARCH)"
+
       # The release launch check, run unpackaged against the same old-state fixture, for
       # startup and sidebar changes. Packaging and signing stay release-only.
       - name: Open the seeded thread in the built desktop app
         id: desktop_launch
-        if: ${{ !cancelled() && steps.build.outcome == 'success' && needs.changes.outputs.desktop_launch != 'false' }}
+        if: ${{ !cancelled() && steps.p0d.outcome == 'success' && needs.changes.outputs.desktop_launch != 'false' }}
         timeout-minutes: 4
         run: |
           electron=$(node -p "require('./apps/desktop/node_modules/electron')")

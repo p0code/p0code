@@ -10,13 +10,16 @@ import {
   DESKTOP_READINESS_PROOF_PATH,
   isValidDesktopReadinessProof,
 } from "@t3tools/shared/desktopReadinessProof";
-import * as NetService from "@t3tools/shared/Net";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Context from "effect/Context";
 import * as Mac from "effect/crypto/Mac";
 import * as SecureRandom from "effect/crypto/SecureRandom";
+import * as Deferred from "effect/Deferred";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Hex from "effect/encoding/Hex";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -24,13 +27,17 @@ import * as Path from "effect/Path";
 import * as Ref from "effect/Ref";
 import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
+import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
+import * as SynchronizedRef from "effect/SynchronizedRef";
 import { HttpClient, HttpClientRequest } from "effect/http";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
+import * as DesktopCliShim from "../app/DesktopCliShim.ts";
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import * as DesktopObservability from "../app/DesktopObservability.ts";
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
+import * as DesktopServerExposure from "./DesktopServerExposure.ts";
 
 const DEFAULT_SERVICE_HOST = "127.0.0.1";
 const DEFAULT_SERVICE_PORT = 3773;
@@ -40,7 +47,13 @@ const HEALTH_PROBE_TIMEOUT = Duration.seconds(1);
 const SERVICE_START_WAIT_TIMEOUT = Duration.seconds(30);
 const SERVICE_START_POLL_INTERVAL = Duration.millis(200);
 const COMMAND_TIMEOUT = Duration.seconds(15);
+// p0d gives its Node sidecar up to 10 seconds to stop before it exits itself.
+const P0D_STOP_GRACE = Duration.seconds(15);
+const P0D_OUTPUT_TAIL_BYTES = 4_000;
+const P0D_LOG_ROTATE_BYTES = 10 * 1024 * 1024;
 const P0D_READY_FILE_NAME = "p0d-ready.json";
+const P0D_DESKTOP_SECRET_FILE = ["secrets", "desktop-bootstrap-secret"] as const;
+const P0D_LOG_FILE = ["logs", "p0d.log"] as const;
 const LEGACY_SERVICE_READY_FILE_NAME = "p0d-legacy-service.json";
 const LEGACY_SERVICE_SECRETS_FILE_NAME = "p0d-legacy-service-secrets.json";
 
@@ -93,11 +106,15 @@ export interface BackendServiceDriver {
   readonly binaryPath: string | null;
   /** Derives the desktop's sign-in tokens; null when the service cannot accept them. */
   readonly desktopBootstrapSecret: string | null;
+  /** Why this driver can never start, e.g. no p0d binary was found. */
+  readonly unavailableReason: string | null;
   readonly status: Effect.Effect<BackendServiceInfo>;
   readonly ensureRunning: Effect.Effect<BackendServiceInfo, BackendServiceDriverError>;
   readonly start: Effect.Effect<BackendServiceInfo, BackendServiceDriverError>;
   readonly stop: Effect.Effect<void, BackendServiceDriverError>;
   readonly restart: Effect.Effect<BackendServiceInfo, BackendServiceDriverError>;
+  /** Completes with a reason when a backend this app started exits; never for one it attached to. */
+  readonly exited: Effect.Effect<string>;
 }
 
 const ReadyFileSchema = Schema.Struct({
@@ -157,9 +174,8 @@ export const adoptRunningLocalService = Effect.fn(
 });
 
 /**
- * The bundled in-app backend is always the default. A p0d binary appearing on disk must not
- * take over an install the user did not opt into; an external mode is only used once the user
- * has chosen it.
+ * p0d is the backend unless the user explicitly picked another mode. The legacy Node backend
+ * ("embedded") is only an escape hatch: it is never chosen for the user.
  */
 export function resolveEffectiveBackendMode(
   settings: Pick<DesktopAppSettings.DesktopSettings, "backendMode" | "backendModeConfiguredByUser">,
@@ -167,20 +183,18 @@ export function resolveEffectiveBackendMode(
   if (settings.backendModeConfiguredByUser) {
     return settings.backendMode;
   }
-  return "embedded";
+  return DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS.backendMode;
 }
 
 function p0dBinaryName(platform: NodeJS.Platform): string {
   return platform === "win32" ? "p0d.exe" : "p0d";
 }
 
-function packagedP0dBinaryCandidates(input: {
-  readonly path: Pick<Path.Path, "join">;
-  readonly platform: NodeJS.Platform;
-  readonly resourcesPath: string;
-}): readonly string[] {
-  const binaryName = p0dBinaryName(input.platform);
-  return [input.path.join(input.resourcesPath, "p0d", binaryName)];
+/** The `<goos>-<goarch>` folder apps/p0d/scripts/build.sh writes for this host. */
+function p0dDistTarget(platform: NodeJS.Platform, arch: string): string {
+  const goos = platform === "win32" ? "windows" : platform;
+  const goarch = arch === "x64" ? "amd64" : arch;
+  return `${goos}-${goarch}`;
 }
 
 export function p0dBinaryCandidates(input: {
@@ -191,9 +205,8 @@ export function p0dBinaryCandidates(input: {
   readonly resourcesPath: string;
   readonly rootDir: string;
   readonly homeDirectory: string;
-  readonly baseDir: string;
-  readonly appDataDirectory: string;
   readonly configuredBinaryPath: string | null;
+  readonly pathEnv: string | undefined;
 }): readonly string[] {
   const candidates: string[] = [];
   const pushUnique = (candidate: string) => {
@@ -202,18 +215,76 @@ export function p0dBinaryCandidates(input: {
       candidates.push(trimmed);
     }
   };
+  const binaryName = p0dBinaryName(input.platform);
 
+  // The bundled binary is built from this app's commit, so it always speaks its protocol.
+  pushUnique(input.path.join(input.resourcesPath, "p0d", binaryName));
   if (input.configuredBinaryPath) {
     pushUnique(input.configuredBinaryPath);
   }
-  // Only binaries this app ships or the user points at explicitly. A p0d left behind by an
-  // unrelated install (or on PATH) is not ours to trust.
-  for (const packaged of packagedP0dBinaryCandidates(input)) {
-    pushUnique(packaged);
+  pushUnique(input.path.join(input.homeDirectory, ".p0code", "bin", binaryName));
+  if (!input.isPackaged) {
+    pushUnique(
+      input.path.join(
+        input.rootDir,
+        "apps",
+        "p0d",
+        "dist",
+        p0dDistTarget(input.platform, input.arch),
+        binaryName,
+      ),
+    );
   }
-  // Other installs (PATH, home/bin, dev dist) are not a compatibility guarantee.
-  // They can be selected deliberately through backendBinaryPath.
+  const delimiter = input.platform === "win32" ? ";" : ":";
+  for (const directory of (input.pathEnv ?? "").split(delimiter)) {
+    if (directory.trim().length > 0) {
+      pushUnique(input.path.join(directory, binaryName));
+    }
+  }
   return candidates;
+}
+
+/** The Node server's own launch arguments, shared by the in-app backend and p0d's sidecar. */
+export function nodeServerArgs(input: {
+  readonly isPackaged: boolean;
+  readonly compileCachePath: string;
+  readonly entryPath: string;
+}): readonly string[] {
+  return [
+    "--title=p0code-backend",
+    // Packaged builds have a separate cache; --require prevents cache settings leaking to provider subprocesses.
+    ...(input.isPackaged ? ["--require", input.compileCachePath] : []),
+    input.entryPath,
+  ];
+}
+
+/** Quotes for p0d's `--legacy-server` splitter: inside double quotes only \" and \\ escape. */
+function formatLegacyServerCommand(argv: ReadonlyArray<string>): string {
+  return argv.map((arg) => `"${arg.replace(/["\\]/g, (char) => `\\${char}`)}"`).join(" ");
+}
+
+/**
+ * The command p0d runs to start its lazy Node sidecar. Web mode, because a desktop-mode server
+ * expects this GUI's control fds; p0d appends --host, --port and --base-dir.
+ */
+export function p0dLegacyServerCommand(input: {
+  readonly executablePath: string;
+  readonly isPackaged: boolean;
+  readonly compileCachePath: string;
+  readonly entryPath: string;
+  readonly tailscaleServeEnabled: boolean;
+  readonly tailscaleServePort: number;
+}): string {
+  return formatLegacyServerCommand([
+    input.executablePath,
+    ...nodeServerArgs(input),
+    "--mode",
+    "web",
+    "--no-browser",
+    `--tailscale-serve=${input.tailscaleServeEnabled}`,
+    "--tailscale-serve-port",
+    String(input.tailscaleServePort),
+  ]);
 }
 
 export function parseReadyFile(raw: string): BackendReadyFileData | null {
@@ -439,6 +510,8 @@ export interface MakeP0dServiceDriverInput {
   readonly stateDir: string;
   readonly readyFilePath: string;
   readonly legacyServerCommand: string | null;
+  readonly desktopSecretFilePath: string;
+  readonly desktopBootstrapSecret: string;
   readonly host: string;
   readonly defaultPort: number;
   readonly fileSystem: FileSystem.FileSystem;
@@ -448,6 +521,21 @@ export interface MakeP0dServiceDriverInput {
   readonly pollInterval?: Duration.Duration;
 }
 
+/** True when the user installed p0d as a launchd/systemd/Task Scheduler service themselves. */
+const isP0dUserServiceInstalled = (
+  spawner: ChildProcessSpawner.ChildProcessSpawner["Service"],
+  binaryPath: string,
+): Effect.Effect<boolean> =>
+  runShortCommand(spawner, binaryPath, ["service", "status"]).pipe(
+    Effect.map(
+      (output) =>
+        output.exitCode === 0 &&
+        parseP0dServiceStatus(`${output.stdout}\n${output.stderr}`).installed,
+    ),
+    Effect.orElseSucceed(() => false),
+  );
+
+/** Drives a p0d user service; only used once the user has installed one. */
 export function makeP0dServiceDriver(input: MakeP0dServiceDriverInput): BackendServiceDriver {
   const defaultUrl = new URL(`http://${input.host}:${input.defaultPort}`);
   const waitTimeout = input.waitTimeout ?? SERVICE_START_WAIT_TIMEOUT;
@@ -548,6 +636,8 @@ export function makeP0dServiceDriver(input: MakeP0dServiceDriverInput): BackendS
       String(input.defaultPort),
       "--ready-file",
       input.readyFilePath,
+      "--desktop-bootstrap-secret-file",
+      input.desktopSecretFilePath,
       ...(input.legacyServerCommand ? ["--legacy-server", input.legacyServerCommand] : []),
     ];
     const withFlags = yield* runShortCommand(input.spawner, input.binaryPath, installArgs);
@@ -616,12 +706,395 @@ export function makeP0dServiceDriver(input: MakeP0dServiceDriverInput): BackendS
   return {
     kind: "p0d",
     binaryPath: input.binaryPath,
-    desktopBootstrapSecret: null,
+    desktopBootstrapSecret: input.desktopBootstrapSecret,
+    unavailableReason: null,
     status: probeStatus,
     ensureRunning,
     start,
     stop,
     restart,
+    exited: Effect.never,
+  };
+}
+
+const DESKTOP_SECRET_PATTERN = /^[0-9a-f]{64}$/;
+
+/**
+ * The secret p0d signs the desktop in with. It must survive relaunches, because a p0d left
+ * running by an earlier launch only knows the secret it read at its own start.
+ */
+export const readOrCreateDesktopSecretFile = Effect.fn(
+  "desktop.backendService.readOrCreateDesktopSecretFile",
+)(function* (input: {
+  readonly fileSystem: FileSystem.FileSystem;
+  readonly path: Pick<Path.Path, "dirname">;
+  readonly random: SecureRandom.SecureRandom["Service"];
+  readonly secretPath: string;
+}): Effect.fn.Return<string, BackendServiceDriverError> {
+  const fail = (message: string) => (cause: unknown) =>
+    new BackendServiceDriverError({ operation: "desktopSecret", message, cause });
+  const existing = (yield* input.fileSystem
+    .readFileString(input.secretPath)
+    .pipe(Effect.orElseSucceed(() => ""))).trim();
+  if (DESKTOP_SECRET_PATTERN.test(existing)) {
+    // p0d refuses a secret others can read; repair the mode rather than rotate the secret.
+    yield* input.fileSystem.chmod(input.secretPath, 0o600).pipe(Effect.ignore);
+    return existing;
+  }
+  const secret = Hex.encode(yield* input.random.randomBytes(32).pipe(Effect.orDie));
+  const temporary = `${input.secretPath}.tmp`;
+  yield* Effect.gen(function* () {
+    yield* input.fileSystem.makeDirectory(input.path.dirname(input.secretPath), {
+      recursive: true,
+      mode: 0o700,
+    });
+    yield* input.fileSystem.remove(temporary, { force: true });
+    yield* input.fileSystem.writeFileString(temporary, `${secret}\n`, { mode: 0o600 });
+    yield* input.fileSystem.chmod(temporary, 0o600);
+    yield* input.fileSystem.rename(temporary, input.secretPath);
+  }).pipe(Effect.mapError(fail(`Could not write the p0d sign-in secret at ${input.secretPath}.`)));
+  return secret;
+});
+
+/**
+ * The p0d process this app started, if any. Shared by every driver the service hands out so a
+ * relaunch through any of them sees (and stops) the same child.
+ */
+export interface P0dChildState {
+  readonly parentScope: Scope.Scope;
+  readonly current: SynchronizedRef.SynchronizedRef<Option.Option<OwnedP0dChild>>;
+}
+
+interface OwnedP0dChild {
+  readonly scope: Scope.Closeable;
+  readonly pid: number;
+  readonly exited: Deferred.Deferred<string>;
+}
+
+export const makeP0dChildState = (parentScope: Scope.Scope) =>
+  SynchronizedRef.make(Option.none<OwnedP0dChild>()).pipe(
+    Effect.map((current): P0dChildState => ({ parentScope, current })),
+  );
+
+export interface MakeP0dChildDriverInput {
+  readonly binaryPath: string;
+  /** p0d's --home; the Node sidecar keeps its data in the same folder. */
+  readonly home: string;
+  readonly readyFilePath: string;
+  readonly desktopSecretFilePath: string;
+  readonly desktopBootstrapSecret: string;
+  readonly legacyServerCommand: string | null;
+  readonly host: string;
+  readonly port: number;
+  readonly cwd: string;
+  /** Resolved at each start; p0d's sidecar inherits it. Never carries the desktop secret. */
+  readonly env: Effect.Effect<Record<string, string | undefined>>;
+  readonly logFilePath: string;
+  readonly path: Pick<Path.Path, "basename" | "dirname">;
+  readonly fileSystem: FileSystem.FileSystem;
+  readonly spawner: ChildProcessSpawner.ChildProcessSpawner["Service"];
+  readonly httpClient: HttpClient.HttpClient;
+  readonly child: P0dChildState;
+  /** Runs before a new p0d starts, e.g. to stop an older backend holding this home. */
+  readonly beforeStart?: Effect.Effect<void>;
+  readonly killProcess?: (pid: number) => Effect.Effect<void>;
+  readonly processAlive?: (pid: number) => Effect.Effect<boolean>;
+  readonly waitTimeout?: Duration.Duration;
+  readonly pollInterval?: Duration.Duration;
+}
+
+export function p0dServeArgs(
+  input: Pick<
+    MakeP0dChildDriverInput,
+    "home" | "host" | "port" | "readyFilePath" | "desktopSecretFilePath" | "legacyServerCommand"
+  >,
+): readonly string[] {
+  return [
+    "serve",
+    "--home",
+    input.home,
+    "--host",
+    input.host,
+    "--port",
+    String(input.port),
+    "--ready-file",
+    input.readyFilePath,
+    "--desktop-bootstrap-secret-file",
+    input.desktopSecretFilePath,
+    ...(input.legacyServerCommand === null ? [] : ["--legacy-server", input.legacyServerCommand]),
+  ];
+}
+
+/**
+ * Runs `p0d serve` as a child of this app: it attaches to a healthy p0d already serving this
+ * home (one an earlier launch left behind, or one the user runs), otherwise starts its own,
+ * which stops when the app quits.
+ */
+export function makeP0dChildDriver(input: MakeP0dChildDriverInput): BackendServiceDriver {
+  const killProcess = input.killProcess ?? defaultKillProcess;
+  const waitTimeout = input.waitTimeout ?? SERVICE_START_WAIT_TIMEOUT;
+  const pollInterval = input.pollInterval ?? SERVICE_START_POLL_INTERVAL;
+
+  const readHealthy = Effect.gen(function* () {
+    const readyFile = yield* readReadyFileFromDisk(input.fileSystem, input.readyFilePath);
+    const url = parseUrlOrNull(readyFile?.url ?? null);
+    if (url === null || !(yield* probeBackendHealth(input.httpClient, url))) {
+      return Option.none<{ readonly url: URL; readonly pid: number | null }>();
+    }
+    return Option.some({ url, pid: readyFile?.pid ?? null });
+  });
+
+  const toInfo = (url: URL | null, pid: number | null): BackendServiceInfo => ({
+    running: url !== null,
+    installed: true,
+    pid,
+    version: null,
+    url,
+    binaryPath: input.binaryPath,
+    managedByService: false,
+    driverKind: "p0d",
+  });
+
+  const status: Effect.Effect<BackendServiceInfo> = readHealthy.pipe(
+    Effect.map((healthy) =>
+      Option.isSome(healthy) ? toInfo(healthy.value.url, healthy.value.pid) : toInfo(null, null),
+    ),
+  );
+
+  const rotateLog = Effect.gen(function* () {
+    const info = yield* input.fileSystem.stat(input.logFilePath);
+    if (Number(info.size) > P0D_LOG_ROTATE_BYTES) {
+      yield* input.fileSystem.rename(input.logFilePath, `${input.logFilePath}.1`);
+    }
+  }).pipe(Effect.ignore);
+
+  const spawnChild = Effect.gen(function* () {
+    if (input.legacyServerCommand !== null && input.path.basename(input.home) !== "userdata") {
+      return yield* new BackendServiceDriverError({
+        operation: "start",
+        message: `p0d keeps the Node sidecar's data in a folder named "userdata", but this app's data folder is ${input.home}. Set P0CODE_HOME (or start the dev app with --home-dir) to use p0d here, or pick the legacy Node backend.`,
+      });
+    }
+    yield* input.beforeStart ?? Effect.void;
+    yield* input.fileSystem.remove(input.readyFilePath, { force: true }).pipe(Effect.ignore);
+    yield* input.fileSystem
+      .makeDirectory(input.path.dirname(input.logFilePath), { recursive: true })
+      .pipe(Effect.ignore);
+    yield* rotateLog;
+    const env = yield* input.env;
+    const scope = yield* Scope.fork(input.child.parentScope, "sequential");
+    const outputTail = yield* Ref.make("");
+    const started = yield* Effect.gen(function* () {
+      const handle = yield* input.spawner
+        .spawn(
+          ChildProcess.make(input.binaryPath, p0dServeArgs(input), {
+            cwd: input.cwd,
+            env,
+            extendEnv: true,
+            stdin: "ignore",
+            stdout: "pipe",
+            stderr: "pipe",
+            killSignal: "SIGTERM",
+            forceKillAfter: P0D_STOP_GRACE,
+          }),
+        )
+        .pipe(
+          Effect.mapError(
+            (cause) =>
+              new BackendServiceDriverError({
+                operation: "start",
+                message: `Could not start p0d at ${input.binaryPath}: ${cause.message}`,
+                cause,
+              }),
+          ),
+        );
+      const output = yield* handle.all.pipe(
+        Stream.tap((chunk) =>
+          Ref.update(outputTail, (tail) =>
+            (tail + new TextDecoder().decode(chunk)).slice(-P0D_OUTPUT_TAIL_BYTES),
+          ),
+        ),
+        Stream.run(input.fileSystem.sink(input.logFilePath, { flag: "a" })),
+        Effect.ignore,
+        Effect.forkIn(scope),
+      );
+      // p0d's last words explain most failures; give the pipe a moment to drain.
+      const withOutput = (reason: string) =>
+        Fiber.await(output).pipe(
+          Effect.timeoutOption(Duration.seconds(1)),
+          Effect.andThen(Ref.get(outputTail)),
+          Effect.map((tail) => (tail.trim().length > 0 ? `${reason}\n\n${tail.trim()}` : reason)),
+        );
+      const exited = handle.exitCode.pipe(
+        Effect.map((code) => `p0d exited with code ${Number(code)}.`),
+        Effect.orElseSucceed(() => "p0d exited."),
+      );
+      const ready = readHealthy.pipe(
+        Effect.repeat({ until: Option.isSome, schedule: Schedule.spaced(pollInterval) }),
+        Effect.timeoutOption(waitTimeout),
+        Effect.map((result) =>
+          Option.isSome(result) && Option.isSome(result.value)
+            ? ({ ok: true, url: result.value.value.url } as const)
+            : ({
+                ok: false,
+                reason: `p0d did not answer ${HEALTHZ_PATH} within ${Duration.format(waitTimeout)}.`,
+              } as const),
+        ),
+      );
+      const outcome = yield* Effect.raceFirst(
+        ready,
+        exited.pipe(Effect.map((reason) => ({ ok: false, reason }) as const)),
+      );
+      if (!outcome.ok) {
+        return yield* new BackendServiceDriverError({
+          operation: "waitForReady",
+          message: yield* withOutput(outcome.reason),
+        });
+      }
+      const pid = Number(handle.pid);
+      const exitedSignal = yield* Deferred.make<string>();
+      yield* exited.pipe(
+        Effect.flatMap(withOutput),
+        Effect.tap((message) => logServiceWarning("p0d exited", { pid, message })),
+        Effect.flatMap((message) => Deferred.succeed(exitedSignal, message)),
+        Effect.forkIn(scope),
+      );
+      yield* logServiceInfo("started p0d", {
+        pid,
+        url: outcome.url.href,
+        binaryPath: input.binaryPath,
+      });
+      return { owned: { scope, pid, exited: exitedSignal }, url: outcome.url };
+    }).pipe(
+      Scope.provide(scope),
+      Effect.onError(() => Scope.close(scope, Exit.void)),
+    );
+    return started;
+  });
+
+  const stopOwned = (owned: OwnedP0dChild) => Scope.close(owned.scope, Exit.void);
+
+  const start: Effect.Effect<BackendServiceInfo, BackendServiceDriverError> =
+    SynchronizedRef.modifyEffect(input.child.current, (current) =>
+      Effect.gen(function* () {
+        if (Option.isSome(current)) {
+          yield* stopOwned(current.value);
+        }
+        const started = yield* spawnChild;
+        return [toInfo(started.url, started.owned.pid), Option.some(started.owned)] as const;
+      }),
+    );
+
+  const ensureRunning: Effect.Effect<BackendServiceInfo, BackendServiceDriverError> = Effect.gen(
+    function* () {
+      const healthy = yield* readHealthy;
+      if (Option.isSome(healthy)) {
+        // A p0d someone else runs now serves this home; our dead child must not end its runs.
+        yield* SynchronizedRef.updateEffect(input.child.current, (current) =>
+          Option.isSome(current) && current.value.pid !== healthy.value.pid
+            ? Deferred.isDone(current.value.exited).pipe(
+                Effect.map((done) => (done ? Option.none<OwnedP0dChild>() : current)),
+              )
+            : Effect.succeed(current),
+        );
+        return toInfo(healthy.value.url, healthy.value.pid);
+      }
+      return yield* start;
+    },
+  );
+
+  const stop: Effect.Effect<void, BackendServiceDriverError> = SynchronizedRef.modifyEffect(
+    input.child.current,
+    (current) =>
+      Effect.gen(function* () {
+        if (Option.isSome(current)) {
+          yield* stopOwned(current.value);
+          return [undefined, Option.none<OwnedP0dChild>()] as const;
+        }
+        // An attached p0d answered on the URL its own ready file names, so its pid is ours to stop.
+        const healthy = yield* readHealthy;
+        if (Option.isSome(healthy) && healthy.value.pid !== null) {
+          const pid = healthy.value.pid;
+          yield* killProcess(pid);
+          const alive =
+            input.processAlive ??
+            ((pid: number) =>
+              Effect.sync(() => {
+                try {
+                  process.kill(pid, 0);
+                  return true;
+                } catch (error) {
+                  return !(error instanceof Error && "code" in error && error.code === "ESRCH");
+                }
+              }));
+          const stopped = yield* alive(pid).pipe(
+            Effect.repeat({
+              until: (running) => !running,
+              schedule: Schedule.spaced(pollInterval),
+            }),
+            Effect.timeoutOption(P0D_STOP_GRACE),
+          );
+          if (Option.isNone(stopped)) {
+            return yield* new BackendServiceDriverError({
+              operation: "stop",
+              message: `p0d process ${pid} did not exit within 15 seconds; refusing to start a replacement.`,
+            });
+          }
+        }
+        return [undefined, current] as const;
+      }),
+  );
+
+  const restart: Effect.Effect<BackendServiceInfo, BackendServiceDriverError> = Effect.gen(
+    function* () {
+      yield* stop;
+      return yield* start;
+    },
+  );
+
+  const exited: Effect.Effect<string> = SynchronizedRef.get(input.child.current).pipe(
+    Effect.flatMap((current) =>
+      Option.isSome(current) ? Deferred.await(current.value.exited) : Effect.never,
+    ),
+  );
+
+  return {
+    kind: "p0d",
+    binaryPath: input.binaryPath,
+    desktopBootstrapSecret: input.desktopBootstrapSecret,
+    unavailableReason: null,
+    status,
+    ensureRunning,
+    start,
+    stop,
+    restart,
+    exited,
+  };
+}
+
+/** Stands in for p0d when it cannot run at all, so every entry point reports the same reason. */
+export function makeUnavailableP0dDriver(reason: string): BackendServiceDriver {
+  const fail = Effect.fail(new BackendServiceDriverError({ operation: "start", message: reason }));
+  return {
+    kind: "p0d",
+    binaryPath: null,
+    desktopBootstrapSecret: null,
+    unavailableReason: reason,
+    status: Effect.succeed({
+      running: false,
+      installed: false,
+      pid: null,
+      version: null,
+      url: null,
+      binaryPath: null,
+      managedByService: false,
+      driverKind: "p0d",
+    }),
+    ensureRunning: fail,
+    start: fail,
+    stop: Effect.void,
+    restart: fail,
+    exited: Effect.never,
   };
 }
 
@@ -959,6 +1432,8 @@ export function makeLegacyNodeServiceDriver(
     kind: "legacy-node",
     binaryPath: input.entryPath,
     desktopBootstrapSecret: input.secrets.bootstrapSecret,
+    unavailableReason: null,
+    exited: Effect.never,
     status: probeStatus,
     ensureRunning,
     start,
@@ -975,16 +1450,15 @@ export class DesktopBackendService extends Context.Service<
     readonly findP0dBinary: Effect.Effect<Option.Option<string>>;
     readonly resolveServiceDriver: Effect.Effect<BackendServiceDriver>;
     /**
-     * Brings an external backend up before any window loads; if it cannot serve the desktop,
-     * switches this install back to the in-app backend and says why.
+     * Brings p0d (or another external backend) up before any window loads. It never falls back
+     * to another backend on its own; the caller shows `failure` and lets the user choose.
      */
     readonly prepareSelectedBackend: Effect.Effect<{
-      /** The mode this launch will run, which is embedded when an external mode failed. */
       readonly mode: DesktopBackendMode;
-      /** The stored choice. It is never rewritten by a failed launch. */
-      readonly requestedMode: DesktopBackendMode;
-      readonly fallbackReason: string | null;
+      readonly failure: string | null;
     }>;
+    /** Runs the deprecated Node backend until the app quits, without changing the saved choice. */
+    readonly useLegacyBackendForThisLaunch: Effect.Effect<void>;
     readonly getStatus: (input: {
       readonly embeddedReady: boolean;
       readonly embeddedDesiredRunning: boolean;
@@ -1017,7 +1491,18 @@ export const make = Effect.gen(function* () {
   const httpClient = yield* HttpClient.HttpClient;
   const mac = yield* Mac.Mac;
   const random = yield* SecureRandom.SecureRandom;
-  const net = yield* NetService.NetService;
+  const serverExposure = yield* Effect.serviceOption(DesktopServerExposure.DesktopServerExposure);
+  const p0dChild = yield* makeP0dChildState(yield* Effect.scope);
+  const launchModeOverride = yield* Ref.make(Option.none<DesktopBackendMode>());
+  const readyFilePath = environment.path.join(environment.stateDir, P0D_READY_FILE_NAME);
+  const desktopSecretFilePath = environment.path.join(
+    environment.stateDir,
+    ...P0D_DESKTOP_SECRET_FILE,
+  );
+  const legacyServiceReadyFilePath = environment.path.join(
+    environment.stateDir,
+    LEGACY_SERVICE_READY_FILE_NAME,
+  );
   const localServiceSecrets = yield* Effect.cached(
     readOrCreateLocalServiceSecrets({
       fileSystem,
@@ -1047,9 +1532,10 @@ export const make = Effect.gen(function* () {
   // resolution is cached here and refreshed before startup and whenever status is read.
   const p0dAvailableRef = yield* Ref.make(false);
 
-  const findP0dBinary = Effect.gen(function* () {
+  const p0dCandidates = Effect.gen(function* () {
     const settings = yield* appSettings.get;
-    const candidates = p0dBinaryCandidates({
+    const env = yield* HostProcess.Environment;
+    return p0dBinaryCandidates({
       path: environment.path,
       platform: environment.platform,
       arch: environment.processArch,
@@ -1057,12 +1543,12 @@ export const make = Effect.gen(function* () {
       resourcesPath: environment.resourcesPath,
       rootDir: environment.rootDir,
       homeDirectory: environment.homeDirectory,
-      baseDir: environment.baseDir,
-      appDataDirectory: environment.appDataDirectory,
       configuredBinaryPath: settings.backendBinaryPath ?? null,
+      pathEnv: env.PATH ?? env.Path,
     });
-    return yield* firstExistingPath(candidates);
   });
+
+  const findP0dBinary = Effect.flatMap(p0dCandidates, firstExistingPath);
 
   const refreshP0dAvailability = Effect.gen(function* () {
     const p0dBinary = yield* findP0dBinary;
@@ -1075,47 +1561,31 @@ export const make = Effect.gen(function* () {
   const hasP0d = Ref.get(p0dAvailableRef);
 
   const resolveEffectiveMode = Effect.gen(function* () {
-    const settings = yield* appSettings.get;
-    return resolveEffectiveBackendMode({
-      backendMode: settings.backendMode ?? DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS.backendMode,
-      backendModeConfiguredByUser: settings.backendModeConfiguredByUser ?? false,
-    });
+    const override = yield* Ref.get(launchModeOverride);
+    if (Option.isSome(override)) return override.value;
+    return resolveEffectiveBackendMode(yield* appSettings.get);
   });
 
-  const resolveServiceDriver: Effect.Effect<BackendServiceDriver> = Effect.gen(function* () {
-    const p0dBinary = yield* findP0dBinary;
-    const defaultPort = Option.getOrElse(
-      environment.configuredBackendPort,
-      () => DEFAULT_SERVICE_PORT,
-    );
-    const legacyEntryExists = yield* fileSystem
-      .exists(environment.backendEntryPath)
-      .pipe(Effect.orElseSucceed(() => false));
-    if (Option.isSome(p0dBinary)) {
-      const legacyServerCommand = legacyEntryExists
-        ? `${process.execPath} ${environment.backendEntryPath}`
-        : null;
-      return makeP0dServiceDriver({
-        binaryPath: p0dBinary.value,
-        stateDir: environment.stateDir,
-        readyFilePath: environment.path.join(environment.stateDir, P0D_READY_FILE_NAME),
-        legacyServerCommand,
-        host: DEFAULT_SERVICE_HOST,
-        defaultPort,
-        fileSystem,
-        spawner,
-        httpClient,
-      });
+  // A Node service an earlier version ran for local-service mode holds this home's lock, which
+  // would stop p0d's sidecar from starting. It only answers to its own secret, so this never
+  // stops anything else.
+  const stopLegacyNodeService = Effect.gen(function* () {
+    if (
+      !(yield* fileSystem
+        .exists(legacyServiceReadyFilePath)
+        .pipe(Effect.orElseSucceed(() => false)))
+    ) {
+      return;
     }
-    return makeLegacyNodeServiceDriver({
+    const legacy = makeLegacyNodeServiceDriver({
       executablePath: process.execPath,
       entryPath: environment.backendEntryPath,
       cwd: environment.backendCwd,
       stateDir: environment.stateDir,
       baseDir: environment.baseDir,
-      readyFilePath: environment.path.join(environment.stateDir, LEGACY_SERVICE_READY_FILE_NAME),
+      readyFilePath: legacyServiceReadyFilePath,
       host: DEFAULT_SERVICE_HOST,
-      preferredPort: defaultPort,
+      preferredPort: DEFAULT_SERVICE_PORT,
       version: environment.appVersion,
       secrets: yield* localServiceSecrets,
       fileSystem,
@@ -1123,17 +1593,120 @@ export const make = Effect.gen(function* () {
       httpClient,
       mac,
       random,
-      pickPort: (preferred) =>
-        net.findAvailablePort(preferred, DEFAULT_SERVICE_HOST).pipe(
-          Effect.mapError(
-            (cause) =>
-              new BackendServiceDriverError({
-                operation: "pickPort",
-                message: "No free port for the local backend service.",
-                cause,
-              }),
-          ),
+      pickPort: () => Effect.succeed(DEFAULT_SERVICE_PORT),
+    });
+    yield* logServiceInfo("stopping the Node backend service an earlier version started");
+    yield* legacy.stop.pipe(Effect.ignore);
+  });
+
+  const p0dListenAddress = Effect.gen(function* () {
+    if (Option.isNone(serverExposure)) {
+      return { host: DEFAULT_SERVICE_HOST, port: 0 };
+    }
+    const exposure = yield* serverExposure.value.backendConfig;
+    // A network-accessible desktop advertises its port to other devices, so it must stay fixed.
+    return exposure.bindHost === DEFAULT_SERVICE_HOST
+      ? { host: DEFAULT_SERVICE_HOST, port: 0 }
+      : { host: exposure.bindHost, port: exposure.port };
+  });
+
+  const p0dEnv = Effect.gen(function* () {
+    const cliPath = yield* DesktopCliShim.install.pipe(
+      Effect.provideService(FileSystem.FileSystem, fileSystem),
+      Effect.provideService(DesktopEnvironment.DesktopEnvironment, environment),
+      Effect.orElseSucceed(() => Option.none<string>()),
+    );
+    return {
+      // For the sidecar only: p0d is a native binary and ignores it.
+      ELECTRON_RUN_AS_NODE: "1",
+      // Web mode would otherwise add the app bundle directory as a project.
+      T3CODE_AUTO_BOOTSTRAP_PROJECT_FROM_CWD: "false",
+      T3CODE_CLI_PATH: Option.getOrUndefined(cliPath),
+      T3CODE_PORT: undefined,
+      T3CODE_MODE: undefined,
+      T3CODE_HOST: undefined,
+      T3CODE_NO_BROWSER: undefined,
+    };
+  });
+
+  const missingP0dMessage = Effect.gen(function* () {
+    const candidates = yield* p0dCandidates;
+    const hint = environment.isPackaged
+      ? "Reinstall p0code; the app ships p0d inside its resources."
+      : `Build it with \`apps/p0d/scripts/build.sh ${p0dDistTarget(environment.platform, environment.processArch).replace("-", "/")}\` (needs Go), or set a p0d binary path in Settings > Backend.`;
+    return `p0code couldn't find its p0d backend. ${hint}\n\nLooked in:\n${candidates
+      .slice(0, 5)
+      .map((candidate) => `- ${candidate}`)
+      .join("\n")}${candidates.length > 5 ? "\n- …and the folders on PATH" : ""}`;
+  });
+
+  const resolveServiceDriver: Effect.Effect<BackendServiceDriver> = Effect.gen(function* () {
+    const p0dBinary = yield* findP0dBinary;
+    if (Option.isNone(p0dBinary)) {
+      return makeUnavailableP0dDriver(yield* missingP0dMessage);
+    }
+    const secret = yield* readOrCreateDesktopSecretFile({
+      fileSystem,
+      path: environment.path,
+      random,
+      secretPath: desktopSecretFilePath,
+    }).pipe(Effect.result);
+    if (secret._tag === "Failure") {
+      return makeUnavailableP0dDriver(secret.failure.message);
+    }
+    const legacyEntryExists = yield* fileSystem
+      .exists(environment.backendEntryPath)
+      .pipe(Effect.orElseSucceed(() => false));
+    const exposure = Option.isSome(serverExposure)
+      ? yield* serverExposure.value.backendConfig
+      : yield* appSettings.get;
+    const legacyServerCommand = legacyEntryExists
+      ? p0dLegacyServerCommand({
+          executablePath: process.execPath,
+          isPackaged: environment.isPackaged,
+          compileCachePath: environment.compileCachePath,
+          entryPath: environment.backendEntryPath,
+          tailscaleServeEnabled: exposure.tailscaleServeEnabled,
+          tailscaleServePort: exposure.tailscaleServePort,
+        })
+      : null;
+    if (yield* isP0dUserServiceInstalled(spawner, p0dBinary.value)) {
+      return makeP0dServiceDriver({
+        binaryPath: p0dBinary.value,
+        stateDir: environment.stateDir,
+        readyFilePath,
+        legacyServerCommand,
+        desktopSecretFilePath,
+        desktopBootstrapSecret: secret.success,
+        host: DEFAULT_SERVICE_HOST,
+        defaultPort: Option.getOrElse(
+          environment.configuredBackendPort,
+          () => DEFAULT_SERVICE_PORT,
         ),
+        fileSystem,
+        spawner,
+        httpClient,
+      });
+    }
+    const listen = yield* p0dListenAddress;
+    return makeP0dChildDriver({
+      binaryPath: p0dBinary.value,
+      home: environment.stateDir,
+      readyFilePath,
+      desktopSecretFilePath,
+      desktopBootstrapSecret: secret.success,
+      legacyServerCommand,
+      host: listen.host,
+      port: listen.port,
+      cwd: environment.backendCwd,
+      env: p0dEnv,
+      logFilePath: environment.path.join(environment.stateDir, ...P0D_LOG_FILE),
+      path: environment.path,
+      fileSystem,
+      spawner,
+      httpClient,
+      child: p0dChild,
+      beforeStart: stopLegacyNodeService,
     });
   });
 
@@ -1147,11 +1720,6 @@ export const make = Effect.gen(function* () {
       }
       if (mode !== "local-service") return null;
       const driver = yield* resolveServiceDriver;
-      if (driver.desktopBootstrapSecret === null) {
-        return driver.kind === "p0d"
-          ? "This p0d build can't prove its identity to the desktop app yet, so it can't sign the app in. The in-app backend is being used instead."
-          : `The ${driver.kind} backend service can't sign this app in yet.`;
-      }
       return yield* driver.ensureRunning.pipe(
         Effect.as(null),
         Effect.catch((error) => Effect.succeed(error.message)),
@@ -1161,24 +1729,25 @@ export const make = Effect.gen(function* () {
 
   const prepareSelectedBackend: DesktopBackendService["Service"]["prepareSelectedBackend"] =
     Effect.gen(function* () {
-      const settings = yield* appSettings.get;
       // Runs after settings load, so this sees a configured p0d override from disk.
       yield* refreshP0dAvailability;
-      const requestedMode = resolveEffectiveBackendMode(settings);
-      const fallbackReason = yield* externalBackendFailure(requestedMode);
-      if (fallbackReason === null) {
-        return { mode: requestedMode, requestedMode, fallbackReason };
+      const mode = yield* resolveEffectiveMode;
+      const failure = yield* externalBackendFailure(mode);
+      if (failure !== null) {
+        yield* logServiceWarning("the selected backend failed to start", {
+          mode,
+          reason: failure,
+        });
+        // Re-resolve so a binary that appeared or vanished while we tried is reflected next time.
+        yield* refreshP0dAvailability;
       }
-      // Keep the user's choice on disk: a transient failure must not silently pin a different
-      // mode, and the next launch should try their backend again.
-      yield* logServiceWarning("selected backend mode failed; using the in-app backend for now", {
-        mode: requestedMode,
-        reason: fallbackReason,
-      });
-      // Re-resolve so a binary that appeared or vanished while we tried is reflected next time.
-      yield* refreshP0dAvailability;
-      return { mode: "embedded" as const, requestedMode, fallbackReason };
+      return { mode, failure };
     }).pipe(Effect.withSpan("desktop.backendService.prepareSelectedBackend"));
+
+  const useLegacyBackendForThisLaunch: DesktopBackendService["Service"]["useLegacyBackendForThisLaunch"] =
+    Ref.set(launchModeOverride, Option.some<DesktopBackendMode>("embedded")).pipe(
+      Effect.tap(() => logServiceWarning("using the deprecated Node backend for this launch")),
+    );
 
   const getStatus: DesktopBackendService["Service"]["getStatus"] = Effect.fn(
     "desktop.backendService.getStatus",
@@ -1226,11 +1795,8 @@ export const make = Effect.gen(function* () {
         version: info.version,
         pid: info.pid,
         serviceInstalled: info.installed,
-        managedByService: true,
-        error:
-          driver.desktopBootstrapSecret === null
-            ? "This p0d build can't prove its identity to the desktop app yet, so it can't sign the app in."
-            : null,
+        managedByService: info.managedByService,
+        error: driver.unavailableReason,
       };
     }
 
@@ -1291,9 +1857,8 @@ export const make = Effect.gen(function* () {
       const settings = yield* appSettings.get;
       return yield* adoptRunningLocalService({
         driver: yield* resolveServiceDriver,
-        settings,
-        // An adopted legacy service has no p0d binary to make the auto default pick it, and the
-        // user's projects live there, so record the choice explicitly for this recovery.
+        settings: { backendMode: resolveEffectiveBackendMode(settings) },
+        // Recorded explicitly so a recovered install keeps using the backend that has its projects.
         setMode: (mode) =>
           appSettings.setBackendConfig({ mode, modeConfiguredByUser: true }).pipe(
             Effect.tap(() => logServiceInfo("recorded the reattached backend mode", { mode })),
@@ -1314,6 +1879,7 @@ export const make = Effect.gen(function* () {
     findP0dBinary,
     resolveServiceDriver,
     prepareSelectedBackend,
+    useLegacyBackendForThisLaunch,
     getStatus,
     updateConfig,
     controlService,
@@ -1333,11 +1899,8 @@ export const layerTest = (
       resolveEffectiveMode: Effect.succeed("embedded"),
       findP0dBinary: Effect.succeedNone,
       resolveServiceDriver: Effect.die("DesktopBackendService.layerTest resolveServiceDriver"),
-      prepareSelectedBackend: Effect.succeed({
-        mode: "embedded",
-        requestedMode: "embedded",
-        fallbackReason: null,
-      }),
+      prepareSelectedBackend: Effect.succeed({ mode: "embedded", failure: null }),
+      useLegacyBackendForThisLaunch: Effect.void,
       getStatus: Effect.fn("DesktopBackendService.getStatus")(function () {
         return Effect.succeed({
           mode: "embedded" as const,

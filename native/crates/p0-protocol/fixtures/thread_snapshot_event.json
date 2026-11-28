@@ -1,0 +1,254 @@
+{
+  "kind": "snapshot",
+  "snapshotSequence": 42,
+  "projection": {
+    "thread": {
+      "createdBy": "user",
+      "creationSource": "web",
+      "id": "thread-1",
+      "projectId": "proj-1",
+      "title": "GPUI Vertical Slice",
+      "providerInstanceId": "replay",
+      "modelSelection": {
+        "instanceId": "replay",
+        "model": "replay-default"
+      },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "branch": "gpui-port",
+      "worktreePath": null,
+      "activeProviderThreadId": null,
+      "lineage": {
+        "parentThreadId": null,
+        "relationshipToParent": null,
+        "rootThreadId": "thread-1"
+      },
+      "forkedFrom": null,
+      "createdAt": "2026-11-27T12:00:00.000Z",
+      "updatedAt": "2026-11-27T12:00:00.000Z",
+      "archivedAt": null,
+      "settledOverride": null,
+      "settledAt": null,
+      "lastVisitedAt": null,
+      "deletedAt": null
+    },
+    "runs": [
+      {
+        "id": "run-1",
+        "threadId": "thread-1",
+        "ordinal": 1,
+        "providerInstanceId": "replay",
+        "modelSelection": {
+          "instanceId": "replay",
+          "model": "replay-default"
+        },
+        "providerThreadId": null,
+        "userMessageId": "msg-1",
+        "rootNodeId": "node-1",
+        "activeAttemptId": null,
+        "status": "waiting",
+        "requestedAt": "2026-11-27T12:00:00.000Z",
+        "startedAt": "2026-11-27T12:00:00.000Z",
+        "completedAt": null,
+        "checkpointId": null,
+        "contextHandoffId": null
+      }
+    ],
+    "attempts": [],
+    "nodes": [],
+    "subagents": [],
+    "providerSessions": [],
+    "providerThreads": [],
+    "providerTurns": [],
+    "runtimeRequests": [
+      {
+        "id": "req-approve-1",
+        "nodeId": "node-3",
+        "providerTurnId": null,
+        "nativeRequestRef": null,
+        "kind": "command",
+        "status": "pending",
+        "responseCapability": {
+          "type": "message"
+        },
+        "createdAt": "2026-11-27T12:00:00.000Z",
+        "resolvedAt": null
+      }
+    ],
+    "messages": [],
+    "plans": [],
+    "turnItems": [
+      {
+        "id": "item-1",
+        "threadId": "thread-1",
+        "runId": "run-1",
+        "nodeId": "node-1",
+        "providerThreadId": null,
+        "providerTurnId": null,
+        "nativeItemRef": null,
+        "parentItemId": null,
+        "ordinal": 0,
+        "status": "completed",
+        "title": null,
+        "startedAt": "2026-11-27T12:00:00.000Z",
+        "completedAt": "2026-11-27T12:00:00.000Z",
+        "updatedAt": "2026-11-27T12:00:00.000Z",
+        "createdBy": "user",
+        "creationSource": "web",
+        "type": "user_message",
+        "messageId": "msg-1",
+        "inputIntent": "turn_start",
+        "text": "Say hello",
+        "attachments": []
+      },
+      {
+        "id": "item-2",
+        "threadId": "thread-1",
+        "runId": "run-1",
+        "nodeId": "node-2",
+        "providerThreadId": null,
+        "providerTurnId": null,
+        "nativeItemRef": null,
+        "parentItemId": null,
+        "ordinal": 1,
+        "status": "completed",
+        "title": null,
+        "startedAt": "2026-11-27T12:00:00.000Z",
+        "completedAt": "2026-11-27T12:00:00.000Z",
+        "updatedAt": "2026-11-27T12:00:00.000Z",
+        "type": "assistant_message",
+        "messageId": "msg-2",
+        "text": "Hello from **Replay**!\n\n```rust\nfn main() {}\n```",
+        "streaming": false
+      },
+      {
+        "id": "item-3",
+        "threadId": "thread-1",
+        "runId": "run-1",
+        "nodeId": "node-3",
+        "providerThreadId": null,
+        "providerTurnId": null,
+        "nativeItemRef": null,
+        "parentItemId": null,
+        "ordinal": 2,
+        "status": "waiting",
+        "title": "Run shell command",
+        "startedAt": "2026-11-27T12:00:00.000Z",
+        "completedAt": null,
+        "updatedAt": "2026-11-27T12:00:00.000Z",
+        "type": "approval_request",
+        "requestId": "req-approve-1",
+        "requestKind": "command",
+        "prompt": "Run cargo test?",
+        "options": [
+          {
+            "decision": "accept",
+            "label": "Accept"
+          },
+          {
+            "decision": "decline",
+            "label": "Decline"
+          }
+        ]
+      }
+    ],
+    "checkpointScopes": [],
+    "checkpoints": [],
+    "contextHandoffs": [],
+    "contextTransfers": [],
+    "visibleTurnItems": [
+      {
+        "position": 0,
+        "visibility": "local",
+        "sourceThreadId": "thread-1",
+        "sourceItemId": "item-1",
+        "item": {
+          "id": "item-1",
+          "threadId": "thread-1",
+          "runId": "run-1",
+          "nodeId": "node-1",
+          "providerThreadId": null,
+          "providerTurnId": null,
+          "nativeItemRef": null,
+          "parentItemId": null,
+          "ordinal": 0,
+          "status": "completed",
+          "title": null,
+          "startedAt": "2026-11-27T12:00:00.000Z",
+          "completedAt": "2026-11-27T12:00:00.000Z",
+          "updatedAt": "2026-11-27T12:00:00.000Z",
+          "createdBy": "user",
+          "creationSource": "web",
+          "type": "user_message",
+          "messageId": "msg-1",
+          "inputIntent": "turn_start",
+          "text": "Say hello",
+          "attachments": []
+        }
+      },
+      {
+        "position": 1,
+        "visibility": "local",
+        "sourceThreadId": "thread-1",
+        "sourceItemId": "item-2",
+        "item": {
+          "id": "item-2",
+          "threadId": "thread-1",
+          "runId": "run-1",
+          "nodeId": "node-2",
+          "providerThreadId": null,
+          "providerTurnId": null,
+          "nativeItemRef": null,
+          "parentItemId": null,
+          "ordinal": 1,
+          "status": "completed",
+          "title": null,
+          "startedAt": "2026-11-27T12:00:00.000Z",
+          "completedAt": "2026-11-27T12:00:00.000Z",
+          "updatedAt": "2026-11-27T12:00:00.000Z",
+          "type": "assistant_message",
+          "messageId": "msg-2",
+          "text": "Hello from **Replay**!\n\n```rust\nfn main() {}\n```",
+          "streaming": false
+        }
+      },
+      {
+        "position": 2,
+        "visibility": "local",
+        "sourceThreadId": "thread-1",
+        "sourceItemId": "item-3",
+        "item": {
+          "id": "item-3",
+          "threadId": "thread-1",
+          "runId": "run-1",
+          "nodeId": "node-3",
+          "providerThreadId": null,
+          "providerTurnId": null,
+          "nativeItemRef": null,
+          "parentItemId": null,
+          "ordinal": 2,
+          "status": "waiting",
+          "title": "Run shell command",
+          "startedAt": "2026-11-27T12:00:00.000Z",
+          "completedAt": null,
+          "updatedAt": "2026-11-27T12:00:00.000Z",
+          "type": "approval_request",
+          "requestId": "req-approve-1",
+          "requestKind": "command",
+          "prompt": "Run cargo test?",
+          "options": [
+            {
+              "decision": "accept",
+              "label": "Accept"
+            },
+            {
+              "decision": "decline",
+              "label": "Decline"
+            }
+          ]
+        }
+      }
+    ],
+    "updatedAt": "2026-11-27T12:00:00.000Z"
+  }
+}

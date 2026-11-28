@@ -45,6 +45,8 @@ type Config struct {
 	LegacyIdle time.Duration
 	Version    string
 	Logger     *log.Logger
+	// DesktopSecretFile enables native desktop sign-in on /oauth/token.
+	DesktopSecretFile string
 }
 
 // Server is a running p0d.
@@ -55,6 +57,9 @@ type Server struct {
 	registry *rpc.Registry
 	listener net.Listener
 	http     *http.Server
+
+	desktopSecret   *auth.DesktopSecret
+	desktopFailures failureLimiter
 }
 
 // Start listens and serves in the background.
@@ -67,6 +72,12 @@ func Start(cfg Config) (*Server, error) {
 		return nil, err
 	}
 	cfg.Home = home
+	var desktopSecret *auth.DesktopSecret
+	if cfg.DesktopSecretFile != "" {
+		if desktopSecret, err = auth.LoadDesktopSecret(cfg.DesktopSecretFile); err != nil {
+			return nil, err
+		}
+	}
 	listener, err := net.Listen("tcp", net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port)))
 	if err != nil {
 		return nil, err
@@ -80,7 +91,7 @@ func Start(cfg Config) (*Server, error) {
 	environmentID, _ := os.ReadFile(filepath.Join(home, "environment-id"))
 	authenticator.CookieName, authenticator.LegacyCookieName = auth.CookieName(port, cfg.Host, home, strings.TrimSpace(string(environmentID)))
 
-	s := &Server{cfg: cfg, auth: authenticator, registry: rpc.NewRegistry(), listener: listener}
+	s := &Server{cfg: cfg, auth: authenticator, registry: rpc.NewRegistry(), listener: listener, desktopSecret: desktopSecret}
 	if len(cfg.Legacy) > 0 {
 		// The legacy server keeps its state in <base-dir>/userdata.
 		if filepath.Base(home) != "userdata" {
@@ -98,6 +109,9 @@ func Start(cfg Config) (*Server, error) {
 		w.Write([]byte("ok\n"))
 	})
 	mux.HandleFunc("GET /ws", s.serveWS)
+	if desktopSecret != nil {
+		mux.HandleFunc("POST /oauth/token", s.serveToken)
+	}
 	mux.HandleFunc("/", s.serveProxy)
 	s.http = &http.Server{Handler: mux, ReadHeaderTimeout: 30 * time.Second}
 	go s.http.Serve(listener)
@@ -142,7 +156,14 @@ func (s *Server) Close() error {
 	}
 	s.auth.Close()
 	if s.cfg.ReadyFile != "" {
-		os.Remove(s.cfg.ReadyFile)
+		data, err := os.ReadFile(s.cfg.ReadyFile)
+		var ready struct {
+			Pid int    `json:"pid"`
+			URL string `json:"url"`
+		}
+		if err == nil && json.Unmarshal(data, &ready) == nil && ready.Pid == os.Getpid() && ready.URL == s.URL() {
+			os.Remove(s.cfg.ReadyFile)
+		}
 	}
 	return err
 }

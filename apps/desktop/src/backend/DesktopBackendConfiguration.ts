@@ -567,11 +567,12 @@ const resolvePrimaryStartConfig = Effect.fn("desktop.backendConfiguration.resolv
 
     return {
       executablePath: process.execPath,
-      // Packaged builds have a separate cache; --require prevents cache settings leaking to provider subprocesses.
       args: [
-        "--title=p0code-backend",
-        ...(environment.isPackaged ? ["--require", environment.compileCachePath] : []),
-        environment.backendEntryPath,
+        ...DesktopBackendService.nodeServerArgs({
+          isPackaged: environment.isPackaged,
+          compileCachePath: environment.compileCachePath,
+          entryPath: environment.backendEntryPath,
+        }),
         "--bootstrap-fd",
         "3",
       ],
@@ -1022,7 +1023,7 @@ export const make = Effect.gen(function* () {
         return "Remote backend";
       }
       if (backendMode === "local-service") {
-        return "Local service";
+        return "p0d";
       }
       if (!useWsl) {
         return environment.platform === "win32" ? "Windows" : "Local environment";

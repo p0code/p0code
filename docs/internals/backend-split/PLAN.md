@@ -28,6 +28,7 @@ Rewriting everything at once is not realistic. So:
 
 ```
 p0d serve --home <dir> [--host 127.0.0.1] [--port 0] [--ready-file <path>] [--legacy-server <cmd>]
+          [--desktop-bootstrap-secret-file <path>]
 p0d version
 p0d service install|uninstall|start|stop|status   # launchd (mac), systemd --user (linux), Task Scheduler/service (windows)
 ```
@@ -37,13 +38,31 @@ p0d service install|uninstall|start|stop|status   # launchd (mac), systemd --use
   and answers `GET /healthz` with 200.
 - `--legacy-server` is the command that starts the Node sidecar. Packaging fills it in. Unset means
   run with no sidecar (unported methods fail).
+- `--desktop-bootstrap-secret-file` names the GUI's desktop secret (base64url text of at least 32
+  bytes, mode 0600 on macOS/Linux). p0d reads it once at startup and refuses to start if it is
+  missing, empty, too short or readable by others; rotating it means restarting p0d. With it, p0d
+  signs the desktop in on `/oauth/token` without the sidecar (PROTOCOL.md §2.5, §6).
 
 ## Desktop split
 
-- The GUI app no longer starts the Node server itself. It connects to a backend URL: by default the
-  local `p0d` (which it can install, start and repair as a user service), or any remote/self-hosted one.
-- Releases ship separate artifacts per OS: `p0code` (GUI) and `p0d` (backend, plus the legacy sidecar
-  until the port is done). The backend can also run headless on servers.
+- The desktop app's backend is `p0d` unless the user explicitly picks another mode. Installs that
+  never chose (including ones that recorded the old `"embedded"` default) move to p0d on upgrade.
+- The GUI bundles the p0d built from the same commit at `resources/p0d/`, next to the Node server,
+  and starts `p0d serve --home <userdata> --port 0 --ready-file … --desktop-bootstrap-secret-file …
+  --legacy-server "<electron> <server bin.mjs> --mode web --no-browser"` as its child. A p0d already
+  answering `/healthz` at the URL in that ready file is attached instead; one the app started stops
+  when the app quits, and the app restarts it if it exits. `p0d service …` is only used once the user
+  has installed a p0d service themselves.
+- The secret file holds a stable 64-hex secret (mode 0600, written then renamed) so a p0d left running
+  by an earlier launch still accepts this launch's tokens. Only p0d reads it; the Node sidecar never
+  receives it, so a desktop sign-in never wakes Node.
+- The sidecar runs in web mode, so features that need the desktop's private channels to a
+  desktop-mode server (fd 3–7: telemetry, the in-app browser host, app-update handoff) are not
+  available through p0d until they move into Go.
+- The Node server run directly by the app (`"embedded"`) is a deprecated escape hatch: a user picks it
+  in Settings, or for one launch from the dialog shown when p0d can't start. The app never falls back
+  to it on its own.
+- Releases also ship p0d as its own archive, so the backend can run headless on servers.
 
 ## Database shrink
 

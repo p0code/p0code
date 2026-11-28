@@ -1,3 +1,4 @@
+import { useMessages } from "gt-react-native";
 import { useAtomValue } from "@effect/atom-react";
 import { useRoute, type RouteProp } from "@react-navigation/native";
 import {
@@ -116,6 +117,7 @@ function threadDetailToShell(
 }
 
 function useResolvedThreadSelection(params: ThreadSelectionRouteParams | undefined) {
+  const resolve = useMessages();
   const routeParams = params ?? {};
   const routeEnvironmentId = firstRouteParam(routeParams.environmentId);
   const routeThreadId = firstRouteParam(routeParams.threadId);
@@ -168,7 +170,7 @@ function useResolvedThreadSelection(params: ThreadSelectionRouteParams | undefin
     (selectedThreadRef !== null && selectedThreadDetail !== null
       ? threadDetailToShell(selectedThreadRef.environmentId, selectedThreadDetail)
       : pendingCreation !== null
-        ? pendingThreadCreationShell(pendingCreation.message)
+        ? pendingThreadCreationShell(pendingCreation.message, resolve)
         : null);
   const resolvedCreation = resolvePendingThreadCreation({
     threadKey: selectedThreadKey,

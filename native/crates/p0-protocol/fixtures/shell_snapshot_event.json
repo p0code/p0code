@@ -1,0 +1,69 @@
+{
+  "kind": "snapshot",
+  "snapshot": {
+    "schemaVersion": 2,
+    "snapshotSequence": 42,
+    "threads": [
+      {
+        "createdBy": "user",
+        "creationSource": "web",
+        "id": "thread-1",
+        "projectId": "proj-1",
+        "title": "GPUI Vertical Slice",
+        "providerInstanceId": "replay",
+        "modelSelection": {
+          "instanceId": "replay",
+          "model": "replay-default"
+        },
+        "runtimeMode": "approval-required",
+        "interactionMode": "default",
+        "branch": "gpui-port",
+        "worktreePath": null,
+        "lineage": {
+          "parentThreadId": null,
+          "relationshipToParent": null,
+          "rootThreadId": "thread-1"
+        },
+        "forkedFrom": null,
+        "activeProviderThreadId": null,
+        "latestRunId": "run-1",
+        "activeRunId": null,
+        "status": "completed",
+        "pendingRuntimeRequest": null,
+        "latestVisibleMessage": {
+          "id": "msg-2",
+          "role": "assistant",
+          "text": "Hello from Replay",
+          "updatedAt": "2026-11-27T12:00:00.000Z"
+        },
+        "latestUserMessageAt": "2026-11-27T12:00:00.000Z",
+        "hasActionableProposedPlan": false,
+        "pendingBackgroundTasks": [],
+        "providerInstanceHistory": ["replay"],
+        "itemCount": 2,
+        "visibleItemCount": 2,
+        "createdAt": "2026-11-27T12:00:00.000Z",
+        "updatedAt": "2026-11-27T12:00:00.000Z",
+        "archivedAt": null,
+        "settledOverride": null,
+        "settledAt": null,
+        "deletedAt": null
+      }
+    ],
+    "archivedThreads": [],
+    "projects": [
+      {
+        "id": "proj-1",
+        "title": "p0code",
+        "workspaceRoot": "/home/dev/p0code",
+        "defaultModelSelection": {
+          "instanceId": "replay",
+          "model": "replay-default"
+        },
+        "scripts": [],
+        "createdAt": "2026-11-27T11:00:00.000Z",
+        "updatedAt": "2026-11-27T11:30:00.000Z"
+      }
+    ]
+  }
+}

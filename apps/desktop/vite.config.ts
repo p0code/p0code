@@ -70,7 +70,7 @@ export default defineConfig({
         cache: false,
       },
       "dev:electron": {
-        command: "node scripts/dev-electron.mjs",
+        command: "node scripts/build-p0d.mjs && node scripts/dev-electron.mjs",
         dependsOn: ["p0#build"],
         cache: false,
       },

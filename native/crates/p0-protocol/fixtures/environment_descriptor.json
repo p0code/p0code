@@ -1,0 +1,15 @@
+{
+  "environmentId": "env-local-1",
+  "label": "Local dev",
+  "platform": {
+    "os": "linux",
+    "arch": "x64",
+    "machine": "desktop"
+  },
+  "serverVersion": "0.9.0",
+  "orchestrationProtocolVersion": 2,
+  "capabilities": {
+    "repositoryIdentity": true,
+    "connectionProbe": true
+  }
+}

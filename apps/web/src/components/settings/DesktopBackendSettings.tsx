@@ -22,7 +22,7 @@ export function DesktopBackendSettings() {
   const bridge = typeof window === "undefined" ? undefined : window.desktopBridge?.backend;
 
   const [status, setStatus] = useState<DesktopBackendStatus | null>(null);
-  const [draftMode, setDraftMode] = useState<DesktopBackendMode>("embedded");
+  const [draftMode, setDraftMode] = useState<DesktopBackendMode>("local-service");
   const [modeTouched, setModeTouched] = useState(false);
   const [draftBinaryPath, setDraftBinaryPath] = useState("");
   const [busyAction, setBusyAction] = useState<DesktopBackendAction | "save" | "refresh" | null>(
@@ -76,9 +76,9 @@ export function DesktopBackendSettings() {
   if (!bridge) return null;
 
   const modeLabel = (mode: DesktopBackendMode): string => {
-    if (mode === "local-service") return gt("Background service");
+    if (mode === "local-service") return "p0d";
     if (mode === "remote") return gt("Remote URL (experimental)");
-    return gt("In-app backend");
+    return gt("Legacy Node backend (deprecated)");
   };
 
   const statusBadge = () => {
@@ -158,13 +158,11 @@ export function DesktopBackendSettings() {
 
   const modeDescription =
     draftMode === "local-service"
-      ? gt(
-          "Runs the backend as a background service so quitting the window leaves it running. This is an opt-in; the in-app backend is the default.",
-        )
+      ? gt("The native backend. It starts the Node server only for features it hasn't taken over.")
       : draftMode === "remote"
         ? gt("Remote backend mode is experimental and not supported yet.")
         : gt(
-            "Runs the backend inside the app. This is the default and always available, and quitting the window stops it.",
+            "Deprecated. Runs the old Node server directly and will be removed in a future release.",
           );
 
   const statusMetaParts: string[] = [];
@@ -176,12 +174,6 @@ export function DesktopBackendSettings() {
 
   return (
     <SettingsSection {...searchableSetting("desktop-backend")} title={gt("Backend")}>
-      <p className="px-3 text-sm leading-relaxed text-muted-foreground sm:px-4">
-        <T>
-          The in-app backend is the default and starts with the app. A background service is an
-          opt-in and must pass its sign-in check before the app will switch to it.
-        </T>
-      </p>
       {status?.mode === "remote" ? (
         <SettingsRow
           title={gt("Remote backend mode is experimental and not supported yet")}
@@ -194,11 +186,11 @@ export function DesktopBackendSettings() {
               variant="outline"
               disabled={busyAction !== null}
               onClick={() => {
-                setDraftMode("embedded");
+                setDraftMode("local-service");
                 setModeTouched(true);
               }}
             >
-              <T>Use the in-app backend</T>
+              <T>Use p0d</T>
             </Button>
           }
         />
@@ -225,11 +217,11 @@ export function DesktopBackendSettings() {
               <SelectValue>{modeLabel(draftMode)}</SelectValue>
             </SelectTrigger>
             <SelectPopup align="end" alignItemWithTrigger={false}>
-              <SelectItem hideIndicator value="embedded">
-                <T>In-app backend</T>
-              </SelectItem>
               <SelectItem hideIndicator value="local-service">
-                <T>Background service</T>
+                p0d
+              </SelectItem>
+              <SelectItem hideIndicator value="embedded">
+                <T>Legacy Node backend (deprecated)</T>
               </SelectItem>
             </SelectPopup>
           </Select>
@@ -245,9 +237,7 @@ export function DesktopBackendSettings() {
                 Optional override. Currently resolved: <Var>{status.resolvedBinaryPath}</Var>
               </T>
             ) : (
-              gt(
-                "Optional path to a background service binary. Leave blank to use the bundled server.",
-              )
+              gt("Used only when this app has no bundled p0d.")
             )
           }
           control={
@@ -263,15 +253,6 @@ export function DesktopBackendSettings() {
             />
           }
         />
-      ) : null}
-
-      {draftMode === "local-service" ? (
-        <p className="px-3 text-sm leading-relaxed text-muted-foreground sm:px-4">
-          <T>
-            Background service mode is blocked when the service cannot prove it belongs to this app.
-            Saving a mode that cannot sign in leaves your current setting untouched.
-          </T>
-        </p>
       ) : null}
 
       {hasUnsavedChanges ? (
@@ -367,5 +348,81 @@ export function DesktopBackendSettings() {
         }
       />
     </SettingsSection>
+  );
+}
+
+/** Names the backend this app runs, so a deprecated Node backend is never invisible. */
+export function DesktopBackendAboutRow() {
+  const gt = useGT();
+  const bridge = typeof window === "undefined" ? undefined : window.desktopBridge?.backend;
+  const [status, setStatus] = useState<DesktopBackendStatus | null>(null);
+  const [switching, setSwitching] = useState(false);
+
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- reads desktop backend IPC status once on mount
+  useEffect(() => {
+    if (!bridge) return;
+    let active = true;
+    void bridge.getStatus().then(
+      (next) => {
+        if (active) setStatus(next);
+      },
+      () => {},
+    );
+    return () => {
+      active = false;
+    };
+  }, [bridge]);
+
+  if (!bridge || status === null || status.mode === "remote") return null;
+  const legacy = status.mode === "embedded";
+
+  const switchToP0d = async () => {
+    setSwitching(true);
+    try {
+      const next = await bridge.updateConfig({ mode: "local-service" });
+      setStatus(next);
+      if (next.error) {
+        toastManager.add(
+          stackedThreadToast({
+            type: "error",
+            title: gt("Could not switch to p0d"),
+            description: next.error,
+          }),
+        );
+      }
+    } catch (cause) {
+      toastManager.add(
+        stackedThreadToast({
+          type: "error",
+          title: gt("Could not switch to p0d"),
+          description: cause instanceof Error ? cause.message : String(cause),
+        }),
+      );
+    }
+    setSwitching(false);
+  };
+
+  return (
+    <SettingsRow
+      title={
+        <span className="inline-flex items-center gap-2">
+          <span>{gt("Backend")}</span>
+          {legacy ? <Badge variant="warning">{gt("Deprecated")}</Badge> : null}
+        </span>
+      }
+      description={legacy ? gt("Legacy Node backend") : "p0d"}
+      control={
+        legacy ? (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={switching}
+            onClick={() => void switchToP0d()}
+          >
+            {switching ? <Spinner size="sm" /> : <T>Switch to p0d</T>}
+          </Button>
+        ) : null
+      }
+    />
   );
 }

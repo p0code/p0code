@@ -230,6 +230,13 @@ jobs:
           toolchain: stable
           targets: ${{ inputs.rust_target }}
 
+      # The GUI bundles p0d (resources/p0d); the artifact script cross-builds it with apps/p0d/scripts/build.sh.
+      - name: Setup Go
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: apps/p0d/go.mod
+          cache-dependency-path: apps/p0d/go.sum
+
       - name: Align package versions to release version
         run: node scripts/update-release-package-versions.ts "${{ inputs.version }}"
 

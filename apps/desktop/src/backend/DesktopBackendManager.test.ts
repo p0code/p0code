@@ -1059,7 +1059,9 @@ describe("DesktopBackendManager", () => {
         serviceDriver: {
           kind: "p0d",
           binaryPath: "/usr/local/bin/p0d",
-          desktopBootstrapSecret: null,
+          desktopBootstrapSecret: "ab".repeat(32),
+          unavailableReason: null,
+          exited: Effect.never,
           status: Effect.succeed({
             running: true,
             installed: true,
@@ -1117,6 +1119,61 @@ describe("DesktopBackendManager", () => {
       assert.equal(afterQuit.ready, false);
       assert.equal(afterQuit.desiredRunning, false);
     }),
+  );
+
+  it.effect("restarts a p0d this app started once it exits", () =>
+    Effect.gen(function* () {
+      const exitSignals = [yield* Deferred.make<string>(), yield* Deferred.make<string>()];
+      let ensureRunningCalls = 0;
+      const readyCount = yield* Ref.make(0);
+      const info = {
+        running: true,
+        installed: true,
+        pid: 7788,
+        version: null,
+        url: new URL("http://127.0.0.1:4123"),
+        binaryPath: "/app/resources/p0d/p0d",
+        managedByService: false,
+        driverKind: "p0d" as const,
+      };
+      const instance = yield* makeTestInstance({
+        config: {
+          ...baseConfig,
+          backendMode: "local-service",
+          serviceDriver: {
+            kind: "p0d",
+            binaryPath: info.binaryPath,
+            desktopBootstrapSecret: "ab".repeat(32),
+            unavailableReason: null,
+            status: Effect.succeed(info),
+            ensureRunning: Effect.sync(() => {
+              ensureRunningCalls += 1;
+              return info;
+            }),
+            start: Effect.die("unexpected direct start"),
+            stop: Effect.void,
+            restart: Effect.die("unexpected direct restart"),
+            exited: Effect.suspend(() => Deferred.await(exitSignals[ensureRunningCalls - 1]!)),
+          },
+        },
+        spawnerLayer: Layer.succeed(
+          ChildProcessSpawner.ChildProcessSpawner,
+          ChildProcessSpawner.make(() => Effect.die("must not spawn the Node backend")),
+        ),
+        onReady: Ref.update(readyCount, (count) => count + 1),
+      });
+
+      yield* instance.start;
+      yield* TestClock.adjust(Duration.millis(1));
+      assert.equal(yield* Ref.get(readyCount), 1);
+
+      yield* Deferred.succeed(exitSignals[0]!, "p0d exited with code 2.");
+      yield* TestClock.adjust(Duration.minutes(1));
+      assert.equal(ensureRunningCalls, 2);
+      assert.equal(yield* Ref.get(readyCount), 2);
+
+      yield* instance.stop();
+    }).pipe(Effect.provide(TestClock.layer())),
   );
 
   it.effect("remote mode connects to a remote URL without spawning any local process", () =>

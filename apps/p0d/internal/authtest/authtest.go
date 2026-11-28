@@ -45,16 +45,63 @@ func New(t testing.TB) *Home {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { db.Close() })
-	_, err = db.Exec(`CREATE TABLE auth_sessions (
-		session_id TEXT PRIMARY KEY, subject TEXT NOT NULL, scopes TEXT NOT NULL, method TEXT NOT NULL,
-		client_label TEXT, client_ip_address TEXT, client_user_agent TEXT,
-		client_device_type TEXT NOT NULL DEFAULT 'unknown', client_os TEXT, client_browser TEXT,
-		issued_at TEXT NOT NULL, expires_at TEXT NOT NULL, last_connected_at TEXT, revoked_at TEXT,
-		client_surface TEXT, client_app_version TEXT, proof_key_thumbprint TEXT)`)
-	if err != nil {
+	if _, err = db.Exec(SessionsSchema); err != nil {
 		t.Fatal(err)
 	}
 	return &Home{Dir: dir, Key: key, db: db}
+}
+
+// SessionsSchema matches apps/server's auth_sessions.
+const SessionsSchema = `CREATE TABLE auth_sessions (
+	session_id TEXT PRIMARY KEY, subject TEXT NOT NULL, scopes TEXT NOT NULL, method TEXT NOT NULL,
+	client_label TEXT, client_ip_address TEXT, client_user_agent TEXT,
+	client_device_type TEXT NOT NULL DEFAULT 'unknown', client_os TEXT, client_browser TEXT,
+	issued_at TEXT NOT NULL, expires_at TEXT NOT NULL, last_connected_at TEXT, revoked_at TEXT,
+	client_surface TEXT, client_app_version TEXT, proof_key_thumbprint TEXT)`
+
+// Row is a stored session, for assertions.
+type Row struct {
+	Subject, Method, Scopes, DeviceType  string
+	Label, IPAddress, UserAgent, OS      sql.NullString
+	Browser, RevokedAt, ProofKeyThumbprt sql.NullString
+}
+
+// Session reads a session row.
+func (h *Home) Session(t testing.TB, sessionID string) Row {
+	t.Helper()
+	var r Row
+	err := h.db.QueryRow(`SELECT subject, method, scopes, client_device_type, client_label, client_ip_address,
+		client_user_agent, client_os, client_browser, revoked_at, proof_key_thumbprint
+		FROM auth_sessions WHERE session_id = ?`, sessionID).
+		Scan(&r.Subject, &r.Method, &r.Scopes, &r.DeviceType, &r.Label, &r.IPAddress, &r.UserAgent, &r.OS, &r.Browser, &r.RevokedAt, &r.ProofKeyThumbprt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return r
+}
+
+// LiveSessions counts unrevoked sessions for subject.
+func (h *Home) LiveSessions(t testing.TB, subject string) int {
+	t.Helper()
+	var n int
+	if err := h.db.QueryRow(`SELECT COUNT(*) FROM auth_sessions WHERE subject = ? AND revoked_at IS NULL`, subject).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	return n
+}
+
+// WriteDesktopSecret writes a fresh mode-0600 desktop secret file and returns its path
+// and contents.
+func (h *Home) WriteDesktopSecret(t testing.TB) (path, secret string) {
+	t.Helper()
+	raw := make([]byte, 32)
+	rand.Read(raw)
+	secret = base64.RawURLEncoding.EncodeToString(raw)
+	path = filepath.Join(filepath.Dir(h.Dir), "desktop-secret")
+	if err := os.WriteFile(path, []byte(secret+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path, secret
 }
 
 func iso(t time.Time) string { return t.UTC().Format("2006-01-02T15:04:05.000Z") }

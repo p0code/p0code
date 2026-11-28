@@ -92,6 +92,7 @@ import { Switch } from "../ui/switch";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { AboutVersionTitle } from "./AboutVersionTitle";
+import { DesktopBackendAboutRow } from "./DesktopBackendSettings";
 import { AdvancedSettings } from "./AdvancedSettings";
 import { BackgroundActivitySettingsRow } from "./BackgroundActivitySettings";
 import { CliCommandSettingsRow } from "./CliCommandSettingsRow";
@@ -2722,6 +2723,7 @@ export function AboutSettingsPanel() {
           </>
         )}
         <MobileAppSettingsRow />
+        <DesktopBackendAboutRow />
         {primaryEnvironmentId === null ? null : (
           <SettingsRow
             {...setting("welcome-page")}
