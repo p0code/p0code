@@ -935,6 +935,23 @@ async fn live_p0d_settings_roundtrip() {
         assert!(!status.compact_command.is_empty());
     }
 
+    // 8. Threads settings round-trip
+    let threads_updated = client
+        .update_settings(&json!({
+            "autoResumeLimitedThreads": true,
+            "snoozeLimitedThreads": true,
+            "sidebarAutoSettleAfterDays": 14,
+            "responseStreamingMode": "turn",
+            "defaultThreadEnvMode": "worktree"
+        }))
+        .await
+        .unwrap();
+    assert_eq!(threads_updated["autoResumeLimitedThreads"], true);
+    assert_eq!(threads_updated["snoozeLimitedThreads"], true);
+    assert_eq!(threads_updated["sidebarAutoSettleAfterDays"], 14);
+    assert_eq!(threads_updated["responseStreamingMode"], "turn");
+    assert_eq!(threads_updated["defaultThreadEnvMode"], "worktree");
+
     client.shutdown().await;
     proc.shutdown().await;
     let _ = std::fs::remove_dir_all(&root);

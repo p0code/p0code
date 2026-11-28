@@ -12,6 +12,7 @@ pub mod labs;
 pub mod maintenance;
 pub mod plugins;
 pub mod providers;
+pub mod threads;
 
 use std::path::PathBuf;
 
@@ -35,6 +36,7 @@ pub struct SettingsUiState {
     pub labs: labs::LabsUiState,
     pub maintenance: maintenance::MaintenanceUiState,
     pub providers: providers::ProvidersUiState,
+    pub threads: threads::ThreadsUiState,
 }
 
 pub struct Section {
@@ -332,6 +334,9 @@ impl crate::app::P0App {
                 .into_any_element(),
             "/settings/providers" => self
                 .render_providers(palette, window, cx)
+                .into_any_element(),
+            "/settings/threads" => self
+                .render_threads_settings(palette, window, cx)
                 .into_any_element(),
             "/settings/connections" => self.render_connections(palette, cx).into_any_element(),
             "/settings/plugins" => self.render_plugins(palette, cx).into_any_element(),
