@@ -5,6 +5,7 @@ members = [
   "crates/p0-i18n",
   "crates/p0-client",
   "crates/p0-terminal",
+  "crates/p0-theme",
   "apps/p0-gpui",
 ]
 exclude = ["resource-monitor"]

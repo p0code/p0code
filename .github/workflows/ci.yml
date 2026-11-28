@@ -123,6 +123,9 @@ jobs:
       - name: Check i18n catalogs
         run: vp run i18n:check
 
+      - name: Check generated native theme tokens
+        run: vp run native-theme:check
+
       - name: Check
         run: vp check
 
