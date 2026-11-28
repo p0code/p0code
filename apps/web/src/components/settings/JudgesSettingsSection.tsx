@@ -1,5 +1,6 @@
 import { newMessageId } from "../../lib/utils";
 import { DEFAULT_JUDGES, ProviderInstanceId, type JudgeMember } from "@t3tools/contracts";
+import { ArrowDownIcon, ArrowUpIcon, Trash2Icon } from "lucide-react";
 import { T, useGT } from "gt-react";
 import { useScopedSettings, useUpdateScopedSettings } from "./useScopedSettings";
 import { useSettingsScope } from "./SettingsScopeContext";
@@ -107,29 +108,35 @@ export function JudgesSettingsSection() {
                     }
                   />
                 ) : null}
-                <div className="ml-auto flex items-center gap-1">
+                <div className="ml-auto flex shrink-0 items-center gap-0.5">
                   <Button
-                    size="xs"
+                    size="icon-xs"
                     variant="ghost"
+                    aria-label={gt("Move up")}
+                    title={gt("Move up")}
                     disabled={index === 0}
                     onClick={() => move(index, -1)}
                   >
-                    <T>Move up</T>
+                    <ArrowUpIcon />
                   </Button>
                   <Button
-                    size="xs"
+                    size="icon-xs"
                     variant="ghost"
+                    aria-label={gt("Move down")}
+                    title={gt("Move down")}
                     disabled={index === settings.judges.length - 1}
                     onClick={() => move(index, 1)}
                   >
-                    <T>Move down</T>
+                    <ArrowDownIcon />
                   </Button>
                   <Button
-                    size="xs"
+                    size="icon-xs"
                     variant="ghost-destructive"
+                    aria-label={gt("Remove")}
+                    title={gt("Remove")}
                     onClick={() => save(settings.judges.filter((_, i) => i !== index))}
                   >
-                    <T>Remove</T>
+                    <Trash2Icon />
                   </Button>
                 </div>
               </div>
