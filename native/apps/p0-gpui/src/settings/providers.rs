@@ -358,10 +358,11 @@ impl P0App {
         let status_meta = [
             Some(status.to_owned()),
             provider.version.clone(),
-            provider
-                .auth
-                .as_ref()
-                .and_then(|a| a.label.clone().or_else(|| Some(a.status.clone()))),
+            provider.auth.as_ref().and_then(|a| {
+                a.label
+                    .clone()
+                    .or_else(|| (a.status != "unknown").then(|| a.status.clone()))
+            }),
         ]
         .into_iter()
         .flatten()
@@ -535,50 +536,78 @@ impl P0App {
                 .child(
                     div()
                         .flex()
+                        .items_end()
                         .gap(px(8.0))
-                        .child(div().flex_1().child(Input::new(&name_input)))
-                        .child(div().flex_1().child(Input::new(&bin_input)))
                         .child(
-                            Button::new(SharedString::from(format!("prov-save-{instance_id}")))
-                                .label(self.i18n.tr("Save").to_owned())
-                                .compact()
-                                .primary()
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    let display_name =
-                                        save_name_in.read(cx).value().trim().to_owned();
-                                    let binary_path =
-                                        save_bin_in.read(cx).value().trim().to_owned();
-                                    let patch = build_provider_instance_patch(
-                                        &save_settings,
-                                        &save_provider,
-                                        |entry| {
-                                            if display_name.is_empty() {
-                                                entry.remove("displayName");
-                                            } else {
+                            div()
+                                .min_w_0()
+                                .flex_1()
+                                .flex()
+                                .flex_col()
+                                .gap(px(3.0))
+                                .child(div().text_xs().text_color(palette.muted_foreground).child(
+                                    SharedString::from(self.i18n.tr("Display name").to_owned()),
+                                ))
+                                .child(Input::new(&name_input)),
+                        )
+                        .child(
+                            div()
+                                .min_w_0()
+                                .flex_1()
+                                .flex()
+                                .flex_col()
+                                .gap(px(3.0))
+                                .child(div().text_xs().text_color(palette.muted_foreground).child(
+                                    SharedString::from(self.i18n.tr("Binary path").to_owned()),
+                                ))
+                                .child(Input::new(&bin_input)),
+                        )
+                        .child(
+                            div().flex_none().child(
+                                Button::new(SharedString::from(format!("prov-save-{instance_id}")))
+                                    .label(self.i18n.tr("Save").to_owned())
+                                    .compact()
+                                    .primary()
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        let display_name =
+                                            save_name_in.read(cx).value().trim().to_owned();
+                                        let binary_path =
+                                            save_bin_in.read(cx).value().trim().to_owned();
+                                        let patch = build_provider_instance_patch(
+                                            &save_settings,
+                                            &save_provider,
+                                            |entry| {
+                                                if display_name.is_empty() {
+                                                    entry.remove("displayName");
+                                                } else {
+                                                    entry.insert(
+                                                        "displayName".to_owned(),
+                                                        Value::String(display_name),
+                                                    );
+                                                }
+                                                let mut cfg = entry
+                                                    .get("config")
+                                                    .and_then(Value::as_object)
+                                                    .cloned()
+                                                    .unwrap_or_default();
+                                                if binary_path.is_empty() {
+                                                    cfg.remove("binaryPath");
+                                                } else {
+                                                    cfg.insert(
+                                                        "binaryPath".to_owned(),
+                                                        Value::String(binary_path),
+                                                    );
+                                                }
                                                 entry.insert(
-                                                    "displayName".to_owned(),
-                                                    Value::String(display_name),
+                                                    "config".to_owned(),
+                                                    Value::Object(cfg),
                                                 );
-                                            }
-                                            let mut cfg = entry
-                                                .get("config")
-                                                .and_then(Value::as_object)
-                                                .cloned()
-                                                .unwrap_or_default();
-                                            if binary_path.is_empty() {
-                                                cfg.remove("binaryPath");
-                                            } else {
-                                                cfg.insert(
-                                                    "binaryPath".to_owned(),
-                                                    Value::String(binary_path),
-                                                );
-                                            }
-                                            entry.insert("config".to_owned(), Value::Object(cfg));
-                                        },
-                                    );
-                                    this.bridge.update_settings_and_refresh_config(patch);
-                                    cx.notify();
-                                })),
+                                            },
+                                        );
+                                        this.bridge.update_settings_and_refresh_config(patch);
+                                        cx.notify();
+                                    })),
+                            ),
                         ),
                 ),
         );

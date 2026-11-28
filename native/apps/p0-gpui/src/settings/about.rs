@@ -71,7 +71,7 @@ impl P0App {
             div()
                 .flex()
                 .flex_col()
-                .items_end()
+                .items_start()
                 .gap(px(2.0))
                 .child(
                     div()
@@ -99,6 +99,7 @@ impl P0App {
                 .gap(px(12.0))
                 .child(
                     div()
+                        .min_w_0()
                         .flex_1()
                         .text_xs()
                         .text_color(palette.muted_foreground)
@@ -109,11 +110,13 @@ impl P0App {
                         )),
                 )
                 .child(
-                    Button::new("about-open-welcome")
-                        .label(self.i18n.tr("Open").to_owned())
-                        .compact()
-                        .outline()
-                        .on_click(move |_, _, cx| cx.open_url(&welcome_url)),
+                    div().flex_none().child(
+                        Button::new("about-open-welcome")
+                            .label(self.i18n.tr("Open").to_owned())
+                            .compact()
+                            .outline()
+                            .on_click(move |_, _, cx| cx.open_url(&welcome_url)),
+                    ),
                 ),
             palette,
         ));
@@ -128,6 +131,7 @@ impl P0App {
                 .gap(px(12.0))
                 .child(
                     div()
+                        .min_w_0()
                         .flex_1()
                         .text_xs()
                         .text_color(palette.muted_foreground)
@@ -136,11 +140,13 @@ impl P0App {
                         ),
                 )
                 .child(
-                    Button::new("about-open-web")
-                        .label(self.i18n.tr("Open in browser").to_owned())
-                        .compact()
-                        .outline()
-                        .on_click(move |_, _, cx| cx.open_url(&web_about_url)),
+                    div().flex_none().child(
+                        Button::new("about-open-web")
+                            .label(self.i18n.tr("Open in browser").to_owned())
+                            .compact()
+                            .outline()
+                            .on_click(move |_, _, cx| cx.open_url(&web_about_url)),
+                    ),
                 ),
             palette,
         ));
@@ -178,6 +184,7 @@ impl P0App {
                 .gap(px(12.0))
                 .child(
                     div()
+                        .min_w_0()
                         .flex_1()
                         .text_xs()
                         .text_color(palette.muted_foreground)
@@ -186,11 +193,13 @@ impl P0App {
                         )),
                 )
                 .child(
-                    Button::new("about-privacy")
-                        .label(self.i18n.tr("View policy").to_owned())
-                        .compact()
-                        .outline()
-                        .on_click(|_, _, cx| cx.open_url(PRIVACY_POLICY_URL)),
+                    div().flex_none().child(
+                        Button::new("about-privacy")
+                            .label(self.i18n.tr("View policy").to_owned())
+                            .compact()
+                            .outline()
+                            .on_click(|_, _, cx| cx.open_url(PRIVACY_POLICY_URL)),
+                    ),
                 ),
             palette,
         ));
@@ -205,6 +214,7 @@ impl P0App {
                 .gap(px(12.0))
                 .child(
                     div()
+                        .min_w_0()
                         .flex_1()
                         .text_xs()
                         .text_color(palette.muted_foreground)
@@ -215,11 +225,13 @@ impl P0App {
                         )),
                 )
                 .child(
-                    Button::new("about-licenses")
-                        .label(self.i18n.tr("View licenses").to_owned())
-                        .compact()
-                        .outline()
-                        .on_click(move |_, _, cx| cx.open_url(&licenses_url)),
+                    div().flex_none().child(
+                        Button::new("about-licenses")
+                            .label(self.i18n.tr("View licenses").to_owned())
+                            .compact()
+                            .outline()
+                            .on_click(move |_, _, cx| cx.open_url(&licenses_url)),
+                    ),
                 ),
             palette,
         ));

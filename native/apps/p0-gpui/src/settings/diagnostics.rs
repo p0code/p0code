@@ -51,11 +51,19 @@ impl P0App {
                 .items_center()
                 .justify_between()
                 .gap(px(8.0))
-                .child(div().text_xs().text_color(palette.muted_foreground).child(
-                    "Live snapshot of host resources, server process tree, and local traces.",
-                ))
                 .child(
                     div()
+                        .min_w_0()
+                        .flex_1()
+                        .text_xs()
+                        .text_color(palette.muted_foreground)
+                        .child(
+                            "Live snapshot of host resources, server process tree, and local traces.",
+                        ),
+                )
+                .child(
+                    div()
+                        .flex_none()
                         .flex()
                         .items_center()
                         .gap(px(6.0))

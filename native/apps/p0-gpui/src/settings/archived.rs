@@ -63,7 +63,7 @@ impl P0App {
         }
 
         let mut col = div().flex().flex_col().gap(px(10.0)).child(
-            div().child(
+            div().flex().items_center().child(
                 Button::new("archived-refresh")
                     .label(self.i18n.tr("Refresh").to_owned())
                     .compact()

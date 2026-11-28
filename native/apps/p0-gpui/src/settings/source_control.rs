@@ -279,17 +279,20 @@ impl P0App {
                 .gap(px(12.0))
                 .child(
                     div()
+                        .min_w_0()
                         .flex_1()
                         .text_xs()
                         .text_color(palette.muted_foreground)
                         .child("Manage host CLI discovery, OAuth sign-ins, and personal access tokens in the web app."),
                 )
                 .child(
-                    Button::new("sc-open-web")
-                        .label(self.i18n.tr("Open in browser").to_owned())
-                        .compact()
-                        .outline()
-                        .on_click(move |_, _, cx| cx.open_url(&web_sc_url)),
+                    div().flex_none().child(
+                        Button::new("sc-open-web")
+                            .label(self.i18n.tr("Open in browser").to_owned())
+                            .compact()
+                            .outline()
+                            .on_click(move |_, _, cx| cx.open_url(&web_sc_url)),
+                    ),
                 ),
             palette,
         ));

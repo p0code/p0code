@@ -20,24 +20,32 @@ impl P0App {
         self.bridge.ensure_plugins_subscribed();
         let open_web_url = web_url(self.bridge.base_url(), "/settings/plugins");
 
-        let mut col =
-            div().flex().flex_col().gap(px(12.0)).child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap(px(8.0))
-                    .child(div().text_xs().text_color(palette.muted_foreground).child(
-                        "Plugin shop, installer, and per-plugin panels open in the web app.",
-                    ))
-                    .child(
+        let mut col = div().flex().flex_col().gap(px(12.0)).child(
+            div()
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap(px(8.0))
+                .child(
+                    div()
+                        .min_w_0()
+                        .flex_1()
+                        .text_xs()
+                        .text_color(palette.muted_foreground)
+                        .child(
+                            "Plugin shop, installer, and per-plugin panels open in the web app.",
+                        ),
+                )
+                .child(
+                    div().flex_none().child(
                         Button::new("plugins-open-web")
                             .label(self.i18n.tr("Open in browser").to_owned())
                             .compact()
                             .outline()
                             .on_click(move |_, _, cx| cx.open_url(&open_web_url)),
                     ),
-            );
+                ),
+        );
 
         let Some(plugins) = self.bridge.plugins() else {
             return col.child(div().text_sm().text_color(palette.muted_foreground).child(

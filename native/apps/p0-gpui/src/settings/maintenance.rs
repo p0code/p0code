@@ -164,18 +164,21 @@ impl P0App {
                     .gap(px(12.0))
                     .child(
                         div()
+                            .min_w_0()
                             .flex_1()
                             .text_xs()
                             .text_color(palette.muted_foreground)
                             .child(SharedString::from(self.i18n.tr(desc).to_owned())),
                     )
                     .child(
-                        Switch::new(SharedString::from(format!("maint-{key}")))
-                            .checked(checked)
-                            .on_click(cx.listener(move |this, val: &bool, _, cx| {
-                                this.bridge.update_settings(json!({ key: *val }));
-                                cx.notify();
-                            })),
+                        div().flex_none().child(
+                            Switch::new(SharedString::from(format!("maint-{key}")))
+                                .checked(checked)
+                                .on_click(cx.listener(move |this, val: &bool, _, cx| {
+                                    this.bridge.update_settings(json!({ key: *val }));
+                                    cx.notify();
+                                })),
+                        ),
                     ),
                 palette,
             ));
@@ -217,7 +220,7 @@ impl P0App {
             div()
                 .flex()
                 .flex_col()
-                .items_end()
+                .items_start()
                 .gap(px(4.0))
                 .child(profiles)
                 .children(maint.has_background_overrides.then(|| {
@@ -240,6 +243,7 @@ impl P0App {
                 .gap(px(12.0))
                 .child(
                     div()
+                        .min_w_0()
                         .flex_1()
                         .text_xs()
                         .text_color(palette.muted_foreground)
@@ -250,13 +254,15 @@ impl P0App {
                         )),
                 )
                 .child(
-                    Switch::new("maint-keep-awake")
-                        .checked(maint.keep_awake_while_agents_work)
-                        .on_click(cx.listener(|this, val: &bool, _, cx| {
-                            this.bridge
-                                .update_settings(json!({ "keepAwakeWhileAgentsWork": *val }));
-                            cx.notify();
-                        })),
+                    div().flex_none().child(
+                        Switch::new("maint-keep-awake")
+                            .checked(maint.keep_awake_while_agents_work)
+                            .on_click(cx.listener(|this, val: &bool, _, cx| {
+                                this.bridge
+                                    .update_settings(json!({ "keepAwakeWhileAgentsWork": *val }));
+                                cx.notify();
+                            })),
+                    ),
                 ),
             palette,
         ));
@@ -348,13 +354,14 @@ impl P0App {
                 .gap(px(10.0))
                 .child(
                     div()
+                        .min_w_0()
                         .flex_1()
                         .text_xs()
                         .text_color(palette.muted_foreground)
                         .child(SharedString::from(summary)),
                 )
                 .child(
-                    div().flex().items_center().gap(px(6.0)).child(
+                    div().flex_none().flex().items_center().gap(px(6.0)).child(
                         Button::new("maint-cleanup-run")
                             .label(self.i18n.tr("Delete now").to_owned())
                             .compact()
@@ -522,6 +529,7 @@ impl P0App {
                 .gap(px(12.0))
                 .child(
                     div()
+                        .min_w_0()
                         .flex_1()
                         .text_xs()
                         .text_color(palette.muted_foreground)
@@ -532,13 +540,15 @@ impl P0App {
                         )),
                 )
                 .child(
-                    Button::new("maint-open-diagnostics")
-                        .label(self.i18n.tr("View diagnostics").to_owned())
-                        .compact()
-                        .outline()
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.open_settings("/settings/diagnostics", cx);
-                        })),
+                    div().flex_none().child(
+                        Button::new("maint-open-diagnostics")
+                            .label(self.i18n.tr("View diagnostics").to_owned())
+                            .compact()
+                            .outline()
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.open_settings("/settings/diagnostics", cx);
+                            })),
+                    ),
                 ),
             palette,
         ));

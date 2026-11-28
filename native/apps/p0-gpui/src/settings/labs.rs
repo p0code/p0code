@@ -119,18 +119,21 @@ impl P0App {
                     .gap(px(12.0))
                     .child(
                         div()
+                            .min_w_0()
                             .flex_1()
                             .text_xs()
                             .text_color(palette.muted_foreground)
                             .child(SharedString::from(self.i18n.tr(desc).to_owned())),
                     )
                     .child(
-                        Switch::new(SharedString::from(format!("labs-{key}")))
-                            .checked(checked)
-                            .on_click(cx.listener(move |this, val: &bool, _, cx| {
-                                this.bridge.update_settings(json!({ key: *val }));
-                                cx.notify();
-                            })),
+                        div().flex_none().child(
+                            Switch::new(SharedString::from(format!("labs-{key}")))
+                                .checked(checked)
+                                .on_click(cx.listener(move |this, val: &bool, _, cx| {
+                                    this.bridge.update_settings(json!({ key: *val }));
+                                    cx.notify();
+                                })),
+                        ),
                     ),
                 palette,
             ));

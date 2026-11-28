@@ -1301,30 +1301,32 @@ pub fn status_dot_color(status: ThreadStatus, palette: &AppPalette) -> gpui_kit:
 
 pub fn run_gui(bridge: Arc<AppBridge>) {
     let on_quit = bridge.clone();
-    gpui_kit::application().run(move |cx: &mut App| {
-        gpui_kit::init(cx);
-        cx.bind_keys(keybindings());
-        cx.on_app_quit(move |_| {
-            on_quit.shutdown();
-            async {}
-        })
-        .detach();
-        let window_opts = gpui_kit::WindowOptions {
-            titlebar: Some(gpui_kit::TitlebarOptions {
-                title: Some("p0code".into()),
+    gpui_kit::application()
+        .with_assets(gpui_kit::assets::Assets)
+        .run(move |cx: &mut App| {
+            gpui_kit::init(cx);
+            cx.bind_keys(keybindings());
+            cx.on_app_quit(move |_| {
+                on_quit.shutdown();
+                async {}
+            })
+            .detach();
+            let window_opts = gpui_kit::WindowOptions {
+                titlebar: Some(gpui_kit::TitlebarOptions {
+                    title: Some("p0code".into()),
+                    ..Default::default()
+                }),
                 ..Default::default()
-            }),
-            ..Default::default()
-        };
-        let bridge_w = bridge.clone();
-        gpui_kit::open_window(window_opts, cx, move |window, cx| {
-            let view = cx.new(|cx| P0App::new(bridge_w.clone(), window, cx));
-            let focus = view.read(cx).focus.clone();
-            window.focus(&focus, cx);
-            cx.new(|cx| Root::new(view, window, cx))
-        })
-        .expect("failed to open p0-gpui window");
-    });
+            };
+            let bridge_w = bridge.clone();
+            gpui_kit::open_window(window_opts, cx, move |window, cx| {
+                let view = cx.new(|cx| P0App::new(bridge_w.clone(), window, cx));
+                let focus = view.read(cx).focus.clone();
+                window.focus(&focus, cx);
+                cx.new(|cx| Root::new(view, window, cx))
+            })
+            .expect("failed to open p0-gpui window");
+        });
 }
 
 #[cfg(test)]

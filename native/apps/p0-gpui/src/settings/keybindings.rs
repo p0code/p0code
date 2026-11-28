@@ -4,11 +4,11 @@
 use std::collections::BTreeMap;
 
 use gpui_kit::component::button::{Button, ButtonVariants as _};
-use gpui_kit::component::input::{Input, InputState};
+use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::{
     AppContext as _, Context, Entity, FontWeight, InteractiveElement as _, IntoElement,
-    ParentElement as _, SharedString, StatefulInteractiveElement as _, Styled as _, Window, div,
-    px,
+    ParentElement as _, SharedString, StatefulInteractiveElement as _, Styled as _, Subscription,
+    Window, div, px,
 };
 use p0_protocol::{
     KeybindingReplaceTarget, ResolvedKeybindingRule, ServerRemoveKeybindingInput,
@@ -20,7 +20,7 @@ use crate::theme::AppPalette;
 
 #[derive(Default)]
 pub struct KeybindingsUiState {
-    search_input: Option<Entity<InputState>>,
+    search_input: Option<(Entity<InputState>, Subscription)>,
     editing: Option<EditingBinding>,
     adding: Option<NewBindingForm>,
 }
@@ -260,15 +260,19 @@ impl P0App {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let search_input = self
-            .settings_ui
-            .keybindings
-            .search_input
-            .get_or_insert_with(|| {
-                let placeholder = self.i18n.tr("Search keybindings").to_owned();
-                cx.new(|cx| InputState::new(window, cx).placeholder(placeholder))
-            })
-            .clone();
+        let search_input = if let Some((input, _)) = &self.settings_ui.keybindings.search_input {
+            input.clone()
+        } else {
+            let placeholder = self.i18n.tr("Search keybindings").to_owned();
+            let input = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder));
+            let sub = cx.subscribe_in(&input, window, |_, _, event: &InputEvent, _, cx| {
+                if matches!(event, InputEvent::Change) {
+                    cx.notify();
+                }
+            });
+            self.settings_ui.keybindings.search_input = Some((input.clone(), sub));
+            input
+        };
         let query = search_input.read(cx).value().to_string();
 
         let Some(config) = self.bridge.server_config() else {
@@ -300,11 +304,12 @@ impl P0App {
                                 this.settings_ui.keybindings.adding = None;
                             } else {
                                 this.settings_ui.keybindings.editing = None;
+                                let command_input = cx.new(|cx| {
+                                    InputState::new(window, cx).placeholder("commandPalette.toggle")
+                                });
+                                command_input.update(cx, |s, cx| s.focus(window, cx));
                                 this.settings_ui.keybindings.adding = Some(NewBindingForm {
-                                    command_input: cx.new(|cx| {
-                                        InputState::new(window, cx)
-                                            .placeholder("commandPalette.toggle")
-                                    }),
+                                    command_input,
                                     key_input: cx
                                         .new(|cx| InputState::new(window, cx).placeholder("mod+k")),
                                     when_input: cx.new(|cx| {
@@ -486,9 +491,11 @@ impl P0App {
                 div()
                     .flex()
                     .items_center()
+                    .min_w_0()
                     .gap(px(6.0))
                     .child(
                         div()
+                            .min_w_0()
                             .text_sm()
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(palette.foreground)
@@ -497,6 +504,8 @@ impl P0App {
                     )
                     .child(
                         div()
+                            .min_w_0()
+                            .flex_shrink(1.0)
                             .text_xs()
                             .font_family("monospace")
                             .text_color(palette.muted_foreground)
@@ -694,6 +703,7 @@ impl P0App {
             state.set_value(initial_key, window, cx);
             state
         });
+        key_input.update(cx, |s, cx| s.focus(window, cx));
         let when_input = cx.new(|cx| {
             let mut state = InputState::new(window, cx).placeholder("When (optional)");
             state.set_value(initial_when, window, cx);
