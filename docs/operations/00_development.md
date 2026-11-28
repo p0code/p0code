@@ -138,6 +138,8 @@ sudo apt-get install build-essential clang mold pkg-config cmake \
   libxcursor-dev libxi-dev libasound2-dev libvulkan1 mesa-vulkan-drivers
 ```
 
+Design tokens in `native/crates/p0-theme/src/generated.rs` are generated from the web app's theme sources; after changing `apps/web/src/index.css`, the built-in theme palettes or project icon colors, run `vp run native-theme:generate` (CI runs `native-theme:check`).
+
 Run tests and clippy from `native/`:
 
 ```sh
