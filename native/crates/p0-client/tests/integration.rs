@@ -888,6 +888,17 @@ async fn live_p0d_settings_roundtrip() {
         "plugin manifests should decode ids"
     );
 
+    // 6. Labs / Workflows settings round-trip
+    let labs_updated = client
+        .update_settings(&json!({
+            "workflowsEnabled": true,
+            "workflowSkippedRunsKept": 25
+        }))
+        .await
+        .unwrap();
+    assert_eq!(labs_updated["workflowsEnabled"], true);
+    assert_eq!(labs_updated["workflowSkippedRunsKept"], 25);
+
     client.shutdown().await;
     proc.shutdown().await;
     let _ = std::fs::remove_dir_all(&root);

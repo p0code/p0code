@@ -7,6 +7,7 @@ pub mod chat;
 pub mod connections;
 pub mod general;
 pub mod keybindings;
+pub mod labs;
 pub mod plugins;
 pub mod providers;
 
@@ -29,6 +30,7 @@ pub struct SettingsUiState {
     pub archived: archived::ArchivedUiState,
     pub connections: connections::ConnectionsUiState,
     pub keybindings: keybindings::KeybindingsUiState,
+    pub labs: labs::LabsUiState,
     pub providers: providers::ProvidersUiState,
 }
 
@@ -330,6 +332,7 @@ impl crate::app::P0App {
                 .into_any_element(),
             "/settings/connections" => self.render_connections(palette, cx).into_any_element(),
             "/settings/plugins" => self.render_plugins(palette, cx).into_any_element(),
+            "/settings/labs" => self.render_labs(palette, window, cx).into_any_element(),
             "/settings/archived" => self.render_archived(palette, cx).into_any_element(),
             _ => {
                 let url = web_url(self.bridge.base_url(), section.path);
