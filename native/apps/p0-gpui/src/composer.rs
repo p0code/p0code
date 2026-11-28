@@ -1,15 +1,16 @@
 //! Multiline prompt composer with Send/Stop, model picker (fed by `server.getConfig`),
 //! and runtime-mode toggle.
 
-use gpui_kit::component::input::Textarea;
+use gpui_kit::component::input::{Enter, Escape, IndentInline, MoveDown, MoveUp, Textarea};
 use gpui_kit::{
-    Context, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _, SharedString,
-    StatefulInteractiveElement as _, Styled as _, div, px,
+    Context, ExternalPaths, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _,
+    SharedString, StatefulInteractiveElement as _, Styled as _, div, px,
 };
 use p0_i18n::{Catalog, Key};
 use p0_protocol::{ModelSelection, RuntimeMode, ServerConfig};
 
 use crate::app::P0App;
+use crate::completions::CompletionKey;
 use crate::theme::AppPalette;
 
 #[derive(Debug, Clone)]
@@ -123,6 +124,10 @@ pub fn render_composer(
         .flex_col()
         .gap(px(6.0));
 
+    if let Some(menu) = app.render_completion_menu(palette, cx) {
+        wrapper = wrapper.child(menu);
+    }
+
     // Inline model picker menu when expanded.
     if app.model_picker_open() {
         let mut menu = div()
@@ -195,6 +200,23 @@ pub fn render_composer(
                 .flex()
                 .items_center()
                 .gap(px(6.0))
+                .child(
+                    div()
+                        .id("composer-attach-btn")
+                        .px(px(8.0))
+                        .py(px(4.0))
+                        .rounded(px(6.0))
+                        .border_1()
+                        .border_color(palette.border)
+                        .cursor_pointer()
+                        .hover(|s| s.bg(palette.row_hover))
+                        .text_xs()
+                        .text_color(palette.muted_foreground)
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.pick_attachments(window, cx);
+                        }))
+                        .child("+"),
+                )
                 .child(
                     div()
                         .id("composer-model-btn")
@@ -277,7 +299,16 @@ pub fn render_composer(
 
     action_row = action_row.child(right_btns);
 
-    let box_card = div()
+    let completion_key = |key: CompletionKey| {
+        cx.listener(move |this: &mut P0App, _: &(), window, cx| {
+            if this.completion_key(key, window, cx) {
+                cx.stop_propagation();
+            }
+        })
+    };
+    let view = cx.entity().downgrade();
+    let mut box_card = div()
+        .id("composer-box")
         .w_full()
         .p(px(10.0))
         .rounded(px(10.0))
@@ -286,7 +317,41 @@ pub fn render_composer(
         .border_color(palette.border)
         .flex()
         .flex_col()
-        .child(Textarea::new(app.composer_input()).bordered(false))
+        .capture_action({
+            let f = completion_key(CompletionKey::Up);
+            move |_: &MoveUp, window, cx| f(&(), window, cx)
+        })
+        .capture_action({
+            let f = completion_key(CompletionKey::Down);
+            move |_: &MoveDown, window, cx| f(&(), window, cx)
+        })
+        .capture_action({
+            let f = completion_key(CompletionKey::Accept);
+            move |_: &Enter, window, cx| f(&(), window, cx)
+        })
+        .capture_action({
+            let f = completion_key(CompletionKey::Accept);
+            move |_: &IndentInline, window, cx| f(&(), window, cx)
+        })
+        .capture_action({
+            let f = completion_key(CompletionKey::Dismiss);
+            move |_: &Escape, window, cx| f(&(), window, cx)
+        })
+        .on_drop(cx.listener(|this, paths: &ExternalPaths, _, cx| {
+            this.drop_attachments(paths, cx);
+        }));
+    if let Some(tray) = app.render_attachment_tray(palette, cx) {
+        box_card = box_card.child(tray);
+    }
+    let box_card = box_card
+        .child(
+            Textarea::new(app.composer_input())
+                .bordered(false)
+                .on_paste(move |item, _, cx| {
+                    view.update(cx, |this, cx| this.paste_attachments(item, cx))
+                        .unwrap_or(false)
+                }),
+        )
         .child(action_row);
 
     wrapper.child(box_card)

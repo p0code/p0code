@@ -1,7 +1,9 @@
 mod app;
+mod attachments;
 mod bridge;
 mod cards;
 mod cli;
+mod completions;
 mod composer;
 mod diff_panel;
 mod explorer;

@@ -17,8 +17,10 @@ use p0_client::{ConnectionState, ShellState, ThreadState};
 use p0_i18n::{Catalog, Key};
 use p0_protocol::{ModelSelection, RuntimeMode, ThreadShell, ThreadStatus};
 
+use crate::attachments::AttachmentTray;
 use crate::bridge::AppBridge;
 use crate::cards::CardForms;
+use crate::completions::Completion;
 use crate::composer::{available_models, render_composer};
 use crate::feed::FeedState;
 use crate::markdown::MarkdownCache;
@@ -109,6 +111,8 @@ pub struct P0App {
     pub(crate) palette: Option<Palette>,
     terminal: Option<TerminalPane>,
     pub(crate) right_panel: RightPanel,
+    pub(crate) attachments: AttachmentTray,
+    pub(crate) completion: Completion,
     _subs: Vec<Subscription>,
 }
 
@@ -131,12 +135,10 @@ impl P0App {
         let composer_sub = cx.subscribe_in(
             &composer_input,
             window,
-            |this, _, event: &InputEvent, window, cx| {
-                if let InputEvent::PressEnter { shift, .. } = event
-                    && !shift
-                {
-                    this.submit_composer(window, cx);
-                }
+            |this, _, event: &InputEvent, window, cx| match event {
+                InputEvent::PressEnter { shift: false, .. } => this.submit_composer(window, cx),
+                InputEvent::Change => this.update_completion(cx),
+                _ => {}
             },
         );
         let appearance_sub = cx.observe_window_appearance(window, |this, window, cx| {
@@ -181,6 +183,8 @@ impl P0App {
             palette: None,
             terminal: None,
             right_panel: RightPanel::new(cx),
+            attachments: AttachmentTray::default(),
+            completion: Completion::default(),
             _subs: vec![composer_sub, appearance_sub],
         };
         app.apply_theme(window, cx);
@@ -291,7 +295,8 @@ impl P0App {
 
     pub fn submit_composer(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let text = self.composer_input.read(cx).value().trim().to_owned();
-        if text.is_empty() {
+        let attachments = self.attachments.ready();
+        if (text.is_empty() && attachments.is_empty()) || self.attachments.is_uploading() {
             return;
         }
         if let Some(tid) = self.selected_thread_id.clone() {
@@ -299,7 +304,7 @@ impl P0App {
             self.bridge.send_message(
                 tid,
                 text,
-                Vec::new(),
+                attachments,
                 self.selected_model.clone(),
                 active_run,
             );
@@ -326,7 +331,7 @@ impl P0App {
                 model,
                 runtime_mode,
                 Some(text),
-                Vec::new(),
+                attachments,
                 move |id| {
                     *launched.lock().unwrap() = Some(id);
                 },
@@ -336,6 +341,7 @@ impl P0App {
         }
         self.composer_input
             .update(cx, |state, cx| state.set_value("", window, cx));
+        self.attachments.clear();
         self.feed.follow_tail(cx);
         cx.notify();
     }
@@ -438,6 +444,13 @@ impl P0App {
         let mut prefs = self.prefs.clone();
         prefs.sidebar_hidden = !prefs.sidebar_hidden;
         self.set_prefs(prefs, window, cx);
+    }
+
+    /// The folder a new thread will start in, while one is being drafted.
+    pub(crate) fn draft_project_root(&self) -> Option<String> {
+        let id = self.draft_project_id.as_deref()?;
+        let project = self.shell.projects.iter().find(|p| p.id == id)?;
+        Some(project.workspace_root.clone())
     }
 
     /// A thread's folder: its worktree, else its project's root.

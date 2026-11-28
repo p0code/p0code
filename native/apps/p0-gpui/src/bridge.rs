@@ -287,6 +287,26 @@ impl AppBridge {
         }
     }
 
+    pub fn upload_attachment(
+        &self,
+        name: String,
+        mime_type: String,
+        bytes: Vec<u8>,
+    ) -> impl Future<Output = Result<p0_protocol::ChatAttachment, String>> + use<> {
+        let client = self.client.clone();
+        let base_url = self.base_url.clone();
+        let task = self.rt.spawn(async move {
+            p0_client::attachments::upload_attachment(&client, &base_url, name, mime_type, bytes)
+                .await
+        });
+        async move {
+            match task.await {
+                Ok(result) => result.map_err(|err| err.to_string()),
+                Err(err) => Err(err.to_string()),
+            }
+        }
+    }
+
     /// Closes the open thread's stream (New thread shows an empty feed).
     pub fn clear_thread(&self) {
         if let Some(prev) = self.thread_task.lock().unwrap().take() {
