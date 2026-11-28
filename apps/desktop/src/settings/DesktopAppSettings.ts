@@ -278,18 +278,23 @@ function normalizeDesktopSettingsDocument(
 
   const parsedBackendMode =
     parsed.backendMode === "legacy-embedded" ? "embedded" : parsed.backendMode;
-  // A recorded mode is not an explicit choice on its own: older documents stored the
-  // default, and only the flag distinguishes that from a mode the user picked. Every install
-  // that never chose moves to p0d, including ones that recorded the old "embedded" default.
+  const preserveWslOnly =
+    parsed.backendModeConfiguredByUser !== true &&
+    parsedBackendMode !== "remote" &&
+    parsed.wslOnly === true &&
+    wslBackendEnabled;
   const backendModeConfiguredByUser =
+    preserveWslOnly ||
     parsed.backendModeConfiguredByUser === true ||
     (parsed.backendModeConfiguredByUser === undefined && parsedBackendMode === "remote");
 
   return {
     backendBinaryPath: normalizeBackendBinaryPath(parsed.backendBinaryPath),
-    backendMode: backendModeConfiguredByUser
-      ? (parsedBackendMode ?? defaultSettings.backendMode)
-      : defaultSettings.backendMode,
+    backendMode: preserveWslOnly
+      ? "embedded"
+      : backendModeConfiguredByUser
+        ? (parsedBackendMode ?? defaultSettings.backendMode)
+        : defaultSettings.backendMode,
     backendModeConfiguredByUser,
     backendRemoteUrl: normalizeBackendRemoteUrl(parsed.backendRemoteUrl),
     localEnvironmentEnabled: parsed.localEnvironmentEnabled !== false,

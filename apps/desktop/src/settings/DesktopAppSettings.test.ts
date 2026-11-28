@@ -269,6 +269,24 @@ describe("DesktopSettings", () => {
         assert.equal(explicitEmbedded.backendMode, "embedded");
         assert.isTrue(explicitEmbedded.backendModeConfiguredByUser);
 
+        for (const document of [
+          { wslOnly: true, wslBackendEnabled: true },
+          {
+            wslOnly: true,
+            wslMode: "wsl",
+            backendMode: "embedded",
+            backendModeConfiguredByUser: false,
+          },
+        ]) {
+          yield* fileSystem.writeFileString(
+            environment.desktopSettingsPath,
+            JSON.stringify(document),
+          );
+          const wsl = yield* settings.load;
+          assert.equal(wsl.backendMode, "embedded");
+          assert.isTrue(wsl.backendModeConfiguredByUser);
+        }
+
         // Remote was never a default, so an older document without the flag still counts as a choice.
         yield* fileSystem.writeFileString(
           environment.desktopSettingsPath,
