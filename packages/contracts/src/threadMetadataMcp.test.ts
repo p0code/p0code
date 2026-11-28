@@ -19,4 +19,19 @@ describe("ThreadMetadataMcpUpdateInput", () => {
       decodeUpdate({ action: "regenerate_title", clientRequestId: "metadata-\udc00" }),
     );
   });
+
+  it("validates action-specific fields for rename, regenerate_title, and move_project", () => {
+    assert.equal(
+      decodeUpdate({ action: "move_project", projectId: "project-target" }).projectId,
+      "project-target",
+    );
+    assert.throws(() => decodeUpdate({ action: "move_project" }));
+    assert.throws(() =>
+      decodeUpdate({ action: "move_project", projectId: "project-target", title: "Nope" }),
+    );
+    assert.throws(() =>
+      decodeUpdate({ action: "rename", title: "Valid", projectId: "project-target" }),
+    );
+    assert.throws(() => decodeUpdate({ action: "regenerate_title", projectId: "project-target" }));
+  });
 });
