@@ -2,19 +2,19 @@
 //! (same order, groups and English labels, so the web translations apply). Each native section
 //! lives in its own module under `settings/`; sections still `todo` link to the web app.
 
+pub mod chat;
+pub mod general;
 pub mod keybindings;
 pub mod providers;
 
 use std::path::PathBuf;
 
 use gpui_kit::component::button::{Button, ButtonVariants as _};
-use gpui_kit::component::switch::Switch;
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     Context, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _, SharedString,
     StatefulInteractiveElement as _, Styled as _, Window, div, px,
 };
-use p0_i18n::SUPPORTED_LOCALES;
 use p0_protocol::RuntimeMode;
 use serde::{Deserialize, Serialize};
 
@@ -83,15 +83,80 @@ pub fn web_url(base_url: &str, path: &str) -> String {
     format!("{}{path}", base_url.trim_end_matches('/'))
 }
 
+fn default_true() -> bool {
+    true
+}
+fn default_off() -> String {
+    "off".to_owned()
+}
+fn default_locale() -> String {
+    "locale".to_owned()
+}
+fn default_left() -> String {
+    "left".to_owned()
+}
+fn default_enter() -> String {
+    "enter".to_owned()
+}
+fn default_steer() -> String {
+    "steer".to_owned()
+}
+fn default_show_all() -> String {
+    "showAll".to_owned()
+}
+
 /// Preferences the web app keeps per client (its `ClientSettings`); the native client keeps them
 /// in a file of its own.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct LocalPrefs {
     pub theme: ThemePreference,
     /// A supported locale code; `None` follows the system.
     pub language: Option<String>,
     pub sidebar_hidden: bool,
+    #[serde(default = "default_off")]
+    pub notification_mode: String,
+    pub in_app_notifications_enabled: bool,
+    #[serde(default = "default_locale")]
+    pub timestamp_format: String,
+    #[serde(default = "default_left")]
+    pub usage_display_mode: String,
+    pub confirm_thread_unpin: bool,
+    pub confirm_thread_archive: bool,
+    #[serde(default = "default_true")]
+    pub confirm_thread_delete: bool,
+    #[serde(default = "default_true")]
+    pub confirm_terminal_close: bool,
+    #[serde(default = "default_enter")]
+    pub send_shortcut: String,
+    #[serde(default = "default_steer")]
+    pub follow_up_behavior: String,
+    #[serde(default = "default_show_all")]
+    pub tool_call_visibility: String,
+    #[serde(default = "default_true")]
+    pub show_skills_in_slash_menu: bool,
+}
+
+impl Default for LocalPrefs {
+    fn default() -> Self {
+        Self {
+            theme: ThemePreference::default(),
+            language: None,
+            sidebar_hidden: false,
+            notification_mode: default_off(),
+            in_app_notifications_enabled: false,
+            timestamp_format: default_locale(),
+            usage_display_mode: default_left(),
+            confirm_thread_unpin: false,
+            confirm_thread_archive: false,
+            confirm_thread_delete: true,
+            confirm_terminal_close: true,
+            send_shortcut: default_enter(),
+            follow_up_behavior: default_steer(),
+            tool_call_visibility: default_show_all(),
+            show_skills_in_slash_menu: true,
+        }
+    }
 }
 
 impl LocalPrefs {
@@ -251,6 +316,7 @@ impl crate::app::P0App {
         let body = match section.path {
             "/settings/general" => self.render_general(palette, cx).into_any_element(),
             "/settings/appearance" => self.render_appearance(palette, cx).into_any_element(),
+            "/settings/chat" => self.render_chat_settings(palette, cx).into_any_element(),
             "/settings/keybindings" => self
                 .render_keybindings(palette, window, cx)
                 .into_any_element(),
@@ -330,84 +396,6 @@ impl crate::app::P0App {
                 .overflow_y_scroll()
                 .child(content),
         )
-    }
-
-    fn render_general(&mut self, palette: &AppPalette, cx: &mut Context<Self>) -> impl IntoElement {
-        let mut col = div().flex().flex_col().gap(px(4.0));
-        let current = self.prefs.language.clone();
-        let mut languages = div().flex().flex_wrap().gap(px(6.0));
-        let follow = choice(
-            "lang-system",
-            self.i18n.tr("Follow system").to_owned(),
-            current.is_none(),
-            palette,
-        )
-        .on_click(cx.listener(|this, _, window, cx| {
-            let mut prefs = this.prefs.clone();
-            prefs.language = None;
-            this.set_prefs(prefs, window, cx);
-        }));
-        languages = languages.child(follow);
-        for (code, name) in SUPPORTED_LOCALES {
-            languages = languages.child(
-                choice(
-                    format!("lang-{code}"),
-                    *name,
-                    current.as_deref() == Some(*code),
-                    palette,
-                )
-                .on_click(cx.listener(move |this, _, window, cx| {
-                    let mut prefs = this.prefs.clone();
-                    prefs.language = Some((*code).to_owned());
-                    this.set_prefs(prefs, window, cx);
-                })),
-            );
-        }
-        col = col.child(setting_row(self.i18n.tr("Language"), languages, palette));
-
-        let Some(settings) = self.bridge.server_settings() else {
-            return col.child(div().text_sm().text_color(palette.muted_foreground).child(
-                SharedString::from(self.i18n.get(p0_i18n::Key::Loading).to_owned()),
-            ));
-        };
-        let server = GeneralServerSettings::from_json(&settings);
-        let mut modes = div().flex().flex_wrap().gap(px(6.0));
-        for mode in [
-            RuntimeMode::ApprovalRequired,
-            RuntimeMode::AutoAcceptEdits,
-            RuntimeMode::Auto,
-            RuntimeMode::FullAccess,
-        ] {
-            modes = modes.child(
-                choice(
-                    format!("mode-{}", mode.as_wire_str()),
-                    crate::composer::runtime_mode_label(mode, &self.i18n),
-                    server.default_runtime_mode == mode,
-                    palette,
-                )
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    this.bridge.update_settings(
-                        serde_json::json!({ "defaultRuntimeMode": mode.as_wire_str() }),
-                    );
-                    cx.notify();
-                })),
-            );
-        }
-        col = col.child(setting_row(self.i18n.tr("Permissions"), modes, palette));
-        for (key, label) in BOOL_SETTINGS {
-            col = col.child(setting_row(
-                self.i18n.tr(label),
-                Switch::new(SharedString::from(format!("setting-{key}")))
-                    .checked(server.flag(key))
-                    .on_click(cx.listener(move |this, checked: &bool, _, cx| {
-                        this.bridge
-                            .update_settings(serde_json::json!({ key: *checked }));
-                        cx.notify();
-                    })),
-                palette,
-            ));
-        }
-        col
     }
 
     fn render_appearance(
@@ -506,12 +494,17 @@ mod tests {
             theme: ThemePreference::Dark,
             language: Some("zh-TW".to_owned()),
             sidebar_hidden: true,
+            notification_mode: "notifications-and-sound".to_owned(),
+            in_app_notifications_enabled: true,
+            ..LocalPrefs::default()
         };
         let raw = serde_json::to_string(&prefs).unwrap();
         assert_eq!(serde_json::from_str::<LocalPrefs>(&raw).unwrap(), prefs);
         let partial: LocalPrefs = serde_json::from_str(r#"{"theme":"light","future":1}"#).unwrap();
         assert_eq!(partial.theme, ThemePreference::Light);
         assert_eq!(partial.language, None);
+        assert_eq!(partial.notification_mode, "off");
+        assert!(partial.confirm_thread_delete);
     }
 
     #[test]
