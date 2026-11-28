@@ -2,6 +2,7 @@
 //! (same order, groups and English labels, so the web translations apply). Each native section
 //! lives in its own module under `settings/`; sections still `todo` link to the web app.
 
+pub mod about;
 pub mod archived;
 pub mod chat;
 pub mod connections;
@@ -338,6 +339,7 @@ impl crate::app::P0App {
                 .render_maintenance(palette, window, cx)
                 .into_any_element(),
             "/settings/labs" => self.render_labs(palette, window, cx).into_any_element(),
+            "/settings/about" => self.render_about(palette, cx).into_any_element(),
             "/settings/archived" => self.render_archived(palette, cx).into_any_element(),
             _ => {
                 let url = web_url(self.bridge.base_url(), section.path);
