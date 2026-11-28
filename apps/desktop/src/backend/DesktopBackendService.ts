@@ -272,6 +272,8 @@ export function p0dLegacyServerCommand(input: {
   readonly isPackaged: boolean;
   readonly compileCachePath: string;
   readonly entryPath: string;
+  readonly tailscaleServeEnabled: boolean;
+  readonly tailscaleServePort: number;
 }): string {
   return formatLegacyServerCommand([
     input.executablePath,
@@ -279,6 +281,9 @@ export function p0dLegacyServerCommand(input: {
     "--mode",
     "web",
     "--no-browser",
+    `--tailscale-serve=${input.tailscaleServeEnabled}`,
+    "--tailscale-serve-port",
+    String(input.tailscaleServePort),
   ]);
 }
 
@@ -1652,12 +1657,17 @@ export const make = Effect.gen(function* () {
     const legacyEntryExists = yield* fileSystem
       .exists(environment.backendEntryPath)
       .pipe(Effect.orElseSucceed(() => false));
+    const exposure = Option.isSome(serverExposure)
+      ? yield* serverExposure.value.backendConfig
+      : yield* appSettings.get;
     const legacyServerCommand = legacyEntryExists
       ? p0dLegacyServerCommand({
           executablePath: process.execPath,
           isPackaged: environment.isPackaged,
           compileCachePath: environment.compileCachePath,
           entryPath: environment.backendEntryPath,
+          tailscaleServeEnabled: exposure.tailscaleServeEnabled,
+          tailscaleServePort: exposure.tailscaleServePort,
         })
       : null;
     if (yield* isP0dUserServiceInstalled(spawner, p0dBinary.value)) {

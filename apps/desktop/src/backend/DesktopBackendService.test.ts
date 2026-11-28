@@ -247,11 +247,13 @@ describe("DesktopBackendService helpers", () => {
       executablePath: "/Applications/p0code.app/Contents/MacOS/p0code",
       isPackaged: true,
       compileCachePath: "/app/compile cache.cjs",
+      tailscaleServeEnabled: true,
+      tailscaleServePort: 8443,
       entryPath: 'C:\\odd "dir"\\bin.mjs',
     });
     assert.equal(
       legacyServerCommand,
-      '"/Applications/p0code.app/Contents/MacOS/p0code" "--title=p0code-backend" "--require" "/app/compile cache.cjs" "C:\\\\odd \\"dir\\"\\\\bin.mjs" "--mode" "web" "--no-browser"',
+      '"/Applications/p0code.app/Contents/MacOS/p0code" "--title=p0code-backend" "--require" "/app/compile cache.cjs" "C:\\\\odd \\"dir\\"\\\\bin.mjs" "--mode" "web" "--no-browser" "--tailscale-serve=true" "--tailscale-serve-port" "8443"',
     );
     const secret = "ab".repeat(32);
     const args = DesktopBackendService.p0dServeArgs({
