@@ -125,6 +125,8 @@ WSL support also requires passing the Linux CLI archive via `--wsl-runtime`; see
 
 The Rust workspace under `native/` (`p0-protocol`, `p0-i18n`, `p0-client`, `apps/p0-gpui`) pins its toolchain in `native/rust-toolchain.toml` (`1.100.0`, required by `gpui-pre 0.3.14`) and caps Cargo concurrency in `native/.cargo/config.toml` (`jobs = 3`, `clang` + `mold` on Linux) to keep peak RAM under ~6.5 GiB.
 
+macOS needs only Xcode command line tools and `rustup`; a first build takes about 15 minutes. In a checkout or worktree made without `--recurse-submodules=plugins`, run `git submodule update --init plugins/t3-connect-bridge plugins/obsidian-shared-memory plugins/backup` before `pnpm install --frozen-lockfile`, or the install fails with `ERR_PNPM_OUTDATED_LOCKFILE`.
+
 ### Linux GPUI build prerequisites
 
 ```sh
