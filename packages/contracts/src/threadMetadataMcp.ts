@@ -4,6 +4,7 @@ import {
   CommandId,
   IsoDateTime,
   NonNegativeInt,
+  ProjectId,
   ThreadId,
   TrimmedNonEmptyString,
 } from "./baseSchemas.ts";
@@ -40,25 +41,46 @@ const ThreadMetadataClientRequestId = TrimmedNonEmptyString.check(Schema.isMaxLe
   )
   .annotate({ description: "Stable idempotency key to reuse when retrying this mutation." });
 
-export const ThreadMetadataMcpAction = Schema.Literals(["rename", "regenerate_title"]);
+const ThreadMetadataProjectId = ProjectId.annotate({
+  description: "Target project id. Required only when action is move_project.",
+});
+
+export const ThreadMetadataMcpAction = Schema.Literals([
+  "rename",
+  "regenerate_title",
+  "move_project",
+]);
 export type ThreadMetadataMcpAction = typeof ThreadMetadataMcpAction.Type;
 
 export const ThreadMetadataMcpUpdateInput = Schema.Struct({
   threadId: Schema.optional(ThreadId),
   action: ThreadMetadataMcpAction,
   title: Schema.optional(ThreadMetadataTitle),
+  projectId: Schema.optional(ThreadMetadataProjectId),
   clientRequestId: Schema.optional(ThreadMetadataClientRequestId),
 }).check(
-  Schema.makeFilter((input) =>
-    (input.action === "rename") === (input.title !== undefined)
-      ? true
-      : "rename requires title; regenerate_title does not accept one.",
-  ),
+  Schema.makeFilter((input) => {
+    switch (input.action) {
+      case "rename":
+        return input.title !== undefined && input.projectId === undefined
+          ? true
+          : "rename requires title and does not accept projectId.";
+      case "regenerate_title":
+        return input.title === undefined && input.projectId === undefined
+          ? true
+          : "regenerate_title does not accept title or projectId.";
+      case "move_project":
+        return input.projectId !== undefined && input.title === undefined
+          ? true
+          : "move_project requires projectId and does not accept title.";
+    }
+  }),
 );
 export type ThreadMetadataMcpUpdateInput = typeof ThreadMetadataMcpUpdateInput.Type;
 
 export const ThreadMetadataMcpUpdateResult = Schema.Struct({
   threadId: ThreadId,
+  projectId: ProjectId,
   action: ThreadMetadataMcpAction,
   commandId: CommandId,
   sequence: NonNegativeInt,

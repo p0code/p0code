@@ -22,8 +22,26 @@ it("refuses a t3_thread_update whose fields do not fit its action", () => {
     OrchestratorToolkit.tools.t3_thread_update.parametersSchema,
   );
   expect(Exit.isFailure(decode({ action: "rename" }))).toBe(true);
+  expect(Exit.isFailure(decode({ action: "rename", title: "New", projectId: "proj-2" }))).toBe(
+    true,
+  );
   expect(Exit.isFailure(decode({ action: "regenerate_title", title: "New" }))).toBe(true);
+  expect(Exit.isFailure(decode({ action: "regenerate_title", projectId: "proj-2" }))).toBe(true);
+  expect(Exit.isFailure(decode({ action: "move_project" }))).toBe(true);
+  expect(
+    Exit.isFailure(decode({ action: "move_project", projectId: "proj-2", title: "New" })),
+  ).toBe(true);
   expect(Exit.isSuccess(decode({ action: "rename", title: "New", environmentId: undefined }))).toBe(
     true,
   );
+  expect(
+    Exit.isSuccess(
+      decode({
+        action: "move_project",
+        projectId: "proj-2",
+        threadId: "thread-1",
+        environmentId: undefined,
+      }),
+    ),
+  ).toBe(true);
 });
