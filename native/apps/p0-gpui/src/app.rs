@@ -617,6 +617,11 @@ impl P0App {
             action: PaletteAction::TogglePanel(PanelTab::Diff),
         });
         items.push(PaletteItem {
+            label: t("Files"),
+            detail: String::new(),
+            action: PaletteAction::TogglePanel(PanelTab::Files),
+        });
+        items.push(PaletteItem {
             label: t("Reconnect"),
             detail: String::new(),
             action: PaletteAction::Reconnect,

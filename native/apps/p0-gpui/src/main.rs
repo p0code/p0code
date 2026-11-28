@@ -4,6 +4,7 @@ mod cards;
 mod cli;
 mod composer;
 mod diff_panel;
+mod explorer;
 mod feed;
 mod markdown;
 mod palette;

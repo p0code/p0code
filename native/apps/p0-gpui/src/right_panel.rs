@@ -1,4 +1,4 @@
-//! The panel beside the chat: the thread's changes, and later its files.
+//! The panel beside the chat: the thread's changes and its files.
 
 use gpui_kit::{
     Context, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _, SharedString,
@@ -7,6 +7,7 @@ use gpui_kit::{
 
 use crate::app::P0App;
 use crate::diff_panel::DiffPanel;
+use crate::explorer::FileExplorer;
 use crate::theme::AppPalette;
 
 pub const RIGHT_PANEL_WIDTH: f32 = 560.0;
@@ -14,12 +15,14 @@ pub const RIGHT_PANEL_WIDTH: f32 = 560.0;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PanelTab {
     Diff,
+    Files,
 }
 
 pub struct RightPanel {
     pub open: bool,
     pub tab: PanelTab,
     pub diff: DiffPanel,
+    pub files: FileExplorer,
 }
 
 impl RightPanel {
@@ -28,6 +31,7 @@ impl RightPanel {
             open: false,
             tab: PanelTab::Diff,
             diff: DiffPanel::new(cx),
+            files: FileExplorer::new(cx),
         }
     }
 
@@ -60,6 +64,7 @@ impl P0App {
         self.right_panel
             .diff
             .sync(thread_id.as_deref(), cwd.as_deref(), checkpoints);
+        self.right_panel.files.sync(cwd.as_deref());
     }
 
     pub(crate) fn render_right_panel(
@@ -103,12 +108,23 @@ impl P0App {
             .py(px(6.0))
             .border_b_1()
             .border_color(palette.border)
-            .child(div().flex().gap(px(4.0)).child(tab(
-                "right-tab-diff",
-                self.i18n.tr("Changes"),
-                PanelTab::Diff,
-                current,
-            )))
+            .child(
+                div()
+                    .flex()
+                    .gap(px(4.0))
+                    .child(tab(
+                        "right-tab-diff",
+                        self.i18n.tr("Changes"),
+                        PanelTab::Diff,
+                        current,
+                    ))
+                    .child(tab(
+                        "right-tab-files",
+                        self.i18n.tr("Files"),
+                        PanelTab::Files,
+                        current,
+                    )),
+            )
             .child(
                 div()
                     .id("right-panel-close")
@@ -124,6 +140,7 @@ impl P0App {
             );
         let body = match current {
             PanelTab::Diff => self.render_diff_panel(palette, cx).into_any_element(),
+            PanelTab::Files => self.render_explorer(palette, cx).into_any_element(),
         };
         Some(
             div()
