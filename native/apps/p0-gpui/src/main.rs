@@ -10,6 +10,7 @@ mod explorer;
 mod feed;
 mod markdown;
 mod palette;
+mod preview;
 mod right_panel;
 mod settings;
 mod terminal;

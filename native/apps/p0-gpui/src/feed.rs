@@ -576,49 +576,57 @@ impl P0App {
             let mut file_row = div().flex().flex_wrap().justify_end().gap(px(6.0));
             for (ix, att) in files.iter().enumerate() {
                 let badge = file_badge(&att.name, &att.mime_type);
-                file_row = file_row.child(
-                    div()
-                        .id(SharedString::from(format!("feed-file-{item_id}-{ix}")))
-                        .max_w(px(300.0))
-                        .px(px(8.0))
-                        .py(px(5.0))
-                        .rounded(px(8.0))
-                        .bg(palette.card)
-                        .border_1()
-                        .border_color(palette.border)
-                        .flex()
-                        .items_center()
-                        .gap(px(6.0))
-                        .child(
-                            div()
-                                .flex_none()
-                                .px(px(5.0))
-                                .py(px(1.0))
-                                .rounded(px(4.0))
-                                .bg(palette.code_bg)
-                                .font_family("monospace")
-                                .text_xs()
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(palette.muted_foreground)
-                                .child(SharedString::from(badge)),
-                        )
-                        .child(
-                            div()
-                                .min_w_0()
-                                .truncate()
-                                .text_xs()
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(palette.foreground)
-                                .child(SharedString::from(att.name.clone())),
-                        )
-                        .child(
-                            div()
-                                .flex_none()
-                                .text_xs()
-                                .text_color(palette.muted_foreground)
-                                .child(SharedString::from(human_size(att.size_bytes))),
-                        ),
-                );
+                let mut chip = div()
+                    .id(SharedString::from(format!("feed-file-{item_id}-{ix}")))
+                    .max_w(px(300.0))
+                    .px(px(8.0))
+                    .py(px(5.0))
+                    .rounded(px(8.0))
+                    .bg(palette.card)
+                    .border_1()
+                    .border_color(palette.border)
+                    .flex()
+                    .items_center()
+                    .gap(px(6.0))
+                    .child(
+                        div()
+                            .flex_none()
+                            .px(px(5.0))
+                            .py(px(1.0))
+                            .rounded(px(4.0))
+                            .bg(palette.code_bg)
+                            .font_family("monospace")
+                            .text_xs()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(palette.muted_foreground)
+                            .child(SharedString::from(badge)),
+                    )
+                    .child(
+                        div()
+                            .min_w_0()
+                            .truncate()
+                            .text_xs()
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(palette.foreground)
+                            .child(SharedString::from(att.name.clone())),
+                    )
+                    .child(
+                        div()
+                            .flex_none()
+                            .text_xs()
+                            .text_color(palette.muted_foreground)
+                            .child(SharedString::from(human_size(att.size_bytes))),
+                    );
+                if crate::preview::policy::is_pdf(&att.name, &att.mime_type) {
+                    let source = crate::preview::DocSource::Attachment((*att).clone());
+                    chip = chip
+                        .cursor_pointer()
+                        .hover(|s| s.bg(palette.row_hover))
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.open_document(source.clone(), cx)
+                        }));
+                }
+                file_row = file_row.child(chip);
             }
             col = col.child(file_row);
         }
@@ -789,7 +797,7 @@ fn inline_text(id: SharedString, inline: &Inline, palette: &AppPalette) -> AnyEl
     InteractiveText::new(id, text)
         .on_click(ranges, move |ix, _, cx| {
             if let Some((_, url)) = links.get(ix) {
-                cx.open_url(url);
+                crate::preview::open_link(url, cx);
             }
         })
         .into_any_element()

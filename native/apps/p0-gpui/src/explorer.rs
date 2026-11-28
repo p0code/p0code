@@ -1,5 +1,6 @@
 //! Files of the open thread's folder: a lazily listed tree (`projects.listEntries`, one folder
-//! per expand) and a read-only, syntax-colored viewer (`projects.readFile`).
+//! per expand) and a read-only, syntax-colored viewer (`projects.readFile`). PDFs open in the
+//! Preview tab.
 
 use std::collections::{HashMap, HashSet};
 
@@ -210,6 +211,15 @@ impl P0App {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if crate::preview::policy::is_pdf(&path, "") {
+            if let Some(thread_id) = self.selected_thread_id().map(ToOwned::to_owned) {
+                self.open_document(
+                    crate::preview::DocSource::WorkspaceFile { thread_id, path },
+                    cx,
+                );
+            }
+            return;
+        }
         let explorer = &mut self.right_panel.files;
         let Some(cwd) = explorer.cwd.clone() else {
             return;

@@ -72,6 +72,12 @@ const NATIVE_CLIENT_MESSAGES = [
   msg("Instructions for branch naming"),
   msg("days"),
   msg("Remote DPoP pairing and adding new peer links are managed in the web app."),
+  msg("localhost:3000 or https://…"),
+  msg("Enter a localhost or https address."),
+  msg("Only localhost, this server, or https addresses can be previewed."),
+  msg("Preview a local dev server, this server's forwarded ports, or an https page."),
+  msg("This build has no embedded browser. Open the page in your browser."),
+  msg("This build has no embedded PDF viewer. Open the file in your browser."),
 ] as const;
 
 void NATIVE_CLIENT_MESSAGES;

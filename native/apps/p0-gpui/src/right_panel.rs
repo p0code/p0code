@@ -1,13 +1,14 @@
-//! The panel beside the chat: the thread's changes and its files.
+//! The panel beside the chat: the thread's changes, its files and the preview.
 
 use gpui_kit::{
     Context, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _, SharedString,
-    StatefulInteractiveElement as _, Styled as _, div, px,
+    StatefulInteractiveElement as _, Styled as _, Window, div, px,
 };
 
 use crate::app::P0App;
 use crate::diff_panel::DiffPanel;
 use crate::explorer::FileExplorer;
+use crate::preview::PreviewPanel;
 use crate::theme::AppPalette;
 
 pub const RIGHT_PANEL_WIDTH: f32 = 560.0;
@@ -16,6 +17,7 @@ pub const RIGHT_PANEL_WIDTH: f32 = 560.0;
 pub enum PanelTab {
     Diff,
     Files,
+    Preview,
 }
 
 pub struct RightPanel {
@@ -23,6 +25,7 @@ pub struct RightPanel {
     pub tab: PanelTab,
     pub diff: DiffPanel,
     pub files: FileExplorer,
+    pub preview: PreviewPanel,
 }
 
 impl RightPanel {
@@ -32,6 +35,7 @@ impl RightPanel {
             tab: PanelTab::Diff,
             diff: DiffPanel::new(cx),
             files: FileExplorer::new(cx),
+            preview: PreviewPanel::new(),
         }
     }
 
@@ -49,6 +53,28 @@ impl P0App {
         panel.tab = tab;
         self.sync_right_panel();
         cx.notify();
+    }
+
+    pub(crate) fn show_right_panel(&mut self, tab: PanelTab, cx: &mut Context<Self>) {
+        self.right_panel.open = true;
+        self.right_panel.tab = tab;
+        self.sync_right_panel();
+        cx.notify();
+    }
+
+    /// The webview is an OS view above GPUI's drawing: hide it unless the Preview tab shows
+    /// on the chat with nothing (like the palette) drawn over it.
+    pub(crate) fn sync_webview_visibility(&self, chat_visible: bool) {
+        let panel = &self.right_panel;
+        let shown = chat_visible
+            && panel.open
+            && panel.tab == PanelTab::Preview
+            && self.selected_thread_id().is_some()
+            && self.palette.is_none()
+            && panel.preview.wants_webview();
+        if !shown {
+            panel.preview.web.hide();
+        }
     }
 
     /// Points the panel at the open thread; cheap enough to run on every store change.
@@ -70,6 +96,7 @@ impl P0App {
     pub(crate) fn render_right_panel(
         &mut self,
         palette: &AppPalette,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Option<impl IntoElement> {
         if !self.right_panel.open || self.selected_thread_id().is_none() {
@@ -123,6 +150,12 @@ impl P0App {
                         self.i18n.tr("Files"),
                         PanelTab::Files,
                         current,
+                    ))
+                    .child(tab(
+                        "right-tab-preview",
+                        self.i18n.tr("Preview"),
+                        PanelTab::Preview,
+                        current,
                     )),
             )
             .child(
@@ -141,6 +174,7 @@ impl P0App {
         let body = match current {
             PanelTab::Diff => self.render_diff_panel(palette, cx).into_any_element(),
             PanelTab::Files => self.render_explorer(palette, cx).into_any_element(),
+            PanelTab::Preview => self.render_preview(palette, window, cx).into_any_element(),
         };
         Some(
             div()

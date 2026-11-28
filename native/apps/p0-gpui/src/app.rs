@@ -148,6 +148,11 @@ impl P0App {
         });
 
         // One repaint per frame at most, and none while nothing changes.
+        let link_app = cx.entity().downgrade();
+        cx.set_global(crate::preview::LinkTarget {
+            app: link_app,
+            server_base: bridge.base_url().to_owned(),
+        });
         let waiter = bridge.clone();
         cx.spawn(async move |this, cx| {
             loop {
@@ -637,6 +642,11 @@ impl P0App {
             label: t("Files"),
             detail: String::new(),
             action: PaletteAction::TogglePanel(PanelTab::Files),
+        });
+        items.push(PaletteItem {
+            label: t("Preview"),
+            detail: String::new(),
+            action: PaletteAction::TogglePanel(PanelTab::Preview),
         });
         items.push(PaletteItem {
             label: t("Reconnect"),
@@ -1227,6 +1237,7 @@ impl SelectedRow for gpui_kit::Stateful<gpui_kit::Div> {
 impl Render for P0App {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = self.palette_colors(window);
+        self.sync_webview_visibility(self.view == View::Chat);
         let mut root =
             div()
                 .id("p0-root")
@@ -1269,7 +1280,7 @@ impl Render for P0App {
                     root = root.child(self.render_sidebar(&palette, cx));
                 }
                 root = root.child(self.render_chat(palette, window, cx));
-                if let Some(panel) = self.render_right_panel(&palette, cx) {
+                if let Some(panel) = self.render_right_panel(&palette, window, cx) {
                     root = root.child(panel);
                 }
             }

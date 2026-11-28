@@ -50,6 +50,7 @@ tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 url = "2.5.9"
 uuid = { version = "1.29.3", features = ["v4"] }
+wry = { version = "0.58.2", default-features = false }
 zeroize = "1.9.2"
 
 [profile.dev]
