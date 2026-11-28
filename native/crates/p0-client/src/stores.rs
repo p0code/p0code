@@ -341,6 +341,13 @@ fn apply_domain_event(proj: &mut ThreadProjection, event: DomainEvent) {
             }
             proj.updated_at = occurred_at;
         }
+        DomainEvent::CheckpointCaptured {
+            occurred_at,
+            payload,
+        } => {
+            upsert_by_id(&mut proj.checkpoints, payload, |c| c.id.as_str());
+            proj.updated_at = occurred_at;
+        }
         DomainEvent::PlanUpdated {
             occurred_at,
             payload,

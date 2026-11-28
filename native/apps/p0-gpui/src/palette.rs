@@ -14,6 +14,7 @@ pub enum PaletteAction {
     ToggleSidebar,
     FocusComposer,
     ToggleTerminal,
+    TogglePanel(crate::right_panel::PanelTab),
     Reconnect,
 }
 

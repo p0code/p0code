@@ -23,6 +23,7 @@ use crate::composer::{available_models, render_composer};
 use crate::feed::FeedState;
 use crate::markdown::MarkdownCache;
 use crate::palette::{PaletteAction, PaletteItem, rank};
+use crate::right_panel::{PanelTab, RightPanel};
 use crate::settings::{LocalPrefs, SECTIONS};
 use p0_terminal::TerminalEngine as _;
 
@@ -40,6 +41,7 @@ actions!(
         OpenSettings,
         NewThread,
         ToggleTerminal,
+        ToggleDiff,
     ]
 );
 
@@ -67,6 +69,7 @@ fn keybindings() -> Vec<KeyBinding> {
         KeyBinding::new(mod_key!(","), OpenSettings, None),
         KeyBinding::new(mod_key!("l"), FocusComposer, None),
         KeyBinding::new(mod_key!("j"), ToggleTerminal, None),
+        KeyBinding::new(mod_key!("d"), ToggleDiff, None),
     ]
 }
 
@@ -105,6 +108,7 @@ pub struct P0App {
     composer_input: Entity<TextareaState>,
     pub(crate) palette: Option<Palette>,
     terminal: Option<TerminalPane>,
+    pub(crate) right_panel: RightPanel,
     _subs: Vec<Subscription>,
 }
 
@@ -176,6 +180,7 @@ impl P0App {
             composer_input,
             palette: None,
             terminal: None,
+            right_panel: RightPanel::new(cx),
             _subs: vec![composer_sub, appearance_sub],
         };
         app.apply_theme(window, cx);
@@ -192,6 +197,7 @@ impl P0App {
         self.auto_select_first_thread();
         self.sync_feed(cx);
         self.cards.retain_pending(&self.thread);
+        self.sync_right_panel();
         cx.notify();
     }
 
@@ -290,8 +296,13 @@ impl P0App {
         }
         if let Some(tid) = self.selected_thread_id.clone() {
             let active_run = self.thread.active_run_id().map(ToOwned::to_owned);
-            self.bridge
-                .send_message(tid, text, self.selected_model.clone(), active_run);
+            self.bridge.send_message(
+                tid,
+                text,
+                Vec::new(),
+                self.selected_model.clone(),
+                active_run,
+            );
         } else if let Some(project_id) = self.draft_project_id.clone() {
             let config = self.bridge.server_config();
             let Some(model) = self.selected_model.clone().or_else(|| {
@@ -310,10 +321,16 @@ impl P0App {
                     .unwrap_or(RuntimeMode::FullAccess)
             });
             let launched = self.launched.clone();
-            self.bridge
-                .launch_thread(project_id, model, runtime_mode, Some(text), move |id| {
+            self.bridge.launch_thread(
+                project_id,
+                model,
+                runtime_mode,
+                Some(text),
+                Vec::new(),
+                move |id| {
                     *launched.lock().unwrap() = Some(id);
-                });
+                },
+            );
         } else {
             return;
         }
@@ -358,6 +375,7 @@ impl P0App {
         self.bridge.select_thread(thread_id);
         self.thread = self.bridge.thread_state();
         self.sync_feed(cx);
+        self.sync_right_panel();
         cx.notify();
     }
 
@@ -422,8 +440,8 @@ impl P0App {
         self.set_prefs(prefs, window, cx);
     }
 
-    /// Where a thread's terminal starts: its worktree, else its project's root.
-    fn terminal_cwd(&self, thread_id: &str) -> Option<String> {
+    /// A thread's folder: its worktree, else its project's root.
+    pub(crate) fn thread_cwd(&self, thread_id: &str) -> Option<String> {
         let thread = self.shell.thread_by_id(thread_id)?;
         thread.worktree_path.clone().or_else(|| {
             self.shell
@@ -434,9 +452,14 @@ impl P0App {
         })
     }
 
-    fn terminal_cols(window: &Window, sidebar: bool) -> u16 {
+    fn terminal_cols(&self, window: &Window) -> u16 {
+        let sidebar = if self.prefs.sidebar_hidden {
+            0.0
+        } else {
+            272.0
+        };
         let width =
-            f32::from(window.viewport_size().width) - if sidebar { 272.0 } else { 0.0 } - 24.0;
+            f32::from(window.viewport_size().width) - sidebar - self.right_panel.width() - 24.0;
         (width / CELL_WIDTH).clamp(20.0, 400.0) as u16
     }
 
@@ -450,13 +473,10 @@ impl P0App {
         let Some(thread_id) = self.selected_thread_id.clone() else {
             return;
         };
-        let Some(cwd) = self.terminal_cwd(&thread_id) else {
+        let Some(cwd) = self.thread_cwd(&thread_id) else {
             return;
         };
-        let size = (
-            Self::terminal_cols(window, !self.prefs.sidebar_hidden),
-            DRAWER_ROWS,
-        );
+        let size = (self.terminal_cols(window), DRAWER_ROWS);
         let shared = self
             .bridge
             .attach_terminal(thread_id.clone(), cwd, size.0, size.1);
@@ -497,11 +517,10 @@ impl P0App {
 
     /// Keeps the session's size in step with the window.
     fn sync_terminal_size(&mut self, window: &Window) {
-        let sidebar = !self.prefs.sidebar_hidden;
+        let size = (self.terminal_cols(window), DRAWER_ROWS);
         let Some(t) = self.terminal.as_mut() else {
             return;
         };
-        let size = (Self::terminal_cols(window, sidebar), DRAWER_ROWS);
         if size != t.size {
             t.size = size;
             t.shared.lock().unwrap().engine.resize(size.0, size.1);
@@ -593,6 +612,11 @@ impl P0App {
             action: PaletteAction::ToggleTerminal,
         });
         items.push(PaletteItem {
+            label: t("Changes"),
+            detail: String::new(),
+            action: PaletteAction::TogglePanel(PanelTab::Diff),
+        });
+        items.push(PaletteItem {
             label: t("Reconnect"),
             detail: String::new(),
             action: PaletteAction::Reconnect,
@@ -651,6 +675,7 @@ impl P0App {
             PaletteAction::ToggleSidebar => self.toggle_sidebar(window, cx),
             PaletteAction::FocusComposer => self.focus_composer(window, cx),
             PaletteAction::ToggleTerminal => self.toggle_terminal(window, cx),
+            PaletteAction::TogglePanel(tab) => self.toggle_right_panel(tab, cx),
             PaletteAction::Reconnect => self.bridge.reconnect_now(),
         }
         cx.notify();
@@ -1203,6 +1228,9 @@ impl Render for P0App {
                 .on_action(cx.listener(|this, _: &ToggleTerminal, window, cx| {
                     this.toggle_terminal(window, cx)
                 }))
+                .on_action(cx.listener(|this, _: &ToggleDiff, _, cx| {
+                    this.toggle_right_panel(PanelTab::Diff, cx)
+                }))
                 .relative()
                 .size_full()
                 .flex()
@@ -1215,6 +1243,9 @@ impl Render for P0App {
                     root = root.child(self.render_sidebar(&palette, cx));
                 }
                 root = root.child(self.render_chat(palette, window, cx));
+                if let Some(panel) = self.render_right_panel(&palette, cx) {
+                    root = root.child(panel);
+                }
             }
             View::Settings(path) => {
                 root = root.child(self.render_settings(path, &palette, window, cx));
@@ -1283,6 +1314,6 @@ mod tests {
     #[test]
     fn keybindings_parse() {
         // KeyBinding::new panics on a keystroke this gpui cannot parse.
-        assert_eq!(keybindings().len(), 9);
+        assert_eq!(keybindings().len(), 10);
     }
 }

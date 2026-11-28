@@ -1044,6 +1044,8 @@ pub struct ThreadProjection {
     pub turn_items: Vec<TurnItem>,
     #[serde(rename = "visibleTurnItems", default)]
     pub visible_turn_items: Vec<ProjectedTurnItem>,
+    #[serde(default)]
+    pub checkpoints: Vec<crate::checkpoint::Checkpoint>,
     #[serde(rename = "updatedAt")]
     pub updated_at: String,
 }
@@ -1104,6 +1106,12 @@ pub enum DomainEvent {
         #[serde(rename = "occurredAt")]
         occurred_at: String,
         payload: PlanArtifact,
+    },
+    #[serde(rename = "checkpoint.captured")]
+    CheckpointCaptured {
+        #[serde(rename = "occurredAt")]
+        occurred_at: String,
+        payload: crate::checkpoint::Checkpoint,
     },
     #[serde(other)]
     Unknown,

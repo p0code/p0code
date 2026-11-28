@@ -137,6 +137,34 @@ pub struct ServerProvider {
     pub supported_runtime_modes: Option<Vec<RuntimeMode>>,
     #[serde(default)]
     pub models: Vec<ServerProviderModel>,
+    #[serde(rename = "slashCommands", default)]
+    pub slash_commands: Vec<ProviderSlashCommand>,
+    #[serde(default)]
+    pub skills: Vec<ProviderSkill>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProviderSlashCommand {
+    pub name: String,
+    #[serde(default)]
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProviderSkill {
+    pub name: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(rename = "shortDescription", default)]
+    pub short_description: Option<String>,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(rename = "userInvocable", default)]
+    pub user_invocable: Option<bool>,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 impl ServerProvider {

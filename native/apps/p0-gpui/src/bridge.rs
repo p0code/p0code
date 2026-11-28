@@ -265,6 +265,28 @@ impl AppBridge {
         )));
     }
 
+    /// One read-only request, awaited from the UI; the caller decides how to show a failure.
+    pub fn query<P, R>(
+        &self,
+        method: &'static str,
+        input: P,
+    ) -> impl Future<Output = Result<R, String>> + use<P, R>
+    where
+        P: serde::Serialize + Send + Sync + 'static,
+        R: serde::de::DeserializeOwned + Send + 'static,
+    {
+        let client = self.client.clone();
+        let task = self
+            .rt
+            .spawn(async move { client.request::<P, R>(method, &input).await });
+        async move {
+            match task.await {
+                Ok(result) => result.map_err(|err| err.to_string()),
+                Err(err) => Err(err.to_string()),
+            }
+        }
+    }
+
     /// Closes the open thread's stream (New thread shows an empty feed).
     pub fn clear_thread(&self) {
         if let Some(prev) = self.thread_task.lock().unwrap().take() {
@@ -278,6 +300,7 @@ impl AppBridge {
         &self,
         thread_id: String,
         text: String,
+        attachments: Vec<Value>,
         model_selection: Option<ModelSelection>,
         active_run_id: Option<String>,
     ) {
@@ -290,7 +313,7 @@ impl AppBridge {
                 thread_id,
                 message_id: Uuid::new_v4().to_string(),
                 text,
-                attachments: Vec::new(),
+                attachments,
                 model_selection,
                 dispatch_mode: if active_run_id.is_some() {
                     DispatchMode::QueueAfterActive
@@ -308,6 +331,7 @@ impl AppBridge {
         model_selection: ModelSelection,
         runtime_mode: RuntimeMode,
         text: Option<String>,
+        attachments: Vec<Value>,
         on_started: impl FnOnce(String) + Send + 'static,
     ) {
         let client = self.client.clone();
@@ -323,7 +347,7 @@ impl AppBridge {
             initial_message: text.map(|text| LaunchInitialMessage {
                 message_id: Some(Uuid::new_v4().to_string()),
                 text,
-                attachments: Vec::new(),
+                attachments,
             }),
         };
         self.run(
