@@ -454,8 +454,19 @@ export function buildTokens() {
     if (!m) throw new Error(`${name} not found in packages/contracts/src/settings.ts`);
     return Number(m[1]);
   };
+  // Project monogram tints, in the web's order: the default color is picked by index.
+  const projectIconColors = [
+    ...read("apps/web/src/projectIconColors.ts").matchAll(
+      /value: "(\w+)",[\s\S]*?className: "text-([\w-]+) dark:text-([\w-]+)"/g,
+    ),
+  ].map((m) => ({
+    name: m[1]!,
+    light: toHex(parseColor(substitute(`var(--color-${m[2]})`, base))),
+    dark: toHex(parseColor(substitute(`var(--color-${m[3]})`, base))),
+  }));
   return {
     defaultThemeId: DEFAULT_THEME_ID,
+    projectIconColors,
     colorNames,
     themes,
     textSizes,
@@ -550,6 +561,22 @@ export function renderRust(tokens: ReturnType<typeof buildTokens>): string {
   push("}");
   push();
   push(`pub const DEFAULT_THEME_ID: &str = ${JSON.stringify(tokens.defaultThemeId)};`);
+  push();
+  push("/// Project icon colors (`text-*-600 dark:text-*-400`) in the web app's order.");
+  push("#[derive(Debug, Clone, Copy, PartialEq, Eq)]");
+  push("pub struct ProjectIconColor {");
+  push("    pub name: &'static str,");
+  push("    pub light: u32,");
+  push("    pub dark: u32,");
+  push("}");
+  push();
+  push("pub const PROJECT_ICON_COLORS: &[ProjectIconColor] = &[");
+  for (const c of tokens.projectIconColors) {
+    push(
+      `    ProjectIconColor { name: ${JSON.stringify(c.name)}, light: ${hexLit(c.light)}, dark: ${hexLit(c.dark)} },`,
+    );
+  }
+  push("];");
   push();
   const palette = (p: Map<string, string>, indent: string) => {
     push(`${indent}Palette {`);

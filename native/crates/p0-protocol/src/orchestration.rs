@@ -161,9 +161,34 @@ pub struct ThreadShell {
     pub last_visited_at: Option<String>,
     #[serde(rename = "deletedAt", default)]
     pub deleted_at: Option<String>,
+    #[serde(rename = "latestUserMessageAt", default)]
+    pub latest_user_message_at: Option<String>,
+    #[serde(rename = "latestRunRequestedAt", default)]
+    pub latest_run_requested_at: Option<String>,
+    #[serde(rename = "latestRunStartedAt", default)]
+    pub latest_run_started_at: Option<String>,
+    #[serde(rename = "latestRunCompletedAt", default)]
+    pub latest_run_completed_at: Option<String>,
 }
 
 impl ThreadShell {
+    /// When the thread last saw activity, as the web sidebar shows and sorts it
+    /// (`resolveThreadActivityTimestamp`): the latest user message or run event, else `updatedAt`.
+    /// Timestamps are the server's UTC ISO strings, so they compare as text.
+    pub fn activity_timestamp(&self) -> &str {
+        [
+            &self.latest_user_message_at,
+            &self.latest_run_requested_at,
+            &self.latest_run_started_at,
+            &self.latest_run_completed_at,
+        ]
+        .into_iter()
+        .flatten()
+        .map(String::as_str)
+        .max()
+        .unwrap_or(&self.updated_at)
+    }
+
     /// Heuristic unread check: thread updated after last visit (or never visited with activity).
     pub fn is_unread(&self) -> bool {
         if self.pending_runtime_request.is_some() {
@@ -1371,4 +1396,35 @@ pub struct LaunchThreadResult {
     pub resumed: bool,
     #[serde(default)]
     pub sequence: Option<u64>,
+}
+
+#[cfg(test)]
+mod activity_tests {
+    use super::ThreadShell;
+
+    fn thread(extra: serde_json::Value) -> ThreadShell {
+        let mut v = serde_json::json!({
+            "id": "t", "projectId": "p", "title": "t", "providerInstanceId": "replay",
+            "modelSelection": {"instanceId": "replay", "model": "m"},
+            "runtimeMode": "full-access", "interactionMode": "default", "status": "idle",
+            "createdAt": "2026-01-01T00:00:00.000Z", "updatedAt": "2026-01-05T00:00:00.000Z"
+        });
+        v.as_object_mut()
+            .unwrap()
+            .extend(extra.as_object().unwrap().clone());
+        serde_json::from_value(v).unwrap()
+    }
+
+    #[test]
+    fn activity_prefers_messages_and_runs_over_updated_at() {
+        let t = thread(serde_json::json!({
+            "latestUserMessageAt": "2026-01-02T00:00:00.000Z",
+            "latestRunCompletedAt": "2026-01-03T00:00:00.000Z"
+        }));
+        assert_eq!(t.activity_timestamp(), "2026-01-03T00:00:00.000Z");
+        assert_eq!(
+            thread(serde_json::json!({})).activity_timestamp(),
+            "2026-01-05T00:00:00.000Z"
+        );
+    }
 }

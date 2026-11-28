@@ -96,6 +96,35 @@ pub struct ShadowLayer {
 
 pub const DEFAULT_THEME_ID: &str = "grove";
 
+/// Project icon colors (`text-*-600 dark:text-*-400`) in the web app's order.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ProjectIconColor {
+    pub name: &'static str,
+    pub light: u32,
+    pub dark: u32,
+}
+
+pub const PROJECT_ICON_COLORS: &[ProjectIconColor] = &[
+    ProjectIconColor { name: "gray", light: 0x4a5565ff, dark: 0x99a1afff },
+    ProjectIconColor { name: "red", light: 0xe7000bff, dark: 0xff6467ff },
+    ProjectIconColor { name: "orange", light: 0xf54900ff, dark: 0xff8904ff },
+    ProjectIconColor { name: "amber", light: 0xe17100ff, dark: 0xffb900ff },
+    ProjectIconColor { name: "yellow", light: 0xd08700ff, dark: 0xfdc700ff },
+    ProjectIconColor { name: "lime", light: 0x5ea500ff, dark: 0x9ae600ff },
+    ProjectIconColor { name: "green", light: 0x00a63eff, dark: 0x05df72ff },
+    ProjectIconColor { name: "emerald", light: 0x009966ff, dark: 0x00d492ff },
+    ProjectIconColor { name: "teal", light: 0x009689ff, dark: 0x00d5beff },
+    ProjectIconColor { name: "cyan", light: 0x0092b8ff, dark: 0x00d3f2ff },
+    ProjectIconColor { name: "sky", light: 0x0084d1ff, dark: 0x00bcffff },
+    ProjectIconColor { name: "blue", light: 0x155dfcff, dark: 0x51a2ffff },
+    ProjectIconColor { name: "indigo", light: 0x4f39f6ff, dark: 0x7c86ffff },
+    ProjectIconColor { name: "violet", light: 0x7f22feff, dark: 0xa684ffff },
+    ProjectIconColor { name: "purple", light: 0x9810faff, dark: 0xc27affff },
+    ProjectIconColor { name: "fuchsia", light: 0xc800deff, dark: 0xed6affff },
+    ProjectIconColor { name: "pink", light: 0xe60076ff, dark: 0xfb64b6ff },
+    ProjectIconColor { name: "rose", light: 0xec003fff, dark: 0xff637eff },
+];
+
 pub const THEMES: &[ThemeDef] = &[
     ThemeDef {
         id: "grove",
