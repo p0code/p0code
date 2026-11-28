@@ -399,7 +399,7 @@ export function UsagePage() {
   const windowOptionLabel = WINDOW_OPTIONS.find((option) => option.days === windowDays)?.label;
   const metricOptionLabel = VIEW_OPTIONS.find((option) => option.value === metric)?.label;
   const topbarContent = (
-    <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 py-2 @4xl/usage-header:flex">
+    <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 py-0 @6xl/usage-header:flex">
       <WorkspaceBreadcrumb ariaLabel={gt("Usage breadcrumb")} className="min-w-0">
         <WorkspaceBreadcrumbItem>
           <h1>
@@ -436,7 +436,7 @@ export function UsagePage() {
           {windowLabel}
         </span>
       ) : null}
-      <div className="ms-auto hidden shrink-0 items-center justify-end gap-2 @4xl/usage-header:flex">
+      <div className="ms-auto hidden shrink-0 items-center justify-end gap-2 @6xl/usage-header:flex">
         {/* Limits are always current, so they have no period. The period sits before the metric
             tabs so dropping it never moves them. */}
         {showingLimits ? null : (
@@ -484,7 +484,7 @@ export function UsagePage() {
           </Button>
         )}
       </div>
-      <div className="ms-auto flex shrink-0 items-center justify-end gap-1 @4xl/usage-header:hidden">
+      <div className="ms-auto flex shrink-0 items-center justify-end gap-1 @6xl/usage-header:hidden">
         {showingLimits ? null : (
           <Select value={String(windowDays)} onValueChange={(value) => selectWindow(Number(value))}>
             <SelectTrigger
@@ -549,7 +549,7 @@ export function UsagePage() {
   return (
     <AppRouteModal label={gt("Usage")} actionsRef={modalActionsRef}>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <header className="@container/usage-header flex min-h-12 shrink-0 items-center gap-1 border-b ps-5 pe-2">
+        <header className="@container/usage-header flex min-h-12 shrink-0 items-center gap-2 border-b ps-5 pe-3">
           {topbarContent}
           <AppRouteModalClose />
         </header>

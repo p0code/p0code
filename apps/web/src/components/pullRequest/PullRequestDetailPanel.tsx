@@ -1658,7 +1658,7 @@ export function PullRequestDetailPanel({
             openOnHostText={openOnHostText}
             onBack={onBack}
           />
-          <div className="mr-4 flex h-7 shrink-0 select-none items-center justify-end gap-1">
+          <div className="mr-4 flex h-9 shrink-0 select-none items-center justify-end gap-2">
             {detail ? (
               <TooltipProvider delay={150} closeDelay={150} timeout={400}>
                 {detail.visibility === "private" ? <PullRequestPrivateBadge /> : null}
