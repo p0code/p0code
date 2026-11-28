@@ -758,6 +758,93 @@ async fn live_p0d_bootstrap_auth_and_probe() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+#[tokio::test]
+async fn live_p0d_settings_roundtrip() {
+    let (Ok(bin), Ok(legacy)) = (
+        std::env::var("P0D_TEST_BIN"),
+        std::env::var("P0D_LEGACY_SERVER"),
+    ) else {
+        return;
+    };
+    let root = std::env::temp_dir().join(format!("p0-live-settings-{}", uuid::Uuid::new_v4()));
+    let home = root.join("userdata");
+    std::fs::create_dir_all(&home).unwrap();
+
+    let mut cfg = p0_client::P0dLaunchConfig::for_home(&home);
+    cfg.configured_binary = Some(bin.into());
+    cfg.legacy_server = Some(legacy);
+
+    let mut proc = p0_client::P0dProcess::attach_or_spawn(cfg).await.unwrap();
+    let secret = proc
+        .bootstrap_secret()
+        .expect("spawned p0d must carry bootstrap secret")
+        .to_owned();
+
+    let mut client_cfg = ClientConfig::new(
+        proc.url().to_owned(),
+        AuthMode::LocalBootstrap {
+            secret,
+            client_label: "p0-gpui-settings-test".to_owned(),
+        },
+    );
+    client_cfg.request_timeout = Duration::from_secs(60);
+    let client = RpcClient::connect(client_cfg);
+    client
+        .wait_connected(Duration::from_secs(45))
+        .await
+        .unwrap();
+
+    // 1. Keybindings read + upsert + verify persistence + remove
+    let config = client.get_config().await.unwrap();
+    assert!(
+        !config.keybindings.is_empty(),
+        "server should return resolved keybindings"
+    );
+    let added = client
+        .upsert_keybinding(&p0_protocol::ServerUpsertKeybindingInput {
+            key: "mod+alt+shift+y".to_owned(),
+            command: "sidebar.toggle".to_owned(),
+            when: Some("!terminalFocus".to_owned()),
+            replace: None,
+        })
+        .await
+        .unwrap();
+    assert!(
+        added
+            .keybindings
+            .iter()
+            .any(|k| k.command == "sidebar.toggle" && k.shortcut.to_wire_key() == "mod+alt+shift+y"),
+        "upserted keybinding missing from result"
+    );
+    let config_after = client.get_config().await.unwrap();
+    assert!(
+        config_after
+            .keybindings
+            .iter()
+            .any(|k| k.command == "sidebar.toggle" && k.shortcut.to_wire_key() == "mod+alt+shift+y"),
+        "upserted keybinding did not persist in server.getConfig"
+    );
+    let removed = client
+        .remove_keybinding(&p0_protocol::ServerRemoveKeybindingInput {
+            key: "mod+alt+shift+y".to_owned(),
+            command: "sidebar.toggle".to_owned(),
+            when: Some("!terminalFocus".to_owned()),
+        })
+        .await
+        .unwrap();
+    assert!(
+        !removed
+            .keybindings
+            .iter()
+            .any(|k| k.command == "sidebar.toggle" && k.shortcut.to_wire_key() == "mod+alt+shift+y"),
+        "removed keybinding still present"
+    );
+
+    client.shutdown().await;
+    proc.shutdown().await;
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 fn local_client(base_url: String, secret: &str) -> ClientConfig {
     ClientConfig::new(
         base_url,

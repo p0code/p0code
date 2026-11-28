@@ -104,6 +104,7 @@ pub struct P0App {
     model_picker_open: bool,
     composer_input: Entity<TextareaState>,
     pub(crate) palette: Option<Palette>,
+    pub(crate) settings_ui: crate::settings::SettingsUiState,
     terminal: Option<TerminalPane>,
     _subs: Vec<Subscription>,
 }
@@ -175,6 +176,7 @@ impl P0App {
             model_picker_open: false,
             composer_input,
             palette: None,
+            settings_ui: crate::settings::SettingsUiState::default(),
             terminal: None,
             _subs: vec![composer_sub, appearance_sub],
         };

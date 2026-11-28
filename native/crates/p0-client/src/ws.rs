@@ -19,10 +19,11 @@ use p0_protocol::{
     RPC_ORCHESTRATION_LAUNCH_THREAD, RPC_ORCHESTRATION_SUBSCRIBE_SHELL,
     RPC_ORCHESTRATION_SUBSCRIBE_THREAD, RPC_SECRETS_ANSWER_REQUEST, RPC_SERVER_GET_CONFIG,
     RPC_SERVER_GET_SETTINGS, RPC_SERVER_PROBE, RPC_SERVER_REFRESH_PROVIDERS,
-    RPC_SERVER_UPDATE_SETTINGS, RequestId, RpcClientFrame, RpcExit, RpcServerFrame,
-    SOCKET_FRAME_PARTS_QUERY_PARAM, SecretRequestAnswerInput, ServerConfig, ServerProbeResult,
-    ShellStreamItem, SubscribeShellInput, SubscribeThreadInput, ThreadStreamItem,
-    decode_server_frame, encode_client_frame,
+    RPC_SERVER_REMOVE_KEYBINDING, RPC_SERVER_UPDATE_SETTINGS, RPC_SERVER_UPSERT_KEYBINDING,
+    RequestId, RpcClientFrame, RpcExit, RpcServerFrame, SOCKET_FRAME_PARTS_QUERY_PARAM,
+    SecretRequestAnswerInput, ServerConfig, ServerKeybindingMutationResult, ServerProbeResult,
+    ServerRemoveKeybindingInput, ServerUpsertKeybindingInput, ShellStreamItem, SubscribeShellInput,
+    SubscribeThreadInput, ThreadStreamItem, decode_server_frame, encode_client_frame,
 };
 use rand::RngExt as _;
 use serde::Serialize;
@@ -332,6 +333,20 @@ impl RpcClient {
     pub async fn update_settings(&self, patch: &Value) -> Result<Value, ClientError> {
         self.request(RPC_SERVER_UPDATE_SETTINGS, &json!({ "patch": patch }))
             .await
+    }
+
+    pub async fn upsert_keybinding(
+        &self,
+        input: &ServerUpsertKeybindingInput,
+    ) -> Result<ServerKeybindingMutationResult, ClientError> {
+        self.request(RPC_SERVER_UPSERT_KEYBINDING, input).await
+    }
+
+    pub async fn remove_keybinding(
+        &self,
+        input: &ServerRemoveKeybindingInput,
+    ) -> Result<ServerKeybindingMutationResult, ClientError> {
+        self.request(RPC_SERVER_REMOVE_KEYBINDING, input).await
     }
 }
 

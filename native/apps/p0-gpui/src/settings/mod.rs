@@ -1,6 +1,8 @@
 //! Settings: the section list mirrors `apps/web/src/components/settings/settingsSearch.ts`
-//! (same order, groups and English labels, so the web translations apply). General, Appearance
-//! and Providers are native; every other section links to the web app.
+//! (same order, groups and English labels, so the web translations apply). Each native section
+//! lives in its own module under `settings/`; sections still `todo` link to the web app.
+
+pub mod keybindings;
 
 use std::path::PathBuf;
 
@@ -17,6 +19,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::feed::choice;
 use crate::theme::{AppPalette, ThemePreference};
+
+#[derive(Default)]
+pub struct SettingsUiState {
+    pub keybindings: keybindings::KeybindingsUiState,
+}
 
 pub struct Section {
     pub path: &'static str,
@@ -242,6 +249,9 @@ impl crate::app::P0App {
         let body = match section.path {
             "/settings/general" => self.render_general(palette, cx).into_any_element(),
             "/settings/appearance" => self.render_appearance(palette, cx).into_any_element(),
+            "/settings/keybindings" => self
+                .render_keybindings(palette, window, cx)
+                .into_any_element(),
             "/settings/providers" => self.render_providers(palette, cx).into_any_element(),
             _ => {
                 let url = web_url(self.bridge.base_url(), section.path);
@@ -265,7 +275,48 @@ impl crate::app::P0App {
                     .into_any_element()
             }
         };
-        let _ = window;
+        let mut content = div()
+            .max_w(px(720.0))
+            .px(px(32.0))
+            .py(px(28.0))
+            .flex()
+            .flex_col()
+            .gap(px(20.0));
+        if let Some(notice) = self.bridge.notice() {
+            let bridge = self.bridge.clone();
+            content = content.child(
+                div()
+                    .px(px(12.0))
+                    .py(px(8.0))
+                    .rounded(px(6.0))
+                    .bg(palette.error_surface)
+                    .border_1()
+                    .border_color(palette.error)
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap(px(8.0))
+                    .text_xs()
+                    .text_color(palette.error)
+                    .child(div().min_w_0().child(SharedString::from(notice)))
+                    .child(
+                        div()
+                            .id("settings-dismiss-notice")
+                            .flex_none()
+                            .cursor_pointer()
+                            .on_click(cx.listener(move |_, _, _, _| bridge.clear_notice()))
+                            .child("✕"),
+                    ),
+            );
+        }
+        content = content
+            .child(
+                div()
+                    .text_xl()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child(t(section.label)),
+            )
+            .child(body);
         div().size_full().flex().flex_row().child(nav).child(
             div()
                 .id("settings-body")
@@ -273,22 +324,7 @@ impl crate::app::P0App {
                 .min_w_0()
                 .h_full()
                 .overflow_y_scroll()
-                .child(
-                    div()
-                        .max_w(px(720.0))
-                        .px(px(32.0))
-                        .py(px(28.0))
-                        .flex()
-                        .flex_col()
-                        .gap(px(20.0))
-                        .child(
-                            div()
-                                .text_xl()
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .child(t(section.label)),
-                        )
-                        .child(body),
-                ),
+                .child(content),
         )
     }
 
@@ -492,7 +528,11 @@ impl crate::app::P0App {
     }
 }
 
-fn setting_row(label: &str, control: impl IntoElement, palette: &AppPalette) -> impl IntoElement {
+pub(crate) fn setting_row(
+    label: &str,
+    control: impl IntoElement,
+    palette: &AppPalette,
+) -> impl IntoElement {
     div()
         .flex()
         .flex_col()
@@ -515,7 +555,7 @@ mod tests {
 
     #[test]
     fn sections_match_the_web_settings_paths() {
-        let web = include_str!("../../../../apps/web/src/components/settings/settingsSearch.ts");
+        let web = include_str!("../../../../../apps/web/src/components/settings/settingsSearch.ts");
         let union = &web[web.find("export type SettingsPath =").unwrap()..];
         let union = &union[..union.find(';').unwrap()];
         let mut web_paths: Vec<&str> = union

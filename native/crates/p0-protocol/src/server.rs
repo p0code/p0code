@@ -13,6 +13,8 @@ pub const RPC_SERVER_SUBSCRIBE_CONFIG: &str = "server.subscribeServerConfig";
 pub const RPC_SERVER_GET_SETTINGS: &str = "server.getSettings";
 pub const RPC_SERVER_UPDATE_SETTINGS: &str = "server.updateSettings";
 pub const RPC_SERVER_REFRESH_PROVIDERS: &str = "server.refreshProviders";
+pub const RPC_SERVER_UPSERT_KEYBINDING: &str = "server.upsertKeybinding";
+pub const RPC_SERVER_REMOVE_KEYBINDING: &str = "server.removeKeybinding";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ServerProbeResult {
@@ -149,6 +151,172 @@ impl ServerProvider {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KeybindingShortcut {
+    pub key: String,
+    #[serde(rename = "metaKey", default)]
+    pub meta_key: bool,
+    #[serde(rename = "ctrlKey", default)]
+    pub ctrl_key: bool,
+    #[serde(rename = "shiftKey", default)]
+    pub shift_key: bool,
+    #[serde(rename = "altKey", default)]
+    pub alt_key: bool,
+    #[serde(rename = "modKey", default)]
+    pub mod_key: bool,
+}
+
+impl KeybindingShortcut {
+    pub fn to_wire_key(&self) -> String {
+        let mut parts: Vec<&str> = Vec::with_capacity(6);
+        if self.mod_key {
+            parts.push("mod");
+        }
+        if self.meta_key {
+            parts.push("meta");
+        }
+        if self.ctrl_key {
+            parts.push("ctrl");
+        }
+        if self.alt_key {
+            parts.push("alt");
+        }
+        if self.shift_key {
+            parts.push("shift");
+        }
+        let key = match self.key.as_str() {
+            " " => "space",
+            "escape" => "esc",
+            other => other,
+        };
+        parts.push(key);
+        parts.join("+")
+    }
+
+    pub fn display_label(&self) -> String {
+        let mut parts: Vec<String> = Vec::with_capacity(6);
+        if self.mod_key {
+            parts.push(if cfg!(target_os = "macos") {
+                "⌘".to_owned()
+            } else {
+                "Ctrl".to_owned()
+            });
+        }
+        if self.meta_key {
+            parts.push(if cfg!(target_os = "macos") {
+                "⌘".to_owned()
+            } else {
+                "Super".to_owned()
+            });
+        }
+        if self.ctrl_key {
+            parts.push("Ctrl".to_owned());
+        }
+        if self.alt_key {
+            parts.push(if cfg!(target_os = "macos") {
+                "⌥".to_owned()
+            } else {
+                "Alt".to_owned()
+            });
+        }
+        if self.shift_key {
+            parts.push("Shift".to_owned());
+        }
+        let key_display = match self.key.as_str() {
+            " " => "Space".to_owned(),
+            "escape" | "esc" => "Esc".to_owned(),
+            "enter" => "Enter".to_owned(),
+            "arrowup" => "↑".to_owned(),
+            "arrowdown" => "↓".to_owned(),
+            "arrowleft" => "←".to_owned(),
+            "arrowright" => "→".to_owned(),
+            other if other.len() == 1 => other.to_ascii_uppercase(),
+            other => other.to_owned(),
+        };
+        parts.push(key_display);
+        parts.join("+")
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum KeybindingWhenNode {
+    #[serde(rename = "identifier")]
+    Identifier { name: String },
+    #[serde(rename = "not")]
+    Not { node: Box<KeybindingWhenNode> },
+    #[serde(rename = "and")]
+    And {
+        left: Box<KeybindingWhenNode>,
+        right: Box<KeybindingWhenNode>,
+    },
+    #[serde(rename = "or")]
+    Or {
+        left: Box<KeybindingWhenNode>,
+        right: Box<KeybindingWhenNode>,
+    },
+    #[serde(other)]
+    Unknown,
+}
+
+impl KeybindingWhenNode {
+    pub fn to_expression(&self) -> String {
+        fn wrap(node: &KeybindingWhenNode) -> String {
+            match node {
+                KeybindingWhenNode::Identifier { .. }
+                | KeybindingWhenNode::Not { .. }
+                | KeybindingWhenNode::Unknown => node.to_expression(),
+                KeybindingWhenNode::And { .. } | KeybindingWhenNode::Or { .. } => {
+                    format!("({})", node.to_expression())
+                }
+            }
+        }
+        match self {
+            Self::Identifier { name } => name.clone(),
+            Self::Not { node } => format!("!{}", wrap(node)),
+            Self::And { left, right } => format!("{} && {}", wrap(left), wrap(right)),
+            Self::Or { left, right } => format!("{} || {}", wrap(left), wrap(right)),
+            Self::Unknown => String::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ResolvedKeybindingRule {
+    pub command: String,
+    pub shortcut: KeybindingShortcut,
+    #[serde(rename = "whenAst", default, skip_serializing_if = "Option::is_none")]
+    pub when_ast: Option<KeybindingWhenNode>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KeybindingReplaceTarget {
+    pub key: String,
+    pub command: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub when: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ServerUpsertKeybindingInput {
+    pub key: String,
+    pub command: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub when: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub replace: Option<KeybindingReplaceTarget>,
+}
+
+pub type ServerRemoveKeybindingInput = KeybindingReplaceTarget;
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ServerKeybindingMutationResult {
+    #[serde(default)]
+    pub keybindings: Vec<ResolvedKeybindingRule>,
+    #[serde(default)]
+    pub issues: Vec<Value>,
+}
+
 /// Subset of `ServerConfig` returned by `server.getConfig`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ServerConfig {
@@ -157,6 +325,12 @@ pub struct ServerConfig {
     pub cwd: String,
     #[serde(default)]
     pub hostname: Option<String>,
+    #[serde(rename = "keybindingsConfigPath", default)]
+    pub keybindings_config_path: Option<String>,
+    #[serde(default)]
+    pub keybindings: Vec<ResolvedKeybindingRule>,
+    #[serde(default)]
+    pub issues: Vec<Value>,
     #[serde(default)]
     pub providers: Vec<ServerProvider>,
     #[serde(rename = "serverTime", default)]

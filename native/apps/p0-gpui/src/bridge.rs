@@ -13,8 +13,9 @@ use p0_client::{
 use p0_protocol::{
     ApprovalDecision, DispatchMode, LaunchInitialMessage, LaunchThreadInput, ModelSelection,
     OrchestrationCommand, RPC_ORCHESTRATION_SUBSCRIBE_SHELL, RPC_ORCHESTRATION_SUBSCRIBE_THREAD,
-    RuntimeMode, SecretRequestAnswer, SecretRequestAnswerInput, ServerConfig, ShellStreamItem,
-    SubscribeShellInput, SubscribeThreadInput, ThreadStreamItem, WorkspaceStrategy,
+    RuntimeMode, SecretRequestAnswer, SecretRequestAnswerInput, ServerConfig,
+    ServerRemoveKeybindingInput, ServerUpsertKeybindingInput, ShellStreamItem, SubscribeShellInput,
+    SubscribeThreadInput, ThreadStreamItem, WorkspaceStrategy,
 };
 use serde_json::Value;
 use tokio::runtime::Runtime;
@@ -456,6 +457,36 @@ impl AppBridge {
                 client.get_config().await
             },
             move |cfg| *config.lock().unwrap() = Some(cfg),
+        );
+    }
+
+    pub fn upsert_keybinding(&self, input: ServerUpsertKeybindingInput) {
+        let client = self.client.clone();
+        let config = self.config.clone();
+        self.run(
+            "Keybindings",
+            async move { client.upsert_keybinding(&input).await },
+            move |res| {
+                if let Some(cfg) = config.lock().unwrap().as_mut() {
+                    cfg.keybindings = res.keybindings;
+                    cfg.issues = res.issues;
+                }
+            },
+        );
+    }
+
+    pub fn remove_keybinding(&self, input: ServerRemoveKeybindingInput) {
+        let client = self.client.clone();
+        let config = self.config.clone();
+        self.run(
+            "Keybindings",
+            async move { client.remove_keybinding(&input).await },
+            move |res| {
+                if let Some(cfg) = config.lock().unwrap().as_mut() {
+                    cfg.keybindings = res.keybindings;
+                    cfg.issues = res.issues;
+                }
+            },
         );
     }
 
