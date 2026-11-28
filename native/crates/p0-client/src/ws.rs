@@ -14,21 +14,25 @@ use futures_util::{SinkExt as _, StreamExt as _};
 use http::HeaderValue;
 use p0_protocol::{
     ArchivedShellSnapshot, DatabaseStorageStatus, DispatchCommandResult, FramePartAssembler,
-    LaunchThreadInput, LaunchThreadResult, ORCHESTRATION_PROTOCOL_QUERY_PARAM,
-    ORCHESTRATION_PROTOCOL_VERSION, OrchestrationCommand, PeerLinkRemoveResult,
-    PeerLinksListResult, PluginsSnapshot, RPC_ORCHESTRATION_DISPATCH_COMMAND,
+    HostResourcesSnapshot, LaunchThreadInput, LaunchThreadResult,
+    ORCHESTRATION_PROTOCOL_QUERY_PARAM, ORCHESTRATION_PROTOCOL_VERSION, OrchestrationCommand,
+    PeerLinkRemoveResult, PeerLinksListResult, PluginsSnapshot, RPC_ORCHESTRATION_DISPATCH_COMMAND,
     RPC_ORCHESTRATION_FORCE_STOP_THREAD, RPC_ORCHESTRATION_GET_ARCHIVED_SHELL_SNAPSHOT,
     RPC_ORCHESTRATION_LAUNCH_THREAD, RPC_ORCHESTRATION_SUBSCRIBE_SHELL,
     RPC_ORCHESTRATION_SUBSCRIBE_THREAD, RPC_PEER_LINKS_LIST, RPC_PEER_LINKS_UNLINK,
-    RPC_PLUGINS_SET_ENABLED, RPC_PLUGINS_SUBSCRIBE, RPC_SECRETS_ANSWER_REQUEST,
-    RPC_SERVER_GET_CONFIG, RPC_SERVER_GET_DATABASE_STORAGE, RPC_SERVER_GET_SETTINGS,
-    RPC_SERVER_GET_STORAGE_CLEANUP_REPORT, RPC_SERVER_PROBE, RPC_SERVER_RECLAIM_DATABASE_SPACE,
-    RPC_SERVER_REFRESH_PROVIDERS, RPC_SERVER_REMOVE_KEYBINDING, RPC_SERVER_RUN_STORAGE_CLEANUP,
-    RPC_SERVER_UPDATE_SETTINGS, RPC_SERVER_UPSERT_KEYBINDING, RequestId, RpcClientFrame, RpcExit,
-    RpcServerFrame, SOCKET_FRAME_PARTS_QUERY_PARAM, SecretRequestAnswerInput, ServerConfig,
-    ServerKeybindingMutationResult, ServerProbeResult, ServerRemoveKeybindingInput,
-    ServerUpsertKeybindingInput, ShellStreamItem, StorageCleanupReport, SubscribeShellInput,
-    SubscribeThreadInput, ThreadStreamItem, decode_server_frame, encode_client_frame,
+    RPC_PLUGINS_SET_ENABLED, RPC_PLUGINS_SUBSCRIBE, RPC_SCHEDULED_TASKS_DELETE,
+    RPC_SCHEDULED_TASKS_RUN_NOW, RPC_SCHEDULED_TASKS_SET_ENABLED, RPC_SCHEDULED_TASKS_SUBSCRIBE,
+    RPC_SECRETS_ANSWER_REQUEST, RPC_SERVER_GET_CONFIG, RPC_SERVER_GET_DATABASE_STORAGE,
+    RPC_SERVER_GET_HOST_RESOURCES, RPC_SERVER_GET_PROCESS_DIAGNOSTICS, RPC_SERVER_GET_SETTINGS,
+    RPC_SERVER_GET_STORAGE_CLEANUP_REPORT, RPC_SERVER_GET_TRACE_DIAGNOSTICS, RPC_SERVER_PROBE,
+    RPC_SERVER_RECLAIM_DATABASE_SPACE, RPC_SERVER_REFRESH_PROVIDERS, RPC_SERVER_REMOVE_KEYBINDING,
+    RPC_SERVER_RUN_STORAGE_CLEANUP, RPC_SERVER_UPDATE_SETTINGS, RPC_SERVER_UPSERT_KEYBINDING,
+    RequestId, RpcClientFrame, RpcExit, RpcServerFrame, SOCKET_FRAME_PARTS_QUERY_PARAM,
+    ScheduledTaskListResult, SecretRequestAnswerInput, ServerConfig,
+    ServerKeybindingMutationResult, ServerProbeResult, ServerProcessDiagnosticsResult,
+    ServerRemoveKeybindingInput, ServerTraceDiagnosticsResult, ServerUpsertKeybindingInput,
+    ShellStreamItem, StorageCleanupReport, SubscribeShellInput, SubscribeThreadInput,
+    ThreadStreamItem, decode_server_frame, encode_client_frame,
 };
 use rand::RngExt as _;
 use serde::Serialize;
@@ -411,6 +415,52 @@ impl RpcClient {
 
     pub async fn reclaim_database_space(&self) -> Result<Value, ClientError> {
         self.request(RPC_SERVER_RECLAIM_DATABASE_SPACE, &json!({}))
+            .await
+    }
+
+    pub async fn subscribe_scheduled_tasks(
+        &self,
+    ) -> Result<Subscription<ScheduledTaskListResult>, ClientError> {
+        self.subscribe(RPC_SCHEDULED_TASKS_SUBSCRIBE, &json!({}))
+            .await
+    }
+
+    pub async fn set_scheduled_task_enabled(
+        &self,
+        id: &str,
+        enabled: bool,
+    ) -> Result<Value, ClientError> {
+        self.request(
+            RPC_SCHEDULED_TASKS_SET_ENABLED,
+            &json!({ "id": id, "enabled": enabled }),
+        )
+        .await
+    }
+
+    pub async fn run_scheduled_task_now(&self, id: &str) -> Result<Value, ClientError> {
+        self.request(RPC_SCHEDULED_TASKS_RUN_NOW, &json!({ "id": id }))
+            .await
+    }
+
+    pub async fn delete_scheduled_task(&self, id: &str) -> Result<Value, ClientError> {
+        self.request(RPC_SCHEDULED_TASKS_DELETE, &json!({ "id": id }))
+            .await
+    }
+
+    pub async fn get_host_resources(&self) -> Result<HostResourcesSnapshot, ClientError> {
+        self.request(RPC_SERVER_GET_HOST_RESOURCES, &json!({}))
+            .await
+    }
+
+    pub async fn get_process_diagnostics(
+        &self,
+    ) -> Result<ServerProcessDiagnosticsResult, ClientError> {
+        self.request(RPC_SERVER_GET_PROCESS_DIAGNOSTICS, &json!({}))
+            .await
+    }
+
+    pub async fn get_trace_diagnostics(&self) -> Result<ServerTraceDiagnosticsResult, ClientError> {
+        self.request(RPC_SERVER_GET_TRACE_DIAGNOSTICS, &json!({}))
             .await
     }
 }

@@ -977,6 +977,25 @@ async fn live_p0d_settings_roundtrip() {
         "tracked-changes"
     );
 
+    // 10. Scheduled tasks stream & diagnostics RPC round-trip
+    let mut sched_sub = client.subscribe_scheduled_tasks().await.unwrap();
+    let sched_snap = tokio::time::timeout(Duration::from_secs(10), sched_sub.recv())
+        .await
+        .expect("scheduledTasks snapshot timeout")
+        .expect("scheduledTasks stream ended")
+        .unwrap();
+    assert!(sched_snap.tasks.is_empty());
+
+    let host_res = client.get_host_resources().await.unwrap();
+    assert!(host_res.cpu_count >= 1);
+    assert!(host_res.total_memory_bytes > 0.0);
+
+    let proc_diag = client.get_process_diagnostics().await.unwrap();
+    assert!(proc_diag.server_pid > 0);
+
+    let trace_diag = client.get_trace_diagnostics().await.unwrap();
+    assert!(!trace_diag.trace_file_path.is_empty());
+
     client.shutdown().await;
     proc.shutdown().await;
     let _ = std::fs::remove_dir_all(&root);

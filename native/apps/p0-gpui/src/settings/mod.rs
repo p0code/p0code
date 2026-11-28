@@ -6,6 +6,7 @@ pub mod about;
 pub mod archived;
 pub mod chat;
 pub mod connections;
+pub mod diagnostics;
 pub mod diffs;
 pub mod general;
 pub mod keybindings;
@@ -13,6 +14,7 @@ pub mod labs;
 pub mod maintenance;
 pub mod plugins;
 pub mod providers;
+pub mod scheduled_tasks;
 pub mod threads;
 pub mod worktrees;
 
@@ -34,10 +36,12 @@ use crate::theme::{AppPalette, ThemePreference};
 pub struct SettingsUiState {
     pub archived: archived::ArchivedUiState,
     pub connections: connections::ConnectionsUiState,
+    pub diagnostics: diagnostics::DiagnosticsUiState,
     pub keybindings: keybindings::KeybindingsUiState,
     pub labs: labs::LabsUiState,
     pub maintenance: maintenance::MaintenanceUiState,
     pub providers: providers::ProvidersUiState,
+    pub scheduled_tasks: scheduled_tasks::ScheduledTasksUiState,
     pub threads: threads::ThreadsUiState,
     pub worktrees: worktrees::WorktreesUiState,
 }
@@ -364,6 +368,9 @@ impl crate::app::P0App {
             "/settings/threads" => self
                 .render_threads_settings(palette, window, cx)
                 .into_any_element(),
+            "/settings/scheduled-tasks" => {
+                self.render_scheduled_tasks(palette, cx).into_any_element()
+            }
             "/settings/worktrees" => self
                 .render_worktrees_settings(palette, window, cx)
                 .into_any_element(),
@@ -375,6 +382,7 @@ impl crate::app::P0App {
             "/settings/labs" => self.render_labs(palette, window, cx).into_any_element(),
             "/settings/about" => self.render_about(palette, cx).into_any_element(),
             "/settings/archived" => self.render_archived(palette, cx).into_any_element(),
+            "/settings/diagnostics" => self.render_diagnostics(palette, cx).into_any_element(),
             _ => {
                 let url = web_url(self.bridge.base_url(), section.path);
                 div()

@@ -23,6 +23,13 @@ pub const RPC_SERVER_GET_STORAGE_CLEANUP_REPORT: &str = "server.getStorageCleanu
 pub const RPC_SERVER_RUN_STORAGE_CLEANUP: &str = "server.runStorageCleanup";
 pub const RPC_SERVER_GET_DATABASE_STORAGE: &str = "server.getDatabaseStorage";
 pub const RPC_SERVER_RECLAIM_DATABASE_SPACE: &str = "server.reclaimDatabaseSpace";
+pub const RPC_SERVER_GET_HOST_RESOURCES: &str = "server.getHostResources";
+pub const RPC_SERVER_GET_PROCESS_DIAGNOSTICS: &str = "server.getProcessDiagnostics";
+pub const RPC_SERVER_GET_TRACE_DIAGNOSTICS: &str = "server.getTraceDiagnostics";
+pub const RPC_SCHEDULED_TASKS_SUBSCRIBE: &str = "scheduledTasks.subscribe";
+pub const RPC_SCHEDULED_TASKS_SET_ENABLED: &str = "scheduledTasks.setEnabled";
+pub const RPC_SCHEDULED_TASKS_DELETE: &str = "scheduledTasks.delete";
+pub const RPC_SCHEDULED_TASKS_RUN_NOW: &str = "scheduledTasks.runNow";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ServerProbeResult {
@@ -453,6 +460,115 @@ pub struct StorageCleanupReport {
     pub omitted_count: u64,
     #[serde(rename = "bytesFreed", default)]
     pub bytes_freed: f64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ScheduledTask {
+    pub id: String,
+    pub title: String,
+    pub prompt: String,
+    pub enabled: bool,
+    #[serde(default)]
+    pub schedule: Value,
+    #[serde(rename = "projectId")]
+    pub project_id: String,
+    #[serde(rename = "threadId", default)]
+    pub thread_id: Option<String>,
+    #[serde(rename = "nextRunAt", default)]
+    pub next_run_at: Option<String>,
+    #[serde(rename = "lastRunAt", default)]
+    pub last_run_at: Option<String>,
+    #[serde(rename = "lastRunStatus", default)]
+    pub last_run_status: String,
+    #[serde(rename = "lastRunError", default)]
+    pub last_run_error: Option<String>,
+    #[serde(rename = "runCount", default)]
+    pub run_count: u64,
+    #[serde(rename = "blockedByPolicy", default)]
+    pub blocked_by_policy: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ScheduledTaskListResult {
+    #[serde(default)]
+    pub tasks: Vec<ScheduledTask>,
+    #[serde(rename = "timeZone", default)]
+    pub time_zone: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct HostResourcesSnapshot {
+    #[serde(rename = "sampledAt")]
+    pub sampled_at: u64,
+    #[serde(rename = "cpuUtilization", default)]
+    pub cpu_utilization: Option<f64>,
+    #[serde(rename = "cpuCount")]
+    pub cpu_count: u64,
+    #[serde(rename = "availableMemoryBytes")]
+    pub available_memory_bytes: f64,
+    #[serde(rename = "totalMemoryBytes")]
+    pub total_memory_bytes: f64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ServerProcessDiagnosticsEntry {
+    pub pid: u64,
+    #[serde(rename = "startTimeMs", default)]
+    pub start_time_ms: u64,
+    #[serde(default)]
+    pub ppid: u64,
+    #[serde(default)]
+    pub status: String,
+    #[serde(rename = "cpuPercent", default)]
+    pub cpu_percent: f64,
+    #[serde(rename = "rssBytes", default)]
+    pub rss_bytes: f64,
+    #[serde(default)]
+    pub elapsed: String,
+    #[serde(default)]
+    pub command: String,
+    #[serde(default)]
+    pub depth: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ServerProcessDiagnosticsResult {
+    #[serde(rename = "serverPid")]
+    pub server_pid: u64,
+    #[serde(rename = "readAt")]
+    pub read_at: String,
+    #[serde(rename = "processCount", default)]
+    pub process_count: u64,
+    #[serde(rename = "totalRssBytes", default)]
+    pub total_rss_bytes: f64,
+    #[serde(rename = "totalCpuPercent", default)]
+    pub total_cpu_percent: f64,
+    #[serde(default)]
+    pub processes: Vec<ServerProcessDiagnosticsEntry>,
+    #[serde(default)]
+    pub error: Option<Value>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ServerTraceDiagnosticsResult {
+    #[serde(rename = "traceFilePath")]
+    pub trace_file_path: String,
+    #[serde(rename = "readAt")]
+    pub read_at: String,
+    #[serde(rename = "recordCount", default)]
+    pub record_count: u64,
+    #[serde(rename = "parseErrorCount", default)]
+    pub parse_error_count: u64,
+    #[serde(rename = "failureCount", default)]
+    pub failure_count: u64,
+    #[serde(rename = "interruptionCount", default)]
+    pub interruption_count: u64,
+    #[serde(rename = "slowSpanThresholdMs", default)]
+    pub slow_span_threshold_ms: u64,
+    #[serde(rename = "slowSpanCount", default)]
+    pub slow_span_count: u64,
+    #[serde(default)]
+    pub error: Option<Value>,
 }
 
 /// Subset of `ServerConfig` returned by `server.getConfig`.

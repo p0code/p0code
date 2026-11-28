@@ -12,13 +12,15 @@ use p0_client::{
 };
 use p0_protocol::{
     ApprovalDecision, ArchivedShellSnapshot, DatabaseStorageStatus, DispatchMode,
-    LaunchInitialMessage, LaunchThreadInput, ModelSelection, OrchestrationCommand, PeerLinkSummary,
-    PluginInfo, PluginsSnapshot, RPC_ORCHESTRATION_SUBSCRIBE_SHELL,
-    RPC_ORCHESTRATION_SUBSCRIBE_THREAD, RPC_PLUGINS_SUBSCRIBE, RPC_SERVER_GET_DATABASE_STORAGE,
-    RPC_SERVER_GET_STORAGE_CLEANUP_REPORT, RuntimeMode, SecretRequestAnswer,
-    SecretRequestAnswerInput, ServerConfig, ServerRemoveKeybindingInput,
-    ServerUpsertKeybindingInput, ShellStreamItem, StorageCleanupReport, SubscribeShellInput,
-    SubscribeThreadInput, ThreadStreamItem, WorkspaceStrategy,
+    HostResourcesSnapshot, LaunchInitialMessage, LaunchThreadInput, ModelSelection,
+    OrchestrationCommand, PeerLinkSummary, PluginInfo, PluginsSnapshot,
+    RPC_ORCHESTRATION_SUBSCRIBE_SHELL, RPC_ORCHESTRATION_SUBSCRIBE_THREAD, RPC_PLUGINS_SUBSCRIBE,
+    RPC_SCHEDULED_TASKS_SUBSCRIBE, RPC_SERVER_GET_DATABASE_STORAGE,
+    RPC_SERVER_GET_STORAGE_CLEANUP_REPORT, RuntimeMode, ScheduledTaskListResult,
+    SecretRequestAnswer, SecretRequestAnswerInput, ServerConfig, ServerProcessDiagnosticsResult,
+    ServerRemoveKeybindingInput, ServerTraceDiagnosticsResult, ServerUpsertKeybindingInput,
+    ShellStreamItem, StorageCleanupReport, SubscribeShellInput, SubscribeThreadInput,
+    ThreadStreamItem, WorkspaceStrategy,
 };
 use serde_json::Value;
 use tokio::runtime::Runtime;
@@ -47,12 +49,17 @@ pub struct AppBridge {
     plugins: Arc<Mutex<Option<Vec<PluginInfo>>>>,
     storage_cleanup_report: Arc<Mutex<Option<Option<StorageCleanupReport>>>>,
     database_storage: Arc<Mutex<Option<Option<DatabaseStorageStatus>>>>,
+    scheduled_tasks: Arc<Mutex<Option<ScheduledTaskListResult>>>,
+    host_resources: Arc<Mutex<Option<HostResourcesSnapshot>>>,
+    process_diagnostics: Arc<Mutex<Option<ServerProcessDiagnosticsResult>>>,
+    trace_diagnostics: Arc<Mutex<Option<ServerTraceDiagnosticsResult>>>,
     notice: Arc<Mutex<Option<String>>>,
     changed: Arc<Notify>,
     thread_task: Mutex<Option<JoinHandle<()>>>,
     terminal_task: Mutex<Option<JoinHandle<()>>>,
     plugins_task: Mutex<Option<JoinHandle<()>>>,
     storage_tasks: Mutex<Option<(JoinHandle<()>, JoinHandle<()>)>>,
+    scheduled_tasks_task: Mutex<Option<JoinHandle<()>>>,
     p0d: Mutex<Option<P0dProcess>>,
 }
 
@@ -83,12 +90,17 @@ impl AppBridge {
             plugins: Arc::new(Mutex::new(None)),
             storage_cleanup_report: Arc::new(Mutex::new(None)),
             database_storage: Arc::new(Mutex::new(None)),
+            scheduled_tasks: Arc::new(Mutex::new(None)),
+            host_resources: Arc::new(Mutex::new(None)),
+            process_diagnostics: Arc::new(Mutex::new(None)),
+            trace_diagnostics: Arc::new(Mutex::new(None)),
             notice: Arc::new(Mutex::new(None)),
             changed: Arc::new(Notify::new()),
             thread_task: Mutex::new(None),
             terminal_task: Mutex::new(None),
             plugins_task: Mutex::new(None),
             storage_tasks: Mutex::new(None),
+            scheduled_tasks_task: Mutex::new(None),
             p0d: Mutex::new(p0d),
         });
         bridge.spawn_background();
@@ -283,6 +295,97 @@ impl AppBridge {
             "Reclaim database space",
             async move { client.reclaim_database_space().await },
             |_| {},
+        );
+    }
+
+    pub fn scheduled_tasks(&self) -> Option<ScheduledTaskListResult> {
+        self.scheduled_tasks.lock().unwrap().clone()
+    }
+
+    pub fn ensure_scheduled_tasks_subscribed(&self) {
+        let mut slot = self.scheduled_tasks_task.lock().unwrap();
+        if slot.is_some() {
+            return;
+        }
+        let tasks = self.scheduled_tasks.clone();
+        let changed = self.changed.clone();
+        let notice = self.notice.clone();
+        *slot = Some(self.rt.spawn(run_durable_stream(
+            self.client.clone(),
+            RPC_SCHEDULED_TASKS_SUBSCRIBE,
+            || serde_json::json!({}),
+            move |snap: ScheduledTaskListResult| {
+                *tasks.lock().unwrap() = Some(snap);
+                changed.notify_one();
+            },
+            move |err| {
+                if is_user_visible(err) {
+                    *notice.lock().unwrap() = Some(err.to_string());
+                }
+            },
+        )));
+    }
+
+    pub fn set_scheduled_task_enabled(&self, id: String, enabled: bool) {
+        let client = self.client.clone();
+        self.run(
+            "Scheduled task",
+            async move { client.set_scheduled_task_enabled(&id, enabled).await },
+            |_| {},
+        );
+    }
+
+    pub fn run_scheduled_task_now(&self, id: String) {
+        let client = self.client.clone();
+        self.run(
+            "Run scheduled task",
+            async move { client.run_scheduled_task_now(&id).await },
+            |_| {},
+        );
+    }
+
+    pub fn delete_scheduled_task(&self, id: String) {
+        let client = self.client.clone();
+        self.run(
+            "Delete scheduled task",
+            async move { client.delete_scheduled_task(&id).await },
+            |_| {},
+        );
+    }
+
+    pub fn host_resources(&self) -> Option<HostResourcesSnapshot> {
+        self.host_resources.lock().unwrap().clone()
+    }
+
+    pub fn process_diagnostics(&self) -> Option<ServerProcessDiagnosticsResult> {
+        self.process_diagnostics.lock().unwrap().clone()
+    }
+
+    pub fn trace_diagnostics(&self) -> Option<ServerTraceDiagnosticsResult> {
+        self.trace_diagnostics.lock().unwrap().clone()
+    }
+
+    pub fn refresh_diagnostics(&self) {
+        let c1 = self.client.clone();
+        let hr = self.host_resources.clone();
+        self.run(
+            "Host resources",
+            async move { c1.get_host_resources().await },
+            move |snap| *hr.lock().unwrap() = Some(snap),
+        );
+        let c2 = self.client.clone();
+        let pd = self.process_diagnostics.clone();
+        self.run(
+            "Process diagnostics",
+            async move { c2.get_process_diagnostics().await },
+            move |snap| *pd.lock().unwrap() = Some(snap),
+        );
+        let c3 = self.client.clone();
+        let td = self.trace_diagnostics.clone();
+        self.run(
+            "Trace diagnostics",
+            async move { c3.get_trace_diagnostics().await },
+            move |snap| *td.lock().unwrap() = Some(snap),
         );
     }
 
