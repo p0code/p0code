@@ -156,7 +156,14 @@ func (s *Server) Close() error {
 	}
 	s.auth.Close()
 	if s.cfg.ReadyFile != "" {
-		os.Remove(s.cfg.ReadyFile)
+		data, err := os.ReadFile(s.cfg.ReadyFile)
+		var ready struct {
+			Pid int    `json:"pid"`
+			URL string `json:"url"`
+		}
+		if err == nil && json.Unmarshal(data, &ready) == nil && ready.Pid == os.Getpid() && ready.URL == s.URL() {
+			os.Remove(s.cfg.ReadyFile)
+		}
 	}
 	return err
 }

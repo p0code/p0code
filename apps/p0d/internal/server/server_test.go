@@ -436,3 +436,17 @@ func TestProxyToLegacy(t *testing.T) {
 		t.Fatal("legacy did not restart")
 	}
 }
+
+func TestClosePreservesReplacementReadyFile(t *testing.T) {
+	h := start(t, false)
+	path := h.home.Dir + "/ready.json"
+	replacement := []byte(`{"pid":123456,"url":"http://127.0.0.1:12345"}`)
+	if err := os.WriteFile(path, replacement, 0600); err != nil {
+		t.Fatal(err)
+	}
+	h.srv.Close()
+	got, err := os.ReadFile(path)
+	if err != nil || string(got) != string(replacement) {
+		t.Fatalf("replacement ready file lost: %s, %v", got, err)
+	}
+}

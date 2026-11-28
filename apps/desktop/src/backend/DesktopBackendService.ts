@@ -793,6 +793,7 @@ export interface MakeP0dChildDriverInput {
   /** Runs before a new p0d starts, e.g. to stop an older backend holding this home. */
   readonly beforeStart?: Effect.Effect<void>;
   readonly killProcess?: (pid: number) => Effect.Effect<void>;
+  readonly processAlive?: (pid: number) => Effect.Effect<boolean>;
   readonly waitTimeout?: Duration.Duration;
   readonly pollInterval?: Duration.Duration;
 }
@@ -1008,7 +1009,32 @@ export function makeP0dChildDriver(input: MakeP0dChildDriverInput): BackendServi
         // An attached p0d answered on the URL its own ready file names, so its pid is ours to stop.
         const healthy = yield* readHealthy;
         if (Option.isSome(healthy) && healthy.value.pid !== null) {
-          yield* killProcess(healthy.value.pid);
+          const pid = healthy.value.pid;
+          yield* killProcess(pid);
+          const alive =
+            input.processAlive ??
+            ((pid: number) =>
+              Effect.sync(() => {
+                try {
+                  process.kill(pid, 0);
+                  return true;
+                } catch (error) {
+                  return !(error instanceof Error && "code" in error && error.code === "ESRCH");
+                }
+              }));
+          const stopped = yield* alive(pid).pipe(
+            Effect.repeat({
+              until: (running) => !running,
+              schedule: Schedule.spaced(pollInterval),
+            }),
+            Effect.timeoutOption(P0D_STOP_GRACE),
+          );
+          if (Option.isNone(stopped)) {
+            return yield* new BackendServiceDriverError({
+              operation: "stop",
+              message: `p0d process ${pid} did not exit within 15 seconds; refusing to start a replacement.`,
+            });
+          }
         }
         return [undefined, current] as const;
       }),

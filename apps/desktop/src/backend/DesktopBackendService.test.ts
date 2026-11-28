@@ -546,6 +546,34 @@ const p0dChildDriverInput = {
 };
 
 describe("makeP0dChildDriver", () => {
+  it.effect("waits for an attached process to exit before restart can spawn", () =>
+    Effect.gen(function* () {
+      const world = makeP0dWorld();
+      world.listen(41_000, 3131);
+      const checked = yield* Deferred.make<void>();
+      const exited = yield* Deferred.make<boolean>();
+      const driver = DesktopBackendService.makeP0dChildDriver({
+        ...p0dChildDriverInput,
+        fileSystem: world.fileSystem,
+        httpClient: world.httpClient,
+        child: yield* DesktopBackendService.makeP0dChildState(yield* Effect.scope),
+        killProcess: () => Effect.void,
+        processAlive: () =>
+          Deferred.succeed(checked, undefined).pipe(Effect.andThen(Deferred.await(exited))),
+        spawner: ChildProcessSpawner.make(() => Effect.die("must not spawn before exit")),
+      });
+      const stopped = yield* driver.stop.pipe(Effect.forkChild);
+      assert.isTrue(
+        yield* Effect.race(
+          Fiber.join(stopped).pipe(Effect.as(false)),
+          Deferred.await(checked).pipe(Effect.as(true)),
+        ),
+      );
+      yield* Deferred.succeed(exited, false);
+      yield* Fiber.join(stopped);
+    }).pipe(Effect.scoped),
+  );
+
   it.effect("attaches to a p0d already serving this home without starting another", () =>
     Effect.gen(function* () {
       const world = makeP0dWorld();
