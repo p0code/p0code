@@ -43,9 +43,10 @@ impl P0App {
                 palette.warning,
                 format!("{} (#{attempt})", self.i18n.tr("Reconnecting")),
             ),
-            ConnectionState::SignedOutElsewhere { .. } => {
-                (palette.warning, "Signed in elsewhere".to_owned())
-            }
+            ConnectionState::SignedOutElsewhere { .. } => (
+                palette.warning,
+                self.i18n.tr("Signed in elsewhere").to_owned(),
+            ),
             ConnectionState::Disconnected => (
                 palette.muted_foreground,
                 self.i18n.tr("Not connected").to_owned(),
@@ -57,7 +58,7 @@ impl P0App {
         let label = config
             .as_ref()
             .map(|c| c.environment.label.clone())
-            .unwrap_or_else(|| "Local environment".to_owned());
+            .unwrap_or_else(|| self.i18n.tr("Local environment").to_owned());
         let env_id = config
             .as_ref()
             .map(|c| c.environment.environment_id.clone())
@@ -230,9 +231,11 @@ impl P0App {
                             div()
                                 .text_xs()
                                 .text_color(palette.muted_foreground)
-                                .child(
-                                    "Remote DPoP pairing and adding new peer links are managed in the web app.",
-                                ),
+                                .child(SharedString::from(
+                                    self.i18n
+                                        .tr("Remote DPoP pairing and adding new peer links are managed in the web app.")
+                                        .to_owned(),
+                                )),
                         ),
                 );
             }

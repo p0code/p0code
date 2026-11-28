@@ -69,14 +69,14 @@ impl P0App {
         let mut col = div().flex().flex_col().gap(px(12.0));
 
         // 1. Access & guest sharing
-        col = col.child(section_heading("Access & sharing", palette));
+        col = col.child(section_heading(self.i18n.tr("Access & sharing"), palette));
         let auth_policy = self
             .bridge
             .server_config()
             .map(|c| format!("{:?}", c.auth.policy))
             .unwrap_or_else(|| "unknown".to_owned());
         col = col.child(setting_row(
-            "Auth policy",
+            self.i18n.tr("Auth policy"),
             div()
                 .text_xs()
                 .font_family("monospace")
@@ -85,7 +85,7 @@ impl P0App {
             palette,
         ));
         col = col.child(setting_row(
-            "Require device approval for Connect",
+            self.i18n.tr("Require device approval for Connect"),
             Switch::new("access-device-approval")
                 .checked(acc.require_connect_device_approval)
                 .on_click(cx.listener(|this, val: &bool, _, cx| {
@@ -108,9 +108,9 @@ impl P0App {
         ));
 
         // 2. Tunnels
-        col = col.child(section_heading("Tunnels", palette));
+        col = col.child(section_heading(self.i18n.tr("Tunnels"), palette));
         col = col.child(setting_row(
-            "Preview tunnel",
+            self.i18n.tr("Preview tunnel"),
             Switch::new("access-preview-tunnel")
                 .checked(acc.enable_preview_tunnel)
                 .on_click(cx.listener(|this, val: &bool, _, cx| {
@@ -121,7 +121,7 @@ impl P0App {
             palette,
         ));
         col = col.child(setting_row(
-            "Public tunnels",
+            self.i18n.tr("Public tunnels"),
             Switch::new("access-public-tunnels")
                 .checked(acc.public_tunnels_enabled)
                 .on_click(cx.listener(|this, val: &bool, _, cx| {
@@ -142,7 +142,7 @@ impl P0App {
                 pub_modes = pub_modes.child(
                     choice(
                         format!("access-pub-{mode}"),
-                        label.to_owned(),
+                        self.i18n.tr(label).to_owned(),
                         acc.public_tunnels_agent_publishing == mode,
                         palette,
                     )
@@ -154,13 +154,17 @@ impl P0App {
                     })),
                 );
             }
-            col = col.child(setting_row("Agent publishing", pub_modes, palette));
+            col = col.child(setting_row(
+                self.i18n.tr("Agent publishing"),
+                pub_modes,
+                palette,
+            ));
         }
 
         // 3. Sessions, pairing & relay in browser
-        col = col.child(section_heading("Pairing & sessions", palette));
+        col = col.child(section_heading(self.i18n.tr("Pairing & sessions"), palette));
         col = col.child(setting_row(
-            "Devices, pairing & relay",
+            self.i18n.tr("Devices, pairing & relay"),
             div()
                 .flex()
                 .items_center()
@@ -172,7 +176,11 @@ impl P0App {
                         .flex_1()
                         .text_xs()
                         .text_color(palette.muted_foreground)
-                        .child("Pair phones/browsers, manage signed-in sessions, and configure relay servers in the web app."),
+                        .child(SharedString::from(
+                            self.i18n
+                                .tr("Pair phones/browsers, manage signed-in sessions, and configure relay servers in the web app.")
+                                .to_owned(),
+                        )),
                 )
                 .child(
                     div().flex_none().child(

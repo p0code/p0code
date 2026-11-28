@@ -328,14 +328,17 @@ impl P0App {
         ));
 
         let title_instr_val = th.thread_title_instructions.clone();
+        let title_placeholder = self
+            .i18n
+            .tr("Optional instructions for generated thread titles")
+            .to_owned();
         let title_in = self
             .settings_ui
             .threads
             .title_instructions_input
             .get_or_insert_with(|| {
                 cx.new(|cx| {
-                    let mut st = InputState::new(window, cx)
-                        .placeholder("Optional instructions for generated thread titles");
+                    let mut st = InputState::new(window, cx).placeholder(title_placeholder);
                     st.set_value(title_instr_val, window, cx);
                     st
                 })
@@ -390,7 +393,7 @@ impl P0App {
                     div()
                         .text_xs()
                         .text_color(palette.muted_foreground)
-                        .child("days"),
+                        .child(SharedString::from(self.i18n.tr("days").to_owned())),
                 )
                 .child(
                     Button::new(SharedString::from(format!("threads-save-{key}")))

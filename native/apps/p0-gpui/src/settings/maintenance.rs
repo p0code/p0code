@@ -249,7 +249,7 @@ impl P0App {
                         .text_color(palette.muted_foreground)
                         .child(SharedString::from(
                             self.i18n
-                                .tr("Stop the computer from going to sleep while agents are working, and let it sleep once they finish.")
+                                .tr("Stop the computer from going to sleep while agents are working, and let it sleep once they finish. Closing a laptop lid still puts it to sleep.")
                                 .to_owned(),
                         )),
                 )
@@ -423,7 +423,11 @@ impl P0App {
                     div()
                         .text_xs()
                         .text_color(palette.muted_foreground)
-                        .child("Database storage metrics are unavailable on this server."),
+                        .child(SharedString::from(
+                            self.i18n
+                                .tr("Database storage metrics are unavailable on this server.")
+                                .to_owned(),
+                        )),
                 );
             }
             Some(Some(db)) => {
@@ -441,13 +445,19 @@ impl P0App {
                                     format_bytes(db.reclaimable_bytes)
                                 )),
                             ))
-                            .child(div().text_xs().text_color(palette.muted_foreground).child(
-                                if db.incremental_vacuum_enabled {
-                                    "Incremental vacuum: on"
-                                } else {
-                                    "Incremental vacuum: off"
-                                },
-                            )),
+                            .child(
+                                div().text_xs().text_color(palette.muted_foreground).child(
+                                    SharedString::from(
+                                        self.i18n
+                                            .tr(if db.incremental_vacuum_enabled {
+                                                "Incremental vacuum: on"
+                                            } else {
+                                                "Incremental vacuum: off"
+                                            })
+                                            .to_owned(),
+                                    ),
+                                ),
+                            ),
                     )
                     .child(
                         div()
@@ -475,11 +485,15 @@ impl P0App {
                                     div()
                                         .text_xs()
                                         .text_color(palette.warning)
-                                        .child("This restarts the server to reclaim free pages."),
+                                        .child(SharedString::from(
+                                        self.i18n
+                                            .tr("This restarts the server to reclaim free pages.")
+                                            .to_owned(),
+                                    )),
                                 )
                                 .child(
                                     Button::new("maint-reclaim-confirm")
-                                        .label("Confirm reclaim".to_owned())
+                                        .label(self.i18n.tr("Restart and reclaim").to_owned())
                                         .compact()
                                         .danger()
                                         .on_click(cx.listener(|this, _, _, cx| {
@@ -503,7 +517,7 @@ impl P0App {
                         db_card = db_card.child(
                             div().flex().child(
                                 Button::new("maint-reclaim-start")
-                                    .label("Reclaim freed space".to_owned())
+                                    .label(self.i18n.tr("Reclaim freed database space").to_owned())
                                     .compact()
                                     .outline()
                                     .on_click(cx.listener(|this, _, _, cx| {
@@ -576,7 +590,7 @@ impl P0App {
                     div()
                         .text_xs()
                         .text_color(palette.muted_foreground)
-                        .child("days"),
+                        .child(SharedString::from(self.i18n.tr("days").to_owned())),
                 )
                 .child(
                     Button::new(SharedString::from(format!("maint-save-{field_key}")))

@@ -178,7 +178,7 @@ impl P0App {
                         )
                         .child(
                             Button::new("labs-workflows-open")
-                                .label("Open Workflows in browser".to_owned())
+                                .label(self.i18n.tr("Open Workflows in browser").to_owned())
                                 .compact()
                                 .outline()
                                 .on_click(move |_, _, cx| cx.open_url(&workflows_url)),

@@ -32,9 +32,11 @@ impl P0App {
                         .flex_1()
                         .text_xs()
                         .text_color(palette.muted_foreground)
-                        .child(
-                            "Plugin shop, installer, and per-plugin panels open in the web app.",
-                        ),
+                        .child(SharedString::from(
+                            self.i18n
+                                .tr("Plugin shop, installer, and per-plugin panels open in the web app.")
+                                .to_owned(),
+                        )),
                 )
                 .child(
                     div().flex_none().child(
@@ -59,7 +61,11 @@ impl P0App {
                     div()
                         .text_sm()
                         .text_color(palette.muted_foreground)
-                        .child("No plugins reported by this environment."),
+                        .child(SharedString::from(
+                            self.i18n
+                                .tr("No plugins reported by this environment.")
+                                .to_owned(),
+                        )),
                 ),
             );
         }

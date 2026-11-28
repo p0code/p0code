@@ -57,9 +57,11 @@ impl P0App {
                         .flex_1()
                         .text_xs()
                         .text_color(palette.muted_foreground)
-                        .child(
-                            "Live snapshot of host resources, server process tree, and local traces.",
-                        ),
+                        .child(SharedString::from(
+                            self.i18n
+                                .tr("Live snapshot of host resources, server process tree, and local traces.")
+                                .to_owned(),
+                        )),
                 )
                 .child(
                     div()
@@ -78,7 +80,7 @@ impl P0App {
                         )
                         .child(
                             Button::new("diag-open-web")
-                                .label("Charts & export in browser".to_owned())
+                                .label(self.i18n.tr("Charts & export in browser").to_owned())
                                 .compact()
                                 .outline()
                                 .on_click(move |_, _, cx| cx.open_url(&web_diag_url)),
@@ -87,7 +89,7 @@ impl P0App {
         );
 
         // 1. Host resources
-        col = col.child(section_heading("Host resources", palette));
+        col = col.child(section_heading(self.i18n.tr("Host resources"), palette));
         match self.bridge.host_resources() {
             None => {
                 col = col.child(div().text_xs().text_color(palette.muted_foreground).child(
@@ -118,7 +120,7 @@ impl P0App {
         }
 
         // 2. Process tree
-        col = col.child(section_heading("Server processes", palette));
+        col = col.child(section_heading(self.i18n.tr("Server processes"), palette));
         match self.bridge.process_diagnostics() {
             None => {
                 col = col.child(div().text_xs().text_color(palette.muted_foreground).child(
@@ -182,7 +184,7 @@ impl P0App {
         }
 
         // 3. Trace diagnostics
-        col = col.child(section_heading("Traces & logs", palette));
+        col = col.child(section_heading(self.i18n.tr("Traces & logs"), palette));
         match self.bridge.trace_diagnostics() {
             None => {
                 col = col.child(div().text_xs().text_color(palette.muted_foreground).child(

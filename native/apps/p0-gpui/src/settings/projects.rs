@@ -76,7 +76,7 @@ impl P0App {
         // 1. Defaults
         col = col.child(section_heading(self.i18n.tr("Defaults"), palette));
         col = col.child(setting_row(
-            self.i18n.tr("Auto-pull before starting threads"),
+            self.i18n.tr("Default automatic pull"),
             Switch::new("proj-default-autopull")
                 .checked(ps.default_auto_pull)
                 .on_click(cx.listener(|this, val: &bool, _, cx| {
@@ -97,7 +97,7 @@ impl P0App {
                 .child(section_heading(self.i18n.tr("Projects"), palette))
                 .child(
                     Button::new("proj-open-web")
-                        .label("Edit scripts & icons in browser".to_owned())
+                        .label(self.i18n.tr("Edit scripts & icons in browser").to_owned())
                         .compact()
                         .outline()
                         .on_click(move |_, _, cx| cx.open_url(&web_projects_url)),
@@ -110,7 +110,11 @@ impl P0App {
                     div()
                         .text_sm()
                         .text_color(palette.muted_foreground)
-                        .child("No projects registered on this environment."),
+                        .child(SharedString::from(
+                            self.i18n
+                                .tr("No projects registered on this environment.")
+                                .to_owned(),
+                        )),
                 ),
             );
         }
@@ -177,10 +181,11 @@ impl P0App {
                                     .items_center()
                                     .gap(px(6.0))
                                     .child(
-                                        div()
-                                            .text_xs()
-                                            .text_color(palette.muted_foreground)
-                                            .child("Auto-pull:"),
+                                        div().text_xs().text_color(palette.muted_foreground).child(
+                                            SharedString::from(
+                                                self.i18n.tr("Auto-pull:").to_owned(),
+                                            ),
+                                        ),
                                     )
                                     .child(auto_pull_choices),
                             ),

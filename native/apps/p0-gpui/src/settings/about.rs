@@ -67,7 +67,7 @@ impl P0App {
             })
             .unwrap_or_else(|| self.i18n.tr("Not connected").to_owned());
         col = col.child(setting_row(
-            "Server",
+            self.i18n.tr("Server"),
             div()
                 .flex()
                 .flex_col()
@@ -123,7 +123,7 @@ impl P0App {
 
         let web_about_url = web_url(self.bridge.base_url(), "/settings/about");
         col = col.child(setting_row(
-            "Updates & desktop backend",
+            self.i18n.tr("Updates & desktop backend"),
             div()
                 .flex()
                 .items_center()
@@ -135,9 +135,11 @@ impl P0App {
                         .flex_1()
                         .text_xs()
                         .text_color(palette.muted_foreground)
-                        .child(
-                            "Native client self-updates are not built in yet. Manage server updates or inspect backend details in the web app.",
-                        ),
+                        .child(SharedString::from(
+                            self.i18n
+                                .tr("Native client self-updates are not built in yet. Manage server updates or inspect backend details in the web app.")
+                                .to_owned(),
+                        )),
                 )
                 .child(
                     div().flex_none().child(

@@ -96,7 +96,7 @@ impl P0App {
         let mut col = div().flex().flex_col().gap(px(12.0));
 
         // 1. Writing style
-        col = col.child(section_heading("Writing & commits", palette));
+        col = col.child(section_heading(self.i18n.tr("Writing & commits"), palette));
         let mut modes = div().flex().flex_wrap().gap(px(6.0));
         for (mode, label) in [
             ("repo_conventions", "Repository conventions"),
@@ -118,18 +118,25 @@ impl P0App {
                 })),
             );
         }
-        col = col.child(setting_row("Commit & PR writing style", modes, palette));
+        col = col.child(setting_row(
+            self.i18n.tr("Commit and pull request writing"),
+            modes,
+            palette,
+        ));
 
         if sc.writing_mode == "custom" {
             let instr_val = sc.writing_custom_instructions.clone();
+            let instr_placeholder = self
+                .i18n
+                .tr("Custom commit/PR writing instructions")
+                .to_owned();
             let instr_in = self
                 .settings_ui
                 .source_control
                 .writing_instructions_input
                 .get_or_insert_with(|| {
                     cx.new(|cx| {
-                        let mut st = InputState::new(window, cx)
-                            .placeholder("Custom commit/PR writing instructions");
+                        let mut st = InputState::new(window, cx).placeholder(instr_placeholder);
                         st.set_value(instr_val, window, cx);
                         st
                     })
@@ -137,7 +144,7 @@ impl P0App {
                 .clone();
             let save_in = instr_in.clone();
             col = col.child(setting_row(
-                "Writing instructions",
+                self.i18n.tr("Writing instructions"),
                 div()
                     .flex()
                     .items_center()
@@ -161,7 +168,7 @@ impl P0App {
         }
 
         col = col.child(setting_row(
-            "Follow pull request templates",
+            self.i18n.tr("Follow pull request templates"),
             Switch::new("sc-pr-templates")
                 .checked(sc.follow_change_request_templates)
                 .on_click(cx.listener(|this, val: &bool, _, cx| {
@@ -202,10 +209,14 @@ impl P0App {
                 })),
             );
         }
-        col = col.child(setting_row("Default merge method", merge_methods, palette));
+        col = col.child(setting_row(
+            self.i18n.tr("Default merge method"),
+            merge_methods,
+            palette,
+        ));
 
         col = col.child(setting_row(
-            "Remove agent credits on merge",
+            self.i18n.tr("Remove agent credits when merging"),
             Switch::new("sc-remove-credits")
                 .checked(sc.remove_agent_credits_on_merge)
                 .on_click(cx.listener(|this, val: &bool, _, cx| {
@@ -217,9 +228,9 @@ impl P0App {
         ));
 
         // 3. Review guides
-        col = col.child(section_heading("Review guides", palette));
+        col = col.child(section_heading(self.i18n.tr("Review guides"), palette));
         col = col.child(setting_row(
-            "Enable PR review guides",
+            self.i18n.tr("Enable PR review guides"),
             Switch::new("sc-review-guides")
                 .checked(sc.review_guides_enabled)
                 .on_click(cx.listener(|this, val: &bool, _, cx| {
@@ -231,14 +242,17 @@ impl P0App {
         ));
         if sc.review_guides_enabled {
             let rg_val = sc.review_guide_instructions.clone();
+            let rg_placeholder = self
+                .i18n
+                .tr("Optional instructions for PR review guides")
+                .to_owned();
             let rg_in = self
                 .settings_ui
                 .source_control
                 .review_guide_instructions_input
                 .get_or_insert_with(|| {
                     cx.new(|cx| {
-                        let mut st = InputState::new(window, cx)
-                            .placeholder("Optional instructions for PR review guides");
+                        let mut st = InputState::new(window, cx).placeholder(rg_placeholder);
                         st.set_value(rg_val, window, cx);
                         st
                     })
@@ -246,7 +260,7 @@ impl P0App {
                 .clone();
             let save_rg = rg_in.clone();
             col = col.child(setting_row(
-                "Review guide instructions",
+                self.i18n.tr("Review guide instructions"),
                 div()
                     .flex()
                     .items_center()
@@ -269,9 +283,12 @@ impl P0App {
         }
 
         // 4. Host accounts & issue trackers (OAuth/tokens stay in browser)
-        col = col.child(section_heading("Hosts & issue trackers", palette));
+        col = col.child(section_heading(
+            self.i18n.tr("Hosts & issue trackers"),
+            palette,
+        ));
         col = col.child(setting_row(
-            "GitHub, GitLab & trackers",
+            self.i18n.tr("GitHub, GitLab & trackers"),
             div()
                 .flex()
                 .items_center()
@@ -283,7 +300,11 @@ impl P0App {
                         .flex_1()
                         .text_xs()
                         .text_color(palette.muted_foreground)
-                        .child("Manage host CLI discovery, OAuth sign-ins, and personal access tokens in the web app."),
+                        .child(SharedString::from(
+                            self.i18n
+                                .tr("Manage host CLI discovery, OAuth sign-ins, and personal access tokens in the web app.")
+                                .to_owned(),
+                        )),
                 )
                 .child(
                     div().flex_none().child(

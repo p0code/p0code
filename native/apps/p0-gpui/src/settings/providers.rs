@@ -491,6 +491,7 @@ impl P0App {
 
         // Expanded: instance display name + binary path + interactive models list + custom models
         let init_name = read_instance_display_name(settings, provider);
+        let name_placeholder = self.i18n.tr("Display name").to_owned();
         let name_input = self
             .settings_ui
             .providers
@@ -498,7 +499,7 @@ impl P0App {
             .entry(instance_id.clone())
             .or_insert_with(|| {
                 cx.new(|cx| {
-                    let mut st = InputState::new(window, cx).placeholder("Display name");
+                    let mut st = InputState::new(window, cx).placeholder(name_placeholder);
                     st.set_value(init_name, window, cx);
                     st
                 })
@@ -506,6 +507,7 @@ impl P0App {
             .clone();
 
         let init_bin = read_instance_config_str(settings, &instance_id, "binaryPath");
+        let bin_placeholder = self.i18n.tr("Binary path (optional)").to_owned();
         let bin_input = self
             .settings_ui
             .providers
@@ -513,7 +515,7 @@ impl P0App {
             .entry(instance_id.clone())
             .or_insert_with(|| {
                 cx.new(|cx| {
-                    let mut st = InputState::new(window, cx).placeholder("Binary path (optional)");
+                    let mut st = InputState::new(window, cx).placeholder(bin_placeholder);
                     st.set_value(init_bin, window, cx);
                     st
                 })
@@ -700,7 +702,7 @@ impl P0App {
                     if is_default {
                         self.i18n.tr("Default").to_owned()
                     } else {
-                        "Set default".to_owned()
+                        self.i18n.tr("Set default").to_owned()
                     },
                     is_default,
                     palette,
@@ -720,7 +722,11 @@ impl P0App {
                 controls = controls.child(
                     choice(
                         format!("model-hide-{instance_id}-{mx}"),
-                        if hidden { "Hidden" } else { "Visible" },
+                        if hidden {
+                            self.i18n.tr("Hidden").to_owned()
+                        } else {
+                            self.i18n.tr("Visible").to_owned()
+                        },
                         !hidden,
                         palette,
                     )
@@ -776,13 +782,14 @@ impl P0App {
 
         // Add custom model input
         if provider.driver != "antigravity" {
+            let custom_placeholder = self.i18n.tr("Add custom model").to_owned();
             let custom_input = self
                 .settings_ui
                 .providers
                 .custom_model_inputs
                 .entry(instance_id.clone())
                 .or_insert_with(|| {
-                    cx.new(|cx| InputState::new(window, cx).placeholder("Add custom model slug…"))
+                    cx.new(|cx| InputState::new(window, cx).placeholder(custom_placeholder))
                 })
                 .clone();
             let add_in = custom_input.clone();

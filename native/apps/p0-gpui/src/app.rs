@@ -612,12 +612,12 @@ impl P0App {
             action: PaletteAction::OpenSettings(s.path),
         }));
         items.push(PaletteItem {
-            label: "Toggle sidebar".to_owned(),
+            label: t("Toggle Sidebar"),
             detail: String::new(),
             action: PaletteAction::ToggleSidebar,
         });
         items.push(PaletteItem {
-            label: "Focus composer".to_owned(),
+            label: t("Focus composer"),
             detail: String::new(),
             action: PaletteAction::FocusComposer,
         });
@@ -798,12 +798,16 @@ impl P0App {
                 palette.warning,
                 match retry_in_ms {
                     Some(ms) => format!(
-                        "Signed in from another desktop app · {}s",
+                        "{} · {}s",
+                        self.i18n.tr("Signed in from another desktop app"),
                         ms.div_ceil(1000)
                     ),
-                    None => "Signed in from another desktop app".to_owned(),
+                    None => self
+                        .i18n
+                        .tr("Signed in from another desktop app")
+                        .to_owned(),
                 },
-                Some("Sign in here".to_owned()),
+                Some(self.i18n.tr("Sign in here").to_owned()),
             ),
             ConnectionState::Disconnected => (
                 palette.muted_foreground,

@@ -78,13 +78,13 @@ impl P0App {
 
         let mut colors = div().flex().gap(px(6.0));
         for (scheme, label) in [
-            ("red-green", "Red / Green"),
-            ("blue-orange", "Blue / Orange"),
+            ("red-green", "Red & green"),
+            ("blue-orange", "Blue & orange"),
         ] {
             colors = colors.child(
                 choice(
                     format!("diff-colors-{scheme}"),
-                    label.to_owned(),
+                    self.i18n.tr(label).to_owned(),
                     self.prefs.diff_color_scheme == scheme,
                     palette,
                 )
@@ -114,7 +114,7 @@ impl P0App {
         ));
 
         col = col.child(setting_row(
-            self.i18n.tr("Open pull request links in app"),
+            self.i18n.tr("Open pull requests in p0code"),
             Switch::new("diff-pr-links-in-app")
                 .checked(self.prefs.pull_request_links_open_in_app)
                 .on_click(cx.listener(|this, val: &bool, window, cx| {

@@ -314,7 +314,9 @@ impl P0App {
                                         .new(|cx| InputState::new(window, cx).placeholder("mod+k")),
                                     when_input: cx.new(|cx| {
                                         InputState::new(window, cx).placeholder(
-                                            "Optional when clause (e.g. !terminalFocus)",
+                                            this.i18n
+                                                .tr("Optional when clause (e.g. !terminalFocus)")
+                                                .to_owned(),
                                         )
                                     }),
                                 });
@@ -342,7 +344,7 @@ impl P0App {
                 let msg = issue
                     .get("message")
                     .and_then(serde_json::Value::as_str)
-                    .unwrap_or("Invalid keybindings configuration entry");
+                    .unwrap_or_else(|| self.i18n.tr("Invalid keybindings configuration entry"));
                 issues_box = issues_box.child(
                     div()
                         .text_xs()
@@ -376,10 +378,13 @@ impl P0App {
                             )
                             .child(Input::new(&cmd_in))
                             .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(palette.muted_foreground)
-                                    .child("Shortcut (e.g. mod+k, ctrl+shift+p)"),
+                                div().text_xs().text_color(palette.muted_foreground).child(
+                                    SharedString::from(
+                                        self.i18n
+                                            .tr("Shortcut (e.g. mod+k, ctrl+shift+p)")
+                                            .to_owned(),
+                                    ),
+                                ),
                             )
                             .child(Input::new(&key_in))
                             .child(
@@ -704,8 +709,9 @@ impl P0App {
             state
         });
         key_input.update(cx, |s, cx| s.focus(window, cx));
+        let when_placeholder = self.i18n.tr("When (optional)").to_owned();
         let when_input = cx.new(|cx| {
-            let mut state = InputState::new(window, cx).placeholder("When (optional)");
+            let mut state = InputState::new(window, cx).placeholder(when_placeholder);
             state.set_value(initial_when, window, cx);
             state
         });

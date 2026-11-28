@@ -109,7 +109,7 @@ impl P0App {
                 ))
                 .child(
                     Button::new("sched-open-web")
-                        .label("Create / edit in browser".to_owned())
+                        .label(self.i18n.tr("Create / edit in browser").to_owned())
                         .compact()
                         .outline()
                         .on_click(move |_, _, cx| cx.open_url(&web_tasks_url)),
@@ -122,7 +122,11 @@ impl P0App {
                     div()
                         .text_sm()
                         .text_color(palette.muted_foreground)
-                        .child("No scheduled tasks configured on this environment."),
+                        .child(SharedString::from(
+                            self.i18n
+                                .tr("No scheduled tasks configured on this environment.")
+                                .to_owned(),
+                        )),
                 ),
             );
         }
@@ -227,7 +231,7 @@ impl P0App {
 
             let mut actions = div().flex().items_center().gap(px(6.0)).child(
                 Button::new(SharedString::from(format!("sched-run-{}", task.id)))
-                    .label("Run now".to_owned())
+                    .label(self.i18n.tr("Run now").to_owned())
                     .compact()
                     .outline()
                     .on_click(cx.listener(move |this, _, _, _| {
@@ -238,7 +242,7 @@ impl P0App {
                 actions = actions
                     .child(
                         Button::new(SharedString::from(format!("sched-del-yes-{}", task.id)))
-                            .label("Confirm delete".to_owned())
+                            .label(self.i18n.tr("Confirm delete").to_owned())
                             .compact()
                             .danger()
                             .on_click(cx.listener(move |this, _, _, cx| {

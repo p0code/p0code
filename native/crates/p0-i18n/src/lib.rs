@@ -297,6 +297,19 @@ mod tests {
         let zh_tw = Catalog::for_locale("zh-TW");
         assert_ne!(zh_tw.tr("Settings"), "Settings");
         assert_eq!(zh_tw.tr("Settings"), zh_tw.get(Key::Settings));
+        for native_key in [
+            "All turns",
+            "Path to a file",
+            "Uploading…",
+            "Access & sharing",
+            "Host resources",
+        ] {
+            assert_ne!(
+                zh_tw.tr(native_key),
+                native_key,
+                "expected zh-TW translation for {native_key:?}"
+            );
+        }
         assert_eq!(
             zh_tw.tr("A string the web app never shows"),
             "A string the web app never shows"

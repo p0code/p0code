@@ -120,13 +120,14 @@ impl P0App {
         // 1. Creation
         col = col.child(section_heading(self.i18n.tr("Creation"), palette));
         let dir_val = wt.worktrees_directory.clone();
+        let dir_placeholder = self.i18n.tr("Default (T3 home)").to_owned();
         let dir_in = self
             .settings_ui
             .worktrees
             .dir_input
             .get_or_insert_with(|| {
                 cx.new(|cx| {
-                    let mut st = InputState::new(window, cx).placeholder("Default (T3 home)");
+                    let mut st = InputState::new(window, cx).placeholder(dir_placeholder);
                     st.set_value(dir_val, window, cx);
                     st
                 })
@@ -227,13 +228,14 @@ impl P0App {
 
         if wt.branch_naming_mode == "static" {
             let prefix_val = wt.branch_name_prefix.clone();
+            let prefix_placeholder = self.i18n.tr("No prefix").to_owned();
             let prefix_in = self
                 .settings_ui
                 .worktrees
                 .branch_prefix_input
                 .get_or_insert_with(|| {
                     cx.new(|cx| {
-                        let mut st = InputState::new(window, cx).placeholder("No prefix");
+                        let mut st = InputState::new(window, cx).placeholder(prefix_placeholder);
                         st.set_value(prefix_val, window, cx);
                         st
                     })
@@ -263,14 +265,14 @@ impl P0App {
             ));
         } else if wt.branch_naming_mode == "custom" {
             let instr_val = wt.branch_name_instructions.clone();
+            let instr_placeholder = self.i18n.tr("Instructions for branch naming").to_owned();
             let instr_in = self
                 .settings_ui
                 .worktrees
                 .branch_instructions_input
                 .get_or_insert_with(|| {
                     cx.new(|cx| {
-                        let mut st = InputState::new(window, cx)
-                            .placeholder("Instructions for branch naming");
+                        let mut st = InputState::new(window, cx).placeholder(instr_placeholder);
                         st.set_value(instr_val, window, cx);
                         st
                     })
@@ -435,7 +437,7 @@ impl P0App {
                     div()
                         .text_xs()
                         .text_color(palette.muted_foreground)
-                        .child("days"),
+                        .child(SharedString::from(self.i18n.tr("days").to_owned())),
                 )
                 .child(
                     Button::new(SharedString::from(format!("wt-save-{key}")))

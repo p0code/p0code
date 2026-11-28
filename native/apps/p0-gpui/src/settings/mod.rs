@@ -405,7 +405,7 @@ impl crate::app::P0App {
                         div()
                             .text_sm()
                             .text_color(palette.muted_foreground)
-                            .child("Not in the native client yet."),
+                            .child(t("Not in the native client yet.")),
                     )
                     .child(
                         Button::new("settings-open-web")

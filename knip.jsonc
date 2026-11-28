@@ -99,9 +99,14 @@
       "ignoreDependencies": ["playwright-core", "electron-builder"],
     },
     "apps/web": {
-      // Worktree setup (scripts/setup-worktree.ts) runs this directly, and evidence
-      // fixtures run under node.
-      "entry": ["src/epubPreviewMain.tsx!", "scripts/warm-dep-cache.ts", "test/fixtures/**/*.mjs"],
+      // Worktree setup (scripts/setup-worktree.ts) runs this directly, evidence
+      // fixtures run under node, and nativeMessages.ts keeps p0-gpui keys in GT catalogs.
+      "entry": [
+        "src/epubPreviewMain.tsx!",
+        "src/i18n/nativeMessages.ts",
+        "scripts/warm-dep-cache.ts",
+        "test/fixtures/**/*.mjs",
+      ],
       // UI component modules are copied and adapted as cohesive sets. Keep their
       // named subcomponents even before they have callers; the file audit still
       // reports an entire component module when nothing imports it.

@@ -113,7 +113,12 @@ impl P0App {
         let require_confirm = self.prefs.confirm_thread_delete;
 
         for (project_title, project_threads) in groups {
-            col = col.child(section_heading(&project_title, palette));
+            let heading = if project_title == "No project" {
+                self.i18n.tr("No project")
+            } else {
+                project_title.as_str()
+            };
+            col = col.child(section_heading(heading, palette));
             for thread in project_threads {
                 let tid = thread.id.clone();
                 let unarchive_id = tid.clone();
