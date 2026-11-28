@@ -17,6 +17,7 @@ import {
   MigrateFromT3Error,
   makePathRewriter,
   migrateFromT3,
+  parseMigrationMarkerSource,
   shouldOfferT3Import,
 } from "./migrateFromT3.ts";
 import { BUILD_MIGRATION_HEAD, migrationManifest } from "./migrationManifest.ts";
@@ -682,5 +683,19 @@ describe("makePathRewriter", () => {
       '{"p":"C:\\\\Users\\\\a\\\\.p0code\\\\userdata\\\\x"}',
     );
     assert.equal(rewrite("C:/Users/a/.t3/userdata/x").text, "C:/Users/a/.p0code/userdata/x");
+  });
+});
+
+describe("parseMigrationMarkerSource", () => {
+  it("extracts an absolute source path and rejects missing or malformed markers", () => {
+    assert.equal(
+      parseMigrationMarkerSource(
+        JSON.stringify({ source: NodePath.resolve("legacy", ".t3"), toolVersion: 1 }),
+      ),
+      NodePath.resolve("legacy", ".t3"),
+    );
+    assert.isUndefined(parseMigrationMarkerSource(JSON.stringify({ source: "legacy/.t3" })));
+    assert.isUndefined(parseMigrationMarkerSource(JSON.stringify({ toolVersion: 1 })));
+    assert.isUndefined(parseMigrationMarkerSource("{not json"));
   });
 });

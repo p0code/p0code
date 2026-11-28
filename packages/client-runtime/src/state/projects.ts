@@ -138,11 +138,14 @@ export function findProjectByPath<T extends { workspaceRoot?: string; cwd?: stri
 export function isScratchProject(
   project: { readonly workspaceRoot: string; readonly isScratch?: true },
   scratchWorkspaceRoot: string | null | undefined,
+  legacyScratchWorkspaceRoots?: ReadonlyArray<string> | null,
 ): boolean {
   return (
     project.isScratch === true ||
     (scratchWorkspaceRoot != null &&
-      findProjectByPath([project], scratchWorkspaceRoot) !== undefined)
+      findProjectByPath([project], scratchWorkspaceRoot) !== undefined) ||
+    (legacyScratchWorkspaceRoots != null &&
+      legacyScratchWorkspaceRoots.some((root) => findProjectByPath([project], root) !== undefined))
   );
 }
 

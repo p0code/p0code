@@ -287,7 +287,10 @@ export function canTurnThreadIntoProject(threadRef: ScopedThreadRef): boolean {
     environmentId: threadRef.environmentId,
     projectId: thread.projectId,
   });
-  return project !== null && isScratchProject(project, config.scratchWorkspaceRoot);
+  return (
+    project !== null &&
+    isScratchProject(project, config.scratchWorkspaceRoot, config.legacyScratchWorkspaceRoots)
+  );
 }
 
 /** A No project thread on a server that can move it into an existing project. */
@@ -299,7 +302,10 @@ export function canMoveThreadIntoProject(threadRef: ScopedThreadRef): boolean {
     environmentId: threadRef.environmentId,
     projectId: thread.projectId,
   });
-  return project !== null && isScratchProject(project, config.scratchWorkspaceRoot);
+  return (
+    project !== null &&
+    isScratchProject(project, config.scratchWorkspaceRoot, config.legacyScratchWorkspaceRoots)
+  );
 }
 
 function threadOperationFailure(target: ScopedThreadRef) {
@@ -594,7 +600,11 @@ export function useThreadActions() {
     if (
       orphanedWorktreePath !== null &&
       threadProject !== null &&
-      !isScratchProject(threadProject, environmentConfig?.scratchWorkspaceRoot) &&
+      !isScratchProject(
+        threadProject,
+        environmentConfig?.scratchWorkspaceRoot,
+        environmentConfig?.legacyScratchWorkspaceRoots,
+      ) &&
       localApi
     ) {
       const sessionResult = await loadSessionState(threadRef.environmentId);

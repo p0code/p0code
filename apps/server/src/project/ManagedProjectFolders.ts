@@ -9,6 +9,7 @@ import {
 } from "@t3tools/contracts";
 import { foldLatinDiacritics, newProjectFolderName } from "@t3tools/shared/path";
 import * as HostProcess from "@t3tools/shared/HostProcess";
+import { MIGRATION_MARKER_FILE, parseMigrationMarkerSource } from "@t3tools/shared/migrateFromT3";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as SecureRandom from "effect/crypto/SecureRandom";
@@ -116,6 +117,7 @@ export class ManagedProjectFolders extends Context.Service<
   ManagedProjectFolders,
   {
     readonly scratchRoot: Effect.Effect<Option.Option<string>>;
+    readonly legacyScratchRoots: Effect.Effect<ReadonlyArray<string>>;
     readonly ensureScratchProject: Effect.Effect<{ readonly projectId: ProjectId }, ScratchError>;
     readonly isScratchProject: (projectId: ProjectId) => Effect.Effect<boolean>;
     readonly folderForThread: (input: {
@@ -350,30 +352,38 @@ const make = Effect.gen(function* () {
     },
   );
 
-  const isScratchRoot = (projectId: ProjectId, root: string) =>
-    projects.getById(projectId).pipe(
-      Effect.map(
-        Option.exists((project) => path.resolve(project.workspaceRoot) === path.resolve(root)),
-      ),
-      Effect.orElseSucceed(() => false),
-    );
+  const legacyScratchRoots: ManagedProjectFolders["Service"]["legacyScratchRoots"] = Effect.gen(
+    function* () {
+      const marker = yield* fileSystem
+        .readFileString(path.join(config.stateDir, MIGRATION_MARKER_FILE))
+        .pipe(Effect.orElseSucceed(() => undefined));
+      const source = marker === undefined ? undefined : parseMigrationMarkerSource(marker);
+      if (source === undefined) return [];
+      const root = scratchFolderRoot(source, path);
+      const projectRoot = yield* scratchProjectRoot(root);
+      return projectRoot === root ? [root] : [root, projectRoot];
+    },
+  );
 
-  const isScratchProject: ManagedProjectFolders["Service"]["isScratchProject"] = (projectId) =>
-    scratchRoot.pipe(
-      Effect.flatMap(
-        Option.match({
-          onNone: () => Effect.succeed(false),
-          onSome: (root) => isScratchRoot(projectId, root),
-        }),
-      ),
-    );
+  const isScratchProject: ManagedProjectFolders["Service"]["isScratchProject"] = Effect.fn(
+    "ManagedProjectFolders.isScratchProject",
+  )(function* (projectId) {
+    const project = yield* projects
+      .getById(projectId)
+      .pipe(Effect.orElseSucceed(() => Option.none()));
+    if (Option.isNone(project)) return false;
+    const workspaceRoot = path.resolve(project.value.workspaceRoot);
+    const current = yield* scratchRoot;
+    if (Option.isSome(current) && workspaceRoot === current.value) return true;
+    return (yield* legacyScratchRoots).includes(workspaceRoot);
+  });
 
   const folderForThread: ManagedProjectFolders["Service"]["folderForThread"] = Effect.fn(
     "ManagedProjectFolders.folderForThread",
   )(function* (input) {
     const root = yield* scratchRoot;
     if (Option.isNone(root)) return Option.none();
-    if (!(yield* isScratchRoot(input.projectId, root.value))) return Option.none();
+    if (!(yield* isScratchProject(input.projectId))) return Option.none();
     const date = DateTime.formatIso(yield* DateTime.now).slice(0, 10);
     const words = folderWords(input.text);
     const id = input.threadId.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -519,6 +529,7 @@ const make = Effect.gen(function* () {
 
   return ManagedProjectFolders.of({
     scratchRoot,
+    legacyScratchRoots,
     ensureScratchProject,
     isScratchProject,
     folderForThread,

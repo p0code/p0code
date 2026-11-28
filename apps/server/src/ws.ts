@@ -1841,6 +1841,7 @@ export const layerWsRpc = (
           ? secretStore.value.storage
           : undefined;
         const scratchWorkspaceRoot = yield* managedFolders.scratchRoot;
+        const legacyScratchWorkspaceRoots = yield* managedFolders.legacyScratchRoots;
         const lastEventLoopStall = yield* eventLoopMonitor.latestNoticeableStall;
         const discovery = yield* resolveOpenDiscoveryForConfig({
           editors: externalLauncher.resolveAvailableEditors(),
@@ -1915,6 +1916,7 @@ export const layerWsRpc = (
             onNone: () => ({}),
             onSome: (root) => ({ scratchWorkspaceRoot: root }),
           }),
+          ...(legacyScratchWorkspaceRoots.length === 0 ? {} : { legacyScratchWorkspaceRoots }),
           newProjectsRoot: yield* managedFolders.namedProjectsRoot,
           ...(lastEventLoopStall === undefined ? {} : { lastEventLoopStall }),
           serverTime: DateTime.formatIso(yield* DateTime.now),

@@ -12968,12 +12968,16 @@ it.layer(layerTest)("snooze queued runs", (it) => {
 });
 
 const SCRATCH_ROOT = "/tmp/runtime-layer-promotion-scratch";
+const LEGACY_SCRATCH_ROOT = "/tmp/runtime-layer-promotion-legacy-scratch";
 const SCRATCH_PROJECT_ID = ProjectId.make("runtime-layer-promotion-scratch");
+const LEGACY_SCRATCH_PROJECT_ID = ProjectId.make("runtime-layer-promotion-legacy-scratch");
 const layerScratchPromotionTest = ScratchThreadPromotion.layer.pipe(
   Layer.provide(
     Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({
       scratchRoot: Effect.succeedSome(SCRATCH_ROOT),
-      isScratchProject: (projectId) => Effect.succeed(projectId === SCRATCH_PROJECT_ID),
+      legacyScratchRoots: Effect.succeed([LEGACY_SCRATCH_ROOT]),
+      isScratchProject: (projectId) =>
+        Effect.succeed(projectId === SCRATCH_PROJECT_ID || projectId === LEGACY_SCRATCH_PROJECT_ID),
       namedProjectsRoot: Effect.succeed("/projects"),
     }),
   ),
@@ -12982,16 +12986,20 @@ const layerScratchPromotionTest = ScratchThreadPromotion.layer.pipe(
 );
 
 it.layer(layerScratchPromotionTest)("turning a No project thread into a project", (it) => {
-  const setup = Effect.fn(function* (name: string) {
+  const setup = Effect.fn(function* (
+    name: string,
+    projectId = SCRATCH_PROJECT_ID,
+    root = SCRATCH_ROOT,
+  ) {
     const projects = yield* ProjectService.ProjectService;
     const orchestrator = yield* Orchestrator.OrchestratorV2;
-    const folder = `${SCRATCH_ROOT}/2026-01-01-${name}`;
-    if (Option.isNone(yield* projects.getById(SCRATCH_PROJECT_ID))) {
+    const folder = `${root}/2026-01-01-${name}`;
+    if (Option.isNone(yield* projects.getById(projectId))) {
       yield* projects.create({
-        commandId: CommandId.make("promotion-scratch-create"),
-        projectId: SCRATCH_PROJECT_ID,
+        commandId: CommandId.make(`${projectId}:create`),
+        projectId,
         title: "No project",
-        workspaceRoot: SCRATCH_ROOT,
+        workspaceRoot: root,
       });
     }
     const createThread = (suffix: string, worktreePath: string) =>
@@ -13002,7 +13010,7 @@ it.layer(layerScratchPromotionTest)("turning a No project thread into a project"
           creationSource: "web",
           commandId: CommandId.make(`promotion-${name}-${suffix}-create`),
           threadId: ThreadId.make(`promotion-${name}-${suffix}`),
-          projectId: SCRATCH_PROJECT_ID,
+          projectId,
           title: `${name} ${suffix}`,
           modelSelection,
           runtimeMode: "full-access",
@@ -13155,6 +13163,28 @@ it.layer(layerScratchPromotionTest)("turning a No project thread into a project"
         error.message,
         "Only a No project thread with its own folder can become a project.",
       );
+    }),
+  );
+
+  it.effect("promotes a thread whose folder lives in a migrated legacy scratch root", () =>
+    Effect.gen(function* () {
+      const promotion = yield* ScratchThreadPromotion.ScratchThreadPromotion;
+      const projects = yield* ProjectService.ProjectService;
+      const { folder, createThread } = yield* setup(
+        "legacy",
+        LEGACY_SCRATCH_PROJECT_ID,
+        LEGACY_SCRATCH_ROOT,
+      );
+      const threadId = yield* createThread("main", folder);
+
+      const { projectId } = yield* promotion.promote({ threadId });
+
+      const project = yield* projects.getById(projectId);
+      assert.equal(Option.getOrUndefined(project)?.workspaceRoot, folder);
+      assert.equal(Option.getOrUndefined(project)?.title, "legacy main");
+      const shell = yield* shellOf(threadId);
+      assert.equal(shell?.projectId, projectId);
+      assert.isNull(shell?.worktreePath);
     }),
   );
 });
