@@ -1,9 +1,8 @@
 //! WebSocket `effect/rpc` transport with 5s Ping / 15s liveness timeout, an `Ack` per `Chunk`,
 //! `U+001E` frame-part reassembly, and jittered exponential backoff reconnect.
 //!
-//! The read loop never awaits a consumer: stream values go to unbounded per-request channels and
-//! are acked once queued. A slow UI therefore cannot stall pings or other requests (or deadlock a
-//! caller that awaits a unary reply while its stream channel is full).
+//! The read loop never awaits a consumer. Bounded per-request queues acknowledge chunks only
+//! after consumption; a peer exceeding the queue budget fails that stream explicitly.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -109,7 +108,19 @@ impl ClientConfig {
     }
 }
 
+/// Per-stream cap on values waiting for the UI. Acks are withheld until values are consumed, so a
+/// compliant server never reaches it; it only stops a peer that ignores flow control.
+const STREAM_QUEUE_VALUES: usize = 4096;
+
+struct StreamValue {
+    value: Value,
+    ack: bool,
+}
+
 enum ActorCmd {
+    Ack {
+        id: u64,
+    },
     Unary {
         id: u64,
         tag: String,
@@ -120,7 +131,7 @@ enum ActorCmd {
         id: u64,
         tag: String,
         payload: Value,
-        sink: mpsc::UnboundedSender<Result<Value, ClientError>>,
+        sink: mpsc::Sender<Result<StreamValue, ClientError>>,
     },
     Interrupt {
         id: u64,
@@ -131,13 +142,13 @@ enum ActorCmd {
 
 enum PendingCall {
     Unary(oneshot::Sender<Result<Value, ClientError>>),
-    Stream(mpsc::UnboundedSender<Result<Value, ClientError>>),
+    Stream(mpsc::Sender<Result<StreamValue, ClientError>>),
 }
 
 /// Handle to a live streaming RPC subscription. Dropping it sends `Interrupt` to the server.
 pub struct Subscription<T> {
     id: u64,
-    rx: mpsc::UnboundedReceiver<Result<Value, ClientError>>,
+    rx: mpsc::Receiver<Result<StreamValue, ClientError>>,
     cmd_tx: mpsc::UnboundedSender<ActorCmd>,
     _marker: std::marker::PhantomData<T>,
 }
@@ -145,7 +156,12 @@ pub struct Subscription<T> {
 impl<T: DeserializeOwned> Subscription<T> {
     pub async fn recv(&mut self) -> Option<Result<T, ClientError>> {
         let raw = self.rx.recv().await?;
-        Some(raw.and_then(|val| serde_json::from_value(val).map_err(ClientError::from)))
+        Some(raw.and_then(|item| {
+            if item.ack {
+                let _ = self.cmd_tx.send(ActorCmd::Ack { id: self.id });
+            }
+            serde_json::from_value(item.value).map_err(ClientError::from)
+        }))
     }
 }
 
@@ -258,7 +274,7 @@ impl RpcClient {
     ) -> Result<Subscription<T>, ClientError> {
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
         let value = serde_json::to_value(payload)?;
-        let (sink_tx, sink_rx) = mpsc::unbounded_channel();
+        let (sink_tx, sink_rx) = mpsc::channel(STREAM_QUEUE_VALUES + 1);
 
         self.cmd_tx
             .send(ActorCmd::Stream {
@@ -764,7 +780,16 @@ where
                                 }
                             }
                             Err(err) => {
-                                let _ = sink.send(Err(ClientError::Protocol(err.to_string())));
+                                let _ = sink.try_send(Err(ClientError::Protocol(err.to_string())));
+                            }
+                        }
+                    }
+                    ActorCmd::Ack { id } => {
+                        if matches!(pending.get(&id), Some(PendingCall::Stream(_))) {
+                            let ack = RpcClientFrame::Ack { request_id: RequestId::Number(id) };
+                            if let Ok(text) = encode_client_frame(&ack)
+                                && let Err(err) = ws_tx.send(Message::Text(text.into())).await {
+                                break SessionOutcome::Disconnected(format!("ack send failed: {err}"));
                             }
                         }
                     }
@@ -806,22 +831,25 @@ where
                                 break SessionOutcome::Disconnected(format!("socket defect: {defect}"));
                             }
                             RpcServerFrame::Chunk { request_id, values } => {
-                                // Send Ack promptly for every Chunk so p0d / Node streams never stall.
-                                let ack = RpcClientFrame::Ack {
-                                    request_id: request_id.clone(),
-                                };
-                                if let Ok(ack_text) = encode_client_frame(&ack)
-                                    && let Err(err) = ws_tx.send(Message::Text(ack_text.into())).await
-                                {
-                                    break SessionOutcome::Disconnected(format!("ack send failed: {err}"));
-                                }
                                 if let RequestId::Number(id) = request_id {
                                     let mut closed = false;
                                     if let Some(PendingCall::Stream(sink)) = pending.get(&id) {
-                                        for value in values {
-                                            if sink.send(Ok(value)).is_err() {
-                                                closed = true;
-                                                break;
+                                        // Keep one slot for the terminal error, even if the UI never reads.
+                                        if values.len() >= sink.capacity() {
+                                            let _ = sink.try_send(Err(ClientError::Protocol("stream queue overflow; resubscribe from the last consumed cursor".to_owned())));
+                                            closed = true;
+                                        } else if values.is_empty() {
+                                            let ack = RpcClientFrame::Ack { request_id: RequestId::Number(id) };
+                                            if let Ok(text) = encode_client_frame(&ack) {
+                                                let _ = ws_tx.send(Message::Text(text.into())).await;
+                                            }
+                                        } else {
+                                            let last = values.len() - 1;
+                                            for (index, value) in values.into_iter().enumerate() {
+                                                if sink.try_send(Ok(StreamValue { value, ack: index == last })).is_err() {
+                                                    closed = true;
+                                                    break;
+                                                }
                                             }
                                         }
                                     }
@@ -858,7 +886,7 @@ where
                                             let msg = other
                                                 .failure_message()
                                                 .unwrap_or_else(|| "Stream failed".to_owned());
-                                            let _ = sink.send(Err(ClientError::RpcFailure(msg)));
+                                            let _ = sink.try_send(Err(ClientError::RpcFailure(msg)));
                                         }
                                     }
                                 }
@@ -893,7 +921,7 @@ where
                 )));
             }
             PendingCall::Stream(sink) => {
-                let _ = sink.send(Err(ClientError::Transport(
+                let _ = sink.try_send(Err(ClientError::Transport(
                     "connection closed while stream was active".to_owned(),
                 )));
             }
@@ -937,9 +965,9 @@ async fn wait_retry_or_shutdown(
                         let _ = reply.send(Err(ClientError::Transport("not connected".to_owned())));
                     }
                     Some(ActorCmd::Stream { sink, .. }) => {
-                        let _ = sink.send(Err(ClientError::Transport("not connected".to_owned())));
+                        let _ = sink.try_send(Err(ClientError::Transport("not connected".to_owned())));
                     }
-                    Some(ActorCmd::Interrupt { .. }) => {}
+                    Some(ActorCmd::Interrupt { .. } | ActorCmd::Ack { .. }) => {}
                 }
             }
         }
@@ -954,9 +982,9 @@ async fn drain_until_shutdown(cmd_rx: &mut mpsc::UnboundedReceiver<ActorCmd>) {
                 let _ = reply.send(Err(ClientError::Auth("authentication failed".to_owned())));
             }
             ActorCmd::Stream { sink, .. } => {
-                let _ = sink.send(Err(ClientError::Auth("authentication failed".to_owned())));
+                let _ = sink.try_send(Err(ClientError::Auth("authentication failed".to_owned())));
             }
-            ActorCmd::Interrupt { .. } | ActorCmd::ReconnectNow => {}
+            ActorCmd::Interrupt { .. } | ActorCmd::Ack { .. } | ActorCmd::ReconnectNow => {}
         }
     }
 }

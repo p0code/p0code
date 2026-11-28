@@ -1089,20 +1089,32 @@ async fn revoked_session_signs_in_again_then_stops_instead_of_looping() {
 async fn unread_stream_does_not_block_other_requests() {
     let secret = "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD";
     let (base_url, state, server_task) = start_fake_server(secret.to_owned(), false).await;
-    state.flood_shell_chunks.store(1_000, Ordering::SeqCst);
+    state.flood_shell_chunks.store(6_000, Ordering::SeqCst);
     let client = RpcClient::connect(local_client(base_url, secret));
     client.wait_connected(Duration::from_secs(5)).await.unwrap();
 
-    // Never read: the old bounded sink blocked the read loop after 128 values.
-    let _unread = client
+    // Never read: the stream queue is bounded, and the read loop must not wait on it.
+    let mut unread = client
         .subscribe_shell(SubscribeShellInput::default())
         .await
         .unwrap();
-    tokio::time::sleep(Duration::from_millis(200)).await;
     let probe = tokio::time::timeout(Duration::from_secs(3), client.probe())
         .await
         .expect("probe must not wait behind an unread stream");
     probe.unwrap();
+    assert_eq!(state.shell_acks.load(Ordering::SeqCst), 0);
+    let mut count = 0;
+    loop {
+        match unread.recv().await {
+            Some(Ok(_)) => count += 1,
+            Some(Err(ClientError::Protocol(message))) => {
+                assert!(message.contains("overflow"));
+                break;
+            }
+            other => panic!("expected explicit stream overflow, got {other:?}"),
+        }
+        assert!(count <= 4096, "stream queue must be bounded");
+    }
 
     client.shutdown().await;
     server_task.abort();
