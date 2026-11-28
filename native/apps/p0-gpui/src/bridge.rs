@@ -11,10 +11,16 @@ use p0_client::{
     wait_until_connected,
 };
 use p0_protocol::{
-    ApprovalDecision, DispatchMode, LaunchInitialMessage, LaunchThreadInput, ModelSelection,
-    OrchestrationCommand, RPC_ORCHESTRATION_SUBSCRIBE_SHELL, RPC_ORCHESTRATION_SUBSCRIBE_THREAD,
-    RuntimeMode, SecretRequestAnswer, SecretRequestAnswerInput, ServerConfig, ShellStreamItem,
-    SubscribeShellInput, SubscribeThreadInput, ThreadStreamItem, WorkspaceStrategy,
+    ApprovalDecision, ArchivedShellSnapshot, DatabaseStorageStatus, DispatchMode,
+    HostResourcesSnapshot, LaunchInitialMessage, LaunchThreadInput, ModelSelection,
+    OrchestrationCommand, PeerLinkSummary, PluginInfo, PluginsSnapshot,
+    RPC_ORCHESTRATION_SUBSCRIBE_SHELL, RPC_ORCHESTRATION_SUBSCRIBE_THREAD, RPC_PLUGINS_SUBSCRIBE,
+    RPC_SCHEDULED_TASKS_SUBSCRIBE, RPC_SERVER_GET_DATABASE_STORAGE,
+    RPC_SERVER_GET_STORAGE_CLEANUP_REPORT, RuntimeMode, ScheduledTaskListResult,
+    SecretRequestAnswer, SecretRequestAnswerInput, ServerConfig, ServerProcessDiagnosticsResult,
+    ServerRemoveKeybindingInput, ServerTraceDiagnosticsResult, ServerUpsertKeybindingInput,
+    ShellStreamItem, StorageCleanupReport, SubscribeShellInput, SubscribeThreadInput,
+    ThreadStreamItem, WorkspaceStrategy,
 };
 use serde_json::Value;
 use tokio::runtime::Runtime;
@@ -38,10 +44,22 @@ pub struct AppBridge {
     thread: Arc<ThreadStore>,
     config: Arc<Mutex<Option<ServerConfig>>>,
     settings: Arc<Mutex<Option<Value>>>,
+    archived_snapshot: Arc<Mutex<Option<ArchivedShellSnapshot>>>,
+    peer_links: Arc<Mutex<Option<Vec<PeerLinkSummary>>>>,
+    plugins: Arc<Mutex<Option<Vec<PluginInfo>>>>,
+    storage_cleanup_report: Arc<Mutex<Option<Option<StorageCleanupReport>>>>,
+    database_storage: Arc<Mutex<Option<Option<DatabaseStorageStatus>>>>,
+    scheduled_tasks: Arc<Mutex<Option<ScheduledTaskListResult>>>,
+    host_resources: Arc<Mutex<Option<HostResourcesSnapshot>>>,
+    process_diagnostics: Arc<Mutex<Option<ServerProcessDiagnosticsResult>>>,
+    trace_diagnostics: Arc<Mutex<Option<ServerTraceDiagnosticsResult>>>,
     notice: Arc<Mutex<Option<String>>>,
     changed: Arc<Notify>,
     thread_task: Mutex<Option<JoinHandle<()>>>,
     terminal_task: Mutex<Option<JoinHandle<()>>>,
+    plugins_task: Mutex<Option<JoinHandle<()>>>,
+    storage_tasks: Mutex<Option<(JoinHandle<()>, JoinHandle<()>)>>,
+    scheduled_tasks_task: Mutex<Option<JoinHandle<()>>>,
     p0d: Mutex<Option<P0dProcess>>,
 }
 
@@ -67,10 +85,22 @@ impl AppBridge {
             thread: Arc::new(ThreadStore::new()),
             config: Arc::new(Mutex::new(None)),
             settings: Arc::new(Mutex::new(None)),
+            archived_snapshot: Arc::new(Mutex::new(None)),
+            peer_links: Arc::new(Mutex::new(None)),
+            plugins: Arc::new(Mutex::new(None)),
+            storage_cleanup_report: Arc::new(Mutex::new(None)),
+            database_storage: Arc::new(Mutex::new(None)),
+            scheduled_tasks: Arc::new(Mutex::new(None)),
+            host_resources: Arc::new(Mutex::new(None)),
+            process_diagnostics: Arc::new(Mutex::new(None)),
+            trace_diagnostics: Arc::new(Mutex::new(None)),
             notice: Arc::new(Mutex::new(None)),
             changed: Arc::new(Notify::new()),
             thread_task: Mutex::new(None),
             terminal_task: Mutex::new(None),
+            plugins_task: Mutex::new(None),
+            storage_tasks: Mutex::new(None),
+            scheduled_tasks_task: Mutex::new(None),
             p0d: Mutex::new(p0d),
         });
         bridge.spawn_background();
@@ -185,6 +215,280 @@ impl AppBridge {
 
     pub fn server_settings(&self) -> Option<Value> {
         self.settings.lock().unwrap().clone()
+    }
+
+    pub fn archived_snapshot(&self) -> Option<ArchivedShellSnapshot> {
+        self.archived_snapshot.lock().unwrap().clone()
+    }
+
+    pub fn peer_links(&self) -> Option<Vec<PeerLinkSummary>> {
+        self.peer_links.lock().unwrap().clone()
+    }
+
+    pub fn plugins(&self) -> Option<Vec<PluginInfo>> {
+        self.plugins.lock().unwrap().clone()
+    }
+
+    pub fn storage_cleanup_report(&self) -> Option<Option<StorageCleanupReport>> {
+        self.storage_cleanup_report.lock().unwrap().clone()
+    }
+
+    pub fn database_storage(&self) -> Option<Option<DatabaseStorageStatus>> {
+        self.database_storage.lock().unwrap().clone()
+    }
+
+    pub fn ensure_storage_subscribed(&self) {
+        let mut slot = self.storage_tasks.lock().unwrap();
+        if slot.is_some() {
+            return;
+        }
+        let report_slot = self.storage_cleanup_report.clone();
+        let changed_r = self.changed.clone();
+        let notice_r = self.notice.clone();
+        let report_task = self.rt.spawn(run_durable_stream(
+            self.client.clone(),
+            RPC_SERVER_GET_STORAGE_CLEANUP_REPORT,
+            || serde_json::json!({}),
+            move |report: Option<StorageCleanupReport>| {
+                *report_slot.lock().unwrap() = Some(report);
+                changed_r.notify_one();
+            },
+            move |err| {
+                if is_user_visible(err) {
+                    *notice_r.lock().unwrap() = Some(err.to_string());
+                }
+            },
+        ));
+        let db_slot = self.database_storage.clone();
+        let changed_d = self.changed.clone();
+        let notice_d = self.notice.clone();
+        let db_task = self.rt.spawn(run_durable_stream(
+            self.client.clone(),
+            RPC_SERVER_GET_DATABASE_STORAGE,
+            || serde_json::json!({}),
+            move |status: Option<DatabaseStorageStatus>| {
+                *db_slot.lock().unwrap() = Some(status);
+                changed_d.notify_one();
+            },
+            move |err| {
+                if is_user_visible(err) {
+                    *notice_d.lock().unwrap() = Some(err.to_string());
+                }
+            },
+        ));
+        *slot = Some((report_task, db_task));
+    }
+
+    pub fn run_storage_cleanup(&self) {
+        let client = self.client.clone();
+        let report_slot = self.storage_cleanup_report.clone();
+        self.run(
+            "Storage cleanup",
+            async move { client.run_storage_cleanup().await },
+            move |report| *report_slot.lock().unwrap() = Some(Some(report)),
+        );
+    }
+
+    pub fn reclaim_database_space(&self) {
+        let client = self.client.clone();
+        self.run(
+            "Reclaim database space",
+            async move { client.reclaim_database_space().await },
+            |_| {},
+        );
+    }
+
+    pub fn scheduled_tasks(&self) -> Option<ScheduledTaskListResult> {
+        self.scheduled_tasks.lock().unwrap().clone()
+    }
+
+    pub fn ensure_scheduled_tasks_subscribed(&self) {
+        let mut slot = self.scheduled_tasks_task.lock().unwrap();
+        if slot.is_some() {
+            return;
+        }
+        let tasks = self.scheduled_tasks.clone();
+        let changed = self.changed.clone();
+        let notice = self.notice.clone();
+        *slot = Some(self.rt.spawn(run_durable_stream(
+            self.client.clone(),
+            RPC_SCHEDULED_TASKS_SUBSCRIBE,
+            || serde_json::json!({}),
+            move |snap: ScheduledTaskListResult| {
+                *tasks.lock().unwrap() = Some(snap);
+                changed.notify_one();
+            },
+            move |err| {
+                if is_user_visible(err) {
+                    *notice.lock().unwrap() = Some(err.to_string());
+                }
+            },
+        )));
+    }
+
+    pub fn set_scheduled_task_enabled(&self, id: String, enabled: bool) {
+        let client = self.client.clone();
+        self.run(
+            "Scheduled task",
+            async move { client.set_scheduled_task_enabled(&id, enabled).await },
+            |_| {},
+        );
+    }
+
+    pub fn run_scheduled_task_now(&self, id: String) {
+        let client = self.client.clone();
+        self.run(
+            "Run scheduled task",
+            async move { client.run_scheduled_task_now(&id).await },
+            |_| {},
+        );
+    }
+
+    pub fn delete_scheduled_task(&self, id: String) {
+        let client = self.client.clone();
+        self.run(
+            "Delete scheduled task",
+            async move { client.delete_scheduled_task(&id).await },
+            |_| {},
+        );
+    }
+
+    pub fn host_resources(&self) -> Option<HostResourcesSnapshot> {
+        self.host_resources.lock().unwrap().clone()
+    }
+
+    pub fn process_diagnostics(&self) -> Option<ServerProcessDiagnosticsResult> {
+        self.process_diagnostics.lock().unwrap().clone()
+    }
+
+    pub fn trace_diagnostics(&self) -> Option<ServerTraceDiagnosticsResult> {
+        self.trace_diagnostics.lock().unwrap().clone()
+    }
+
+    pub fn refresh_diagnostics(&self) {
+        let c1 = self.client.clone();
+        let hr = self.host_resources.clone();
+        self.run(
+            "Host resources",
+            async move { c1.get_host_resources().await },
+            move |snap| *hr.lock().unwrap() = Some(snap),
+        );
+        let c2 = self.client.clone();
+        let pd = self.process_diagnostics.clone();
+        self.run(
+            "Process diagnostics",
+            async move { c2.get_process_diagnostics().await },
+            move |snap| *pd.lock().unwrap() = Some(snap),
+        );
+        let c3 = self.client.clone();
+        let td = self.trace_diagnostics.clone();
+        self.run(
+            "Trace diagnostics",
+            async move { c3.get_trace_diagnostics().await },
+            move |snap| *td.lock().unwrap() = Some(snap),
+        );
+    }
+
+    pub fn ensure_plugins_subscribed(&self) {
+        let mut slot = self.plugins_task.lock().unwrap();
+        if slot.is_some() {
+            return;
+        }
+        let plugins = self.plugins.clone();
+        let changed = self.changed.clone();
+        let notice = self.notice.clone();
+        *slot = Some(self.rt.spawn(run_durable_stream(
+            self.client.clone(),
+            RPC_PLUGINS_SUBSCRIBE,
+            || serde_json::json!({}),
+            move |snap: PluginsSnapshot| {
+                *plugins.lock().unwrap() = Some(snap.plugins);
+                changed.notify_one();
+            },
+            move |err| {
+                if is_user_visible(err) {
+                    *notice.lock().unwrap() = Some(err.to_string());
+                }
+            },
+        )));
+    }
+
+    pub fn set_plugin_enabled(&self, plugin_id: String, enabled: bool) {
+        let client = self.client.clone();
+        let plugins = self.plugins.clone();
+        self.run(
+            "Plugins",
+            async move { client.set_plugin_enabled(&plugin_id, enabled).await },
+            move |snap| *plugins.lock().unwrap() = Some(snap.plugins),
+        );
+    }
+
+    pub fn refresh_peer_links(&self) {
+        let client = self.client.clone();
+        let links = self.peer_links.clone();
+        self.run(
+            "Linked environments",
+            async move { client.list_peer_links().await },
+            move |res| *links.lock().unwrap() = Some(res.links),
+        );
+    }
+
+    pub fn unlink_peer(&self, environment_id: String) {
+        let client = self.client.clone();
+        let links = self.peer_links.clone();
+        self.run(
+            "Unlink environment",
+            async move {
+                client.unlink_peer(&environment_id).await?;
+                client.list_peer_links().await
+            },
+            move |res| *links.lock().unwrap() = Some(res.links),
+        );
+    }
+
+    pub fn refresh_archived_threads(&self) {
+        let client = self.client.clone();
+        let archived = self.archived_snapshot.clone();
+        self.run(
+            "Archived threads",
+            async move { client.get_archived_shell_snapshot().await },
+            move |snap| *archived.lock().unwrap() = Some(snap),
+        );
+    }
+
+    pub fn unarchive_thread(&self, thread_id: String) {
+        let client = self.client.clone();
+        let archived = self.archived_snapshot.clone();
+        let cmd = OrchestrationCommand::ThreadUnarchive {
+            command_id: Uuid::new_v4().to_string(),
+            thread_id,
+        };
+        self.run(
+            "Unarchive",
+            async move {
+                client.dispatch_command(&cmd).await?;
+                client.get_archived_shell_snapshot().await
+            },
+            move |snap| *archived.lock().unwrap() = Some(snap),
+        );
+    }
+
+    pub fn delete_thread(&self, thread_id: String) {
+        let client = self.client.clone();
+        let archived = self.archived_snapshot.clone();
+        let cmd = OrchestrationCommand::ThreadDelete {
+            command_id: Uuid::new_v4().to_string(),
+            thread_id,
+            only_if_unused: None,
+        };
+        self.run(
+            "Delete thread",
+            async move {
+                client.dispatch_command(&cmd).await?;
+                client.get_archived_shell_snapshot().await
+            },
+            move |snap| *archived.lock().unwrap() = Some(snap),
+        );
     }
 
     pub fn notice(&self) -> Option<String> {
@@ -490,6 +794,25 @@ impl AppBridge {
         );
     }
 
+    /// Patches server settings and re-fetches `server.getConfig` (for provider/model changes).
+    pub fn update_settings_and_refresh_config(&self, patch: Value) {
+        let client = self.client.clone();
+        let settings = self.settings.clone();
+        let config = self.config.clone();
+        self.run(
+            "Settings",
+            async move {
+                let updated = client.update_settings(&patch).await?;
+                let cfg = client.get_config().await?;
+                Ok((updated, cfg))
+            },
+            move |(updated, cfg)| {
+                *settings.lock().unwrap() = Some(updated);
+                *config.lock().unwrap() = Some(cfg);
+            },
+        );
+    }
+
     pub fn refresh_providers(&self) {
         let client = self.client.clone();
         let config = self.config.clone();
@@ -500,6 +823,36 @@ impl AppBridge {
                 client.get_config().await
             },
             move |cfg| *config.lock().unwrap() = Some(cfg),
+        );
+    }
+
+    pub fn upsert_keybinding(&self, input: ServerUpsertKeybindingInput) {
+        let client = self.client.clone();
+        let config = self.config.clone();
+        self.run(
+            "Keybindings",
+            async move { client.upsert_keybinding(&input).await },
+            move |res| {
+                if let Some(cfg) = config.lock().unwrap().as_mut() {
+                    cfg.keybindings = res.keybindings;
+                    cfg.issues = res.issues;
+                }
+            },
+        );
+    }
+
+    pub fn remove_keybinding(&self, input: ServerRemoveKeybindingInput) {
+        let client = self.client.clone();
+        let config = self.config.clone();
+        self.run(
+            "Keybindings",
+            async move { client.remove_keybinding(&input).await },
+            move |res| {
+                if let Some(cfg) = config.lock().unwrap().as_mut() {
+                    cfg.keybindings = res.keybindings;
+                    cfg.issues = res.issues;
+                }
+            },
         );
     }
 

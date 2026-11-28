@@ -1,22 +1,54 @@
 //! Settings: the section list mirrors `apps/web/src/components/settings/settingsSearch.ts`
-//! (same order, groups and English labels, so the web translations apply). General, Appearance
-//! and Providers are native; every other section links to the web app.
+//! (same order, groups and English labels, so the web translations apply). Each native section
+//! lives in its own module under `settings/`; sections still `todo` link to the web app.
+
+pub mod about;
+pub mod access;
+pub mod archived;
+pub mod chat;
+pub mod connections;
+pub mod diagnostics;
+pub mod diffs;
+pub mod general;
+pub mod keybindings;
+pub mod labs;
+pub mod maintenance;
+pub mod plugins;
+pub mod projects;
+pub mod providers;
+pub mod scheduled_tasks;
+pub mod source_control;
+pub mod threads;
+pub mod worktrees;
 
 use std::path::PathBuf;
 
 use gpui_kit::component::button::{Button, ButtonVariants as _};
-use gpui_kit::component::switch::Switch;
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     Context, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _, SharedString,
     StatefulInteractiveElement as _, Styled as _, Window, div, px,
 };
-use p0_i18n::SUPPORTED_LOCALES;
-use p0_protocol::{RuntimeMode, ServerProviderState};
+use p0_protocol::RuntimeMode;
 use serde::{Deserialize, Serialize};
 
 use crate::feed::choice;
 use crate::theme::{AppPalette, ThemePreference};
+
+#[derive(Default)]
+pub struct SettingsUiState {
+    pub archived: archived::ArchivedUiState,
+    pub connections: connections::ConnectionsUiState,
+    pub diagnostics: diagnostics::DiagnosticsUiState,
+    pub keybindings: keybindings::KeybindingsUiState,
+    pub labs: labs::LabsUiState,
+    pub maintenance: maintenance::MaintenanceUiState,
+    pub providers: providers::ProvidersUiState,
+    pub scheduled_tasks: scheduled_tasks::ScheduledTasksUiState,
+    pub source_control: source_control::SourceControlUiState,
+    pub threads: threads::ThreadsUiState,
+    pub worktrees: worktrees::WorktreesUiState,
+}
 
 pub struct Section {
     pub path: &'static str,
@@ -74,15 +106,102 @@ pub fn web_url(base_url: &str, path: &str) -> String {
     format!("{}{path}", base_url.trim_end_matches('/'))
 }
 
+fn default_true() -> bool {
+    true
+}
+fn default_off() -> String {
+    "off".to_owned()
+}
+fn default_locale() -> String {
+    "locale".to_owned()
+}
+fn default_left() -> String {
+    "left".to_owned()
+}
+fn default_enter() -> String {
+    "enter".to_owned()
+}
+fn default_steer() -> String {
+    "steer".to_owned()
+}
+fn default_show_all() -> String {
+    "showAll".to_owned()
+}
+fn default_stacked() -> String {
+    "stacked".to_owned()
+}
+fn default_red_green() -> String {
+    "red-green".to_owned()
+}
+
 /// Preferences the web app keeps per client (its `ClientSettings`); the native client keeps them
 /// in a file of its own.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct LocalPrefs {
     pub theme: ThemePreference,
     /// A supported locale code; `None` follows the system.
     pub language: Option<String>,
     pub sidebar_hidden: bool,
+    #[serde(default = "default_off")]
+    pub notification_mode: String,
+    pub in_app_notifications_enabled: bool,
+    #[serde(default = "default_locale")]
+    pub timestamp_format: String,
+    #[serde(default = "default_left")]
+    pub usage_display_mode: String,
+    pub confirm_thread_unpin: bool,
+    pub confirm_thread_archive: bool,
+    #[serde(default = "default_true")]
+    pub confirm_thread_delete: bool,
+    #[serde(default = "default_true")]
+    pub confirm_terminal_close: bool,
+    #[serde(default = "default_enter")]
+    pub send_shortcut: String,
+    #[serde(default = "default_steer")]
+    pub follow_up_behavior: String,
+    #[serde(default = "default_show_all")]
+    pub tool_call_visibility: String,
+    #[serde(default = "default_true")]
+    pub show_skills_in_slash_menu: bool,
+    #[serde(default = "default_stacked")]
+    pub diff_layout: String,
+    pub diff_ignore_whitespace: bool,
+    pub diff_files_collapsed: bool,
+    #[serde(default = "default_red_green")]
+    pub diff_color_scheme: String,
+    #[serde(default = "default_true")]
+    pub proactive_panels_enabled: bool,
+    #[serde(default = "default_true")]
+    pub pull_request_links_open_in_app: bool,
+}
+
+impl Default for LocalPrefs {
+    fn default() -> Self {
+        Self {
+            theme: ThemePreference::default(),
+            language: None,
+            sidebar_hidden: false,
+            notification_mode: default_off(),
+            in_app_notifications_enabled: false,
+            timestamp_format: default_locale(),
+            usage_display_mode: default_left(),
+            confirm_thread_unpin: false,
+            confirm_thread_archive: false,
+            confirm_thread_delete: true,
+            confirm_terminal_close: true,
+            send_shortcut: default_enter(),
+            follow_up_behavior: default_steer(),
+            tool_call_visibility: default_show_all(),
+            show_skills_in_slash_menu: true,
+            diff_layout: default_stacked(),
+            diff_ignore_whitespace: false,
+            diff_files_collapsed: false,
+            diff_color_scheme: default_red_green(),
+            proactive_panels_enabled: true,
+            pull_request_links_open_in_app: true,
+        }
+    }
 }
 
 impl LocalPrefs {
@@ -242,7 +361,39 @@ impl crate::app::P0App {
         let body = match section.path {
             "/settings/general" => self.render_general(palette, cx).into_any_element(),
             "/settings/appearance" => self.render_appearance(palette, cx).into_any_element(),
-            "/settings/providers" => self.render_providers(palette, cx).into_any_element(),
+            "/settings/chat" => self.render_chat_settings(palette, cx).into_any_element(),
+            "/settings/diffs" => self.render_diffs_settings(palette, cx).into_any_element(),
+            "/settings/keybindings" => self
+                .render_keybindings(palette, window, cx)
+                .into_any_element(),
+            "/settings/providers" => self
+                .render_providers(palette, window, cx)
+                .into_any_element(),
+            "/settings/threads" => self
+                .render_threads_settings(palette, window, cx)
+                .into_any_element(),
+            "/settings/scheduled-tasks" => {
+                self.render_scheduled_tasks(palette, cx).into_any_element()
+            }
+            "/settings/projects" => self
+                .render_projects_settings(palette, cx)
+                .into_any_element(),
+            "/settings/source-control" => self
+                .render_source_control_settings(palette, window, cx)
+                .into_any_element(),
+            "/settings/worktrees" => self
+                .render_worktrees_settings(palette, window, cx)
+                .into_any_element(),
+            "/settings/connections" => self.render_connections(palette, cx).into_any_element(),
+            "/settings/access" => self.render_access_settings(palette, cx).into_any_element(),
+            "/settings/plugins" => self.render_plugins(palette, cx).into_any_element(),
+            "/settings/maintenance" => self
+                .render_maintenance(palette, window, cx)
+                .into_any_element(),
+            "/settings/labs" => self.render_labs(palette, window, cx).into_any_element(),
+            "/settings/about" => self.render_about(palette, cx).into_any_element(),
+            "/settings/archived" => self.render_archived(palette, cx).into_any_element(),
+            "/settings/diagnostics" => self.render_diagnostics(palette, cx).into_any_element(),
             _ => {
                 let url = web_url(self.bridge.base_url(), section.path);
                 div()
@@ -265,7 +416,48 @@ impl crate::app::P0App {
                     .into_any_element()
             }
         };
-        let _ = window;
+        let mut content = div()
+            .max_w(px(720.0))
+            .px(px(32.0))
+            .py(px(28.0))
+            .flex()
+            .flex_col()
+            .gap(px(20.0));
+        if let Some(notice) = self.bridge.notice() {
+            let bridge = self.bridge.clone();
+            content = content.child(
+                div()
+                    .px(px(12.0))
+                    .py(px(8.0))
+                    .rounded(px(6.0))
+                    .bg(palette.error_surface)
+                    .border_1()
+                    .border_color(palette.error)
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap(px(8.0))
+                    .text_xs()
+                    .text_color(palette.error)
+                    .child(div().min_w_0().child(SharedString::from(notice)))
+                    .child(
+                        div()
+                            .id("settings-dismiss-notice")
+                            .flex_none()
+                            .cursor_pointer()
+                            .on_click(cx.listener(move |_, _, _, _| bridge.clear_notice()))
+                            .child("✕"),
+                    ),
+            );
+        }
+        content = content
+            .child(
+                div()
+                    .text_xl()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child(t(section.label)),
+            )
+            .child(body);
         div().size_full().flex().flex_row().child(nav).child(
             div()
                 .id("settings-body")
@@ -273,101 +465,8 @@ impl crate::app::P0App {
                 .min_w_0()
                 .h_full()
                 .overflow_y_scroll()
-                .child(
-                    div()
-                        .max_w(px(720.0))
-                        .px(px(32.0))
-                        .py(px(28.0))
-                        .flex()
-                        .flex_col()
-                        .gap(px(20.0))
-                        .child(
-                            div()
-                                .text_xl()
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .child(t(section.label)),
-                        )
-                        .child(body),
-                ),
+                .child(content),
         )
-    }
-
-    fn render_general(&mut self, palette: &AppPalette, cx: &mut Context<Self>) -> impl IntoElement {
-        let mut col = div().flex().flex_col().gap(px(4.0));
-        let current = self.prefs.language.clone();
-        let mut languages = div().flex().flex_wrap().gap(px(6.0));
-        let follow = choice(
-            "lang-system",
-            self.i18n.tr("Follow system").to_owned(),
-            current.is_none(),
-            palette,
-        )
-        .on_click(cx.listener(|this, _, window, cx| {
-            let mut prefs = this.prefs.clone();
-            prefs.language = None;
-            this.set_prefs(prefs, window, cx);
-        }));
-        languages = languages.child(follow);
-        for (code, name) in SUPPORTED_LOCALES {
-            languages = languages.child(
-                choice(
-                    format!("lang-{code}"),
-                    *name,
-                    current.as_deref() == Some(*code),
-                    palette,
-                )
-                .on_click(cx.listener(move |this, _, window, cx| {
-                    let mut prefs = this.prefs.clone();
-                    prefs.language = Some((*code).to_owned());
-                    this.set_prefs(prefs, window, cx);
-                })),
-            );
-        }
-        col = col.child(setting_row(self.i18n.tr("Language"), languages, palette));
-
-        let Some(settings) = self.bridge.server_settings() else {
-            return col.child(div().text_sm().text_color(palette.muted_foreground).child(
-                SharedString::from(self.i18n.get(p0_i18n::Key::Loading).to_owned()),
-            ));
-        };
-        let server = GeneralServerSettings::from_json(&settings);
-        let mut modes = div().flex().flex_wrap().gap(px(6.0));
-        for mode in [
-            RuntimeMode::ApprovalRequired,
-            RuntimeMode::AutoAcceptEdits,
-            RuntimeMode::Auto,
-            RuntimeMode::FullAccess,
-        ] {
-            modes = modes.child(
-                choice(
-                    format!("mode-{}", mode.as_wire_str()),
-                    crate::composer::runtime_mode_label(mode, &self.i18n),
-                    server.default_runtime_mode == mode,
-                    palette,
-                )
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    this.bridge.update_settings(
-                        serde_json::json!({ "defaultRuntimeMode": mode.as_wire_str() }),
-                    );
-                    cx.notify();
-                })),
-            );
-        }
-        col = col.child(setting_row(self.i18n.tr("Permissions"), modes, palette));
-        for (key, label) in BOOL_SETTINGS {
-            col = col.child(setting_row(
-                self.i18n.tr(label),
-                Switch::new(SharedString::from(format!("setting-{key}")))
-                    .checked(server.flag(key))
-                    .on_click(cx.listener(move |this, checked: &bool, _, cx| {
-                        this.bridge
-                            .update_settings(serde_json::json!({ key: *checked }));
-                        cx.notify();
-                    })),
-                palette,
-            ));
-        }
-        col
     }
 
     fn render_appearance(
@@ -400,99 +499,13 @@ impl crate::app::P0App {
             .flex_col()
             .child(setting_row(self.i18n.tr("Color scheme"), schemes, palette))
     }
-
-    fn render_providers(
-        &mut self,
-        palette: &AppPalette,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        let mut col = div().flex().flex_col().gap(px(10.0)).child(
-            div().child(
-                Button::new("providers-refresh")
-                    .label(self.i18n.tr("Refresh").to_owned())
-                    .compact()
-                    .outline()
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.bridge.refresh_providers();
-                        cx.notify();
-                    })),
-            ),
-        );
-        let Some(config) = self.bridge.server_config() else {
-            return col;
-        };
-        for provider in &config.providers {
-            let (dot, status) = match provider.status {
-                ServerProviderState::Ready => (palette.success, self.i18n.tr("Ready")),
-                ServerProviderState::Warning => (palette.warning, self.i18n.tr("Warning")),
-                ServerProviderState::Error => (palette.error, self.i18n.get(p0_i18n::Key::Error)),
-                ServerProviderState::Disabled => {
-                    (palette.muted_foreground, self.i18n.tr("Disabled"))
-                }
-                ServerProviderState::Unknown => (palette.muted_foreground, ""),
-            };
-            let mut c = crate::feed::card(palette).child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap(px(8.0))
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(px(8.0))
-                            .child(div().w(px(8.0)).h(px(8.0)).rounded_full().bg(dot))
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .child(SharedString::from(provider.label().to_owned())),
-                            )
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(palette.muted_foreground)
-                                    .child(SharedString::from(provider.driver.clone())),
-                            ),
-                    )
-                    .child(
-                        div().text_xs().text_color(palette.muted_foreground).child(
-                            SharedString::from(
-                                [Some(status.to_owned()), provider.version.clone()]
-                                    .into_iter()
-                                    .flatten()
-                                    .filter(|s| !s.is_empty())
-                                    .collect::<Vec<_>>()
-                                    .join(" · "),
-                            ),
-                        ),
-                    ),
-            );
-            if let Some(message) = provider.message.as_deref().filter(|m| !m.is_empty()) {
-                c = c.child(
-                    div()
-                        .text_xs()
-                        .text_color(palette.muted_foreground)
-                        .child(SharedString::from(message.to_owned())),
-                );
-            }
-            let models = provider
-                .models
-                .iter()
-                .map(|m| m.short_name.clone().unwrap_or_else(|| m.name.clone()))
-                .collect::<Vec<_>>()
-                .join(", ");
-            if !models.is_empty() {
-                c = c.child(div().text_xs().child(SharedString::from(models)));
-            }
-            col = col.child(c);
-        }
-        col
-    }
 }
 
-fn setting_row(label: &str, control: impl IntoElement, palette: &AppPalette) -> impl IntoElement {
+pub(crate) fn setting_row(
+    label: &str,
+    control: impl IntoElement,
+    palette: &AppPalette,
+) -> impl IntoElement {
     div()
         .flex()
         .flex_col()
@@ -515,7 +528,7 @@ mod tests {
 
     #[test]
     fn sections_match_the_web_settings_paths() {
-        let web = include_str!("../../../../apps/web/src/components/settings/settingsSearch.ts");
+        let web = include_str!("../../../../../apps/web/src/components/settings/settingsSearch.ts");
         let union = &web[web.find("export type SettingsPath =").unwrap()..];
         let union = &union[..union.find(';').unwrap()];
         let mut web_paths: Vec<&str> = union
@@ -552,12 +565,17 @@ mod tests {
             theme: ThemePreference::Dark,
             language: Some("zh-TW".to_owned()),
             sidebar_hidden: true,
+            notification_mode: "notifications-and-sound".to_owned(),
+            in_app_notifications_enabled: true,
+            ..LocalPrefs::default()
         };
         let raw = serde_json::to_string(&prefs).unwrap();
         assert_eq!(serde_json::from_str::<LocalPrefs>(&raw).unwrap(), prefs);
         let partial: LocalPrefs = serde_json::from_str(r#"{"theme":"light","future":1}"#).unwrap();
         assert_eq!(partial.theme, ThemePreference::Light);
         assert_eq!(partial.language, None);
+        assert_eq!(partial.notification_mode, "off");
+        assert!(partial.confirm_thread_delete);
     }
 
     #[test]

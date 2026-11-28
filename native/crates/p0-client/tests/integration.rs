@@ -758,6 +758,276 @@ async fn live_p0d_bootstrap_auth_and_probe() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+#[tokio::test]
+async fn live_p0d_settings_roundtrip() {
+    let (Ok(bin), Ok(legacy)) = (
+        std::env::var("P0D_TEST_BIN"),
+        std::env::var("P0D_LEGACY_SERVER"),
+    ) else {
+        return;
+    };
+    let root = std::env::temp_dir().join(format!("p0-live-settings-{}", uuid::Uuid::new_v4()));
+    let home = root.join("userdata");
+    std::fs::create_dir_all(&home).unwrap();
+
+    let mut cfg = p0_client::P0dLaunchConfig::for_home(&home);
+    cfg.configured_binary = Some(bin.into());
+    cfg.legacy_server = Some(legacy);
+
+    let mut proc = p0_client::P0dProcess::attach_or_spawn(cfg).await.unwrap();
+    let secret = proc
+        .bootstrap_secret()
+        .expect("spawned p0d must carry bootstrap secret")
+        .to_owned();
+
+    let mut client_cfg = ClientConfig::new(
+        proc.url().to_owned(),
+        AuthMode::LocalBootstrap {
+            secret,
+            client_label: "p0-gpui-settings-test".to_owned(),
+        },
+    );
+    client_cfg.request_timeout = Duration::from_secs(60);
+    let client = RpcClient::connect(client_cfg);
+    client
+        .wait_connected(Duration::from_secs(45))
+        .await
+        .unwrap();
+
+    // 1. Keybindings read + upsert + verify persistence + remove
+    let config = client.get_config().await.unwrap();
+    assert!(
+        !config.keybindings.is_empty(),
+        "server should return resolved keybindings"
+    );
+    let added = client
+        .upsert_keybinding(&p0_protocol::ServerUpsertKeybindingInput {
+            key: "mod+alt+shift+y".to_owned(),
+            command: "sidebar.toggle".to_owned(),
+            when: Some("!terminalFocus".to_owned()),
+            replace: None,
+        })
+        .await
+        .unwrap();
+    assert!(
+        added
+            .keybindings
+            .iter()
+            .any(|k| k.command == "sidebar.toggle" && k.shortcut.to_wire_key() == "mod+alt+shift+y"),
+        "upserted keybinding missing from result"
+    );
+    let config_after = client.get_config().await.unwrap();
+    assert!(
+        config_after
+            .keybindings
+            .iter()
+            .any(|k| k.command == "sidebar.toggle" && k.shortcut.to_wire_key() == "mod+alt+shift+y"),
+        "upserted keybinding did not persist in server.getConfig"
+    );
+    let removed = client
+        .remove_keybinding(&p0_protocol::ServerRemoveKeybindingInput {
+            key: "mod+alt+shift+y".to_owned(),
+            command: "sidebar.toggle".to_owned(),
+            when: Some("!terminalFocus".to_owned()),
+        })
+        .await
+        .unwrap();
+    assert!(
+        !removed
+            .keybindings
+            .iter()
+            .any(|k| k.command == "sidebar.toggle" && k.shortcut.to_wire_key() == "mod+alt+shift+y"),
+        "removed keybinding still present"
+    );
+
+    // 2. Provider model preferences & idleCompaction round-trip
+    let updated_prefs = client
+        .update_settings(&json!({
+            "idleCompaction": "beforeCacheExpires",
+            "setModelFavorites": [{"provider": "codex", "model": "gpt-5", "favorite": true}],
+            "setModelsHidden": [{"provider": "codex", "model": "gpt-4", "hidden": true}]
+        }))
+        .await
+        .unwrap();
+    assert_eq!(updated_prefs["idleCompaction"], "beforeCacheExpires");
+    assert!(
+        updated_prefs["favorites"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|f| f["provider"] == "codex" && f["model"] == "gpt-5")
+    );
+    assert!(
+        updated_prefs["providerModelPreferences"]["codex"]["hiddenModels"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|m| m == "gpt-4")
+    );
+
+    // 3. Archived threads snapshot round-trip
+    let archived = client.get_archived_shell_snapshot().await.unwrap();
+    assert_eq!(archived.schema_version, 2);
+
+    // 4. Peer links list round-trip
+    let peers = client.list_peer_links().await.unwrap();
+    assert!(peers.links.is_empty());
+
+    // 5. Plugins subscription snapshot round-trip
+    let mut plugins_sub = client.subscribe_plugins().await.unwrap();
+    let plugins_snap = tokio::time::timeout(Duration::from_secs(10), plugins_sub.recv())
+        .await
+        .expect("plugins snapshot timeout")
+        .expect("plugins stream ended")
+        .unwrap();
+    assert!(
+        plugins_snap
+            .plugins
+            .iter()
+            .all(|p| !p.manifest.id.is_empty()),
+        "plugin manifests should decode ids"
+    );
+
+    // 6. Labs / Workflows settings round-trip
+    let labs_updated = client
+        .update_settings(&json!({
+            "workflowsEnabled": true,
+            "workflowSkippedRunsKept": 25
+        }))
+        .await
+        .unwrap();
+    assert_eq!(labs_updated["workflowsEnabled"], true);
+    assert_eq!(labs_updated["workflowSkippedRunsKept"], 25);
+
+    // 7. Maintenance settings & storage/database RPC round-trip
+    let maint_updated = client
+        .update_settings(&json!({
+            "backgroundActivity": {
+                "schemaVersion": 1,
+                "profile": "battery-saver",
+                "overrides": {}
+            },
+            "storageCleanup": {
+                "logsAfterDays": 14
+            }
+        }))
+        .await
+        .unwrap();
+    assert_eq!(
+        maint_updated["backgroundActivity"]["profile"],
+        "battery-saver"
+    );
+    assert_eq!(maint_updated["storageCleanup"]["logsAfterDays"], 14);
+    let mut cleanup_sub = client.subscribe_storage_cleanup_report().await.unwrap();
+    let _cleanup_report = tokio::time::timeout(Duration::from_secs(10), cleanup_sub.recv())
+        .await
+        .expect("storage cleanup report stream timeout")
+        .expect("storage cleanup report stream ended")
+        .unwrap();
+    let mut db_sub = client.subscribe_database_storage().await.unwrap();
+    let db_storage = tokio::time::timeout(Duration::from_secs(10), db_sub.recv())
+        .await
+        .expect("database storage stream timeout")
+        .expect("database storage stream ended")
+        .unwrap();
+    if let Some(status) = db_storage {
+        assert!(status.database_bytes >= 0.0);
+        assert!(!status.compact_command.is_empty());
+    }
+
+    // 8. Threads settings round-trip
+    let threads_updated = client
+        .update_settings(&json!({
+            "autoResumeLimitedThreads": true,
+            "snoozeLimitedThreads": true,
+            "sidebarAutoSettleAfterDays": 14,
+            "responseStreamingMode": "turn",
+            "defaultThreadEnvMode": "worktree"
+        }))
+        .await
+        .unwrap();
+    assert_eq!(threads_updated["autoResumeLimitedThreads"], true);
+    assert_eq!(threads_updated["snoozeLimitedThreads"], true);
+    assert_eq!(threads_updated["sidebarAutoSettleAfterDays"], 14);
+    assert_eq!(threads_updated["responseStreamingMode"], "turn");
+    assert_eq!(threads_updated["defaultThreadEnvMode"], "worktree");
+
+    // 9. Worktrees settings round-trip
+    let worktrees_updated = client
+        .update_settings(&json!({
+            "newWorktreesStartFromOrigin": false,
+            "worktreeSubmodules": "recursive",
+            "branchNamingMode": "semantic",
+            "storageCleanup": {
+                "worktreeOnDelete": true,
+                "worktreeKeepWhen": "tracked-changes"
+            }
+        }))
+        .await
+        .unwrap();
+    assert_eq!(worktrees_updated["newWorktreesStartFromOrigin"], false);
+    assert_eq!(worktrees_updated["worktreeSubmodules"], "recursive");
+    assert_eq!(worktrees_updated["branchNamingMode"], "semantic");
+    assert_eq!(
+        worktrees_updated["storageCleanup"]["worktreeOnDelete"],
+        true
+    );
+    assert_eq!(
+        worktrees_updated["storageCleanup"]["worktreeKeepWhen"],
+        "tracked-changes"
+    );
+
+    // 10. Scheduled tasks stream & diagnostics RPC round-trip
+    let mut sched_sub = client.subscribe_scheduled_tasks().await.unwrap();
+    let sched_snap = tokio::time::timeout(Duration::from_secs(10), sched_sub.recv())
+        .await
+        .expect("scheduledTasks snapshot timeout")
+        .expect("scheduledTasks stream ended")
+        .unwrap();
+    assert!(sched_snap.tasks.is_empty());
+
+    let host_res = client.get_host_resources().await.unwrap();
+    assert!(host_res.cpu_count >= 1);
+    assert!(host_res.total_memory_bytes > 0.0);
+
+    let proc_diag = client.get_process_diagnostics().await.unwrap();
+    assert!(proc_diag.server_pid > 0);
+
+    let trace_diag = client.get_trace_diagnostics().await.unwrap();
+    assert!(!trace_diag.trace_file_path.is_empty());
+
+    // 11. Projects, Source control, and Sharing & access settings round-trip
+    let sc_access_updated = client
+        .update_settings(&json!({
+            "defaultAutoPull": true,
+            "sourceControlWritingStyle": {
+                "mode": "conventional_commits",
+                "followChangeRequestTemplates": false
+            },
+            "pullRequestMergeMethod": "squash",
+            "removeAgentCreditsOnMerge": true,
+            "reviewGuidesEnabled": true,
+            "requireConnectDeviceApproval": true,
+            "enablePreviewTunnel": false
+        }))
+        .await
+        .unwrap();
+    assert_eq!(sc_access_updated["defaultAutoPull"], true);
+    assert_eq!(
+        sc_access_updated["sourceControlWritingStyle"]["mode"],
+        "conventional_commits"
+    );
+    assert_eq!(sc_access_updated["pullRequestMergeMethod"], "squash");
+    assert_eq!(sc_access_updated["removeAgentCreditsOnMerge"], true);
+    assert_eq!(sc_access_updated["reviewGuidesEnabled"], true);
+    assert_eq!(sc_access_updated["requireConnectDeviceApproval"], true);
+    assert_eq!(sc_access_updated["enablePreviewTunnel"], false);
+
+    client.shutdown().await;
+    proc.shutdown().await;
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 fn local_client(base_url: String, secret: &str) -> ClientConfig {
     ClientConfig::new(
         base_url,

@@ -13,6 +13,8 @@ pub const RPC_ORCHESTRATION_DISPATCH_COMMAND: &str = "orchestration.dispatchComm
 pub const RPC_ORCHESTRATION_LAUNCH_THREAD: &str = "orchestration.launchThread";
 pub const RPC_ORCHESTRATION_FORCE_STOP_THREAD: &str = "orchestration.forceStopThread";
 pub const RPC_ORCHESTRATION_GET_TURN_ITEM: &str = "orchestration.getTurnItem";
+pub const RPC_ORCHESTRATION_GET_ARCHIVED_SHELL_SNAPSHOT: &str =
+    "orchestration.getArchivedShellSnapshot";
 pub const RPC_ORCHESTRATION_SUBSCRIBE_SHELL: &str = "orchestration.subscribeShell";
 pub const RPC_ORCHESTRATION_SUBSCRIBE_THREAD: &str = "orchestration.subscribeThread";
 pub const RPC_SECRETS_ANSWER_REQUEST: &str = "secrets.answerRequest";
@@ -191,6 +193,18 @@ pub struct ShellSnapshot {
     pub threads: Vec<ThreadShell>,
     #[serde(rename = "archivedThreads", default)]
     pub archived_threads: Vec<ThreadShell>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ArchivedShellSnapshot {
+    #[serde(rename = "schemaVersion")]
+    pub schema_version: u32,
+    #[serde(rename = "snapshotSequence")]
+    pub snapshot_sequence: u64,
+    #[serde(default)]
+    pub projects: Vec<ProjectShell>,
+    #[serde(default)]
+    pub threads: Vec<ThreadShell>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -1256,6 +1270,29 @@ pub enum OrchestrationCommand {
         visited_at: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         opened: Option<bool>,
+    },
+    #[serde(rename = "thread.archive")]
+    ThreadArchive {
+        #[serde(rename = "commandId")]
+        command_id: String,
+        #[serde(rename = "threadId")]
+        thread_id: String,
+    },
+    #[serde(rename = "thread.unarchive")]
+    ThreadUnarchive {
+        #[serde(rename = "commandId")]
+        command_id: String,
+        #[serde(rename = "threadId")]
+        thread_id: String,
+    },
+    #[serde(rename = "thread.delete")]
+    ThreadDelete {
+        #[serde(rename = "commandId")]
+        command_id: String,
+        #[serde(rename = "threadId")]
+        thread_id: String,
+        #[serde(rename = "onlyIfUnused", skip_serializing_if = "Option::is_none")]
+        only_if_unused: Option<bool>,
     },
     #[serde(other)]
     Unknown,
