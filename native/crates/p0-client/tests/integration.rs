@@ -865,6 +865,10 @@ async fn live_p0d_settings_roundtrip() {
             .any(|m| m == "gpt-4")
     );
 
+    // 3. Archived threads snapshot round-trip
+    let archived = client.get_archived_shell_snapshot().await.unwrap();
+    assert_eq!(archived.schema_version, 2);
+
     client.shutdown().await;
     proc.shutdown().await;
     let _ = std::fs::remove_dir_all(&root);

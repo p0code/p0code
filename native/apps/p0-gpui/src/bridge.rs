@@ -11,11 +11,11 @@ use p0_client::{
     wait_until_connected,
 };
 use p0_protocol::{
-    ApprovalDecision, DispatchMode, LaunchInitialMessage, LaunchThreadInput, ModelSelection,
-    OrchestrationCommand, RPC_ORCHESTRATION_SUBSCRIBE_SHELL, RPC_ORCHESTRATION_SUBSCRIBE_THREAD,
-    RuntimeMode, SecretRequestAnswer, SecretRequestAnswerInput, ServerConfig,
-    ServerRemoveKeybindingInput, ServerUpsertKeybindingInput, ShellStreamItem, SubscribeShellInput,
-    SubscribeThreadInput, ThreadStreamItem, WorkspaceStrategy,
+    ApprovalDecision, ArchivedShellSnapshot, DispatchMode, LaunchInitialMessage, LaunchThreadInput,
+    ModelSelection, OrchestrationCommand, RPC_ORCHESTRATION_SUBSCRIBE_SHELL,
+    RPC_ORCHESTRATION_SUBSCRIBE_THREAD, RuntimeMode, SecretRequestAnswer, SecretRequestAnswerInput,
+    ServerConfig, ServerRemoveKeybindingInput, ServerUpsertKeybindingInput, ShellStreamItem,
+    SubscribeShellInput, SubscribeThreadInput, ThreadStreamItem, WorkspaceStrategy,
 };
 use serde_json::Value;
 use tokio::runtime::Runtime;
@@ -39,6 +39,7 @@ pub struct AppBridge {
     thread: Arc<ThreadStore>,
     config: Arc<Mutex<Option<ServerConfig>>>,
     settings: Arc<Mutex<Option<Value>>>,
+    archived_snapshot: Arc<Mutex<Option<ArchivedShellSnapshot>>>,
     notice: Arc<Mutex<Option<String>>>,
     changed: Arc<Notify>,
     thread_task: Mutex<Option<JoinHandle<()>>>,
@@ -68,6 +69,7 @@ impl AppBridge {
             thread: Arc::new(ThreadStore::new()),
             config: Arc::new(Mutex::new(None)),
             settings: Arc::new(Mutex::new(None)),
+            archived_snapshot: Arc::new(Mutex::new(None)),
             notice: Arc::new(Mutex::new(None)),
             changed: Arc::new(Notify::new()),
             thread_task: Mutex::new(None),
@@ -186,6 +188,55 @@ impl AppBridge {
 
     pub fn server_settings(&self) -> Option<Value> {
         self.settings.lock().unwrap().clone()
+    }
+
+    pub fn archived_snapshot(&self) -> Option<ArchivedShellSnapshot> {
+        self.archived_snapshot.lock().unwrap().clone()
+    }
+
+    pub fn refresh_archived_threads(&self) {
+        let client = self.client.clone();
+        let archived = self.archived_snapshot.clone();
+        self.run(
+            "Archived threads",
+            async move { client.get_archived_shell_snapshot().await },
+            move |snap| *archived.lock().unwrap() = Some(snap),
+        );
+    }
+
+    pub fn unarchive_thread(&self, thread_id: String) {
+        let client = self.client.clone();
+        let archived = self.archived_snapshot.clone();
+        let cmd = OrchestrationCommand::ThreadUnarchive {
+            command_id: Uuid::new_v4().to_string(),
+            thread_id,
+        };
+        self.run(
+            "Unarchive",
+            async move {
+                client.dispatch_command(&cmd).await?;
+                client.get_archived_shell_snapshot().await
+            },
+            move |snap| *archived.lock().unwrap() = Some(snap),
+        );
+    }
+
+    pub fn delete_thread(&self, thread_id: String) {
+        let client = self.client.clone();
+        let archived = self.archived_snapshot.clone();
+        let cmd = OrchestrationCommand::ThreadDelete {
+            command_id: Uuid::new_v4().to_string(),
+            thread_id,
+            only_if_unused: None,
+        };
+        self.run(
+            "Delete thread",
+            async move {
+                client.dispatch_command(&cmd).await?;
+                client.get_archived_shell_snapshot().await
+            },
+            move |snap| *archived.lock().unwrap() = Some(snap),
+        );
     }
 
     pub fn notice(&self) -> Option<String> {

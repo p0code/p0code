@@ -2,6 +2,7 @@
 //! (same order, groups and English labels, so the web translations apply). Each native section
 //! lives in its own module under `settings/`; sections still `todo` link to the web app.
 
+pub mod archived;
 pub mod chat;
 pub mod general;
 pub mod keybindings;
@@ -23,6 +24,7 @@ use crate::theme::{AppPalette, ThemePreference};
 
 #[derive(Default)]
 pub struct SettingsUiState {
+    pub archived: archived::ArchivedUiState,
     pub keybindings: keybindings::KeybindingsUiState,
     pub providers: providers::ProvidersUiState,
 }
@@ -323,6 +325,7 @@ impl crate::app::P0App {
             "/settings/providers" => self
                 .render_providers(palette, window, cx)
                 .into_any_element(),
+            "/settings/archived" => self.render_archived(palette, cx).into_any_element(),
             _ => {
                 let url = web_url(self.bridge.base_url(), section.path);
                 div()
