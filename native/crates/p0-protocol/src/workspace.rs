@@ -146,6 +146,13 @@ pub enum AssetResource {
         #[serde(skip_serializing_if = "Option::is_none")]
         disposition: Option<String>,
     },
+    /// A file of the thread's workspace, `path` relative to its root.
+    #[serde(rename = "workspace-file")]
+    WorkspaceFile {
+        #[serde(rename = "threadId")]
+        thread_id: String,
+        path: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -226,6 +233,18 @@ mod tests {
                 disposition: Some("inline".into()),
             },
         };
+        let workspace_req = CreateAssetUrlInput {
+            resource: AssetResource::WorkspaceFile {
+                thread_id: "t-1".into(),
+                path: "docs/spec.pdf".into(),
+            },
+        };
+        assert_eq!(
+            serde_json::to_value(&workspace_req).unwrap(),
+            serde_json::json!({
+                "resource": {"_tag": "workspace-file", "threadId": "t-1", "path": "docs/spec.pdf"}
+            })
+        );
         assert_eq!(
             serde_json::to_value(&asset_req).unwrap(),
             serde_json::json!({
